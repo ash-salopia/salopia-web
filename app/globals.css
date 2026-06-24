@@ -1,0 +1,47 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
+
+:root {
+  --ink: #0f1418;
+  --panel: #171d23;
+  --panel2: #1f272e;
+  --line: #2a343d;
+  --text: #e8edf1;
+  --mute: #8593a0;
+  --accent: #3b8beb;
+  --accent-dim: #162743;
+  --good: #3fcf8e;
+  --good-dim: #15302a;
+  --warn: #ffc94d;
+  --blue: #4dc3ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}

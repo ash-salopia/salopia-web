@@ -1,0 +1,410 @@
+import { createClient } from "@/lib/supabase-browser";
+import { todayISO, addDaysISO } from "@/lib/date-utils";
+import type { Session, SessionExercise, SessionType, SetLog } from "@/types";
+
+// ------------------------------------------------------------
+// Reading
+// ------------------------------------------------------------
+
+export async function listAllSessionDates(): Promise<{ athlete_id: string; date: string }[]> {
+  const supabase = createClient();
+  // Only the columns the dashboard's expiry calculation actually
+  // needs - athlete_id and date - rather than fetching every
+  // session's full exercise list, which the dashboard never reads.
+  const { data, error } = await supabase.from("sessions").select("athlete_id, date");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listSessionsForAthlete(athleteId: string): Promise<Session[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("*, session_exercises(*)")
+    .eq("athlete_id", athleteId)
+    .order("date", { ascending: true });
+  if (error) throw error;
+  // Supabase returns the joined rows under the relation name —
+  // normalise to the `exercises` field our types/UI expect.
+  return (data ?? []).map((s) => ({
+    ...s,
+    exercises: (s.session_exercises ?? []).sort(
+      (a: SessionExercise, b: SessionExercise) => a.sort_order - b.sort_order
+    ),
+  }));
+}
+
+// Same as listSessionsForAthlete but for several athletes in one
+// query — used by the Live Group view, which needs every starred
+// athlete's sessions (with exercises, for the tappable set dots) at
+// once rather than fetching one athlete at a time.
+export async function listSessionsForAthletes(athleteIds: string[]): Promise<Session[]> {
+  if (!athleteIds.length) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("*, session_exercises(*)")
+    .in("athlete_id", athleteIds)
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((s) => ({
+    ...s,
+    exercises: (s.session_exercises ?? []).sort(
+      (a: SessionExercise, b: SessionExercise) => a.sort_order - b.sort_order
+    ),
+  }));
+}
+
+export async function getSession(sessionId: string): Promise<Session | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("*, session_exercises(*)")
+    .eq("id", sessionId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null; // no rows
+    throw error;
+  }
+  return {
+    ...data,
+    exercises: (data.session_exercises ?? []).sort(
+      (a: SessionExercise, b: SessionExercise) => a.sort_order - b.sort_order
+    ),
+  };
+}
+
+// ------------------------------------------------------------
+// Creating
+// ------------------------------------------------------------
+
+export interface NewExerciseInput {
+  name: string;
+  order?: string;
+  sets?: number;
+  reps?: string;
+  time?: string;
+  rest?: string;
+  target_load?: string;
+  tempo?: string;
+  each_side?: boolean;
+  notes?: string;
+  video_url?: string;
+}
+
+// Mirrors the prototype's newExercise() defaults exactly.
+function exerciseDefaults(over: NewExerciseInput) {
+  const sets = over.sets ?? 3;
+  return {
+    name: over.name ?? "",
+    order: over.order ?? "",
+    sets,
+    reps: over.reps ?? "8",
+    time: over.time ?? "",
+    rest: over.rest ?? "",
+    target_load: over.target_load ?? "",
+    tempo: over.tempo ?? "2-0-2",
+    each_side: over.each_side ?? false,
+    notes: over.notes ?? "",
+    video_url: over.video_url ?? "",
+    session_notes: "",
+    progress: "" as const,
+    progress_reminder: false,
+    log: Array.from({ length: sets }, () => ({ weight: "", done: false, reps: "" })) as SetLog[],
+  };
+}
+
+export async function createSession(
+  athleteId: string,
+  type: SessionType,
+  date: string,
+  name: string,
+  exercises: NewExerciseInput[]
+): Promise<Session> {
+  const supabase = createClient();
+
+  const { data: session, error: sessionError } = await supabase
+    .from("sessions")
+    .insert({ athlete_id: athleteId, type, date, name })
+    .select()
+    .single();
+  if (sessionError) throw sessionError;
+
+  const rows = (exercises.length ? exercises : [{ name: "" }]).map((e, i) => ({
+    session_id: session.id,
+    ...exerciseDefaults(e),
+    sort_order: i,
+  }));
+
+  const { data: insertedExercises, error: exError } = await supabase
+    .from("session_exercises")
+    .insert(rows)
+    .select();
+  if (exError) throw exError;
+
+  return { ...session, exercises: insertedExercises };
+}
+
+// ------------------------------------------------------------
+// Updating
+// ------------------------------------------------------------
+
+export async function addExercisesToSession(
+  sessionId: string,
+  exercises: NewExerciseInput[]
+): Promise<SessionExercise[]> {
+  const supabase = createClient();
+
+  // Find current max sort_order
+  const { data: existing } = await supabase
+    .from("session_exercises")
+    .select("sort_order")
+    .eq("session_id", sessionId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const startOrder = ((existing?.[0] as any)?.sort_order ?? -1) + 1;
+
+  const rows = exercises.map((e, i) => ({
+    session_id: sessionId,
+    ...exerciseDefaults(e),
+    sort_order: startOrder + i,
+  }));
+
+  const { data, error } = await supabase
+    .from("session_exercises")
+    .insert(rows)
+    .select();
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateSession(
+  sessionId: string,
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "session_notes">>
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);
+  if (error) throw error;
+}
+
+export async function updateExercise(
+  exerciseId: string,
+  patch: Partial<SessionExercise>
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("session_exercises").update(patch).eq("id", exerciseId);
+  if (error) throw error;
+}
+
+export async function deleteExercise(exerciseId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("session_exercises").delete().eq("id", exerciseId);
+  if (error) throw error;
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  const supabase = createClient();
+  // session_exercises cascade-delete with the session.
+  const { error } = await supabase.from("sessions").delete().eq("id", sessionId);
+  if (error) throw error;
+}
+
+// ------------------------------------------------------------
+// Copy sessions / delete range
+// ------------------------------------------------------------
+// Ported from the prototype's copySessions/deleteRange. Copy takes
+// every session for an athlete within a date range and duplicates it
+// `weeks` times, each copy landing exactly 7×k days later than the
+// original — e.g. copying a Mon/Wed/Fri week forward 3 times
+// recreates that same week's structure for the next 3 weeks.
+export interface CopySessionsResult {
+  sourceCount: number;
+  createdCount: number;
+}
+
+export async function copySessionsRange(
+  athleteId: string,
+  start: string,
+  end: string,
+  weeks: number
+): Promise<CopySessionsResult> {
+  const sourceSessions = await listSessionsForAthlete(athleteId);
+  const src = sourceSessions.filter((s) => s.date >= start && s.date <= end);
+  if (!src.length) return { sourceCount: 0, createdCount: 0 };
+
+  const supabase = createClient();
+  const newSessionRows = src.flatMap((s) =>
+    Array.from({ length: weeks }, (_, k) => ({
+      athlete_id: athleteId,
+      name: s.name,
+      date: addDaysISO(s.date, 7 * (k + 1)),
+      type: s.type,
+      hyrox_type: s.hyrox_type,
+      hyrox_config: s.hyrox_config,
+      cardio_type: s.cardio_type,
+      cardio_config: s.cardio_config,
+      // sourceSessionId is carried through client-side only, not a
+      // real column — used below to look up which exercises to copy
+      // for each newly created session, then stripped before insert.
+      _sourceSessionId: s.id,
+    }))
+  );
+
+  // Insert sessions in one batch, then map the returned rows back to
+  // their source by array position (Supabase preserves insert order).
+  const rowsForInsert = newSessionRows.map(({ _sourceSessionId, ...rest }) => rest);
+  const { data: createdSessions, error: sessErr } = await supabase
+    .from("sessions")
+    .insert(rowsForInsert)
+    .select();
+  if (sessErr) throw sessErr;
+
+  const exerciseRows = createdSessions.flatMap((sess, i) => {
+    const sourceId = newSessionRows[i]._sourceSessionId;
+    const sourceSession = src.find((s) => s.id === sourceId);
+    return (sourceSession?.exercises ?? []).map((e, sortIdx) => ({
+      session_id: sess.id,
+      name: e.name,
+      order: e.order ?? "",
+      sets: e.sets ?? 3,
+      reps: e.reps ?? "",
+      time: e.time ?? "",
+      rest: e.rest ?? "",
+      target_load: e.target_load ?? "",
+      tempo: e.tempo ?? "2-0-2",
+      each_side: e.each_side ?? false,
+      notes: e.notes ?? "",
+      video_url: e.video_url ?? "",
+      sort_order: sortIdx,
+      // Copying resets the log (no logged weights carried over) —
+      // matches the prototype's copyExercise(e, true), which keeps
+      // the progress flag but clears actual logged data since this
+      // is a fresh, not-yet-trained session.
+      log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
+    }));
+  });
+
+  if (exerciseRows.length) {
+    const { error: exErr } = await supabase.from("session_exercises").insert(exerciseRows);
+    if (exErr) throw exErr;
+  }
+
+  return { sourceCount: src.length, createdCount: createdSessions.length };
+}
+
+export async function deleteSessionsRange(athleteId: string, start: string, end: string): Promise<number> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("athlete_id", athleteId)
+    .gte("date", start)
+    .lte("date", end)
+    .select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
+// ------------------------------------------------------------
+// Apply to future sessions
+// ------------------------------------------------------------
+// Ported from the prototype's applyToFutureSessions. With a real
+// database this is actually simpler than the React-state version we
+// had to debug carefully there (see build history — React 18 batches
+// setState calls, which caused a counting bug we had to work around).
+// Here it's a straightforward two-step: count matches, then update them.
+export async function applyToFutureSessions(
+  athleteId: string,
+  exerciseName: string,
+  fromDate: string,
+  patch: Partial<Pick<SessionExercise, "sets" | "reps" | "time" | "rest" | "target_load" | "tempo" | "each_side">>
+): Promise<number> {
+  const supabase = createClient();
+  const targetName = exerciseName.trim().toLowerCase();
+
+  // Find every future session for this athlete, then the matching
+  // exercise rows within them, in one query using a join.
+  const { data: matches, error: findError } = await supabase
+    .from("session_exercises")
+    .select("id, sessions!inner(athlete_id, date)")
+    .eq("sessions.athlete_id", athleteId)
+    .gt("sessions.date", fromDate)
+    .ilike("name", targetName);
+  if (findError) throw findError;
+  if (!matches || matches.length === 0) return 0;
+
+  const ids = matches.map((m) => m.id);
+  const { error: updateError } = await supabase
+    .from("session_exercises")
+    .update(patch)
+    .in("id", ids);
+  if (updateError) throw updateError;
+
+  return ids.length;
+}
+
+// ------------------------------------------------------------
+// Set logging (athlete ticking off a set during a session)
+// ------------------------------------------------------------
+
+export async function updateExerciseLog(exerciseId: string, log: SetLog[]): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("session_exercises").update({ log }).eq("id", exerciseId);
+  if (error) throw error;
+}
+
+// ------------------------------------------------------------
+// Live Group support
+// ------------------------------------------------------------
+
+// Picks which of an athlete's sessions to show in a compact view
+// (Live Group) where there's only room for one at a time: today's
+// session if one exists, otherwise the soonest upcoming one,
+// otherwise the most recent past one. Ported from the prototype's
+// pickActiveSession.
+export function pickActiveSession(sessions: Session[], athleteId: string): Session | null {
+  const list = sessions.filter((s) => s.athlete_id === athleteId);
+  if (!list.length) return null;
+  const today = todayISO();
+  const todays = list.find((s) => s.date === today);
+  if (todays) return todays;
+  const future = list.filter((s) => s.date > today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  if (future.length) return future[0];
+  return [...list].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+}
+
+// Toggles one set's done flag directly, given the exercise's current
+// log — used by the Live Group view for quick tap-to-complete
+// without opening the full session editor.
+export async function toggleSetDone(exerciseId: string, setIndex: number, log: SetLog[]): Promise<SetLog[]> {
+  const newLog = log.map((s, i) => (i === setIndex ? { ...s, done: !s.done } : s));
+  await updateExerciseLog(exerciseId, newLog);
+  return newLog;
+}
+
+// Returns per-athlete session + completion data for a given date range.
+// Used by the dashboard "this week" panels.
+export async function getWeekCompletionData(
+  weekStart: string,
+  weekEnd: string
+): Promise<{ athlete_id: string; date: string; doneSets: number; totalSets: number }[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("athlete_id, date, session_exercises(log)")
+    .gte("date", weekStart)
+    .lte("date", weekEnd);
+  if (error) throw error;
+
+  return (data ?? []).map((session: any) => {
+    let doneSets = 0;
+    let totalSets = 0;
+    for (const ex of session.session_exercises ?? []) {
+      const log: Array<{ done: boolean }> = ex.log ?? [];
+      totalSets += log.length;
+      doneSets += log.filter((s) => s.done).length;
+    }
+    return { athlete_id: session.athlete_id, date: session.date, doneSets, totalSets };
+  });
+}
