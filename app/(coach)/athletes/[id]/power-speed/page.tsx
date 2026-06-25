@@ -257,7 +257,7 @@ export default function PowerSpeedDashboard() {
                           <div style={{ ...s.statValue, color: RAG_COLOR[rag] }}>
                             {best!.toFixed(def.lowerIsBetter && best! < 10 ? 2 : 1)}{def.unit}
                           </div>
-                          <div style={s.statDate}>{bestDate}</div>
+                          <div style={s.statDate}>{result.bestDate}</div>
                         </div>
                         <div style={s.stat}>
                           <div style={s.statLabel}>Latest</div>
