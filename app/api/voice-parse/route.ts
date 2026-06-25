@@ -152,6 +152,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
   // Normalise defaults so the client can rely on all fields being present
   const exercises: ParsedExercise[] = (parsed.exercises ?? []).map((e) => ({
     name: e.name ?? "",
+    order: String(e.order ?? ""),
     sets: typeof e.sets === "number" ? e.sets : parseInt(String(e.sets), 10) || 3,
     reps: e.reps ?? "",
     rest: e.rest ?? "",
