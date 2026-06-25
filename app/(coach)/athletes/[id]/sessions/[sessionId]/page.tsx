@@ -62,7 +62,8 @@ export default function SessionDetailPage() {
     id: ex.id,
     name: ex.name ?? "",
     order: ex.order ?? "",
-    quality: ex.intensity_label ?? "",   // reuse intensity_label as quality store
+    quality: ex.intensity_label ?? "",
+    measurement_type: ex.tempo ?? "none",
     sets: ex.sets ?? 3,
     reps: ex.reps ?? "",
     distance: ex.distance ?? "",
