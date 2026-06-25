@@ -151,9 +151,9 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       while (log.length < newSets) log.push(emptySetLog(newReps));
       updated.log = log.slice(0, newSets).map(s => ({
         ...s,
-        rep_results: s.rep_results.length === newReps
+        rep_results: (s.rep_results ?? []).length === newReps
           ? s.rep_results
-          : Array.from({ length: newReps }, (_, i) => s.rep_results[i] ?? ""),
+          : Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
       }));
     }
 
@@ -351,7 +351,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                     onChange={e => updateSet(si, { single_value: e.target.checked })}
                     style={{ accentColor: "var(--accent)" }}
                   />
-                  <span style={{ fontSize: 11, color: "var(--mute)" }}>One {mMeta.label.toLowerCase()} for all reps</span>
+                  <span style={{ fontSize: 11, color: "var(--mute)" }}>Record one value per set</span>
                 </label>
 
                 {/* RPE + Pain */}
