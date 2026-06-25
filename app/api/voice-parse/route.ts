@@ -16,6 +16,8 @@ export interface ParsedExercise {
   tempo: string;
   notes: string;
   time: string;
+  order: string;
+  order: string;
   each_side: boolean;
 }
 
@@ -36,6 +38,9 @@ Always respond with valid JSON only - no markdown, no backticks, no preamble. Us
   "exercises": [
     {
       "name": "Exercise Name",
+      "order": "1",
+      "order": "1",
+      "order": "1",
       "sets": 3,
       "reps": "8",
       "rest": "90s",
@@ -58,6 +63,8 @@ Field rules:
 - tempo: "3-1-2" format. Empty string if not mentioned
 - time: for timed sets, e.g. "30s", "1min". Empty string if not reps-based
 - each_side: true only if coach explicitly says "each side", "per side", "each leg/arm"
+- order: "1","2","3" sequential; "1A","1B" for supersets. Always assign.
+- order: "1","2","3" sequential; "1A","1B" for supersets. Always assign.
 - notes: any other instruction that doesn't fit the above
 
 Correction rules:
@@ -141,6 +148,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
   // Normalise defaults so the client can rely on all fields being present
   const exercises: ParsedExercise[] = (parsed.exercises ?? []).map((e) => ({
     name: e.name ?? "",
+    order: String(e.order ?? ""),
+    order: String(e.order ?? ""),
     sets: typeof e.sets === "number" ? e.sets : parseInt(String(e.sets), 10) || 3,
     reps: e.reps ?? "",
     rest: e.rest ?? "",

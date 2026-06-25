@@ -26,7 +26,7 @@ export default function AthleteSessionView({
   const exercises = (session.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
   const doneSets = exercises.reduce(
-    (n, e) => n + (e.log ?? []).filter((s) => s.done || s.weight.trim().length > 0).length,
+    (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
     0
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
@@ -129,7 +129,7 @@ export default function AthleteSessionView({
 
             <div style={styles.setGrid}>
               {(ex.log ?? []).map((set, i) => {
-                const hasWeight = set.weight.trim().length > 0;
+                const hasWeight = (set.weight ?? "").trim().length > 0;
                 return (
                   <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
                     <div style={styles.setIdx}>{i + 1}</div>
