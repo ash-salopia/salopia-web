@@ -1,37 +1,40 @@
 "use client";
 
 // ============================================================
-// PowerSpeedExerciseCard
-// Used in Power/Speed sessions on the coach-side session editor.
-// Replaces ExerciseCard for session.type === "power_speed".
-//
-// Fields per exercise:
-//   Prescribed: quality, name, sets, reps, distance, rest,
-//               contacts, surface, notes (coaching cues)
-//   Logged per set: result (time or height), contact_time,
-//                   rsi (auto-calc), rpe, pain, notes, done
+// PowerSpeedExerciseCard — v2
+// Per-rep logging with measurement type selector.
+// Each set has an array of rep results. A "same for all reps"
+// toggle collapses to one value per set (useful for RSI scores
+// measured per set, not per rep).
+// Library autocomplete shows Power/Speed exercises first.
 // ============================================================
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import type { LibraryEntry } from "@/types";
 
-// ── Types ─────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 export type PSQuality =
-  | "acceleration"
-  | "max_velocity"
-  | "plyometric"
-  | "cod"
-  | "deceleration"
-  | "";
+  | "acceleration" | "max_velocity" | "plyometric"
+  | "cod" | "deceleration" | "";
+
+export type MeasurementType =
+  | "time_s"      // sprint time (lower = better)
+  | "height_cm"   // jump height
+  | "distance_m"  // broad jump / sprint distance result
+  | "rsi"         // reactive strength index
+  | "contacts"    // plyometric contacts
+  | "none";       // just tick done
 
 export interface PSSetLog {
   done: boolean;
-  result: string;        // sprint time (s) or jump height (cm) or distance (m)
-  contact_time: string;  // ms — for RSI calc
-  rsi: string;           // reactive strength index (auto or manual)
-  rpe: string;           // 1–10
-  pain: string;          // 0–10
-  notes: string;
+  rep_results: string[];    // one per rep — length matches exercise.reps
+  single_value: boolean;    // if true, only rep_results[0] is shown/used
+  contact_time: string;     // ms (plyometric)
+  rsi: string;              // auto-calculated or manual
+  rpe: string;              // 1–10
+  pain: string;             // 0–10
+  set_notes: string;
 }
 
 export interface PSExercise {
@@ -39,117 +42,181 @@ export interface PSExercise {
   name: string;
   order: string;
   quality: PSQuality;
+  measurement_type: MeasurementType;
   sets: number;
-  reps: string;
-  distance: string;
+  reps: number;             // number of reps per set (integer for P/S)
+  distance: string;         // prescribed distance e.g. "10m"
   rest: string;
-  contacts: number | null;
+  contacts: number | null;  // prescribed contacts (plyometric)
   surface: string;
-  notes: string;          // coaching cues
+  notes: string;            // coaching cues
   log: PSSetLog[];
   sort_order: number;
 }
 
-// ── Constants ─────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 
-const QUALITY_META: Record<PSQuality, { label: string; color: string; icon: string }> = {
-  acceleration:  { label: "Acceleration",  color: "#F59E0B", icon: "⚡" },
-  max_velocity:  { label: "Max Velocity",  color: "#EF4444", icon: "🏃" },
-  plyometric:    { label: "Plyometric",    color: "#8B5CF6", icon: "🦘" },
-  cod:           { label: "COD",           color: "#3B82F6", icon: "🔄" },
-  deceleration:  { label: "Deceleration",  color: "#10B981", icon: "🛑" },
-  "":            { label: "General",       color: "#6B7280", icon: "🏋" },
+export const QUALITY_META: Record<string, { label: string; color: string; icon: string; defaultMeasurement: MeasurementType }> = {
+  acceleration:  { label: "Acceleration",  color: "#F59E0B", icon: "⚡", defaultMeasurement: "time_s" },
+  max_velocity:  { label: "Max Velocity",  color: "#EF4444", icon: "🏃", defaultMeasurement: "time_s" },
+  plyometric:    { label: "Plyometric",    color: "#8B5CF6", icon: "🦘", defaultMeasurement: "height_cm" },
+  cod:           { label: "COD",           color: "#3B82F6", icon: "🔄", defaultMeasurement: "time_s" },
+  deceleration:  { label: "Deceleration",  color: "#10B981", icon: "🛑", defaultMeasurement: "time_s" },
+  "":            { label: "General",       color: "#6B7280", icon: "•",  defaultMeasurement: "none" },
+};
+
+const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; placeholder: string }> = {
+  time_s:    { label: "Time",     unit: "s",   placeholder: "1.52" },
+  height_cm: { label: "Height",   unit: "cm",  placeholder: "42" },
+  distance_m:{ label: "Distance", unit: "m",   placeholder: "2.45" },
+  rsi:       { label: "RSI",      unit: "",    placeholder: "1.8" },
+  contacts:  { label: "Contacts", unit: "",    placeholder: "20" },
+  none:      { label: "None",     unit: "",    placeholder: "—" },
 };
 
 const SURFACES = ["Grass", "Artificial Turf", "Track", "Gym Floor", "Sand", "Road", "Court"];
 const DISTANCE_PRESETS = ["5m", "10m", "15m", "20m", "30m", "40m", "60m", "100m"];
 
-// ── Helpers ───────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function calcRSI(jumpHeightCm: string, contactTimeMs: string): string {
-  const h = parseFloat(jumpHeightCm);
-  const ct = parseFloat(contactTimeMs);
+function calcRSI(heightCm: string, contactMs: string): string {
+  const h = parseFloat(heightCm);
+  const ct = parseFloat(contactMs);
   if (!h || !ct || ct === 0) return "";
-  // RSI = jump height (m) / contact time (s)
-  const rsi = (h / 100) / (ct / 1000);
-  return rsi.toFixed(2);
+  return ((h / 100) / (ct / 1000)).toFixed(2);
 }
 
-function emptyLog(sets: number): PSSetLog[] {
-  return Array.from({ length: sets }, () => ({
-    done: false, result: "", contact_time: "", rsi: "", rpe: "", pain: "", notes: "",
-  }));
+export function emptySetLog(reps: number): PSSetLog {
+  return {
+    done: false,
+    rep_results: Array(Math.max(1, reps)).fill(""),
+    single_value: false,
+    contact_time: "",
+    rsi: "",
+    rpe: "",
+    pain: "",
+    set_notes: "",
+  };
 }
 
-// ── Props ─────────────────────────────────────────────────────
+export function buildLog(sets: number, reps: number): PSSetLog[] {
+  return Array.from({ length: sets }, () => emptySetLog(reps));
+}
+
+// ── Props ──────────────────────────────────────────────────────────────────────
 
 interface Props {
   exercise: PSExercise;
   onChange: (updated: PSExercise) => void;
   onDelete: () => void;
-  isPlyo?: boolean; // true = show contact_time + RSI in log
+  library?: LibraryEntry[];
 }
 
-// ── Component ─────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────────────
 
-export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete }: Props) {
+export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, library = [] }: Props) {
   const [showCues, setShowCues] = useState(!!exercise.notes);
   const [showLog, setShowLog] = useState(false);
+  const [nameQuery, setNameQuery] = useState(exercise.name);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
 
-  const isPlyoQuality = exercise.quality === "plyometric";
-  const isSprintQuality = exercise.quality === "acceleration" || exercise.quality === "max_velocity";
-  const resultLabel = isPlyoQuality ? "Height (cm)" : isSprintQuality ? "Time (s)" : "Result";
+  const qMeta = QUALITY_META[exercise.quality] ?? QUALITY_META[""];
+  const mMeta = MEASUREMENT_META[exercise.measurement_type] ?? MEASUREMENT_META.none;
+  const isPlyo = exercise.quality === "plyometric";
+  const doneSets = exercise.log.filter(s => s.done).length;
+
+  // Library autocomplete — Power/Speed exercises first
+  const libraryMatches = nameQuery.trim().length > 0
+    ? library
+        .filter(e => e.name.toLowerCase().includes(nameQuery.toLowerCase()))
+        .sort((a, b) => {
+          const aPS = (a.types ?? []).includes("Power/Speed");
+          const bPS = (b.types ?? []).includes("Power/Speed");
+          if (aPS && !bPS) return -1;
+          if (!aPS && bPS) return 1;
+          return 0;
+        })
+        .slice(0, 8)
+    : [];
 
   function update(fields: Partial<PSExercise>) {
     const updated = { ...exercise, ...fields };
-    // Resize log if sets changed
-    if (fields.sets !== undefined && fields.sets !== exercise.sets) {
-      const newSets = Math.max(1, fields.sets);
+
+    // Resize log if sets or reps changed
+    if (fields.sets !== undefined || fields.reps !== undefined) {
+      const newSets = fields.sets ?? exercise.sets;
+      const newReps = fields.reps ?? exercise.reps;
       const log = [...(updated.log ?? [])];
-      while (log.length < newSets) log.push({ done: false, result: "", contact_time: "", rsi: "", rpe: "", pain: "", notes: "" });
-      updated.log = log.slice(0, newSets);
+      while (log.length < newSets) log.push(emptySetLog(newReps));
+      updated.log = log.slice(0, newSets).map(s => ({
+        ...s,
+        rep_results: s.rep_results.length === newReps
+          ? s.rep_results
+          : Array.from({ length: newReps }, (_, i) => s.rep_results[i] ?? ""),
+      }));
     }
+
+    // Auto-set measurement type when quality changes
+    if (fields.quality !== undefined) {
+      updated.measurement_type = QUALITY_META[fields.quality]?.defaultMeasurement ?? "none";
+    }
+
     onChange(updated);
   }
 
-  function updateSet(i: number, patch: Partial<PSSetLog>) {
+  function updateSet(si: number, patch: Partial<PSSetLog>) {
     const log = exercise.log.map((s, idx) => {
-      if (idx !== i) return s;
+      if (idx !== si) return s;
       const updated = { ...s, ...patch };
-      // Auto-calculate RSI when height + contact_time are both set (plyometric)
-      if (isPlyoQuality && (patch.result !== undefined || patch.contact_time !== undefined)) {
-        const rsi = calcRSI(
-          patch.result ?? updated.result,
-          patch.contact_time ?? updated.contact_time
-        );
+      // Auto-calc RSI for plyometric
+      if (isPlyo && (patch.contact_time !== undefined || patch.rep_results !== undefined)) {
+        const firstResult = updated.rep_results[0] ?? "";
+        const rsi = calcRSI(firstResult, updated.contact_time);
         if (rsi) updated.rsi = rsi;
-      }
-      // Mark done when result logged
-      if (patch.result !== undefined) {
-        updated.done = patch.result.trim().length > 0;
       }
       return updated;
     });
     onChange({ ...exercise, log });
   }
 
-  const qMeta = QUALITY_META[exercise.quality] ?? QUALITY_META[""];
-  const doneSets = exercise.log.filter(s => s.done).length;
+  function updateRep(si: number, ri: number, value: string) {
+    const log = exercise.log.map((s, idx) => {
+      if (idx !== si) return s;
+      const rep_results = s.rep_results.map((r, i) => i === ri ? value : r);
+      const updated = { ...s, rep_results };
+      // Mark set done if any rep has a result
+      updated.done = rep_results.some(r => r.trim().length > 0);
+      // Auto-calc RSI from first result
+      if (isPlyo && ri === 0) {
+        const rsi = calcRSI(value, s.contact_time);
+        if (rsi) updated.rsi = rsi;
+      }
+      return updated;
+    });
+    onChange({ ...exercise, log });
+  }
+
+  function selectLibraryEntry(entry: LibraryEntry) {
+    setNameQuery(entry.name);
+    setShowDropdown(false);
+    update({ name: entry.name });
+  }
 
   return (
     <div style={card.wrap}>
       {/* ── Header ── */}
       <div style={card.header}>
-        {/* Quality chip */}
+        {/* Quality selector */}
         <select
           value={exercise.quality}
           onChange={e => update({ quality: e.target.value as PSQuality })}
-          style={{ ...card.qualityChip, background: qMeta.color + "22", color: qMeta.color, border: `1px solid ${qMeta.color}44` }}
+          style={{ ...card.qualityChip, background: qMeta.color + "22", color: qMeta.color, border: `1px solid ${qMeta.color}55` }}
         >
           {Object.entries(QUALITY_META).filter(([k]) => k !== "").map(([k, v]) => (
             <option key={k} value={k}>{v.icon} {v.label}</option>
           ))}
-          <option value="">⚪ General</option>
+          <option value="">• General</option>
         </select>
 
         {/* Order */}
@@ -157,21 +224,42 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete }:
           value={exercise.order}
           onChange={e => update({ order: e.target.value })}
           placeholder="#"
-          title="e.g. 1, 1A/1B for superset, Complex A for French Contrast"
+          title="1, 1A/1B for superset, Complex A for French Contrast"
           style={card.orderInput}
         />
 
-        {/* Name */}
-        <input
-          value={exercise.name}
-          onChange={e => update({ name: e.target.value })}
-          placeholder="Exercise name…"
-          style={card.nameInput}
-        />
+        {/* Name with autocomplete */}
+        <div style={{ flex: 1, position: "relative" as const }}>
+          <input
+            ref={nameRef}
+            value={nameQuery}
+            onChange={e => { setNameQuery(e.target.value); update({ name: e.target.value }); setShowDropdown(true); }}
+            onFocus={() => setShowDropdown(true)}
+            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+            placeholder="Exercise name…"
+            style={card.nameInput}
+          />
+          {showDropdown && libraryMatches.length > 0 && (
+            <div style={card.dropdown}>
+              {libraryMatches.map(e => (
+                <button
+                  key={e.id}
+                  style={card.dropdownItem}
+                  onMouseDown={ev => { ev.preventDefault(); selectLibraryEntry(e); }}
+                >
+                  <span>{e.name}</span>
+                  {(e.types ?? []).includes("Power/Speed") && (
+                    <span style={{ fontSize: 10, color: "#A855F7", marginLeft: 6 }}>P/S</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Done badge */}
         {exercise.log.length > 0 && (
-          <span style={{ ...card.doneBadge, background: doneSets === exercise.log.length ? "#10B98122" : "var(--ink)", color: doneSets === exercise.log.length ? "#10B981" : "var(--mute)" }}>
+          <span style={{ ...card.badge, background: doneSets === exercise.log.length ? "#10B98122" : "var(--ink)", color: doneSets === exercise.log.length ? "#10B981" : "var(--mute)" }}>
             {doneSets}/{exercise.log.length}
           </span>
         )}
@@ -187,8 +275,9 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete }:
             style={card.miniInput} />
         </Field>
         <Field label="Reps">
-          <input value={exercise.reps} onChange={e => update({ reps: e.target.value })}
-            placeholder="6" style={card.miniInput} />
+          <input type="number" value={exercise.reps} min={1}
+            onChange={e => update({ reps: parseInt(e.target.value) || 1 })}
+            style={card.miniInput} />
         </Field>
         <Field label="Distance">
           <div style={{ display: "flex", gap: 2 }}>
@@ -205,7 +294,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete }:
           <input value={exercise.rest} onChange={e => update({ rest: e.target.value })}
             placeholder="3min" style={card.miniInput} />
         </Field>
-        {isPlyoQuality && (
+        {isPlyo && (
           <Field label="Contacts">
             <input type="number" value={exercise.contacts ?? ""}
               onChange={e => update({ contacts: parseInt(e.target.value) || null })}
@@ -219,110 +308,120 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete }:
             {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
+        <Field label="Measure">
+          <select value={exercise.measurement_type} onChange={e => update({ measurement_type: e.target.value as MeasurementType })}
+            style={card.miniInput}>
+            {Object.entries(MEASUREMENT_META).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
+            ))}
+          </select>
+        </Field>
       </div>
 
-      {/* ── Coaching cues toggle ── */}
+      {/* ── Coaching cues ── */}
       <button style={card.toggleBtn} onClick={() => setShowCues(v => !v)}>
         {showCues ? "▾ Hide cues" : "▸ Coaching cues"}
       </button>
       {showCues && (
-        <textarea
-          value={exercise.notes}
-          onChange={e => update({ notes: e.target.value })}
-          placeholder="Technical focus, progressions, constraints…"
-          rows={2}
-          style={card.cuesInput}
-        />
+        <textarea value={exercise.notes} onChange={e => update({ notes: e.target.value })}
+          placeholder="Technical focus, progressions, constraints…" rows={2} style={card.cuesInput} />
       )}
 
-      {/* ── Live log toggle ── */}
+      {/* ── Live log ── */}
       <button
         style={{ ...card.toggleBtn, color: doneSets > 0 ? "#10B981" : "var(--mute)" }}
         onClick={() => setShowLog(v => !v)}
       >
-        {showLog ? "▾ Hide log" : `▸ Log sets${doneSets > 0 ? ` (${doneSets}/${exercise.log.length} done)` : ""}`}
+        {showLog ? "▾ Hide log" : `▸ Log sets${doneSets > 0 ? ` (${doneSets}/${exercise.log.length})` : ""}`}
       </button>
 
-      {showLog && (
-        <div style={card.logSection}>
-          {/* Column headers */}
-          <div style={card.logHeaderRow}>
-            <span style={card.logHeaderCell}>#</span>
-            <span style={{ ...card.logHeaderCell, flex: 2 }}>{resultLabel}</span>
-            {isPlyoQuality && <span style={{ ...card.logHeaderCell, flex: 2 }}>CT (ms)</span>}
-            {isPlyoQuality && <span style={{ ...card.logHeaderCell, flex: 1.5 }}>RSI</span>}
-            <span style={card.logHeaderCell}>RPE</span>
-            <span style={card.logHeaderCell}>Pain</span>
-            <span style={{ ...card.logHeaderCell, flex: 2 }}>Notes</span>
-            <span style={card.logHeaderCell}>✓</span>
-          </div>
+      {showLog && exercise.measurement_type !== "none" && (
+        <div style={card.logWrap}>
+          {exercise.log.map((set, si) => (
+            <div key={si} style={{ ...card.setBlock, ...(set.done ? card.setBlockDone : {}) }}>
+              {/* Set header */}
+              <div style={card.setHeader}>
+                <span style={card.setLabel}>Set {si + 1}</span>
 
-          {exercise.log.map((set, i) => (
-            <div key={i} style={{ ...card.logRow, ...(set.done ? card.logRowDone : {}) }}>
-              <span style={card.setNum}>{i + 1}</span>
+                {/* Single value toggle */}
+                <label style={card.toggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={set.single_value}
+                    onChange={e => updateSet(si, { single_value: e.target.checked })}
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  <span style={{ fontSize: 11, color: "var(--mute)" }}>One {mMeta.label.toLowerCase()} for all reps</span>
+                </label>
 
-              {/* Result: time or height */}
-              <input
-                value={set.result}
-                onChange={e => updateSet(i, { result: e.target.value })}
-                placeholder={isPlyoQuality ? "cm" : isSprintQuality ? "s" : "—"}
-                inputMode="decimal"
-                style={{ ...card.logInput, flex: 2 }}
-              />
+                {/* RPE + Pain */}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={card.metaLabel}>RPE</span>
+                  <input value={set.rpe} onChange={e => updateSet(si, { rpe: e.target.value })}
+                    placeholder="—" inputMode="numeric" style={card.metaInput} />
+                  <span style={card.metaLabel}>Pain</span>
+                  <input value={set.pain} onChange={e => updateSet(si, { pain: e.target.value })}
+                    placeholder="—" inputMode="numeric" style={card.metaInput} />
+                  <button
+                    style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
+                    onClick={() => updateSet(si, { done: !set.done })}
+                  >✓</button>
+                </div>
+              </div>
 
-              {/* Contact time (plyometric only) */}
-              {isPlyoQuality && (
-                <input
-                  value={set.contact_time}
-                  onChange={e => updateSet(i, { contact_time: e.target.value })}
-                  placeholder="ms"
-                  inputMode="decimal"
-                  style={{ ...card.logInput, flex: 2 }}
-                />
+              {/* Rep results */}
+              {set.single_value ? (
+                /* Single value for all reps */
+                <div style={card.singleValueRow}>
+                  <span style={card.repLabel}>All reps</span>
+                  <input
+                    value={set.rep_results[0] ?? ""}
+                    onChange={e => updateSet(si, { rep_results: Array(exercise.reps).fill(e.target.value), done: e.target.value.trim().length > 0 })}
+                    placeholder={mMeta.placeholder}
+                    inputMode="decimal"
+                    style={card.repInput}
+                  />
+                  <span style={card.unitLabel}>{mMeta.unit}</span>
+                </div>
+              ) : (
+                /* Per-rep inputs */
+                <div style={card.repGrid}>
+                  {set.rep_results.map((result, ri) => (
+                    <div key={ri} style={card.repRow}>
+                      <span style={card.repLabel}>R{ri + 1}</span>
+                      <input
+                        value={result}
+                        onChange={e => updateRep(si, ri, e.target.value)}
+                        placeholder={mMeta.placeholder}
+                        inputMode="decimal"
+                        style={card.repInput}
+                      />
+                      <span style={card.unitLabel}>{mMeta.unit}</span>
+                    </div>
+                  ))}
+                </div>
               )}
 
-              {/* RSI (auto or manual) */}
-              {isPlyoQuality && (
-                <input
-                  value={set.rsi}
-                  onChange={e => updateSet(i, { rsi: e.target.value })}
-                  placeholder="auto"
-                  inputMode="decimal"
-                  style={{ ...card.logInput, flex: 1.5, color: "var(--accent)" }}
-                />
+              {/* Plyometric extras: contact time + RSI */}
+              {isPlyo && (
+                <div style={card.plyoRow}>
+                  <span style={card.metaLabel}>CT (ms)</span>
+                  <input value={set.contact_time}
+                    onChange={e => updateSet(si, { contact_time: e.target.value })}
+                    placeholder="180" inputMode="decimal" style={card.metaInput} />
+                  <span style={card.metaLabel}>RSI</span>
+                  <input value={set.rsi}
+                    onChange={e => updateSet(si, { rsi: e.target.value })}
+                    placeholder="auto" inputMode="decimal"
+                    style={{ ...card.metaInput, color: "var(--accent)" }} />
+                </div>
               )}
 
-              {/* RPE */}
-              <input
-                value={set.rpe}
-                onChange={e => updateSet(i, { rpe: e.target.value })}
-                placeholder="—"
-                inputMode="numeric"
-                style={{ ...card.logInput }}
-              />
-
-              {/* Pain */}
-              <input
-                value={set.pain}
-                onChange={e => updateSet(i, { pain: e.target.value })}
-                placeholder="—"
-                inputMode="numeric"
-                style={{ ...card.logInput }}
-              />
-
-              {/* Notes */}
-              <input
-                value={set.notes}
-                onChange={e => updateSet(i, { notes: e.target.value })}
-                placeholder="—"
-                style={{ ...card.logInput, flex: 2 }}
-              />
-
-              {/* Done */}
-              <button
-                style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
-                onClick={() => updateSet(i, { done: !set.done })}
-              >✓</button>
+              {/* Set notes */}
+              <input value={set.set_notes}
+                onChange={e => updateSet(si, { set_notes: e.target.value })}
+                placeholder="Set notes…"
+                style={card.setNotesInput} />
             </div>
           ))}
         </div>
@@ -331,7 +430,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete }:
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -342,27 +441,38 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────
+// ── Styles ─────────────────────────────────────────────────────────────────────
 
 const card: Record<string, React.CSSProperties> = {
   wrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 },
   header: { display: "flex", alignItems: "center", gap: 6 },
-  qualityChip: { borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
+  qualityChip: { borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
   orderInput: { width: 32, textAlign: "center" as const, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "6px 2px", fontSize: 12, fontWeight: 700, flexShrink: 0 },
-  nameInput: { flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 14, fontWeight: 700 },
-  doneBadge: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 7px", flexShrink: 0 },
+  nameInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 14, fontWeight: 700 },
+  dropdown: { position: "absolute" as const, top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 10, padding: 4, maxHeight: 200, overflowY: "auto" as const, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
+  dropdownItem: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "7px 10px", border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
+  badge: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 7px", flexShrink: 0 },
   deleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", padding: 4, flexShrink: 0 },
   fields: { display: "flex", gap: 8, flexWrap: "wrap" as const },
   miniInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 7px", fontSize: 13 },
   toggleBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "2px 0", textAlign: "left" as const },
   cuesInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 10px", fontSize: 12, fontStyle: "italic" as const, resize: "vertical" as const, fontFamily: "inherit" },
-  logSection: { display: "flex", flexDirection: "column" as const, gap: 4, background: "var(--ink)", borderRadius: 8, padding: 8 },
-  logHeaderRow: { display: "flex", gap: 4, alignItems: "center", paddingBottom: 4, borderBottom: "1px solid var(--line)", marginBottom: 2 },
-  logHeaderCell: { flex: 1, fontSize: 9, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, textAlign: "center" as const },
-  logRow: { display: "flex", gap: 4, alignItems: "center" },
-  logRowDone: { opacity: 0.7 },
-  setNum: { width: 18, fontSize: 11, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const, flexShrink: 0 },
-  logInput: { flex: 1, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "5px 6px", fontSize: 12, minWidth: 0 },
+  logWrap: { display: "flex", flexDirection: "column" as const, gap: 8 },
+  setBlock: { background: "var(--ink)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column" as const, gap: 6 },
+  setBlockDone: { boxShadow: "inset 0 0 0 1px #10B98144" },
+  setHeader: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const },
+  setLabel: { fontSize: 12, fontWeight: 700, color: "var(--mute)", flexShrink: 0 },
+  toggleLabel: { display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flex: 1 },
+  metaLabel: { fontSize: 10, color: "var(--mute)", fontWeight: 600, textTransform: "uppercase" as const, flexShrink: 0 },
+  metaInput: { width: 44, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "4px 6px", fontSize: 12, textAlign: "center" as const },
   doneBtn: { width: 26, height: 26, borderRadius: 5, border: "1px solid var(--line)", background: "transparent", color: "var(--mute)", cursor: "pointer", flexShrink: 0, fontSize: 12 },
   doneBtnOn: { background: "#10B98122", color: "#10B981", borderColor: "#10B981" },
+  repGrid: { display: "flex", flexWrap: "wrap" as const, gap: 6 },
+  repRow: { display: "flex", alignItems: "center", gap: 4 },
+  singleValueRow: { display: "flex", alignItems: "center", gap: 6 },
+  repLabel: { fontSize: 10, color: "var(--mute)", fontWeight: 700, width: 22, flexShrink: 0 },
+  repInput: { width: 64, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "5px 7px", fontSize: 13, fontWeight: 700 },
+  unitLabel: { fontSize: 10, color: "var(--mute)", flexShrink: 0 },
+  plyoRow: { display: "flex", alignItems: "center", gap: 6 },
+  setNotesInput: { width: "100%", background: "transparent", border: "none", borderTop: "1px solid var(--line)", color: "var(--mute)", padding: "6px 0 0", fontSize: 11, fontStyle: "italic" as const },
 };

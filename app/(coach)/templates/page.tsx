@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { listTemplates, createTemplate, deleteTemplate } from "@/lib/data/templates";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesTemplateModal from "@/components/NotesTemplateModal";
+import NoteTemplatesManager from "@/components/NoteTemplatesManager";
 import type { Template } from "@/types";
 
 export default function TemplatesPage() {
