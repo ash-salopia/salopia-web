@@ -8,6 +8,7 @@ const TYPE_META: Record<SessionType, { label: string; color: string; short: stri
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
   hyrox:    { label: "Hyrox",    color: "#B388FF", short: "Hyr" },
   cardio:   { label: "Cardio",   color: "#4DC3FF", short: "Car" },
+  power_speed: { label: "Power/Speed", color: "#A855F7", short: "Pow" },
 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
