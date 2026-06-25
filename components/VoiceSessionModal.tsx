@@ -84,6 +84,7 @@ export default function VoiceSessionModal({
   const [correcting, setCorrecting] = useState(false);
   const [corrElapsed, setCorrElapsed] = useState(0);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [detectedType, setDetectedType] = useState<string>("strength");
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -169,6 +170,7 @@ export default function VoiceSessionModal({
           setSessions(toReviewSessions(result.exercises));
           setHistory(result.history);
           setAiMessage(result.message);
+          if (result.session_type) setDetectedType(result.session_type);
           setPhase("review");
         } catch (e) { setError(e instanceof Error ? e.message : "Could not parse"); setPhase("idle"); }
       },
@@ -239,7 +241,7 @@ export default function VoiceSessionModal({
     try {
       if (mode === "new") {
         const session = await createSession(
-          athleteId!, "strength", sessionDate,
+          athleteId!, (detectedType as any) || "strength", sessionDate,
           sessionName.trim() || `Session ${sessionCount + 1}`, exInputs
         );
         onCreated?.(session);
@@ -360,6 +362,11 @@ export default function VoiceSessionModal({
               )}
 
               {aiMessage && <div style={s.aiMsg}>{aiMessage}</div>}
+              {detectedType && detectedType !== "strength" && (
+                <div style={{ fontSize: 12, color: "#A855F7", background: "#A855F715", border: "1px solid #A855F744", borderRadius: 6, padding: "5px 10px" }}>
+                  Detected as <strong>{detectedType.replace("_", " / ")}</strong> session
+                </div>
+              )}
 
               <SessionReviewEditor
                 sessions={sessions}

@@ -21,6 +21,7 @@ export interface ParsedExerciseWithMatch {
 export interface ParsedSession {
   name: string;
   exercises: ParsedExerciseWithMatch[];
+  type?: string;       // "strength" | "power_speed" | "cardio" | "hyrox"
   date?: string;       // ISO date YYYY-MM-DD if a specific date was mentioned
   dayOffset: number;   // 0=Mon, 1=Tue … relative offset if no specific date
   weekNumber: number;  // 1-based
@@ -54,6 +55,7 @@ Response format:
   "sessions": [
     {
       "name": "Session name",
+      "type": "strength",
       "date": "2026-06-26",
       "dayOffset": 0,
       "weekNumber": 1,
@@ -84,6 +86,14 @@ Library matching rules:
 - If matched: use the EXACT library name, set matched=true
 - If no reasonable match: use best interpretation from the notes, set matched=false
 - List all unmatched names in unmatchedExercises
+
+Session type detection:
+- Add "type" to each session: "strength" | "power_speed" | "cardio" | "hyrox"
+- "power_speed" if session contains sprints, plyometrics, jumps, agility, throws, speed work
+- "strength" for weights, sets/reps, resistance
+- "cardio" for endurance without structure
+- "hyrox" if Hyrox is mentioned
+- Default: "strength"
 
 Session detection rules:
 - Detect how many distinct sessions are described - one or many
@@ -189,6 +199,7 @@ export async function POST(
   // Normalise all fields so the client can rely on them being present
   const sessions: ParsedSession[] = (parsed.sessions ?? []).map((s) => ({
     name: s.name ?? "Session",
+    type: (["strength","power_speed","cardio","hyrox"] as const).includes(s.type as any) ? s.type : "strength",
     date: s.date ?? undefined,
     dayOffset: typeof s.dayOffset === "number" ? s.dayOffset : 0,
     weekNumber: typeof s.weekNumber === "number" ? Math.max(1, s.weekNumber) : 1,

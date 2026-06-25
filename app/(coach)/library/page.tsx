@@ -176,7 +176,7 @@ export default function LibraryPage() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={styles.rowName}>{entry.name || "Untitled"}</div>
-                    {entry.types.length > 0 && (
+                    {entry.types && entry.types.length > 0 && (
                       <div style={styles.rowTypes}>{entry.types.join(", ")}</div>
                     )}
                   </div>
@@ -248,6 +248,11 @@ function LibraryEntryEditor({
   const [targetLoad, setTargetLoad] = useState(entry?.target_load ?? "");
   const [tempo, setTempo] = useState(entry?.tempo ?? "2-0-2");
   const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [types, setTypes] = useState<string[]>(entry?.types ?? []);
+
+  const SESSION_TYPES = ["Strength", "Power/Speed", "Cardio", "Hyrox"];
+  const toggleType = (t: string) =>
+    setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,6 +267,7 @@ function LibraryEntryEditor({
       target_load: targetLoad,
       tempo,
       notes,
+      types,
     } as Partial<LibraryEntry> & { name: string });
   };
 
@@ -298,6 +304,32 @@ function LibraryEntryEditor({
       </FieldRow>
       <FieldRow label="Notes">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...styles.input, minHeight: 70 }} />
+      </FieldRow>
+      <FieldRow label="Session types">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {SESSION_TYPES.map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => toggleType(t)}
+              style={{
+                background: types.includes(t) ? "var(--accent-dim)" : "var(--ink)",
+                border: `1px solid ${types.includes(t) ? "var(--accent)" : "var(--line)"}`,
+                color: types.includes(t) ? "var(--accent)" : "var(--mute)",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+          Tag which session types this exercise appears in
+        </div>
       </FieldRow>
       <button type="submit" style={styles.primaryBtn}>
         Save

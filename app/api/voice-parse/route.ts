@@ -9,6 +9,7 @@ interface ConvMessage {
 
 export interface ParsedExercise {
   name: string;
+  order: string;
   sets: number;
   reps: string;
   rest: string;
@@ -16,12 +17,12 @@ export interface ParsedExercise {
   tempo: string;
   notes: string;
   time: string;
-  order: string;
   each_side: boolean;
 }
 
 interface ParseResponse {
   exercises: ParsedExercise[];
+  session_type: string;
   message: string;
   history: ConvMessage[];
 }
@@ -37,7 +38,6 @@ Always respond with valid JSON only - no markdown, no backticks, no preamble. Us
   "exercises": [
     {
       "name": "Exercise Name",
-      "order": "1",
       "sets": 3,
       "reps": "8",
       "rest": "90s",
@@ -48,6 +48,7 @@ Always respond with valid JSON only - no markdown, no backticks, no preamble. Us
       "each_side": false
     }
   ],
+  "session_type": "strength",
   "message": "One sentence confirming what you parsed or changed."
 }
 
@@ -60,13 +61,20 @@ Field rules:
 - tempo: "3-1-2" format. Empty string if not mentioned
 - time: for timed sets, e.g. "30s", "1min". Empty string if not reps-based
 - each_side: true only if coach explicitly says "each side", "per side", "each leg/arm"
-- order: "1","2","3" sequential; "1A","1B" for supersets. Always assign.
 - notes: any other instruction that doesn't fit the above
 
 Correction rules:
 - When the user says "correction" or describes a change, update only the exercise(s) mentioned
 - Return the COMPLETE updated exercises array, not just the changed ones
 - Infer exercise number from "exercise 1", "first exercise", "the squat", etc.
+
+Session type detection:
+- Analyse the exercises described and return session_type as one of: "strength", "power_speed", "cardio", "hyrox"
+- "power_speed" if the session contains sprints, jumps, plyometrics, agility drills, throws, or speed work
+- "strength" if it contains weights, sets/reps, resistance exercises
+- "cardio" if it contains running, cycling, rowing without structure  
+- "hyrox" if it explicitly mentions Hyrox
+- Default to "strength" if unclear
 
 Keep "message" to one sentence, friendly and direct.`;
 
@@ -129,7 +137,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
   const anthropicData = await anthropicRes.json();
   const raw: string = anthropicData?.content?.[0]?.text ?? "{}";
 
-  let parsed: { exercises?: ParsedExercise[]; message?: string };
+  let parsed: { exercises?: ParsedExercise[]; session_type?: string; message?: string };
   try {
     // Strip any accidental markdown fences before parsing
     const clean = raw.replace(/```json|```/g, "").trim();
@@ -144,7 +152,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
   // Normalise defaults so the client can rely on all fields being present
   const exercises: ParsedExercise[] = (parsed.exercises ?? []).map((e) => ({
     name: e.name ?? "",
-    order: String(e.order ?? ""),
     sets: typeof e.sets === "number" ? e.sets : parseInt(String(e.sets), 10) || 3,
     reps: e.reps ?? "",
     rest: e.rest ?? "",
@@ -160,8 +167,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
     { role: "assistant", content: raw },
   ];
 
+  const session_type = (["strength","power_speed","cardio","hyrox"] as const)
+    .includes(parsed.session_type as any) ? parsed.session_type : "strength";
+
   return NextResponse.json({
     exercises,
+    session_type,
     message: parsed.message ?? "",
     history: updatedHistory,
   });

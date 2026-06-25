@@ -28,6 +28,7 @@ interface ParsedSessionFromAPI {
     time: string;
     each_side: boolean;
   }>;
+  type?: string;       // detected session type
   date?: string;       // ISO date if AI detected a specific date in the notes
   dayOffset: number;
   weekNumber: number;
@@ -119,7 +120,8 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
   const toReviewSessions = (parsed: ParsedSessionFromAPI[]): ReviewSession[] =>
     parsed.map((s) => ({
       name: s.name,
-      date: s.date,            // carry AI-detected date through for display/save
+      date: s.date,
+      type: s.type ?? "strength",
       dayOffset: s.dayOffset,
       weekNumber: s.weekNumber,
       exercises: enrichWithLibrary(s.exercises, library),
@@ -227,7 +229,8 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             notes: e.notes,
             time: e.time, each_side: e.each_side, video_url: e.video_url,
           }));
-        const session = await createSession(athleteId, "strength", date, name, exInputs);
+        const sessionType = ((s as any).type ?? "strength") as any;
+        const session = await createSession(athleteId, sessionType, date, name, exInputs);
         created.push(session);
       }
       onCreated(created);

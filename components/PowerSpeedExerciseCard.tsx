@@ -151,9 +151,9 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       while (log.length < newSets) log.push(emptySetLog(newReps));
       updated.log = log.slice(0, newSets).map(s => ({
         ...s,
-        rep_results: (s.rep_results ?? []).length === newReps
+        rep_results: s.rep_results.length === newReps
           ? s.rep_results
-          : Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
+          : Array.from({ length: newReps }, (_, i) => s.rep_results[i] ?? ""),
       }));
     }
 
@@ -264,6 +264,18 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           </span>
         )}
 
+        {/* Measurement type — prominent in header so it's always visible */}
+        <select
+          value={exercise.measurement_type}
+          onChange={e => update({ measurement_type: e.target.value as MeasurementType })}
+          style={card.measureSelect}
+          title="What are you measuring per rep?"
+        >
+          {Object.entries(MEASUREMENT_META).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
+          ))}
+        </select>
+
         <button style={card.deleteBtn} onClick={onDelete}>×</button>
       </div>
 
@@ -308,14 +320,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
             {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
-        <Field label="Measure">
-          <select value={exercise.measurement_type} onChange={e => update({ measurement_type: e.target.value as MeasurementType })}
-            style={card.miniInput}>
-            {Object.entries(MEASUREMENT_META).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
-            ))}
-          </select>
-        </Field>
+
       </div>
 
       {/* ── Coaching cues ── */}
@@ -351,7 +356,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                     onChange={e => updateSet(si, { single_value: e.target.checked })}
                     style={{ accentColor: "var(--accent)" }}
                   />
-                  <span style={{ fontSize: 11, color: "var(--mute)" }}>Record one value per set</span>
+                  <span style={{ fontSize: 11, color: "var(--mute)" }}>One {mMeta.label.toLowerCase()} for all reps</span>
                 </label>
 
                 {/* RPE + Pain */}
@@ -375,7 +380,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                 <div style={card.singleValueRow}>
                   <span style={card.repLabel}>All reps</span>
                   <input
-                    value={(set.rep_results ?? [])[0] ?? ""}
+                    value={set.rep_results[0] ?? ""}
                     onChange={e => updateSet(si, { rep_results: Array(exercise.reps).fill(e.target.value), done: e.target.value.trim().length > 0 })}
                     placeholder={mMeta.placeholder}
                     inputMode="decimal"
@@ -386,7 +391,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
               ) : (
                 /* Per-rep inputs */
                 <div style={card.repGrid}>
-                  {(set.rep_results ?? []).map((result, ri) => (
+                  {set.rep_results.map((result, ri) => (
                     <div key={ri} style={card.repRow}>
                       <span style={card.repLabel}>R{ri + 1}</span>
                       <input
@@ -453,6 +458,7 @@ const card: Record<string, React.CSSProperties> = {
   dropdownItem: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "7px 10px", border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
   badge: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 7px", flexShrink: 0 },
   deleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", padding: 4, flexShrink: 0 },
+  measureSelect: { background: "var(--ink)", border: "1px solid var(--accent)44", color: "var(--accent)", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
   fields: { display: "flex", gap: 8, flexWrap: "wrap" as const },
   miniInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 7px", fontSize: 13 },
   toggleBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "2px 0", textAlign: "left" as const },
