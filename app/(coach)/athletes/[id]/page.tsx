@@ -29,7 +29,6 @@ const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
   hyrox: { label: "Hyrox", color: "#B388FF" },
   cardio: { label: "Cardio", color: "#4DC3FF" },
-  power_speed: { label: "Power/Speed", color: "#A855F7" },
 };
 
 function EditableName({ name, onSave }: { name: string; onSave: (n: string) => Promise<void> }) {
@@ -682,6 +681,18 @@ export default function AthleteDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Power/Speed benchmark link */}
+      <button
+        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #A855F744", background: "#A855F708" }}
+        onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
+      >
+        <div>
+          <div style={{ ...styles.testingTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
+          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>10m, 20m, CMJ, RSI, Broad Jump, 505 →</div>
+        </div>
+        <span style={{ fontSize: 20, color: "#A855F7" }}>›</span>
+      </button>
 
       {/* Testing schedule card */}
       <div style={styles.testingCard}>

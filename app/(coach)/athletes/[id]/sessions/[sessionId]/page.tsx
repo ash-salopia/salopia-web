@@ -21,6 +21,9 @@ import HyroxTimer from "@/components/HyroxTimer";
 import CheckInModal from "@/components/CheckInModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
+import PowerSpeedExerciseCard from "@/components/PowerSpeedExerciseCard";
+import PowerSpeedSummaryBar from "@/components/PowerSpeedSummaryBar";
+import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
 
@@ -53,6 +56,25 @@ export default function SessionDetailPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [report, setReport] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+
+  // Convert DB session exercise to PSExercise shape
+  const toPSExercise = (ex: any): PSExercise => ({
+    id: ex.id,
+    name: ex.name ?? "",
+    order: ex.order ?? "",
+    quality: ex.intensity_label ?? "",   // reuse intensity_label as quality store
+    sets: ex.sets ?? 3,
+    reps: ex.reps ?? "",
+    distance: ex.distance ?? "",
+    rest: ex.rest ?? "",
+    contacts: ex.contacts ?? null,
+    surface: ex.target_load ?? "",       // reuse target_load as surface store
+    notes: ex.notes ?? "",
+    log: Array.isArray(ex.log) && ex.log.length > 0 && typeof ex.log[0] === 'object' && 'result' in ex.log[0]
+      ? ex.log
+      : Array.from({ length: ex.sets ?? 3 }, () => ({ done: false, result: "", contact_time: "", rsi: "", rpe: "", pain: "", notes: "" })),
+    sort_order: ex.sort_order ?? 0,
+  });
 
   const load = async () => {
     setLoading(true);
@@ -93,6 +115,40 @@ export default function SessionDetailPage() {
   const showFlash = (msg: string) => {
     setFlash(msg);
     setTimeout(() => setFlash(""), 3000);
+  };
+
+  // Power/Speed exercise update handler
+  const handlePSExerciseChange = async (updated: PSExercise) => {
+    // Optimistic update
+    setSession(prev => prev ? {
+      ...prev,
+      exercises: prev.exercises?.map(ex => ex.id === updated.id ? {
+        ...ex,
+        name: updated.name,
+        order: updated.order,
+        sets: updated.sets,
+        reps: updated.reps,
+        distance: updated.distance,
+        rest: updated.rest,
+        contacts: updated.contacts ?? undefined,
+        intensity_label: updated.quality,  // quality stored in intensity_label
+        target_load: updated.surface,       // surface stored in target_load
+        notes: updated.notes,
+        log: updated.log,
+      } as any : ex),
+    } : prev);
+    try {
+      await updateExercise(updated.id, {
+        name: updated.name,
+        order: updated.order,
+        sets: updated.sets,
+        reps: updated.reps,
+        notes: updated.notes,
+        log: updated.log as any,
+      } as any);
+    } catch (e) {
+      console.error("PS exercise update failed:", e);
+    }
   };
 
   const handleSessionNotesChange = async (session_notes: string) => {
@@ -553,7 +609,23 @@ export default function SessionDetailPage() {
               />
             ))}
           </div>
-
+          <button style={styles.addExerciseBtn} onClick={handleAddExercise}>
+            + Add exercise
+          </button>
+        </>
+      ) : session.type === "power_speed" ? (
+        <>
+          <PowerSpeedSummaryBar exercises={exercises.map(toPSExercise)} />
+          <div style={styles.exerciseList}>
+            {exercises.map((ex) => (
+              <PowerSpeedExerciseCard
+                key={ex.id}
+                exercise={toPSExercise(ex)}
+                onChange={handlePSExerciseChange}
+                onDelete={() => handleRemoveExercise(ex.id)}
+              />
+            ))}
+          </div>
           <button style={styles.addExerciseBtn} onClick={handleAddExercise}>
             + Add exercise
           </button>
