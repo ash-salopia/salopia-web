@@ -162,30 +162,110 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {CHECKIN_CONDITIONS.map((condition) => (
-                  <div key={condition.key} style={s.ruleRow}>
-                    <div style={{ flex: 1 }}>
-                      <div style={s.ruleLabel}>{condition.label}</div>
-                      <div style={s.ruleDesc}>{condition.description}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {CHECKIN_CONDITIONS.map((condition) => {
+                  const action = settings.checkin_rules[condition.key] as CheckInAction;
+                  const optMeta = CHECKIN_RULE_OPTIONS.find(o => o.value === action);
+                  return (
+                    <div key={condition.key} style={s.ruleBlock}>
+                      <div style={s.ruleHeader}>
+                        <div>
+                          <div style={s.ruleLabel}>{condition.label}</div>
+                          <div style={s.ruleDesc}>{condition.description}</div>
+                        </div>
+                        <select
+                          value={action}
+                          onChange={(e) => setSettings((prev) => ({
+                            ...prev,
+                            checkin_rules: { ...prev.checkin_rules, [condition.key]: e.target.value as CheckInAction },
+                          }))}
+                          style={s.ruleSelect}
+                        >
+                          {CHECKIN_RULE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Description of selected action */}
+                      {optMeta?.description && (
+                        <div style={s.actionDesc}>{optMeta.description}</div>
+                      )}
+
+                      {/* Custom text input */}
+                      {action === "custom" && (
+                        <textarea
+                          value={(settings.checkin_rules as any)[condition.customKey] ?? ""}
+                          onChange={e => setSettings(prev => ({
+                            ...prev,
+                            checkin_rules: { ...prev.checkin_rules, [condition.customKey]: e.target.value },
+                          }))}
+                          placeholder="Write your custom recommendation for athletes..."
+                          rows={2}
+                          style={s.customTextarea}
+                        />
+                      )}
+
+                      {/* Secondary action for high soreness */}
+                      {condition.key === "high_soreness" && (
+                        <div style={s.secondaryRow}>
+                          <div style={s.ruleDesc}>Also recommend:</div>
+                          <select
+                            value={settings.checkin_rules.high_soreness_also ?? ""}
+                            onChange={e => setSettings(prev => ({
+                              ...prev,
+                              checkin_rules: { ...prev.checkin_rules, high_soreness_also: e.target.value as any },
+                            }))}
+                            style={{ ...s.ruleSelect, flex: "unset", width: 220 }}
+                          >
+                            <option value="">Nothing additional</option>
+                            <option value="skip_sore_muscles">Skip sore muscle exercises</option>
+                            <option value="postpone">Postpone to later in week</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
-                    <select
-                      value={settings.checkin_rules[condition.key]}
-                      onChange={(e) => setSettings((prev) => ({
-                        ...prev,
-                        checkin_rules: {
-                          ...prev.checkin_rules,
-                          [condition.key]: e.target.value as CheckInAction,
-                        },
-                      }))}
-                      style={s.ruleSelect}
-                    >
-                      {CHECKIN_RULE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                  );
+                })}
+              </div>
+
+              {/* Extra custom rules */}
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 4 }}>
+                <div style={s.cardLabel}>Additional custom suggestions</div>
+                <div style={s.cardDesc}>
+                  These appear for all athletes on every check-in, regardless of scores.
+                  Use for team-wide reminders or coaching points.
+                </div>
+                {(settings.checkin_rules.extra_rules ?? []).map((rule, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                    <input
+                      value={rule.text}
+                      onChange={e => {
+                        const extra_rules = [...(settings.checkin_rules.extra_rules ?? [])];
+                        extra_rules[i] = { ...extra_rules[i], text: e.target.value };
+                        setSettings(prev => ({ ...prev, checkin_rules: { ...prev.checkin_rules, extra_rules } }));
+                      }}
+                      placeholder="Custom suggestion text..."
+                      style={{ ...s.ruleSelect, flex: 1 }}
+                    />
+                    <button
+                      style={s.removeBtn}
+                      onClick={() => {
+                        const extra_rules = (settings.checkin_rules.extra_rules ?? []).filter((_, j) => j !== i);
+                        setSettings(prev => ({ ...prev, checkin_rules: { ...prev.checkin_rules, extra_rules } }));
+                      }}
+                    >✕</button>
                   </div>
                 ))}
+                <button
+                  style={s.addRuleBtn}
+                  onClick={() => {
+                    const extra_rules = [...(settings.checkin_rules.extra_rules ?? []), { label: "", text: "" }];
+                    setSettings(prev => ({ ...prev, checkin_rules: { ...prev.checkin_rules, extra_rules } }));
+                  }}
+                >
+                  + Add custom suggestion
+                </button>
               </div>
             </>
           )}
@@ -243,6 +323,13 @@ const s: Record<string, React.CSSProperties> = {
   saveBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
   toggleSwitch: { width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative" as const, flexShrink: 0, transition: "background 0.2s" },
   toggleThumb: { position: "absolute" as const, top: 3, left: 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "transform 0.2s" },
+  ruleBlock: { background: "var(--panel2)", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column" as const, gap: 8 },
+  ruleHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  actionDesc: { fontSize: 11, color: "var(--accent)", fontStyle: "italic" as const },
+  secondaryRow: { display: "flex", alignItems: "center", gap: 10 },
+  customTextarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 12, resize: "vertical" as const, fontFamily: "inherit" },
+  removeBtn: { background: "transparent", border: "1px solid var(--line)", color: "#FF6B6B", borderRadius: 6, padding: "6px 8px", fontSize: 12, cursor: "pointer", flexShrink: 0 },
+  addRuleBtn: { background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", width: "100%", marginTop: 4 },
   ruleRow: { display: "flex", alignItems: "center", gap: 16, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 14px" },
   ruleLabel: { fontSize: 14, fontWeight: 600, color: "var(--text)" },
   ruleDesc: { fontSize: 11, color: "var(--mute)", marginTop: 2 },
