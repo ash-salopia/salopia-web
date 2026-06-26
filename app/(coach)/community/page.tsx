@@ -13,8 +13,9 @@ import {
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
+import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
 
-type Tab = "groups" | "announcements" | "feed" | "chat";
+type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ const GROUP_COLOURS = [
 
 export default function CommunityPage() {
   const [tab, setTab] = useState<Tab>("groups");
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [pbs, setPbs] = useState<PersonalBest[]>([]);
@@ -81,7 +83,7 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat"] as Tab[]).map((t) => (
+        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
@@ -118,6 +120,15 @@ export default function CommunityPage() {
               coachId={coachId}
               coachName={coachName}
               onPbsChange={setPbs}
+            />
+          )}
+          {tab === "comps" && (
+            <CompetitionFeed
+              competitions={competitions}
+              athleteId={coachId}
+              athleteName={coachName}
+              token=""
+              onUpdated={setCompetitions}
             />
           )}
           {tab === "chat" && (

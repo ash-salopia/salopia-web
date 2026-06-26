@@ -185,7 +185,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   function updateRep(si: number, ri: number, value: string) {
     const log = exercise.log.map((s, idx) => {
       if (idx !== si) return s;
-      const rep_results = s.rep_results.map((r, i) => i === ri ? value : r);
+      const rep_results = (s.rep_results ?? []).map((r, i) => i === ri ? value : r);
       const updated = { ...s, rep_results };
       // Mark set done if any rep has a result
       updated.done = rep_results.some(r => r.trim().length > 0);

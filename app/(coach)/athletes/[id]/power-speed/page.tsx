@@ -133,6 +133,7 @@ export default function PowerSpeedDashboard() {
         .select("name, log, sessions!inner(athlete_id, date, type)")
         .eq("sessions.athlete_id", athleteId)
         .eq("sessions.type", "power_speed")
+        .not("sessions", "is", null)
         .order("sessions.date", { ascending: true });
 
       if (exErr) throw exErr;
