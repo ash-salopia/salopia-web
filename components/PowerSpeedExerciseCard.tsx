@@ -165,27 +165,29 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
     : [];
 
   function update(fields: Partial<PSExercise>) {
-    const updated = { ...exercise, ...fields };
+    // Compute new values first
+    const newSets = fields.sets ?? localSets;
+    const newReps = fields.reps ?? localReps;
 
-    // Resize log if sets or reps changed
-    if (fields.sets !== undefined || fields.reps !== undefined) {
-      const newSets = fields.sets ?? localSets;
-      const newReps = fields.reps ?? localReps;
-      const log = [...(updated.log ?? [])];
-      while (log.length < newSets) log.push(emptySetLog(newReps));
-      const newLog = log.slice(0, newSets).map(s => ({
-        ...s,
-        rep_results: Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
-      }));
-      updated.log = newLog;
-      setLocalLog(newLog);
-    }
+    // Update local counters immediately
+    if (fields.sets !== undefined) setLocalSets(newSets);
+    if (fields.reps !== undefined) setLocalReps(newReps);
+
+    // Resize log from localLog (not exercise.log which may be stale)
+    const log = [...localLog];
+    while (log.length < newSets) log.push(emptySetLog(newReps));
+    const newLog = log.slice(0, newSets).map(s => ({
+      ...s,
+      rep_results: Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
+    }));
+    setLocalLog(newLog);
 
     // Auto-set measurement type when quality changes
-    if (fields.quality !== undefined) {
-      const newM = (QUALITY_META[fields.quality]?.defaultMeasurement ?? "time_s") as MeasurementType; updated.measurement_type = newM; setLocalMeasure(newM);
-    }
+    let newMeasure = localMeasure;
+    if (fields.measurement_type !== undefined) { newMeasure = fields.measurement_type as MeasurementType; setLocalMeasure(newMeasure); }
+    if (fields.quality !== undefined) { newMeasure = (QUALITY_META[fields.quality]?.defaultMeasurement ?? "time_s") as MeasurementType; setLocalMeasure(newMeasure); }
 
+    const updated = { ...exercise, ...fields, sets: newSets, reps: newReps, measurement_type: newMeasure, log: newLog };
     onChange(updated);
   }
 
