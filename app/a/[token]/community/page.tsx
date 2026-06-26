@@ -180,6 +180,10 @@ export default function AthleteCommunityPage() {
             Chat
           </button>
         )}
+        <button style={{ ...s.tab, ...(tab === "comps" ? s.tabActive : {}) }}
+          onClick={() => setTab("comps")}>
+          🏆 Comps
+        </button>
       </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
