@@ -71,12 +71,12 @@ export const DEFAULT_CHECKIN_RULES: CheckInRules = {
 
 export const CHECKIN_RULE_OPTIONS: { value: CheckInAction; label: string; description: string }[] = [
   { value: "proceed",           label: "Proceed normally",              description: "Train as planned" },
-  { value: "maintenance_mode",  label: "Maintenance mode",              description: "Increase reps, lower weight 20-30% — reduces CNS demand, maintains muscle fibre recruitment" },
+  { value: "maintenance_mode",  label: "Maintenance mode",              description: "Perform 8-12+ reps / reduce load as needed — reduces CNS demand, maintains muscle strength/size" },
   { value: "reduce_10",         label: "Reduce load 10%",               description: "Slight reduction — train within yourself" },
   { value: "reduce_20",         label: "Reduce load 20%",               description: "Meaningful reduction — avoid max-effort sets" },
   { value: "skip_sore_muscles", label: "Skip sore muscle exercises",    description: "Modify or skip exercises targeting sore muscle groups" },
   { value: "postpone",          label: "Postpone to later in week",     description: "Move session to a later slot when recovery improves" },
-  { value: "skip",              label: "Skip session entirely",          description: "Rest and recover — do not train today" },
+  { value: "skip",              label: "Skip sore muscles or entire session", description: "Skip exercises targeting sore muscles, or skip the session entirely if soreness is severe" },
   { value: "custom",            label: "Custom message",                 description: "Write your own recommendation for athletes" },
 ];
 
