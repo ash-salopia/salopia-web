@@ -310,13 +310,15 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       {/* ── Prescribed fields ── */}
       <div style={card.fields}>
         <Field label="Sets">
-          <input type="number" value={localSets} min={1}
-            onChange={e => update({ sets: parseInt(e.target.value) || 1 })}
+          <input type="number" value={localSets || ""} min={1}
+            onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ sets: v }); else if (e.target.value === "") setLocalSets(0); }}
+            onBlur={e => { if (!localSets || localSets < 1) { setLocalSets(1); update({ sets: 1 }); } }}
             style={card.miniInput} />
         </Field>
         <Field label="Reps">
-          <input type="number" value={localReps} min={1}
-            onChange={e => update({ reps: parseInt(e.target.value) || 1 })}
+          <input type="number" value={localReps || ""} min={1}
+            onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ reps: v }); else if (e.target.value === "") setLocalReps(0); }}
+            onBlur={e => { if (!localReps || localReps < 1) { setLocalReps(1); update({ reps: 1 }); } }}
             style={card.miniInput} />
         </Field>
         <Field label="Distance">
