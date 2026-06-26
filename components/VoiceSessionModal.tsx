@@ -126,7 +126,7 @@ export default function VoiceSessionModal({
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Parse failed");
-    return data as { exercises: ParsedExercise[]; history: ConvMessage[]; message: string };
+    return data as { exercises: ParsedExercise[]; session_type?: string; history: ConvMessage[]; message: string };
   };
 
   const startMediaRecorder = async (
