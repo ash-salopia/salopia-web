@@ -92,7 +92,8 @@ export default function CommunityPage() {
             {t === "groups" ? `👥 Groups (${groups.length})` :
              t === "announcements" ? `📢 Announcements` :
              t === "feed" ? `🏆 PB Feed` :
-             `💬 Chat`}
+             t === "chat" ? `💬 Chat` :
+             `🏆 Comps`}
           </button>
         ))}
       </div>

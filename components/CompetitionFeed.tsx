@@ -42,6 +42,7 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
   const [error, setError] = useState("");
 
   async function apiPost(body: object) {
+    if (!token) throw new Error("Adding competitions is only available from the athlete app");
     const res = await fetch("/api/athlete-link/competitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -110,9 +111,9 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
       {/* Header */}
       <div style={s.header}>
         <div style={s.title}>🏆 Competition Calendar</div>
-        <button style={s.addBtn} onClick={() => setAdding(v => !v)}>
+        {token && <button style={s.addBtn} onClick={() => setAdding(v => !v)}>
           {adding ? "Cancel" : "+ Add comp"}
-        </button>
+        </button>}
       </div>
 
       {error && <div style={s.error}>{error}</div>}

@@ -382,7 +382,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                 <div style={card.singleValueRow}>
                   <span style={card.repLabel}>All reps</span>
                   <input
-                    value={set.rep_results[0] ?? ""}
+                    value={(set.rep_results ?? [])[0] ?? ""}
                     onChange={e => updateSet(si, { rep_results: Array(exercise.reps).fill(e.target.value), done: e.target.value.trim().length > 0 })}
                     placeholder={mMeta.placeholder}
                     inputMode="decimal"
@@ -393,7 +393,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
               ) : (
                 /* Per-rep inputs */
                 <div style={card.repGrid}>
-                  {set.rep_results.map((result, ri) => (
+                  {(set.rep_results ?? []).map((result, ri) => (
                     <div key={ri} style={card.repRow}>
                       <span style={card.repLabel}>R{ri + 1}</span>
                       <input
