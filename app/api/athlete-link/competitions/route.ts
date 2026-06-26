@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("competitions")
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Add a competition
   if (action === "add_competition") {
