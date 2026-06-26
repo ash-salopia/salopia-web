@@ -169,28 +169,28 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
 
     // Resize log if sets or reps changed
     if (fields.sets !== undefined || fields.reps !== undefined) {
-      const newSets = fields.sets ?? exercise.sets;
-      const newReps = fields.reps ?? exercise.reps;
+      const newSets = fields.sets ?? localSets;
+      const newReps = fields.reps ?? localReps;
       const log = [...(updated.log ?? [])];
       while (log.length < newSets) log.push(emptySetLog(newReps));
-      updated.log = log.slice(0, newSets).map(s => ({
+      const newLog = log.slice(0, newSets).map(s => ({
         ...s,
-        rep_results: s.rep_results.length === newReps
-          ? s.rep_results
-          : Array.from({ length: newReps }, (_, i) => s.rep_results[i] ?? ""),
+        rep_results: Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
       }));
+      updated.log = newLog;
+      setLocalLog(newLog);
     }
 
     // Auto-set measurement type when quality changes
     if (fields.quality !== undefined) {
-      updated.measurement_type = QUALITY_META[fields.quality]?.defaultMeasurement ?? "none";
+      const newM = (QUALITY_META[fields.quality]?.defaultMeasurement ?? "time_s") as MeasurementType; updated.measurement_type = newM; setLocalMeasure(newM);
     }
 
     onChange(updated);
   }
 
   function updateSet(si: number, patch: Partial<PSSetLog>) {
-    const log = exercise.log.map((s, idx) => {
+    const newLog = localLog.map((s, idx) => {
       if (idx !== si) return s;
       const updated = { ...s, ...patch };
       // Auto-calc RSI for plyometric
@@ -201,11 +201,12 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       }
       return updated;
     });
-    onChange({ ...exercise, log });
+    setLocalLog(newLog);
+    onChange({ ...exercise, sets: localSets, reps: localReps, measurement_type: localMeasure, log: newLog });
   }
 
   function updateRep(si: number, ri: number, value: string) {
-    const log = exercise.log.map((s, idx) => {
+    const newLog2 = localLog.map((s, idx) => {
       if (idx !== si) return s;
       const rep_results = s.rep_results.map((r, i) => i === ri ? value : r);
       const updated = { ...s, rep_results };
@@ -218,7 +219,8 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       }
       return updated;
     });
-    onChange({ ...exercise, log });
+    setLocalLog(newLog2);
+    onChange({ ...exercise, sets: localSets, reps: localReps, measurement_type: localMeasure, log: newLog2 });
   }
 
   function selectLibraryEntry(entry: LibraryEntry) {
@@ -282,16 +284,16 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         </div>
 
         {/* Done badge */}
-        {exercise.log.length > 0 && (
-          <span style={{ ...card.badge, background: doneSets === exercise.log.length ? "#10B98122" : "var(--ink)", color: doneSets === exercise.log.length ? "#10B981" : "var(--mute)" }}>
+        {localLog.length > 0 && (
+          <span style={{ ...card.badge, background: doneSets === localLog.length ? "#10B98122" : "var(--ink)", color: doneSets === localLog.length ? "#10B981" : "var(--mute)" }}>
             {doneSets}/{localLog.length}
           </span>
         )}
 
         {/* Measurement type — prominent in header so it's always visible */}
         <select
-          value={exercise.measurement_type}
-          onChange={e => update({ measurement_type: e.target.value as MeasurementType })}
+          value={localMeasure}
+          onChange={e => { setLocalMeasure(e.target.value as MeasurementType); update({ measurement_type: e.target.value as MeasurementType }); }}
           style={card.measureSelect}
           title="What are you measuring per rep?"
         >
