@@ -13,9 +13,8 @@ import {
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
-import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
 
-type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
+type Tab = "groups" | "announcements" | "feed" | "chat";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,13 +36,13 @@ const GROUP_COLOURS = [
 
 export default function CommunityPage() {
   const [tab, setTab] = useState<Tab>("groups");
-  const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [pbs, setPbs] = useState<PersonalBest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [coachId, setCoachId] = useState("");
+  const [orgId, setOrgId] = useState("");
   const [coachName, setCoachName] = useState("");
 
   useEffect(() => {
@@ -83,7 +82,7 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).map((t) => (
+        {(["groups", "announcements", "feed", "chat"] as Tab[]).map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
@@ -92,8 +91,7 @@ export default function CommunityPage() {
             {t === "groups" ? `👥 Groups (${groups.length})` :
              t === "announcements" ? `📢 Announcements` :
              t === "feed" ? `🏆 PB Feed` :
-             t === "chat" ? `💬 Chat` :
-             `🏆 Comps`}
+             `💬 Chat`}
           </button>
         ))}
       </div>
@@ -121,15 +119,6 @@ export default function CommunityPage() {
               coachId={coachId}
               coachName={coachName}
               onPbsChange={setPbs}
-            />
-          )}
-          {tab === "comps" && (
-            <CompetitionFeed
-              competitions={competitions}
-              athleteId={coachId}
-              athleteName={coachName}
-              token=""
-              onUpdated={setCompetitions}
             />
           )}
           {tab === "chat" && (

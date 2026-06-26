@@ -27,13 +27,17 @@ export interface Competition {
 
 interface Props {
   competitions: Competition[];
-  athleteId: string;
+  athleteId: string;      // athlete whose comp we're adding (for coach: selected athlete or "")
   athleteName: string;
-  token: string;
+  token: string;          // share token (athlete mobile) — empty string on coach side
+  // Coach identity — used when token is empty
+  coachId?: string;
+  coachName?: string;
+  organisationId?: string;
   onUpdated: (comps: Competition[]) => void;
 }
 
-export default function CompetitionFeed({ competitions, athleteId, athleteName, token, onUpdated }: Props) {
+export default function CompetitionFeed({ competitions, athleteId, athleteName, token, coachId, coachName, organisationId, onUpdated }: Props) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", competition_date: "", location: "", notes: "" });
   const [saving, setSaving] = useState(false);
@@ -42,7 +46,6 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
   const [error, setError] = useState("");
 
   async function apiPost(body: object) {
-    if (!token) throw new Error("Adding competitions is only available from the athlete app");
     const res = await fetch("/api/athlete-link/competitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -59,7 +62,7 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
     try {
       await apiPost({ action: "add_competition", ...form });
       // Reload
-      const res = await fetch(`/api/athlete-link/competitions?token=${token}`);
+      const res = await fetch(`/api/athlete-link/competitions?organisation_id=${organisationId || ""}&token=${token}`);
       const data = await res.json();
       onUpdated(data.competitions ?? []);
       setAdding(false);
@@ -72,7 +75,7 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
   async function handleReact(competition_id: string, emoji: string) {
     try {
       await apiPost({ action: "react", competition_id, emoji });
-      const res = await fetch(`/api/athlete-link/competitions?token=${token}`);
+      const res = await fetch(`/api/athlete-link/competitions?organisation_id=${organisationId || ""}&token=${token}`);
       const data = await res.json();
       onUpdated(data.competitions ?? []);
     } catch (e) { console.error(e); }
@@ -84,7 +87,7 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
     try {
       await apiPost({ action: "comment", competition_id, body });
       setCommentText(prev => ({ ...prev, [competition_id]: "" }));
-      const res = await fetch(`/api/athlete-link/competitions?token=${token}`);
+      const res = await fetch(`/api/athlete-link/competitions?organisation_id=${organisationId || ""}&token=${token}`);
       const data = await res.json();
       onUpdated(data.competitions ?? []);
     } catch (e) { console.error(e); }
@@ -111,9 +114,9 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
       {/* Header */}
       <div style={s.header}>
         <div style={s.title}>🏆 Competition Calendar</div>
-        {token && <button style={s.addBtn} onClick={() => setAdding(v => !v)}>
+        <button style={s.addBtn} onClick={() => setAdding(v => !v)}>
           {adding ? "Cancel" : "+ Add comp"}
-        </button>}
+        </button>
       </div>
 
       {error && <div style={s.error}>{error}</div>}

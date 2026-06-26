@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 
 export async function GET(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   const { data, error } = await supabase
     .from("competitions")
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   // Add a competition
   if (action === "add_competition") {
