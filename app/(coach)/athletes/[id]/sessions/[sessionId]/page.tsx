@@ -413,7 +413,7 @@ export default function SessionDetailPage() {
   // individual set chips are showing.
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
   const doneSets = exercises.reduce(
-    (n, e) => n + (e.log ?? []).filter((s) => s.done || s.weight.trim().length > 0).length,
+    (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
     0
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
