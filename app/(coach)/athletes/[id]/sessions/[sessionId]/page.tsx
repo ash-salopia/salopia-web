@@ -58,24 +58,41 @@ export default function SessionDetailPage() {
   const [reportLoading, setReportLoading] = useState(false);
 
   // Convert DB session exercise to PSExercise shape
-  const toPSExercise = (ex: any): PSExercise => ({
-    id: ex.id,
-    name: ex.name ?? "",
-    order: ex.order ?? "",
-    quality: ex.intensity_label ?? "",
-    measurement_type: ex.tempo ?? "none",
-    sets: ex.sets ?? 3,
-    reps: ex.reps ?? "",
-    distance: ex.distance ?? "",
-    rest: ex.rest ?? "",
-    contacts: ex.contacts ?? null,
-    surface: ex.target_load ?? "",       // reuse target_load as surface store
-    notes: ex.notes ?? "",
-    log: Array.isArray(ex.log) && ex.log.length > 0 && typeof ex.log[0] === 'object' && 'result' in ex.log[0]
+  const toPSExercise = (ex: any): PSExercise => {
+    const sets = ex.sets ?? 3;
+    const reps = parseInt(String(ex.reps ?? "")) || 4;  // default 4 reps for P/S
+    // Detect if log already has the new per-rep shape
+    const hasNewShape = Array.isArray(ex.log) && ex.log.length > 0 &&
+      typeof ex.log[0] === 'object' && 'rep_results' in ex.log[0];
+    const log = hasNewShape
       ? ex.log
-      : Array.from({ length: ex.sets ?? 3 }, () => ({ done: false, result: "", contact_time: "", rsi: "", rpe: "", pain: "", notes: "" })),
-    sort_order: ex.sort_order ?? 0,
-  });
+      : Array.from({ length: sets }, () => ({
+          done: false,
+          rep_results: Array(reps).fill(""),
+          single_value: false,
+          contact_time: "",
+          rsi: "",
+          rpe: "",
+          pain: "",
+          set_notes: "",
+        }));
+    return {
+      id: ex.id,
+      name: ex.name ?? "",
+      order: ex.order ?? "",
+      quality: ex.intensity_label ?? "",
+      measurement_type: (["time_s","height_cm","distance_m","rsi","power_w","none"].includes(ex.tempo) ? ex.tempo : (ex.intensity_label === "plyometric" ? "height_cm" : "time_s")) as any,
+      sets,
+      reps,
+      distance: ex.distance ?? "",
+      rest: ex.rest ?? "",
+      contacts: ex.contacts ?? null,
+      surface: ex.target_load ?? "",
+      notes: ex.notes ?? "",
+      log,
+      sort_order: ex.sort_order ?? 0,
+    };
+  };
 
   const load = async () => {
     setLoading(true);
@@ -120,7 +137,6 @@ export default function SessionDetailPage() {
 
   // Power/Speed exercise update handler
   const handlePSExerciseChange = async (updated: PSExercise) => {
-    // Optimistic update
     setSession(prev => prev ? {
       ...prev,
       exercises: prev.exercises?.map(ex => ex.id === updated.id ? {
@@ -128,14 +144,15 @@ export default function SessionDetailPage() {
         name: updated.name,
         order: updated.order,
         sets: updated.sets,
-        reps: updated.reps,
+        reps: String(updated.reps),
         distance: updated.distance,
         rest: updated.rest,
-        contacts: updated.contacts ?? undefined,
-        intensity_label: updated.quality,  // quality stored in intensity_label
-        target_load: updated.surface,       // surface stored in target_load
+        contacts: updated.contacts,
+        intensity_label: updated.quality,
+        tempo: updated.measurement_type,   // measurement_type stored in tempo
+        target_load: updated.surface,
         notes: updated.notes,
-        log: updated.log,
+        log: updated.log as any,
       } as any : ex),
     } : prev);
     try {
@@ -143,13 +160,14 @@ export default function SessionDetailPage() {
         name: updated.name,
         order: updated.order,
         sets: updated.sets,
-        reps: updated.reps,
+        reps: String(updated.reps),
+        rest: updated.rest,
         notes: updated.notes,
         log: updated.log as any,
-        tempo: updated.measurement_type,
-        intensity_label: updated.quality,
+        tempo: updated.measurement_type,      // measurement_type stored in tempo
+        intensity_label: updated.quality,     // quality stored in intensity_label
         distance: updated.distance,
-        target_load: updated.surface,
+        target_load: updated.surface,         // surface stored in target_load
         contacts: updated.contacts ?? null,
       } as any);
     } catch (e) {
@@ -395,7 +413,7 @@ export default function SessionDetailPage() {
   // individual set chips are showing.
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
   const doneSets = exercises.reduce(
-    (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
+    (n, e) => n + (e.log ?? []).filter((s) => s.done || s.weight.trim().length > 0).length,
     0
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
@@ -629,6 +647,7 @@ export default function SessionDetailPage() {
                 exercise={toPSExercise(ex)}
                 onChange={handlePSExerciseChange}
                 onDelete={() => handleRemoveExercise(ex.id)}
+                library={library}
               />
             ))}
           </div>

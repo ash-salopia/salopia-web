@@ -23,7 +23,6 @@ export type MeasurementType =
   | "height_cm"   // jump height
   | "distance_m"  // broad jump / sprint distance result
   | "rsi"         // reactive strength index
-  | "contacts"    // plyometric contacts
   | "power_w"    // power in watts
   | "none";       // just tick done
 
@@ -71,7 +70,6 @@ const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; p
   height_cm: { label: "Height",   unit: "cm",  placeholder: "42" },
   distance_m:{ label: "Distance", unit: "m",   placeholder: "2.45" },
   rsi:       { label: "RSI",      unit: "",    placeholder: "1.8" },
-  contacts:  { label: "Contacts", unit: "",    placeholder: "20" },
   power_w:   { label: "Power",    unit: "W",   placeholder: "850" },
   none:      { label: "None",     unit: "",    placeholder: "—" },
 };
@@ -123,10 +121,34 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const [showDropdown, setShowDropdown] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
+  // Local state prevents dropdown/log flickering on parent re-renders
+  const validMeasureTypes: MeasurementType[] = ["time_s","height_cm","distance_m","rsi","power_w","none"];
+  const initMeasure: MeasurementType = validMeasureTypes.includes(exercise.measurement_type as any)
+    ? exercise.measurement_type as MeasurementType
+    : "time_s";
+  const [localMeasure, setLocalMeasure] = useState<MeasurementType>(initMeasure);
+  const [localSets, setLocalSets] = useState(exercise.sets || 3);
+  const [localReps, setLocalReps] = useState(exercise.reps || 4);
+
+  // Build log from exercise or create fresh
+  const initLog = (): PSSetLog[] => {
+    const sets = exercise.sets || 3;
+    const reps = exercise.reps || 4;
+    if (Array.isArray(exercise.log) && exercise.log.length > 0 && 'rep_results' in exercise.log[0]) {
+      // Ensure rep_results length matches reps
+      return exercise.log.map(s => ({
+        ...s,
+        rep_results: Array.from({ length: reps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
+      }));
+    }
+    return buildLog(sets, reps);
+  };
+  const [localLog, setLocalLog] = useState<PSSetLog[]>(initLog);
+
   const qMeta = QUALITY_META[exercise.quality] ?? QUALITY_META[""];
-  const mMeta = MEASUREMENT_META[exercise.measurement_type] ?? MEASUREMENT_META.none;
+  const mMeta = MEASUREMENT_META[localMeasure] ?? MEASUREMENT_META.none;
   const isPlyo = exercise.quality === "plyometric";
-  const doneSets = exercise.log.filter(s => s.done).length;
+  const doneSets = localLog.filter(s => s.done).length;
 
   // Library autocomplete — Power/Speed exercises first
   const libraryMatches = nameQuery.trim().length > 0
@@ -153,9 +175,9 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       while (log.length < newSets) log.push(emptySetLog(newReps));
       updated.log = log.slice(0, newSets).map(s => ({
         ...s,
-        rep_results: (s.rep_results ?? []).length === newReps
+        rep_results: s.rep_results.length === newReps
           ? s.rep_results
-          : Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
+          : Array.from({ length: newReps }, (_, i) => s.rep_results[i] ?? ""),
       }));
     }
 
@@ -173,7 +195,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       const updated = { ...s, ...patch };
       // Auto-calc RSI for plyometric
       if (isPlyo && (patch.contact_time !== undefined || patch.rep_results !== undefined)) {
-        const firstResult = (updated.rep_results ?? [])[0] ?? "";
+        const firstResult = updated.rep_results[0] ?? "";
         const rsi = calcRSI(firstResult, updated.contact_time);
         if (rsi) updated.rsi = rsi;
       }
@@ -185,7 +207,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   function updateRep(si: number, ri: number, value: string) {
     const log = exercise.log.map((s, idx) => {
       if (idx !== si) return s;
-      const rep_results = (s.rep_results ?? []).map((r, i) => i === ri ? value : r);
+      const rep_results = s.rep_results.map((r, i) => i === ri ? value : r);
       const updated = { ...s, rep_results };
       // Mark set done if any rep has a result
       updated.done = rep_results.some(r => r.trim().length > 0);
@@ -262,14 +284,14 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         {/* Done badge */}
         {exercise.log.length > 0 && (
           <span style={{ ...card.badge, background: doneSets === exercise.log.length ? "#10B98122" : "var(--ink)", color: doneSets === exercise.log.length ? "#10B981" : "var(--mute)" }}>
-            {doneSets}/{exercise.log.length}
+            {doneSets}/{localLog.length}
           </span>
         )}
 
         {/* Measurement type — prominent in header so it's always visible */}
         <select
           value={exercise.measurement_type}
-          onChange={e => { update({ measurement_type: e.target.value as MeasurementType }); }}
+          onChange={e => update({ measurement_type: e.target.value as MeasurementType })}
           style={card.measureSelect}
           title="What are you measuring per rep?"
         >
@@ -284,12 +306,12 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       {/* ── Prescribed fields ── */}
       <div style={card.fields}>
         <Field label="Sets">
-          <input type="number" value={exercise.sets} min={1}
+          <input type="number" value={localSets} min={1}
             onChange={e => update({ sets: parseInt(e.target.value) || 1 })}
             style={card.miniInput} />
         </Field>
         <Field label="Reps">
-          <input type="number" value={exercise.reps} min={1}
+          <input type="number" value={localReps} min={1}
             onChange={e => update({ reps: parseInt(e.target.value) || 1 })}
             style={card.miniInput} />
         </Field>
@@ -339,12 +361,12 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         style={{ ...card.toggleBtn, color: doneSets > 0 ? "#10B981" : "var(--mute)" }}
         onClick={() => setShowLog(v => !v)}
       >
-        {showLog ? "▾ Hide log" : `▸ Log sets${doneSets > 0 ? ` (${doneSets}/${exercise.log.length})` : ""}`}
+        {showLog ? "▾ Hide log" : `▸ Log sets${doneSets > 0 ? ` (${doneSets}/${localLog.length})` : ""}`}
       </button>
 
-      {showLog && exercise.measurement_type !== "none" && (
+      {showLog && localMeasure !== "none" && (
         <div style={card.logWrap}>
-          {exercise.log.map((set, si) => (
+          {localLog.map((set, si) => (
             <div key={si} style={{ ...card.setBlock, ...(set.done ? card.setBlockDone : {}) }}>
               {/* Set header */}
               <div style={card.setHeader}>
@@ -382,7 +404,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                 <div style={card.singleValueRow}>
                   <span style={card.repLabel}>All reps</span>
                   <input
-                    value={(set.rep_results ?? [])[0] ?? ""}
+                    value={set.rep_results[0] ?? ""}
                     onChange={e => updateSet(si, { rep_results: Array(exercise.reps).fill(e.target.value), done: e.target.value.trim().length > 0 })}
                     placeholder={mMeta.placeholder}
                     inputMode="decimal"
@@ -393,7 +415,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
               ) : (
                 /* Per-rep inputs */
                 <div style={card.repGrid}>
-                  {(set.rep_results ?? []).map((result, ri) => (
+                  {set.rep_results.map((result, ri) => (
                     <div key={ri} style={card.repRow}>
                       <span style={card.repLabel}>R{ri + 1}</span>
                       <input
