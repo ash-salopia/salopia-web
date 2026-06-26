@@ -153,9 +153,9 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       while (log.length < newSets) log.push(emptySetLog(newReps));
       updated.log = log.slice(0, newSets).map(s => ({
         ...s,
-        rep_results: s.rep_results.length === newReps
+        rep_results: (s.rep_results ?? []).length === newReps
           ? s.rep_results
-          : Array.from({ length: newReps }, (_, i) => s.rep_results[i] ?? ""),
+          : Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
       }));
     }
 
@@ -173,7 +173,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       const updated = { ...s, ...patch };
       // Auto-calc RSI for plyometric
       if (isPlyo && (patch.contact_time !== undefined || patch.rep_results !== undefined)) {
-        const firstResult = updated.rep_results[0] ?? "";
+        const firstResult = (updated.rep_results ?? [])[0] ?? "";
         const rsi = calcRSI(firstResult, updated.contact_time);
         if (rsi) updated.rsi = rsi;
       }
@@ -269,7 +269,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         {/* Measurement type — prominent in header so it's always visible */}
         <select
           value={exercise.measurement_type}
-          onChange={e => update({ measurement_type: e.target.value as MeasurementType })}
+          onChange={e => { update({ measurement_type: e.target.value as MeasurementType }); }}
           style={card.measureSelect}
           title="What are you measuring per rep?"
         >
