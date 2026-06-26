@@ -66,11 +66,11 @@ export const QUALITY_META: Record<string, { label: string; color: string; icon: 
 };
 
 const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; placeholder: string }> = {
-  time_s:    { label: "Time",     unit: "s",   placeholder: "1.52" },
-  height_cm: { label: "Height",   unit: "cm",  placeholder: "42" },
-  distance_m:{ label: "Distance", unit: "m",   placeholder: "2.45" },
-  rsi:       { label: "RSI",      unit: "",    placeholder: "1.8" },
-  power_w:   { label: "Power",    unit: "W",   placeholder: "850" },
+  time_s:    { label: "Time",     unit: "s",   placeholder: "" },
+  height_cm: { label: "Height",   unit: "cm",  placeholder: "" },
+  distance_m:{ label: "Distance", unit: "m",   placeholder: "" },
+  rsi:       { label: "RSI",      unit: "",    placeholder: "" },
+  power_w:   { label: "Power",    unit: "W",   placeholder: "" },
   none:      { label: "None",     unit: "",    placeholder: "—" },
 };
 
