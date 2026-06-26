@@ -169,7 +169,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
   ];
 
   const session_type = (["strength","power_speed","cardio","hyrox"] as const)
-    .includes(parsed.session_type as any) ? parsed.session_type : "strength";
+    .includes(parsed.session_type as any) ? parsed.session_type! : "strength";
 
   return NextResponse.json({
     exercises,
