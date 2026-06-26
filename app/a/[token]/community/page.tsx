@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -27,7 +28,8 @@ export default function AthleteCommunityPage() {
   const router = useRouter();
   const token = params?.token as string;
 
-  const [tab, setTab] = useState<"announcements" | "pbs" | "chat">("announcements");
+  const [tab, setTab] = useState<"announcements" | "pbs" | "chat" | "comps">("announcements");
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [pbs, setPbs] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
@@ -53,8 +55,10 @@ export default function AthleteCommunityPage() {
       safe(fetch(`/api/athlete-link/announcements?token=${token}`)),
       safe(fetch(`/api/athlete-link/pbs?token=${token}`)),
       safe(fetch(`/api/athlete-link/chat?token=${token}`)),
+      safe(fetch(`/api/athlete-link/competitions?token=${token}`)),
     ])
-      .then(([annData, pbData, chatData]) => {
+      .then(([annData, pbData, chatData, compData]) => {
+        if (compData?.competitions) setCompetitions(compData.competitions);
         const errors = [annData, pbData, chatData]
           .map((d: any) => d.error || d._fetchError)
           .filter(Boolean);
@@ -155,7 +159,7 @@ export default function AthleteCommunityPage() {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <div style={s.brand}>AthletiQ</div>
+        <div style={s.brand}>SALOPIA</div>
         <button style={s.backBtn} onClick={() => router.push(`/a/${token}`)}>
           Back
         </button>
@@ -234,7 +238,16 @@ export default function AthleteCommunityPage() {
           )}
 
           {/* Chat */}
-          {tab === "chat" && (
+          {tab === "comps" && (
+        <CompetitionFeed
+          competitions={competitions}
+          athleteId={athleteId}
+          athleteName={athleteName}
+          token={token as string}
+          onUpdated={setCompetitions}
+        />
+      )}
+      {tab === "chat" && (
             <div style={s.chatPage}>
               {/* Group selector if multiple groups */}
               {groups.length > 1 && (

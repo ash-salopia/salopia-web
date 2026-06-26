@@ -171,7 +171,7 @@ export default function AthleteDetailPage() {
         athleteId,
         type,
         date,
-        `Session ${sessions.length + 1}`,
+        TYPE_META[type]?.label ?? "Session",
         []
       );
       router.push(`/athletes/${athleteId}/sessions/${session.id}`);

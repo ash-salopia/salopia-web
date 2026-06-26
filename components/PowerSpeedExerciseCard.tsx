@@ -24,6 +24,7 @@ export type MeasurementType =
   | "distance_m"  // broad jump / sprint distance result
   | "rsi"         // reactive strength index
   | "contacts"    // plyometric contacts
+  | "power_w"    // power in watts
   | "none";       // just tick done
 
 export interface PSSetLog {
@@ -71,6 +72,7 @@ const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; p
   distance_m:{ label: "Distance", unit: "m",   placeholder: "2.45" },
   rsi:       { label: "RSI",      unit: "",    placeholder: "1.8" },
   contacts:  { label: "Contacts", unit: "",    placeholder: "20" },
+  power_w:   { label: "Power",    unit: "W",   placeholder: "850" },
   none:      { label: "None",     unit: "",    placeholder: "—" },
 };
 
@@ -407,20 +409,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                 </div>
               )}
 
-              {/* Plyometric extras: contact time + RSI */}
-              {isPlyo && (
-                <div style={card.plyoRow}>
-                  <span style={card.metaLabel}>CT (ms)</span>
-                  <input value={set.contact_time}
-                    onChange={e => updateSet(si, { contact_time: e.target.value })}
-                    placeholder="180" inputMode="decimal" style={card.metaInput} />
-                  <span style={card.metaLabel}>RSI</span>
-                  <input value={set.rsi}
-                    onChange={e => updateSet(si, { rsi: e.target.value })}
-                    placeholder="auto" inputMode="decimal"
-                    style={{ ...card.metaInput, color: "var(--accent)" }} />
-                </div>
-              )}
+
 
               {/* Set notes */}
               <input value={set.set_notes}

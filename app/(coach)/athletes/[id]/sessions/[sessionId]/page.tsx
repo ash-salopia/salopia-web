@@ -146,6 +146,11 @@ export default function SessionDetailPage() {
         reps: updated.reps,
         notes: updated.notes,
         log: updated.log as any,
+        tempo: updated.measurement_type,
+        intensity_label: updated.quality,
+        distance: updated.distance,
+        target_load: updated.surface,
+        contacts: updated.contacts ?? null,
       } as any);
     } catch (e) {
       console.error("PS exercise update failed:", e);
