@@ -305,7 +305,7 @@ export default function SettingsPage() {
       </div>
       <BrandingSettings
         orgId={orgId}
-        orgName={settings.org_name || ""}
+        orgName=""
         tier={orgTier}
         branding={orgBranding}
         onSaved={setOrgBranding}
