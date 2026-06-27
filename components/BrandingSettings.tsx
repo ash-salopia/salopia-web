@@ -52,6 +52,13 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
         .eq("id", orgId);
       if (error) throw error;
       onSaved(branding);
+      // Apply colour changes immediately without requiring a page refresh
+      if (branding.primary_color) {
+        document.documentElement.style.setProperty("--accent", branding.primary_color);
+      }
+      if (branding.primary_color_dim) {
+        document.documentElement.style.setProperty("--accent-dim", branding.primary_color_dim);
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
     } catch (e) {
@@ -108,7 +115,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
               key={p.color}
               style={{ ...s.colourSwatch, background: p.color, boxShadow: branding.primary_color === p.color ? `0 0 0 3px ${p.color}55, 0 0 0 5px var(--ink)` : "none" }}
               title={p.label}
-              onClick={() => setBranding(b => ({ ...b, primary_color: p.color, primary_color_dim: p.dim }))}
+              onClick={() => { setBranding(b => ({ ...b, primary_color: p.color, primary_color_dim: p.dim })); document.documentElement.style.setProperty("--accent", p.color); document.documentElement.style.setProperty("--accent-dim", p.dim); }}
             />
           ))}
           {/* Custom colour picker */}
@@ -116,7 +123,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
             <input
               type="color"
               value={branding.primary_color ?? "#00d4ff"}
-              onChange={e => setBranding(b => ({ ...b, primary_color: e.target.value }))}
+              onChange={e => { setBranding(b => ({ ...b, primary_color: e.target.value })); document.documentElement.style.setProperty("--accent", e.target.value); }}
               style={s.colourPicker}
               title="Custom colour"
             />
