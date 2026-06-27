@@ -49,18 +49,18 @@ export default function CommunityPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from("coaches").select("id, name").single().then(({ data }) => {
+    (async () => {
+      const { data } = await supabase.from("coaches").select("id, name, organisation_id").single();
       if (data) {
         setCoachId(data.id);
         setCoachName(data.name);
-        const { data: coachRow } = await supabase.from("coaches").select("organisation_id").eq("id", data.id).single();
-        if (coachRow?.organisation_id) {
-          setOrgId(coachRow.organisation_id);
-          const { data: compsData } = await supabase.from("competitions").select("*, athlete:athletes(id, name), reactions:competition_reactions(*), comments:competition_comments(*)").eq("organisation_id", coachRow.organisation_id).order("competition_date", { ascending: true });
+        if (data.organisation_id) {
+          setOrgId(data.organisation_id);
+          const { data: compsData } = await supabase.from("competitions").select("*, athlete:athletes(id, name), reactions:competition_reactions(*), comments:competition_comments(*)").eq("organisation_id", data.organisation_id).order("competition_date", { ascending: true });
           setCompetitions(compsData ?? []);
         }
       }
-    });
+    })();
     loadAll();
   }, []);
 
