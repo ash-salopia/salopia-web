@@ -27,7 +27,7 @@ export async function listRecentOrgPBs(limit = 30): Promise<PersonalBest[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("personal_bests")
-    .select("*, athlete:athletes(id, name), reactions:pb_reactions(*)")
+    .select("*, athlete:athletes(id, name), reactions:pb_reactions(*), comments:pb_comments(*)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;

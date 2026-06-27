@@ -42,7 +42,6 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [coachId, setCoachId] = useState("");
-  const [orgId, setOrgId] = useState("");
   const [coachName, setCoachName] = useState("");
 
   useEffect(() => {
@@ -496,38 +495,126 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
           (acc, r) => { acc[r.emoji] = (acc[r.emoji] ?? 0) + 1; return acc; }, {}
         );
         return (
-          <div key={pb.id} style={s.pbCard}>
-            <div style={s.pbTop}>
-              <div>
-                <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
-                <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
-                <div style={s.pbWeight}>
-                  {pb.weight_kg ? `${pb.weight_kg}kg` : ""}
-                  {pb.reps ? ` × ${pb.reps} reps` : ""}
-                </div>
-                <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
-              </div>
-              <div style={s.reactionArea}>
-                {Object.entries(reactionGroups).map(([emoji, count]) => (
-                  <span key={emoji} style={s.reactionBadge}>{emoji} {count}</span>
-                ))}
-                {["🔥", "💪", "⭐", "👏"].map((emoji) => (
-                  <button
-                    key={emoji}
-                    style={{
-                      ...s.reactionBtn,
-                      ...(myReaction?.emoji === emoji ? s.reactionBtnActive : {}),
-                    }}
-                    onClick={() => handleReaction(pb, emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <PBCard
+            key={pb.id}
+            pb={pb}
+            myReaction={myReaction}
+            reactionGroups={reactionGroups}
+            onReact={(emoji) => handleReaction(pb, emoji)}
+            coachId={coachId}
+            coachName={coachName}
+            onCommentAdded={(comment) => {
+              onPbsChange(pbs.map(p => p.id === pb.id
+                ? { ...p, comments: [...(p.comments ?? []), comment] }
+                : p
+              ));
+            }}
+            s={s}
+          />
         );
       })}
+    </div>
+  );
+}
+
+// ── PB Card ──────────────────────────────────────────────────────────────────
+
+function PBCard({ pb, myReaction, reactionGroups, onReact, coachId, coachName, onCommentAdded, s }: {
+  pb: PersonalBest;
+  myReaction: any;
+  reactionGroups: Record<string, number>;
+  onReact: (emoji: string) => void;
+  coachId: string;
+  coachName: string;
+  onCommentAdded: (comment: any) => void;
+  s: Record<string, React.CSSProperties>;
+}) {
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [sending, setSending] = useState(false);
+  const comments = pb.comments ?? [];
+
+  const handleComment = async () => {
+    if (!commentText.trim() || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/pb-comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pb_id: pb.id,
+          body: commentText.trim(),
+          author_id: coachId,
+          author_name: coachName,
+          author_type: "coach",
+        }),
+      });
+      const data = await res.json();
+      if (data.comment) {
+        onCommentAdded(data.comment);
+        setCommentText("");
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={s.pbCard}>
+      <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
+      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
+      <div style={s.pbWeight}>
+        {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
+        {pb.reps ? ` × ${pb.reps} reps` : ""}
+      </div>
+      <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
+
+      <div style={s.reactionArea}>
+        {Object.entries(reactionGroups).map(([emoji, count]) => (
+          <span key={emoji} style={s.reactionBadge}>{emoji} {count}</span>
+        ))}
+        {["🔥", "💪", "⭐", "👏"].map((emoji) => (
+          <button
+            key={emoji}
+            style={{ ...s.reactionBtn, ...(myReaction?.emoji === emoji ? s.reactionBtnActive : {}) }}
+            onClick={() => onReact(emoji)}
+          >
+            {emoji}
+          </button>
+        ))}
+        <button
+          style={{ ...s.reactionBtn, width: "auto", padding: "0 8px", fontSize: 12, color: "var(--mute)", gap: 4 }}
+          onClick={() => setShowComments(v => !v)}
+        >
+          💬 {comments.length > 0 ? comments.length : ""} {showComments ? "▴" : "▾"}
+        </button>
+      </div>
+
+      {showComments && (
+        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 8, marginTop: 4, display: "flex", flexDirection: "column" as const, gap: 6 }}>
+          {comments.map((c: any) => (
+            <div key={c.id} style={{ fontSize: 12, display: "flex", gap: 6 }}>
+              <span style={{ fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{c.author_name}</span>
+              <span style={{ color: "var(--mute)" }}>{c.body}</span>
+            </div>
+          ))}
+          {comments.length === 0 && <div style={{ fontSize: 12, color: "var(--mute)" }}>No comments yet</div>}
+          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+            <input
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleComment(); }}
+              placeholder="Add a comment..."
+              style={{ flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}
+            />
+            <button
+              style={{ background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: sending ? 0.5 : 1 }}
+              onClick={handleComment}
+              disabled={sending}
+            >Send</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -633,13 +720,13 @@ const s: Record<string, React.CSSProperties> = {
   annMeta: { fontSize: 12, color: "var(--mute)", marginTop: 3 },
   annBody: { fontSize: 13, color: "var(--mute)", marginTop: 8, lineHeight: 1.5 },
   pbCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
-  pbTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  pbTop: { display: "flex", flexDirection: "column" as const, gap: 8 },
   pbAthlete: { fontSize: 13, fontWeight: 700, color: "var(--text)" },
   pbExercise: { fontSize: 15, fontWeight: 700, color: "var(--accent)", marginTop: 2 },
   pbWeight: { fontSize: 20, fontWeight: 700, color: "var(--text)", marginTop: 4 },
   pbDate: { fontSize: 11, color: "var(--mute)", marginTop: 4 },
-  reactionArea: { display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 6 },
+  reactionArea: { display: "flex", flexDirection: "row" as const, alignItems: "center", gap: 4, flexWrap: "wrap" as const },
   reactionBadge: { fontSize: 12, background: "var(--ink)", borderRadius: 6, padding: "2px 8px" },
-  reactionBtn: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, width: 34, height: 34, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  reactionBtn: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 6, width: 28, height: 28, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
   reactionBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)" },
 };

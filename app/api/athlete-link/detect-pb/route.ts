@@ -95,6 +95,23 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
 
     if (maxWeight <= (existing?.weight_kg ?? 0)) return;
 
+    // Check we haven't already saved a PB for this exercise in this session
+    const { data: sessionPB } = await supabase
+      .from("personal_bests")
+      .select("id, weight_kg")
+      .eq("athlete_id", athleteId)
+      .eq("session_id", sessionId)
+      .ilike("exercise_name", exData.name)
+      .maybeSingle();
+
+    if (sessionPB) {
+      // Update existing session PB if new weight is higher
+      if (maxWeight > sessionPB.weight_kg) {
+        await supabase.from("personal_bests").update({ weight_kg: maxWeight, reps: repsAtMax }).eq("id", sessionPB.id);
+      }
+      return;
+    }
+
     await supabase.from("personal_bests").insert({
       athlete_id: athleteId,
       exercise_name: exData.name,
