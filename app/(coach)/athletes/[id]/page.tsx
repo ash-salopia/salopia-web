@@ -1,4 +1,6 @@
 "use client";
+import { reorderSessionsOnDay, copySessionToDates } from "@/lib/data/sessions";
+import CopySessionModal from "@/components/CopySessionModal";
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -29,6 +31,7 @@ const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
   hyrox: { label: "Hyrox", color: "#B388FF" },
   cardio: { label: "Cardio", color: "#4DC3FF" },
+  power_speed: { label: "Power/Speed", color: "#A855F7" },
 };
 
 function EditableName({ name, onSave }: { name: string; onSave: (n: string) => Promise<void> }) {
@@ -87,6 +90,14 @@ export default function AthleteDetailPage() {
   const [flash, setFlash] = useState("");
   const [typePicker, setTypePicker] = useState(false);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
+  const [calView, setCalView] = useState<"month" | "week">("month");
+  const [weekStart, setWeekStart] = useState<string>(() => {
+    const d = new Date();
+    const dow = d.getDay();
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+    return monday.toISOString().slice(0, 10);
+  });
   const [linkCopied, setLinkCopied] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [loadTemplateId, setLoadTemplateId] = useState("");
@@ -112,16 +123,6 @@ export default function AthleteDetailPage() {
   const [goalsOpen, setGoalsOpen] = useState(false);
 
   // Calendar view state
-  const [calView, setCalView] = useState<"month" | "week">("month");
-  const [weekStart, setWeekStart] = useState<string>(() => {
-    // Start on Monday of current week
-    const d = new Date();
-    const dow = d.getDay();
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
-    return monday.toISOString().slice(0, 10);
-  });
-
   const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -181,7 +182,7 @@ export default function AthleteDetailPage() {
         athleteId,
         type,
         date,
-        `Session ${sessions.length + 1}`,
+        TYPE_META[type]?.label ?? "Session",
         []
       );
       router.push(`/athletes/${athleteId}/sessions/${session.id}`);
@@ -190,8 +191,8 @@ export default function AthleteDetailPage() {
     }
   };
 
-  const handleReorderSessions = async (date: string, sessions: Session[], direction: "up" | "down", sessionId: string) => {
-    const sorted = [...sessions].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+  const handleReorderSessions = async (date: string, daySess: Session[], direction: "up" | "down", sessionId: string) => {
+    const sorted = [...daySess].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
     const idx = sorted.findIndex(s => s.id === sessionId);
     if (direction === "up" && idx === 0) return;
     if (direction === "down" && idx === sorted.length - 1) return;
@@ -375,8 +376,7 @@ export default function AthleteDetailPage() {
       String(d.getDate()).padStart(2, "0");
   }
 
-  // Week view helpers
-  const weekDates = (() => {
+  const weekDates: string[] = (() => {
     const dates: string[] = [];
     const start = new Date(weekStart + "T12:00:00Z");
     for (let i = 0; i < 7; i++) {
@@ -388,11 +388,11 @@ export default function AthleteDetailPage() {
   })();
 
   const weekTitle = (() => {
-    const start = new Date(weekStart + "T12:00:00Z");
-    const end = new Date(weekStart + "T12:00:00Z");
-    end.setDate(end.getDate() + 6);
+    const s = new Date(weekStart + "T12:00:00Z");
+    const e = new Date(weekStart + "T12:00:00Z");
+    e.setDate(e.getDate() + 6);
     const fmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    return `${fmt(start)} – ${fmt(end)} ${end.getFullYear()}`;
+    return fmt(s) + " – " + fmt(e) + " " + e.getFullYear();
   })();
 
   const prevWeek = () => {
@@ -507,15 +507,10 @@ export default function AthleteDetailPage() {
           sessionName={copyModal.sessionName}
           sessionDate={copyModal.sessionDate}
           athleteId={athleteId}
-          onDone={(count) => {
-            setCopyModal(null);
-            load();
-            showFlash(`Copied to ${count} date${count !== 1 ? "s" : ""}`);
-          }}
+          onDone={(count) => { setCopyModal(null); load(); setFlash("Copied to " + count + " date" + (count !== 1 ? "s" : "")); setTimeout(() => setFlash(""), 3000); }}
           onClose={() => setCopyModal(null)}
         />
       )}
-
       {typePicker && (
             <div style={styles.typePopover}>
               {calendarAddDate && (
@@ -558,148 +553,86 @@ export default function AthleteDetailPage() {
           <span style={styles.calTitle}>{calView === "month" ? calendarTitle : weekTitle}</span>
           <button style={styles.calNavBtn} onClick={calView === "month" ? nextMonth : nextWeek}>›</button>
           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-            <button
-              style={{ ...styles.viewTabBtn, ...(calView === "month" ? styles.viewTabBtnActive : {}) }}
-              onClick={() => setCalView("month")}
-            >Month</button>
-            <button
-              style={{ ...styles.viewTabBtn, ...(calView === "week" ? styles.viewTabBtnActive : {}) }}
-              onClick={() => setCalView("week")}
-            >Week</button>
+            {(["month", "week"] as const).map(v => (
+              <button key={v} style={{ ...styles.viewTabBtn, ...(calView === v ? styles.viewTabBtnActive : {}) }} onClick={() => setCalView(v)}>
+                {v === "month" ? "Month" : "Week"}
+              </button>
+            ))}
           </div>
         </div>
 
         {calView === "week" ? (
-          /* ── Week view ── */
           <div style={styles.weekGrid}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((dayLabel, di) => {
+            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((dayLabel, di) => {
               const iso = weekDates[di];
-              const daySessions = (sessionsByDate.get(iso) ?? []).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+              const daySess = [...(sessionsByDate.get(iso) ?? [])].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
               const isToday = iso === todayStr;
               const dayDate = new Date(iso + "T12:00:00Z");
               return (
-                <div key={iso} style={{ ...styles.weekCol, ...(isToday ? styles.weekColToday : {}) }}>
+                <div key={iso} style={{ ...styles.weekCol, ...(isToday ? { borderColor: "var(--accent)44" } : {}) }}>
                   <div style={styles.weekDayHeader}>
-                    <div style={styles.weekDayLabel}>{dayLabel}</div>
-                    <div style={{ ...styles.weekDayNum, color: isToday ? "var(--accent)" : "var(--mute)", fontWeight: isToday ? 700 : 400 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>{dayLabel}</div>
+                    <div style={{ fontSize: 13, color: isToday ? "var(--accent)" : "var(--mute)", fontWeight: isToday ? 700 : 400 }}>
                       {dayDate.getDate()} {dayDate.toLocaleDateString("en-GB", { month: "short" })}
                     </div>
                   </div>
-                  <div
-                    style={styles.weekDayBody}
-                    onClick={() => { setCalendarAddDate(iso); setTypePicker(false); }}
-                  >
-                    {daySessions.map((session, si) => {
+                  <div style={styles.weekDayBody} onClick={() => { setCalendarAddDate(iso); setTypePicker(false); }}>
+                    {daySess.map((session, si) => {
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                       return (
                         <div key={session.id} style={{ ...styles.weekSessionCard, borderLeftColor: meta.color }}>
-                          <div style={styles.weekSessionTop}>
-                            <span style={{ ...styles.weekSessionType, color: meta.color }}>{meta.label}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const }}>{meta.label}</span>
                             <div style={{ display: "flex", gap: 2 }}>
-                              <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }}
-                                onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySessions, "up", session.id); }}>▴</button>
-                              <button style={{ ...styles.reorderBtn, opacity: si === daySessions.length - 1 ? 0.2 : 1 }}
-                                onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySessions, "down", session.id); }}>▾</button>
+                              <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "up", session.id); }}>▴</button>
+                              <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
                             </div>
                           </div>
-                          <button
-                            style={styles.weekSessionName}
-                            onClick={e => { e.stopPropagation(); router.push(`/athletes/${athleteId}/sessions/${session.id}`); }}
-                          >
+                          <button style={styles.weekSessionName} onClick={e => { e.stopPropagation(); router.push(`/athletes/${athleteId}/sessions/${session.id}`); }}>
                             {session.name}
                           </button>
                           {session.exercises && session.exercises.length > 0 && (
-                            <div style={styles.weekExCount}>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</div>
+                            <div style={{ fontSize: 10, color: "var(--mute)" }}>{session.exercises.length} exercises</div>
                           )}
-                          <button
-                            style={styles.copySessionBtn}
-                            onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }}
-                            title="Copy session"
-                          >⧉ Copy</button>
+                          <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
                         </div>
                       );
                     })}
-                    {daySessions.length === 0 && (
-                      <div style={styles.weekEmpty}>+ Add</div>
-                    )}
+                    {daySess.length === 0 && <div style={{ fontSize: 11, color: "var(--line)", textAlign: "center" as const, padding: "16px 0" }}>+ Add</div>}
                   </div>
                 </div>
               );
             })}
           </div>
         ) : (
-        /* ── Month view ── */
         <div style={styles.calGrid}>
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
             <div key={d} style={styles.calDayHeader}>{d}</div>
           ))}
-
-          {/* Weeks */}
           {calendarWeeks.map((week, wi) =>
             week.map((day) => {
               const iso = dateToISO(day);
               const isCurrentMonth = day.getMonth() === calendarMonth.month;
               const isToday = iso === todayStr;
-              const daySessions = sessionsByDate.get(iso) ?? [];
-
+              const daySess = [...(sessionsByDate.get(iso) ?? [])].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
               return (
-                <div
-                  key={iso}
-                  style={{
-                    ...styles.calCell,
-                    opacity: isCurrentMonth ? 1 : 0.35,
-                    background: calendarAddDate === iso ? "var(--accent-dim)" : isToday ? "rgba(59,139,235,0.08)" : "var(--panel)",
-                    borderColor: calendarAddDate === iso ? "var(--accent)" : isToday ? "var(--accent)44" : "var(--line)",
-                    cursor: isCurrentMonth ? "pointer" : "default",
-                  }}
-                  onClick={() => {
-                    if (!isCurrentMonth) return;
-                    setCalendarAddDate(iso);
-                    setTypePicker(false); // close popover if open, let user use top-right button
-                  }}
-                >
-                  <div style={{
-                    ...styles.calDayNum,
-                    color: isToday ? "var(--accent)" : isCurrentMonth ? "var(--mute)" : "var(--line)",
-                    fontWeight: isToday ? 700 : 400,
-                  }}>
+                <div key={iso} style={{ ...styles.calCell, opacity: isCurrentMonth ? 1 : 0.35, background: calendarAddDate === iso ? "var(--accent-dim)" : isToday ? "rgba(59,139,235,0.08)" : "var(--panel)", borderColor: calendarAddDate === iso ? "var(--accent)" : isToday ? "var(--accent)44" : "var(--line)", cursor: isCurrentMonth ? "pointer" : "default" }}
+                  onClick={() => { if (!isCurrentMonth) return; setCalendarAddDate(iso); setTypePicker(false); }}>
+                  <div style={{ ...styles.calDayNum, color: isToday ? "var(--accent)" : isCurrentMonth ? "var(--mute)" : "var(--line)", fontWeight: isToday ? 700 : 400 }}>
                     {day.getDate()}
                   </div>
-                  {daySessions.map((session) => {
+                  {daySess.map((session, si) => {
                     const meta = TYPE_META[session.type] ?? TYPE_META.strength;
-                    const daySessions = (sessionsByDate.get(dateStr) ?? []).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
-                    const sessionIdx = daySessions.findIndex(s => s.id === session.id);
                     return (
-                      <div key={session.id} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        {/* Reorder arrows */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                          <button
-                            style={{ ...styles.reorderBtn, opacity: sessionIdx === 0 ? 0.2 : 1 }}
-                            onClick={e => { e.stopPropagation(); handleReorderSessions(dateStr, daySessions, "up", session.id); }}
-                            title="Move up"
-                          >▴</button>
-                          <button
-                            style={{ ...styles.reorderBtn, opacity: sessionIdx === daySessions.length - 1 ? 0.2 : 1 }}
-                            onClick={e => { e.stopPropagation(); handleReorderSessions(dateStr, daySessions, "down", session.id); }}
-                            title="Move down"
-                          >▾</button>
+                      <div key={session.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <div style={{ display: "flex", flexDirection: "column" as const }}>
+                          <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "up", session.id); }}>▴</button>
+                          <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
                         </div>
-                        <button
-                          style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`);
-                          }}
-                          title={session.name}
-                        >
-                          {session.name.length > 14 ? session.name.slice(0, 13) + "..." : session.name}
+                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={session.name}>
+                          {session.name.length > 12 ? session.name.slice(0, 11) + "…" : session.name}
                         </button>
-                        {/* Copy button */}
-                        <button
-                          style={styles.copySessionBtn}
-                          onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }}
-                          title="Copy session"
-                        >⧉</button>
+                        <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
                       </div>
                     );
                   })}
@@ -708,12 +641,11 @@ export default function AthleteDetailPage() {
             })
           )}
         </div>
+        )}
 
         {sessions.length === 0 && (
           <div style={styles.empty}>No sessions yet. Add one above or click a date.</div>
         )}
-        </div>
-        )} {/* end month/week conditional */}
       </div>
 
       {loadTemplateOpen && (
@@ -850,6 +782,17 @@ export default function AthleteDetailPage() {
           </div>
         </div>
       )}
+
+      <button
+        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #A855F744", background: "#A855F708" }}
+        onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
+      >
+        <div>
+          <div style={{ ...styles.testingTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
+          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>10m, 20m, CMJ, RSI, Broad Jump, 505 →</div>
+        </div>
+        <span style={{ fontSize: 20, color: "#A855F7" }}>›</span>
+      </button>
 
       {/* Testing schedule card */}
       <div style={styles.testingCard}>
@@ -1123,98 +1066,16 @@ const styles: Record<string, React.CSSProperties> = {
   calDayHeader: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const, padding: "4px 0", textTransform: "uppercase" as const },
   calCell: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 6px 4px", minHeight: 72, cursor: "pointer", display: "flex", flexDirection: "column" as const, gap: 3 },
   calDayNum: { fontSize: 11, marginBottom: 2, textAlign: "right" as const },
-  reorderBtn: {
-    background: "transparent",
-    border: "none",
-    color: "var(--mute)",
-    fontSize: 8,
-    cursor: "pointer",
-    padding: "1px 2px",
-    lineHeight: 1,
-  },
-  copySessionBtn: {
-    background: "transparent",
-    border: "1px solid var(--line)",
-    color: "var(--mute)",
-    borderRadius: 4,
-    fontSize: 11,
-    cursor: "pointer",
-    padding: "1px 4px",
-    flexShrink: 0,
-  },
-  viewTabBtn: {
-    background: "transparent",
-    border: "1px solid var(--line)",
-    color: "var(--mute)",
-    borderRadius: 6,
-    padding: "5px 12px",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  viewTabBtnActive: {
-    background: "var(--accent-dim)",
-    border: "1px solid var(--accent)",
-    color: "var(--accent)",
-  },
-  weekGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 6,
-    marginTop: 8,
-  },
-  weekCol: {
-    background: "var(--panel)",
-    border: "1px solid var(--line)",
-    borderRadius: 10,
-    overflow: "hidden",
-    minHeight: 200,
-    display: "flex",
-    flexDirection: "column" as const,
-  },
-  weekColToday: {
-    border: "1px solid var(--accent)44",
-    background: "rgba(59,139,235,0.04)",
-  },
-  weekDayHeader: {
-    padding: "8px 10px",
-    borderBottom: "1px solid var(--line)",
-    background: "var(--ink)",
-  },
-  weekDayLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.05em" },
-  weekDayNum: { fontSize: 13, marginTop: 2 },
-  weekDayBody: {
-    flex: 1,
-    padding: 8,
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 6,
-    cursor: "pointer",
-  },
-  weekSessionCard: {
-    background: "var(--ink)",
-    border: "1px solid var(--line)",
-    borderLeft: "3px solid var(--accent)",
-    borderRadius: 6,
-    padding: "6px 8px",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 3,
-  },
-  weekSessionTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  weekSessionType: { fontSize: 9, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.05em" },
-  weekSessionName: {
-    background: "transparent",
-    border: "none",
-    color: "var(--text)",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: 0,
-    textAlign: "left" as const,
-  },
-  weekExCount: { fontSize: 10, color: "var(--mute)" },
-  weekEmpty: { fontSize: 11, color: "var(--line)", textAlign: "center" as const, padding: "20px 0" },
+  viewTabBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  viewTabBtnActive: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--accent)" },
+  reorderBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 8, cursor: "pointer", padding: "1px 2px", lineHeight: 1 },
+  copySessionBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 4, fontSize: 10, cursor: "pointer", padding: "1px 4px", flexShrink: 0 },
+  weekGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginTop: 8 },
+  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, display: "flex", flexDirection: "column" as const },
+  weekDayHeader: { padding: "8px 10px", borderBottom: "1px solid var(--line)", background: "var(--ink)" },
+  weekDayBody: { flex: 1, padding: 8, display: "flex", flexDirection: "column" as const, gap: 6, cursor: "pointer" },
+  weekSessionCard: { background: "var(--ink)", border: "1px solid var(--line)", borderLeft: "3px solid", borderRadius: 6, padding: "6px 8px", display: "flex", flexDirection: "column" as const, gap: 3 },
+  weekSessionName: { background: "transparent", border: "none", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, textAlign: "left" as const },
   calSessionChip: { fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 5px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap" as const },
   typeDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   sessionName: { fontWeight: 700, fontSize: 14, color: "var(--text)" },
