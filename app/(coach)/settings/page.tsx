@@ -1,4 +1,5 @@
 "use client";
+import BrandingSettings from "@/components/BrandingSettings";
 
 import { useState, useEffect } from "react";
 import { getOrgSettings, updateOrgSettings } from "@/lib/data/settings";
@@ -15,6 +16,9 @@ export default function SettingsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [orgId, setOrgId] = useState("");
+  const [orgTier, setOrgTier] = useState<"standard"|"premium">("standard");
+  const [orgBranding, setOrgBranding] = useState({});
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
