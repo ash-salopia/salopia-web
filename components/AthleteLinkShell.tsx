@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import type { ResolvedBranding } from "@/types/branding";
+import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
 import type { Athlete, Session, SessionType } from "@/types";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
-  strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
-  hyrox:    { label: "Hyrox",    color: "#B388FF", short: "Hyr" },
-  cardio:   { label: "Cardio",   color: "#4DC3FF", short: "Car" },
-  power_speed: { label: "Power/Speed", color: "#A855F7", short: "Pow" },
+  strength:    { label: "Strength",     color: "#3B8BEB", short: "Str" },
+  hyrox:       { label: "Hyrox",        color: "#B388FF", short: "Hyr" },
+  cardio:      { label: "Cardio",       color: "#4DC3FF", short: "Car" },
+  power_speed: { label: "Power/Speed",  color: "#A855F7", short: "P/S" },
 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -39,11 +41,12 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions, token,
+  athlete, sessions, token, branding = DEFAULT_BRANDING,
 }: {
   athlete: Athlete;
   sessions: Session[];
   token: string;
+  branding?: ResolvedBranding;
 }) {
   const router = useRouter();
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -89,7 +92,7 @@ export default function AthleteLinkShell({
       {/* Header */}
       <div style={st.header}>
         <div>
-          <div style={st.brand}>AthletiQ</div>
+          <div style={st.brand}>SALOPIA</div>
           <div style={st.athleteName}>{athlete.name}</div>
         </div>
       </div>

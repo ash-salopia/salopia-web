@@ -206,6 +206,24 @@ export default function SettingsPage() {
                         />
                       )}
 
+                      {/* Secondary action for high soreness */}
+                      {condition.key === "high_soreness" && (
+                        <div style={s.secondaryRow}>
+                          <div style={s.ruleDesc}>Also recommend:</div>
+                          <select
+                            value={settings.checkin_rules.high_soreness_also ?? ""}
+                            onChange={e => setSettings(prev => ({
+                              ...prev,
+                              checkin_rules: { ...prev.checkin_rules, high_soreness_also: e.target.value as any },
+                            }))}
+                            style={{ ...s.ruleSelect, flex: "unset", width: 220 }}
+                          >
+                            <option value="">Nothing additional</option>
+                            <option value="skip_sore_muscles">Skip sore muscle exercises</option>
+                            <option value="postpone">Postpone to later in week</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
