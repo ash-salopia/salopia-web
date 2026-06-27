@@ -472,7 +472,7 @@ export default function AthleteDetailPage() {
           onDone={(count) => {
             setCopyModal(null);
             load();
-            showFlash(`Copied to ${count} date${count !== 1 ? "s" : ""}`);
+            setFlash(`Copied to ${count} date${count !== 1 ? "s" : ""}`);
           }}
           onClose={() => setCopyModal(null)}
         />
