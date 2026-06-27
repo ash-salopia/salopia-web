@@ -665,23 +665,22 @@ export default function AthleteDetailPage() {
                   }}>
                     {day.getDate()}
                   </div>
-                  {(() => {
-                    const sortedDay = [...daySessions].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
-                    return sortedDay.map((session) => {
+                  {daySessions.map((session) => {
                     const meta = TYPE_META[session.type] ?? TYPE_META.strength;
-                    const sessionIdx = sortedDay.findIndex(s => s.id === session.id);
+                    const daySessions = (sessionsByDate.get(dateStr) ?? []).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+                    const sessionIdx = daySessions.findIndex(s => s.id === session.id);
                     return (
                       <div key={session.id} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                         {/* Reorder arrows */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                           <button
                             style={{ ...styles.reorderBtn, opacity: sessionIdx === 0 ? 0.2 : 1 }}
-                            onClick={e => { e.stopPropagation(); handleReorderSessions(iso, sortedDay, "up", session.id); }}
+                            onClick={e => { e.stopPropagation(); handleReorderSessions(dateStr, daySessions, "up", session.id); }}
                             title="Move up"
                           >▴</button>
                           <button
-                            style={{ ...styles.reorderBtn, opacity: sessionIdx === sortedDay.length - 1 ? 0.2 : 1 }}
-                            onClick={e => { e.stopPropagation(); handleReorderSessions(iso, sortedDay, "down", session.id); }}
+                            style={{ ...styles.reorderBtn, opacity: sessionIdx === daySessions.length - 1 ? 0.2 : 1 }}
+                            onClick={e => { e.stopPropagation(); handleReorderSessions(dateStr, daySessions, "down", session.id); }}
                             title="Move down"
                           >▾</button>
                         </div>
@@ -703,8 +702,7 @@ export default function AthleteDetailPage() {
                         >⧉</button>
                       </div>
                     );
-                  });
-                  })()}
+                  })}
                 </div>
               );
             })
@@ -716,6 +714,7 @@ export default function AthleteDetailPage() {
         )}
         </div>
         )} {/* end month/week conditional */}
+      </div>
 
       {loadTemplateOpen && (
         <div style={styles.overlay} onClick={() => setLoadTemplateOpen(false)}>
