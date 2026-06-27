@@ -716,7 +716,6 @@ export default function AthleteDetailPage() {
         )}
         </div>
         )} {/* end month/week conditional */}
-      </div>
 
       {loadTemplateOpen && (
         <div style={styles.overlay} onClick={() => setLoadTemplateOpen(false)}>
