@@ -1,5 +1,6 @@
 "use client";
 import { reorderSessionsOnDay, copySessionToDates } from "@/lib/data/sessions";
+import CopySessionModal from "@/components/CopySessionModal";
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
