@@ -11,6 +11,17 @@ export interface PersonalBest {
   created_at: string;
   athlete?: { id: string; name: string } | null;
   reactions?: PBReaction[];
+  comments?: PBComment[];
+}
+
+export interface PBComment {
+  id: string;
+  pb_id: string;
+  author_id: string;
+  author_type: "coach" | "athlete";
+  author_name: string;
+  body: string;
+  created_at: string;
 }
 
 export interface PBReaction {
