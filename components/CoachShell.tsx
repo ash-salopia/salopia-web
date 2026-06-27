@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import type { ResolvedBranding } from "@/types/branding";
@@ -31,6 +32,12 @@ export default function CoachShell({
   const pathname = usePathname();
   const router = useRouter();
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--accent", branding.primaryColor);
+    root.style.setProperty("--accent-dim", branding.primaryColorDim);
+  }, [branding.primaryColor, branding.primaryColorDim]);
+
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -39,13 +46,8 @@ export default function CoachShell({
   };
 
   // Inject branding CSS variables
-  const brandingVars = {
-    "--accent": branding.primaryColor,
-    "--accent-dim": branding.primaryColorDim,
-  } as React.CSSProperties;
-
   return (
-    <div style={{ ...styles.app, ...brandingVars }}>
+    <div style={styles.app}>
       <header style={styles.header}>
         {/* Logo / brand name */}
         <div style={styles.brand}>
