@@ -46,10 +46,13 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
   const [error, setError] = useState("");
 
   async function apiPost(body: object) {
+    const identity = token
+      ? { token }
+      : { athlete_id: athleteId || undefined, organisation_id: organisationId, actor_id: coachId, actor_name: coachName, actor_type: "coach" };
     const res = await fetch("/api/athlete-link/competitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, ...body }),
+      body: JSON.stringify({ ...identity, ...body }),
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
