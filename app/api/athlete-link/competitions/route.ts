@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     if (!title || !competition_date) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     const { data, error } = await supabase
       .from("competitions")
-      .insert({ athlete_id: resolvedAthleteId || resolvedActorId, organisation_id: resolvedOrgId, title, competition_date, location: location ?? null, notes: notes ?? null })
+      .insert({ athlete_id: resolvedAthleteId || null, organisation_id: resolvedOrgId, title, competition_date, location: location ?? null, notes: notes ?? null })
       .select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ competition: data });
