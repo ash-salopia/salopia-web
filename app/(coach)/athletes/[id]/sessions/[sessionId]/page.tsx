@@ -323,9 +323,45 @@ export default function SessionDetailPage() {
     );
     try {
       await updateExerciseLog(exerciseId, log);
+      // Detect PB after coach logs a set
+      detectPBFromCoachLog(exerciseId, log).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save set");
     }
+  };
+
+  const detectPBFromCoachLog = async (exerciseId: string, log: SetLog[]) => {
+    // Find best weight in completed sets
+    let maxWeight = 0;
+    let repsAtMax: number | null = null;
+    let hasBodyweight = false;
+    for (const set of log) {
+      if (!set.done) continue;
+      const w = parseFloat(String(set.weight));
+      if (!isNaN(w) && w > 0 && w > maxWeight) {
+        maxWeight = w;
+        repsAtMax = parseInt(String(set.reps)) || null;
+      }
+      // Bodyweight: done but no weight recorded
+      if (set.done && (!set.weight || set.weight === "" || w === 0)) {
+        hasBodyweight = true;
+        repsAtMax = parseInt(String(set.reps)) || null;
+      }
+    }
+    if (maxWeight <= 0 && !hasBodyweight) return;
+
+    // Call the existing athlete-link log API with athleteId from session
+    if (!session?.athlete_id) return;
+    await fetch("/api/athlete-link/detect-pb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        athleteId: session.athlete_id,
+        exerciseId,
+        sessionId,
+        log,
+      }),
+    });
   };
 
   const handleRemoveExercise = async (exerciseId: string) => {
