@@ -1,4 +1,5 @@
 "use client";
+import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
 
 import { useState, useEffect } from "react";
 import {
@@ -14,7 +15,7 @@ import {
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
 
-type Tab = "groups" | "announcements" | "feed" | "chat";
+type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,8 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [coachId, setCoachId] = useState("");
+  const [orgId, setOrgId] = useState("");
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [coachName, setCoachName] = useState("");
 
   useEffect(() => {
@@ -90,7 +93,8 @@ export default function CommunityPage() {
             {t === "groups" ? `👥 Groups (${groups.length})` :
              t === "announcements" ? `📢 Announcements` :
              t === "feed" ? `🏆 PB Feed` :
-             `💬 Chat`}
+             t === "chat" ? `💬 Chat` :
+             `🏆 Comps`}
           </button>
         ))}
       </div>
@@ -118,6 +122,18 @@ export default function CommunityPage() {
               coachId={coachId}
               coachName={coachName}
               onPbsChange={setPbs}
+            />
+          )}
+          {tab === "comps" && (
+            <CompetitionFeed
+              competitions={competitions}
+              athleteId=""
+              athleteName={coachName}
+              token=""
+              coachId={coachId}
+              coachName={coachName}
+              organisationId={orgId}
+              onUpdated={setCompetitions}
             />
           )}
           {tab === "chat" && (
