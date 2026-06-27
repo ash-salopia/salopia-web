@@ -84,7 +84,7 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat"] as Tab[]).map((t) => (
+        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
