@@ -29,7 +29,6 @@ const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
   hyrox: { label: "Hyrox", color: "#B388FF" },
   cardio: { label: "Cardio", color: "#4DC3FF" },
-  power_speed: { label: "Power/Speed", color: "#A855F7" },
 };
 
 function EditableName({ name, onSave }: { name: string; onSave: (n: string) => Promise<void> }) {
@@ -87,6 +86,7 @@ export default function AthleteDetailPage() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [typePicker, setTypePicker] = useState(false);
+  const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [loadTemplateId, setLoadTemplateId] = useState("");
@@ -171,13 +171,32 @@ export default function AthleteDetailPage() {
         athleteId,
         type,
         date,
-        TYPE_META[type]?.label ?? "Session",
+        `Session ${sessions.length + 1}`,
         []
       );
       router.push(`/athletes/${athleteId}/sessions/${session.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create session");
     }
+  };
+
+  const handleReorderSessions = async (date: string, sessions: Session[], direction: "up" | "down", sessionId: string) => {
+    const sorted = [...sessions].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+    const idx = sorted.findIndex(s => s.id === sessionId);
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === sorted.length - 1) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
+    const orderedIds = sorted.map(s => s.id);
+    setSessions(prev => {
+      const updated = [...prev];
+      orderedIds.forEach((id, i) => {
+        const s = updated.find(x => x.id === id);
+        if (s) (s as any).sort_order = i;
+      });
+      return [...updated];
+    });
+    await reorderSessionsOnDay(athleteId, date, orderedIds);
   };
 
   const handleDeleteSession = async (session: Session) => {
@@ -441,7 +460,22 @@ export default function AthleteDetailPage() {
               ? `Add session — ${new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
               : "Add session"}
           </button>
-          {typePicker && (
+          {copyModal && (
+        <CopySessionModal
+          sessionId={copyModal.sessionId}
+          sessionName={copyModal.sessionName}
+          sessionDate={copyModal.sessionDate}
+          athleteId={athleteId}
+          onDone={(count) => {
+            setCopyModal(null);
+            load();
+            showFlash(`Copied to ${count} date${count !== 1 ? "s" : ""}`);
+          }}
+          onClose={() => setCopyModal(null)}
+        />
+      )}
+
+      {typePicker && (
             <div style={styles.typePopover}>
               {calendarAddDate && (
                 <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, padding: "4px 12px 8px", borderBottom: "1px solid var(--line)", marginBottom: 4 }}>
@@ -523,18 +557,40 @@ export default function AthleteDetailPage() {
                   </div>
                   {daySessions.map((session) => {
                     const meta = TYPE_META[session.type] ?? TYPE_META.strength;
+                    const daySessions = (sessionsByDate.get(dateStr) ?? []).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+                    const sessionIdx = daySessions.findIndex(s => s.id === session.id);
                     return (
-                      <button
-                        key={session.id}
-                        style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`);
-                        }}
-                        title={session.name}
-                      >
-                        {session.name.length > 14 ? session.name.slice(0, 13) + "..." : session.name}
-                      </button>
+                      <div key={session.id} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                        {/* Reorder arrows */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                          <button
+                            style={{ ...styles.reorderBtn, opacity: sessionIdx === 0 ? 0.2 : 1 }}
+                            onClick={e => { e.stopPropagation(); handleReorderSessions(dateStr, daySessions, "up", session.id); }}
+                            title="Move up"
+                          >▴</button>
+                          <button
+                            style={{ ...styles.reorderBtn, opacity: sessionIdx === daySessions.length - 1 ? 0.2 : 1 }}
+                            onClick={e => { e.stopPropagation(); handleReorderSessions(dateStr, daySessions, "down", session.id); }}
+                            title="Move down"
+                          >▾</button>
+                        </div>
+                        <button
+                          style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`);
+                          }}
+                          title={session.name}
+                        >
+                          {session.name.length > 14 ? session.name.slice(0, 13) + "..." : session.name}
+                        </button>
+                        {/* Copy button */}
+                        <button
+                          style={styles.copySessionBtn}
+                          onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }}
+                          title="Copy session"
+                        >⧉</button>
+                      </div>
                     );
                   })}
                 </div>
@@ -682,18 +738,6 @@ export default function AthleteDetailPage() {
           </div>
         </div>
       )}
-
-      {/* Power/Speed benchmark link */}
-      <button
-        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #A855F744", background: "#A855F708" }}
-        onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
-      >
-        <div>
-          <div style={{ ...styles.testingTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
-          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>10m, 20m, CMJ, RSI, Broad Jump, 505 →</div>
-        </div>
-        <span style={{ fontSize: 20, color: "#A855F7" }}>›</span>
-      </button>
 
       {/* Testing schedule card */}
       <div style={styles.testingCard}>
@@ -967,6 +1011,25 @@ const styles: Record<string, React.CSSProperties> = {
   calDayHeader: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const, padding: "4px 0", textTransform: "uppercase" as const },
   calCell: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 6px 4px", minHeight: 72, cursor: "pointer", display: "flex", flexDirection: "column" as const, gap: 3 },
   calDayNum: { fontSize: 11, marginBottom: 2, textAlign: "right" as const },
+  reorderBtn: {
+    background: "transparent",
+    border: "none",
+    color: "var(--mute)",
+    fontSize: 8,
+    cursor: "pointer",
+    padding: "1px 2px",
+    lineHeight: 1,
+  },
+  copySessionBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--mute)",
+    borderRadius: 4,
+    fontSize: 11,
+    cursor: "pointer",
+    padding: "1px 4px",
+    flexShrink: 0,
+  },
   calSessionChip: { fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 5px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap" as const },
   typeDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   sessionName: { fontWeight: 700, fontSize: 14, color: "var(--text)" },

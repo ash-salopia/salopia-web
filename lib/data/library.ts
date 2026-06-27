@@ -44,6 +44,7 @@ export async function saveLibraryEntry(
         target_load: entry.target_load ?? existing.target_load,
         tempo: entry.tempo ?? existing.tempo,
         notes: entry.notes ?? existing.notes,
+        types: entry.types ?? existing.types ?? [],   // FIX: was missing from update
       })
       .eq("id", existing.id)
       .select()

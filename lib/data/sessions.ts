@@ -181,7 +181,7 @@ export async function addExercisesToSession(
 
 export async function updateSession(
   sessionId: string,
-  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "session_notes">>
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);
@@ -407,4 +407,130 @@ export async function getWeekCompletionData(
     }
     return { athlete_id: session.athlete_id, date: session.date, doneSets, totalSets };
   });
+}
+
+// ── Reorder sessions within a day ────────────────────────────────────────────
+
+export async function reorderSessionsOnDay(
+  athleteId: string,
+  date: string,
+  orderedIds: string[]   // session IDs in desired order
+): Promise<void> {
+  const supabase = createClient();
+  await Promise.all(
+    orderedIds.map((id, i) =>
+      supabase
+        .from("sessions")
+        .update({ sort_order: i })
+        .eq("id", id)
+        .eq("athlete_id", athleteId)
+        .eq("date", date)
+    )
+  );
+}
+
+// ── Copy a single session to one or more dates ────────────────────────────────
+
+export async function copySessionToDates(
+  sessionId: string,
+  athleteId: string,
+  targetDates: string[]   // ISO date strings
+): Promise<number> {
+  const supabase = createClient();
+
+  // Fetch source session with exercises
+  const source = await getSession(sessionId);
+  if (!source) throw new Error("Session not found");
+
+  let created = 0;
+  for (const date of targetDates) {
+    // Create session
+    const { data: newSession, error: sessErr } = await supabase
+      .from("sessions")
+      .insert({
+        athlete_id: athleteId,
+        name: source.name,
+        date,
+        type: source.type,
+        hyrox_type: source.hyrox_type ?? null,
+        hyrox_config: source.hyrox_config ?? null,
+        cardio_type: source.cardio_type ?? null,
+        cardio_config: source.cardio_config ?? null,
+        session_notes: source.session_notes ?? null,
+      })
+      .select()
+      .single();
+    if (sessErr) throw sessErr;
+
+    // Copy exercises
+    const exercises = source.exercises ?? [];
+    if (exercises.length) {
+      const exRows = exercises.map((e, i) => ({
+        session_id: newSession.id,
+        name: e.name,
+        order: e.order ?? "",
+        sets: e.sets ?? 3,
+        reps: e.reps ?? "",
+        time: e.time ?? "",
+        rest: e.rest ?? "",
+        target_load: e.target_load ?? "",
+        tempo: e.tempo ?? "2-0-2",
+        each_side: e.each_side ?? false,
+        notes: e.notes ?? "",
+        video_url: e.video_url ?? "",
+        sort_order: i,
+        distance: (e as any).distance ?? null,
+        contacts: (e as any).contacts ?? null,
+        intensity_label: (e as any).intensity_label ?? null,
+        log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
+      }));
+      const { error: exErr } = await supabase.from("session_exercises").insert(exRows);
+      if (exErr) throw exErr;
+    }
+    created++;
+  }
+  return created;
+}
+
+// ── Generate repeat dates from a pattern ─────────────────────────────────────
+
+export type RepeatPattern = "daily" | "mwf" | "tu_th" | "mtwthf" | "weekends" | "custom";
+
+const DOW_MAP: Record<string, number> = {
+  mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0,
+};
+
+const PATTERN_DAYS: Record<RepeatPattern, number[]> = {
+  daily:   [0, 1, 2, 3, 4, 5, 6],
+  mwf:     [1, 3, 5],
+  tu_th:   [2, 4],
+  mtwthf:  [1, 2, 3, 4, 5],
+  weekends:[0, 6],
+  custom:  [],
+};
+
+export function generateRepeatDates(
+  startDate: string,   // ISO — first date to consider (usually day after source)
+  endDate: string,     // ISO — last date to include
+  pattern: RepeatPattern,
+  customDays?: number[] // 0=Sun..6=Sat, used when pattern=custom
+): string[] {
+  const days = pattern === "custom" ? (customDays ?? []) : PATTERN_DAYS[pattern];
+  const dates: string[] = [];
+  const cursor = new Date(startDate + "T12:00:00Z");
+  const end = new Date(endDate + "T12:00:00Z");
+
+  while (cursor <= end) {
+    if (days.includes(cursor.getDay())) {
+      dates.push(cursor.toISOString().slice(0, 10));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+export function endDateFromWeeks(startDate: string, weeks: number): string {
+  const d = new Date(startDate + "T12:00:00Z");
+  d.setDate(d.getDate() + weeks * 7 - 1);
+  return d.toISOString().slice(0, 10);
 }
