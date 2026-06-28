@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { updatePB, deletePB, createManualPB } from "@/lib/data/personal-bests";
 import { archiveAthlete } from "@/lib/data/athletes";
 import ExportModal from "@/components/ExportModal";
 import type { Athlete } from "@/types";
@@ -10,6 +11,7 @@ import type { Athlete } from "@/types";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PBRecord {
+  id: string;
   exercise_name: string;
   weight_kg: number;
   reps: number | null;
@@ -157,6 +159,11 @@ export default function AthleteProfilePage() {
   const [stats, setStats] = useState<SessionStat | null>(null);
   const [progressData, setProgressData] = useState<Record<string, ProgressPoint[]>>({});
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
+  const [editingPB, setEditingPB] = useState<string | null>(null); // exercise_name being edited
+  const [editValues, setEditValues] = useState<{ weight: string; reps: string; date: string }>({ weight: "", reps: "", date: "" });
+  const [savingPB, setSavingPB] = useState(false);
+  const [addingPB, setAddingPB] = useState(false);
+  const [newPB, setNewPB] = useState({ exercise_name: "", weight: "", reps: "", date: "" });
   const [loading, setLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(false);
   const [error, setError] = useState("");
@@ -177,7 +184,7 @@ export default function AthleteProfilePage() {
     try {
       const [{ data: athleteData }, { data: pbData }, { data: sessionData }, { data: exerciseData }] = await Promise.all([
         supabase.from("athletes").select("*").eq("id", athleteId).single(),
-        supabase.from("personal_bests").select("exercise_name, weight_kg, reps, date")
+        supabase.from("personal_bests").select("id, exercise_name, weight_kg, reps, date")
           .eq("athlete_id", athleteId).order("weight_kg", { ascending: false }),
         supabase.from("sessions").select("date, session_exercises(log)").eq("athlete_id", athleteId),
         // Also calculate PBs directly from session logs to catch coach-logged sessions
@@ -193,7 +200,7 @@ export default function AthleteProfilePage() {
       for (const pb of pbData ?? []) {
         const key = pb.exercise_name.toLowerCase();
         if (!bestPerExercise.has(key) || pb.weight_kg > bestPerExercise.get(key)!.weight_kg) {
-          bestPerExercise.set(key, pb);
+          bestPerExercise.set(key, { id: pb.id, exercise_name: pb.exercise_name, weight_kg: pb.weight_kg, reps: pb.reps, date: pb.date });
         }
       }
 
@@ -213,6 +220,7 @@ export default function AthleteProfilePage() {
           const existing = bestPerExercise.get(key);
           if (!existing || w > existing.weight_kg) {
             bestPerExercise.set(key, {
+              id: existing?.id ?? "",  // keep real PB id if exists
               exercise_name: ex.name,
               weight_kg: w,
               reps: r,
@@ -396,6 +404,81 @@ export default function AthleteProfilePage() {
         <div style={p.sectionTitle}>🏆 Personal bests</div>
         <p style={p.sectionHint}>Click any exercise to see weight progression over time.</p>
 
+        {/* Add manual PB button */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button
+            style={p.ghostBtn}
+            onClick={() => setAddingPB(v => !v)}
+          >
+            {addingPB ? "Cancel" : "+ Add manual PB"}
+          </button>
+        </div>
+
+        {/* Add manual PB form */}
+        {addingPB && (
+          <div style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={p.sectionTitle}>Add manual PB</div>
+            <input
+              placeholder="Exercise name"
+              value={newPB.exercise_name}
+              onChange={e => setNewPB(v => ({ ...v, exercise_name: e.target.value }))}
+              style={p.editInput}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                placeholder="Weight (kg)"
+                value={newPB.weight}
+                onChange={e => setNewPB(v => ({ ...v, weight: e.target.value }))}
+                style={{ ...p.editInput, flex: 1 }}
+                inputMode="decimal"
+              />
+              <input
+                placeholder="Reps"
+                value={newPB.reps}
+                onChange={e => setNewPB(v => ({ ...v, reps: e.target.value }))}
+                style={{ ...p.editInput, flex: 1 }}
+                inputMode="numeric"
+              />
+              <input
+                type="date"
+                value={newPB.date}
+                onChange={e => setNewPB(v => ({ ...v, date: e.target.value }))}
+                style={{ ...p.editInput, flex: 1 }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button style={p.ghostBtn} onClick={() => { setAddingPB(false); setNewPB({ exercise_name: "", weight: "", reps: "", date: "" }); }}>
+                Cancel
+              </button>
+              <button
+                style={{ ...p.ghostBtn, background: "var(--accent)", color: "#0a1420", border: "none", opacity: (!newPB.exercise_name.trim() || !newPB.weight || !newPB.date || savingPB) ? 0.5 : 1 }}
+                disabled={!newPB.exercise_name.trim() || !newPB.weight || !newPB.date || savingPB}
+                onClick={async () => {
+                  setSavingPB(true);
+                  try {
+                    const created = await createManualPB({
+                      athleteId,
+                      exerciseName: newPB.exercise_name.trim(),
+                      weightKg: parseFloat(newPB.weight) || null,
+                      reps: parseInt(newPB.reps) || null,
+                      date: newPB.date,
+                    });
+                    setPbs(prev => [...prev, { id: created.id, exercise_name: created.exercise_name, weight_kg: created.weight_kg ?? 0, reps: created.reps, date: created.date }].sort((a, b) => b.weight_kg - a.weight_kg));
+                    setAddingPB(false);
+                    setNewPB({ exercise_name: "", weight: "", reps: "", date: "" });
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Could not create PB");
+                  } finally {
+                    setSavingPB(false);
+                  }
+                }}
+              >
+                {savingPB ? "Saving…" : "Save PB"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {pbs.length === 0 ? (
           <div style={p.empty}>
             No PBs recorded yet. They appear automatically when athletes log heavier weights.
@@ -405,24 +488,124 @@ export default function AthleteProfilePage() {
             {pbs.map((pb) => {
               const isExpanded = expandedExercise === pb.exercise_name;
               const chartPoints = progressData[pb.exercise_name];
+              const isEditing = editingPB === pb.exercise_name;
               return (
                 <div key={pb.exercise_name} style={p.pbCard}>
-                  <button
-                    style={p.pbCardBtn}
-                    onClick={() => loadProgressForExercise(pb.exercise_name)}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div style={p.pbExercise}>{pb.exercise_name}</div>
-                      <div style={p.pbDate}>{formatDate(pb.date)}</div>
+                  {isEditing ? (
+                    /* Edit mode */
+                    <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{pb.exercise_name}</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={p.editLabel}>Weight (kg)</div>
+                          <input
+                            value={editValues.weight}
+                            onChange={e => setEditValues(v => ({ ...v, weight: e.target.value }))}
+                            style={p.editInput}
+                            inputMode="decimal"
+                            autoFocus
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={p.editLabel}>Reps</div>
+                          <input
+                            value={editValues.reps}
+                            onChange={e => setEditValues(v => ({ ...v, reps: e.target.value }))}
+                            style={p.editInput}
+                            inputMode="numeric"
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={p.editLabel}>Date</div>
+                          <input
+                            type="date"
+                            value={editValues.date}
+                            onChange={e => setEditValues(v => ({ ...v, date: e.target.value }))}
+                            style={p.editInput}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button
+                          style={{ ...p.dangerBtn, fontSize: 12, padding: "5px 10px" }}
+                          onClick={async () => {
+                            if (!pb.id) return;
+                            if (!confirm(`Delete PB for ${pb.exercise_name}? This cannot be undone.`)) return;
+                            try {
+                              await deletePB(pb.id);
+                              setPbs(prev => prev.filter(r => r.exercise_name !== pb.exercise_name));
+                              setEditingPB(null);
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Could not delete PB");
+                            }
+                          }}
+                        >
+                          Delete PB
+                        </button>
+                        <button style={p.ghostBtn} onClick={() => setEditingPB(null)}>Cancel</button>
+                        <button
+                          style={{ ...p.ghostBtn, background: "var(--accent)", color: "#0a1420", border: "none", opacity: savingPB ? 0.5 : 1 }}
+                          disabled={savingPB}
+                          onClick={async () => {
+                            if (!pb.id) return;
+                            setSavingPB(true);
+                            try {
+                              const wKg = parseFloat(editValues.weight);
+                              const reps = parseInt(editValues.reps) || null;
+                              await updatePB(pb.id, {
+                                weight_kg: isNaN(wKg) ? null : wKg,
+                                reps,
+                                date: editValues.date || pb.date,
+                              });
+                              setPbs(prev => prev.map(r =>
+                                r.exercise_name === pb.exercise_name
+                                  ? { ...r, weight_kg: isNaN(wKg) ? r.weight_kg : wKg, reps, date: editValues.date || r.date }
+                                  : r
+                              ));
+                              setEditingPB(null);
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Could not update PB");
+                            } finally {
+                              setSavingPB(false);
+                            }
+                          }}
+                        >
+                          {savingPB ? "Saving…" : "Save"}
+                        </button>
+                      </div>
                     </div>
-                    <div style={p.pbWeightGroup}>
-                      <div style={p.pbWeight}>{pb.weight_kg}kg</div>
-                      {pb.reps && <div style={p.pbReps}>× {pb.reps}</div>}
+                  ) : (
+                    /* View mode */
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <button
+                        style={{ ...p.pbCardBtn, flex: 1 }}
+                        onClick={() => loadProgressForExercise(pb.exercise_name)}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={p.pbExercise}>{pb.exercise_name}</div>
+                          <div style={p.pbDate}>{formatDate(pb.date)}</div>
+                        </div>
+                        <div style={p.pbWeightGroup}>
+                          <div style={p.pbWeight}>{pb.weight_kg}kg</div>
+                          {pb.reps && <div style={p.pbReps}>× {pb.reps}</div>}
+                        </div>
+                        <div style={{ ...p.chevron, transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</div>
+                      </button>
+                      <button
+                        style={{ background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", padding: "0 14px", fontSize: 14 }}
+                        title="Edit this PB"
+                        onClick={() => {
+                          setEditingPB(pb.exercise_name);
+                          setEditValues({ weight: String(pb.weight_kg ?? ""), reps: String(pb.reps ?? ""), date: pb.date });
+                          setExpandedExercise(null);
+                        }}
+                      >
+                        ✎
+                      </button>
                     </div>
-                    <div style={{ ...p.chevron, transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</div>
-                  </button>
+                  )}
 
-                  {isExpanded && (
+                  {!isEditing && isExpanded && (
                     <div style={p.chartArea}>
                       {progressLoading && !chartPoints ? (
                         <div style={p.chartLoading}>Loading history…</div>
@@ -487,6 +670,11 @@ const p: Record<string, React.CSSProperties> = {
   chevron: { fontSize: 16, color: "var(--mute)", transition: "transform 0.2s", flexShrink: 0 },
   chartArea: { borderTop: "1px solid var(--line)", padding: "12px 14px", background: "var(--ink)" },
   chartLoading: { fontSize: 13, color: "var(--mute)", textAlign: "center", padding: 8 },
+  editInput: {
+    width: "100%", background: "var(--ink)", border: "1px solid var(--line)",
+    color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit",
+  },
+  editLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em", marginBottom: 3 },
 };
 
 const c: Record<string, React.CSSProperties> = {

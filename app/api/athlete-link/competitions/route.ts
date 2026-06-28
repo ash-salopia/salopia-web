@@ -38,11 +38,25 @@ export async function POST(req: NextRequest) {
 
   // Add a competition
   if (action === "add_competition") {
-    const { title, competition_date, location, notes } = rest;
+    const { title, competition_date, location, notes, athlete_id_override } = rest;
     if (!title || !competition_date) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+
+    // Allow coach to add a competition for a different athlete in the same org
+    let targetAthleteId = athlete.id;
+    if (athlete_id_override && athlete_id_override !== athlete.id) {
+      // Verify the override athlete is in the same organisation
+      const { data: overrideAthlete } = await supabase
+        .from("athletes")
+        .select("id, organisation_id")
+        .eq("id", athlete_id_override)
+        .eq("organisation_id", athlete.organisation_id)
+        .single();
+      if (overrideAthlete) targetAthleteId = overrideAthlete.id;
+    }
+
     const { data, error } = await supabase
       .from("competitions")
-      .insert({ athlete_id: athlete.id, organisation_id: athlete.organisation_id, title, competition_date, location: location ?? null, notes: notes ?? null })
+      .insert({ athlete_id: targetAthleteId, organisation_id: athlete.organisation_id, title, competition_date, location: location ?? null, notes: notes ?? null })
       .select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ competition: data });

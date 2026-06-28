@@ -141,6 +141,35 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* ── Session Types ── */}
+      <div style={s.section}>
+        <div style={s.sectionTitle}>Session Types</div>
+
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable Hyrox sessions</div>
+              <div style={s.cardDesc}>
+                Show the Hyrox session type when creating sessions for athletes.
+                Turn this off if your coaching business doesn&apos;t programme Hyrox training.
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.hyrox_enabled ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, hyrox_enabled: !prev.hyrox_enabled }))}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.hyrox_enabled ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* ── Check-in ── */}
       <div style={s.section}>
         <div style={s.sectionTitle}>Check-in</div>

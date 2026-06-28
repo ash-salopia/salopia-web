@@ -662,6 +662,8 @@ export default function SessionDetailPage() {
                 key={ex.id}
                 exercise={ex}
                 library={library}
+                athleteId={athleteId}
+                currentSessionId={sessionId}
                 onEdit={(patch) => handleEditExercise(ex.id, patch)}
                 onRemove={() => handleRemoveExercise(ex.id)}
                 onLogChange={(log) => handleLogChange(ex.id, log)}

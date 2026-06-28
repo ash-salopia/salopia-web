@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import VideoModal from "@/components/VideoModal";
+import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
 import type { SessionExercise, SetLog, LibraryEntry } from "@/types";
 
 interface Props {
   exercise: SessionExercise;
   library?: LibraryEntry[];
+  athleteId?: string;
+  currentSessionId?: string;
   onEdit: (patch: Partial<SessionExercise>) => void;
   onRemove: () => void;
   onLogChange: (log: SetLog[]) => void;
@@ -16,6 +19,8 @@ interface Props {
 export default function ExerciseCard({
   exercise,
   library = [],
+  athleteId,
+  currentSessionId,
   onEdit,
   onRemove,
   onLogChange,
@@ -25,6 +30,7 @@ export default function ExerciseCard({
   const [eachSideInfoOpen, setEachSideInfoOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const [nameDropdownOpen, setNameDropdownOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Wraps onEdit: always updates this exercise, and if the "apply to
   // future" toggle is on, also pushes the same patch to every future
@@ -120,6 +126,15 @@ export default function ExerciseCard({
             ▶
           </button>
         )}
+        {athleteId && exercise.name.trim() && (
+          <button
+            style={styles.historyBtn}
+            onClick={() => setHistoryOpen(true)}
+            title="View history & PB"
+          >
+            📈
+          </button>
+        )}
         <button style={styles.removeBtn} onClick={onRemove}>
           ×
         </button>
@@ -130,6 +145,15 @@ export default function ExerciseCard({
           videoUrl={exercise.video_url}
           title={exercise.name}
           onClose={() => setVideoOpen(false)}
+        />
+      )}
+
+      {historyOpen && athleteId && exercise.name.trim() && (
+        <ExerciseHistoryModal
+          athleteId={athleteId}
+          exerciseName={exercise.name}
+          currentSessionId={currentSessionId ?? ""}
+          onClose={() => setHistoryOpen(false)}
         />
       )}
 
@@ -379,6 +403,20 @@ const styles: Record<string, React.CSSProperties> = {
     width: 34,
     height: 34,
     flexShrink: 0,
+  },
+  historyBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--mute)",
+    fontSize: 14,
+    cursor: "pointer",
+    borderRadius: 8,
+    width: 34,
+    height: 34,
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkboxRow: {
     display: "flex",

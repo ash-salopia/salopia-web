@@ -80,3 +80,48 @@ export async function removeCoachReaction(pbId: string, coachId: string): Promis
     .eq("reactor_id", coachId);
   if (error) throw error;
 }
+
+export async function deletePB(pbId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("personal_bests")
+    .delete()
+    .eq("id", pbId);
+  if (error) throw error;
+}
+
+export async function updatePB(
+  pbId: string,
+  patch: { weight_kg?: number | null; reps?: number | null; date?: string }
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("personal_bests")
+    .update(patch)
+    .eq("id", pbId);
+  if (error) throw error;
+}
+
+export async function createManualPB(params: {
+  athleteId: string;
+  exerciseName: string;
+  weightKg: number | null;
+  reps: number | null;
+  date: string;
+}): Promise<PersonalBest> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("personal_bests")
+    .insert({
+      athlete_id: params.athleteId,
+      exercise_name: params.exerciseName,
+      weight_kg: params.weightKg,
+      reps: params.reps,
+      date: params.date,
+      is_manual: true,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}

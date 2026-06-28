@@ -24,6 +24,7 @@ import ModifySessionsModal from "@/components/ModifySessionsModal";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
 import AssignProgrammeModal from "@/components/AssignProgrammeModal";
 import GoalsManager from "@/components/GoalsManager";
+import DocumentsManager from "@/components/DocumentsManager";
 import ExportModal from "@/components/ExportModal";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 
@@ -121,6 +122,7 @@ export default function AthleteDetailPage() {
   const [retestWeeks, setRetestWeeks] = useState<number | "">(8);
   const [testSaving, setTestSaving] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   // Calendar view state
   const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
@@ -495,6 +497,9 @@ export default function AthleteDetailPage() {
           </button>
           <button style={styles.ghostBtn} onClick={() => setGoalsOpen(true)}>
             🎯 Goals
+          </button>
+          <button style={styles.ghostBtn} onClick={() => setDocsOpen(true)}>
+            📁 Documents
           </button>
           <button style={styles.primaryBtn} onClick={() => setTypePicker((v) => !v)}>
             + {calendarAddDate && calendarAddDate !== todayStr
@@ -873,6 +878,14 @@ export default function AthleteDetailPage() {
           athleteId={athleteId}
           athleteName={athlete.name}
           onClose={() => setGoalsOpen(false)}
+        />
+      )}
+
+      {docsOpen && athlete && (
+        <DocumentsManager
+          athleteId={athleteId}
+          athleteName={athlete.name}
+          onClose={() => setDocsOpen(false)}
         />
       )}
 

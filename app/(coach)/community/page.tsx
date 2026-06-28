@@ -9,7 +9,7 @@ import {
   listAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement,
 } from "@/lib/data/announcements";
 import {
-  listRecentOrgPBs, addCoachReaction, removeCoachReaction, type PersonalBest,
+  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, type PersonalBest,
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
@@ -444,6 +444,16 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
 }) {
   const [error, setError] = useState("");
 
+  const handleDelete = async (pbId: string) => {
+    if (!confirm("Delete this PB record? This cannot be undone.")) return;
+    try {
+      await deletePB(pbId);
+      onPbsChange(pbs.filter((p) => p.id !== pbId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete PB");
+    }
+  };
+
   const handleReaction = async (pb: PersonalBest, emoji: string) => {
     const myReaction = pb.reactions?.find(
       (r) => r.reactor_type === "coach" && r.reactor_id === coachId
@@ -501,6 +511,7 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
             myReaction={myReaction}
             reactionGroups={reactionGroups}
             onReact={(emoji) => handleReaction(pb, emoji)}
+            onDelete={() => handleDelete(pb.id)}
             coachId={coachId}
             coachName={coachName}
             onCommentAdded={(comment) => {
@@ -519,11 +530,12 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
 
 // ── PB Card ──────────────────────────────────────────────────────────────────
 
-function PBCard({ pb, myReaction, reactionGroups, onReact, coachId, coachName, onCommentAdded, s }: {
+function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, coachId, coachName, onCommentAdded, s }: {
   pb: PersonalBest;
   myReaction: any;
   reactionGroups: Record<string, number>;
   onReact: (emoji: string) => void;
+  onDelete: () => void;
   coachId: string;
   coachName: string;
   onCommentAdded: (comment: any) => void;
@@ -561,7 +573,16 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, coachId, coachName, o
 
   return (
     <div style={s.pbCard}>
-      <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
+        <button
+          onClick={onDelete}
+          title="Delete this PB"
+          style={{ background: "transparent", border: "none", color: "var(--mute)", fontSize: 14, cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
+        >
+          ✕
+        </button>
+      </div>
       <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
       <div style={s.pbWeight}>
         {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
