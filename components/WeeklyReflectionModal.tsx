@@ -13,24 +13,58 @@ interface ReflectionConfig {
 
 interface Props {
   token: string;
-  weekStart: string; // YYYY-MM-DD (Monday of the week)
-  weekLabel: string; // e.g. "Week of 23 Jun"
+  weekStart: string;
+  weekLabel: string;
   onClose: () => void;
 }
 
-const SCORE_LABELS = ["", "Poor", "Below average", "Average", "Good", "Excellent"];
-const SCORE_COLORS = ["", "#FF6B6B", "#FFA94D", "#FFD43B", "#69DB7C", "#38D9A9"];
+// Colour logic per metric type:
+//   standard  — higher = better (intent, consistency, recovery)
+//   neutral   — 3 = ideal, diverge out from centre (load)
+//   inverted  — lower = better (stress: low stress is good for training)
+const NEUTRAL_KEYS  = new Set(["load"]);
+const INVERTED_KEYS = new Set(["stress"]);
 
-function getMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const mon = new Date(d);
-  mon.setDate(d.getDate() + diff);
-  return mon;
+function scoreColor(key: string, score: number): string {
+  if (NEUTRAL_KEYS.has(key)) {
+    // 3 = teal (ideal), 4/5 = blue (under), 2/1 = red (over)
+    const palette: Record<number, string> = {
+      5: "#74C0FC",
+      4: "#A9E34B",
+      3: "#38D9A9",
+      2: "#FFA94D",
+      1: "#FF6B6B",
+    };
+    return palette[score] ?? "var(--mute)";
+  }
+  if (INVERTED_KEYS.has(key)) {
+    // 1 = green (low stress = good), 5 = red (very high stress = bad)
+    const palette: Record<number, string> = {
+      1: "#38D9A9",
+      2: "#69DB7C",
+      3: "#FFD43B",
+      4: "#FFA94D",
+      5: "#FF6B6B",
+    };
+    return palette[score] ?? "var(--mute)";
+  }
+  // Standard: higher = better
+  const palette: Record<number, string> = {
+    5: "#38D9A9",
+    4: "#69DB7C",
+    3: "#FFD43B",
+    2: "#FFA94D",
+    1: "#FF6B6B",
+  };
+  return palette[score] ?? "var(--mute)";
 }
 
 export function currentWeekStart(): string {
-  const mon = getMonday(new Date());
+  const today = new Date();
+  const day = today.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(today);
+  mon.setDate(today.getDate() + diff);
   return mon.toISOString().slice(0, 10);
 }
 
@@ -40,17 +74,17 @@ export function weekStartLabel(weekStart: string): string {
 }
 
 export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onClose }: Props) {
-  const [config, setConfig] = useState<ReflectionConfig | null>(null);
-  const [scores, setScores] = useState<Record<string, number>>({});
-  const [good, setGood] = useState("");
-  const [better, setBetter] = useState("");
-  const [how, setHow] = useState("");
+  const [config, setConfig]   = useState<ReflectionConfig | null>(null);
+  const [scores, setScores]   = useState<Record<string, number>>({});
+  const [good, setGood]       = useState("");
+  const [better, setBetter]   = useState("");
+  const [how, setHow]         = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [error, setError]     = useState("");
 
-  const metrics = config?.reflection_metrics ?? DEFAULT_REFLECTION_METRICS;
+  const metrics: ReflectionMetric[] = config?.reflection_metrics ?? DEFAULT_REFLECTION_METRICS;
 
   useEffect(() => {
     if (!token || !weekStart) return;
@@ -64,7 +98,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
           setGood(d.reflection.good ?? "");
           setBetter(d.reflection.better ?? "");
           setHow(d.reflection.how ?? "");
-          setSaved(true); // already has a submission
+          setSaved(true);
         }
       })
       .catch(e => setError(e.message))
@@ -90,11 +124,13 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
     }
   };
 
-  const allScored = metrics.every(m => scores[m.key] != null);
+  const hasAnyInput = Object.keys(scores).length > 0 || good || better || how;
 
   return (
     <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={s.modal}>
+
+        {/* Header */}
         <div style={s.header}>
           <div>
             <div style={s.title}>📝 Weekly Reflection</div>
@@ -109,99 +145,107 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
           <div style={s.loading}>Loading…</div>
         ) : (
           <div style={s.body}>
+
             {saved && !saving && (
               <div style={s.savedBanner}>✓ Reflection saved for this week</div>
             )}
 
-            {/* 1–5 Score sliders */}
+            {/* ── Per-metric scoring ── */}
             <div style={s.section}>
-              <div style={s.sectionLabel}>Rate your week (1–5)</div>
+              <div style={s.sectionLabel}>Rate your week</div>
+
               {metrics.map(metric => {
                 const val = scores[metric.key] ?? 0;
+                const scoreDefs = metric.scores ?? null;
+                const selectedDef = scoreDefs?.find(o => o.score === val);
+
                 return (
-                  <div key={metric.key} style={s.metricRow}>
-                    <div style={s.metricLabel}>{metric.label}</div>
+                  <div key={metric.key} style={s.metricBlock}>
+                    <div style={s.metricTitle}>{metric.label}</div>
+
+                    {/* Score buttons — always show 5 down to 1 */}
                     <div style={s.scoreRow}>
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <button
-                          key={n}
-                          style={{
-                            ...s.scoreBtn,
-                            background: val === n ? SCORE_COLORS[n] : "var(--ink)",
-                            border: val === n ? `1px solid ${SCORE_COLORS[n]}` : "1px solid var(--line)",
-                            color: val === n ? "#0a1420" : "var(--mute)",
-                            fontWeight: val === n ? 700 : 500,
-                          }}
-                          onClick={() => setScores(prev => ({ ...prev, [metric.key]: n }))}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                      {val > 0 && (
-                        <span style={{ fontSize: 11, color: SCORE_COLORS[val], marginLeft: 4, fontWeight: 600 }}>
-                          {SCORE_LABELS[val]}
-                        </span>
-                      )}
+                      {[5, 4, 3, 2, 1].map(n => {
+                        const def = scoreDefs?.find(o => o.score === n);
+                        const active = val === n;
+                        const color = scoreColor(metric.key, n);
+                        return (
+                          <button
+                            key={n}
+                            title={def ? `${def.label} — ${def.meaning}` : String(n)}
+                            style={{
+                              ...s.scoreBtn,
+                              background: active ? color : "var(--ink)",
+                              border: active ? `2px solid ${color}` : "1px solid var(--line)",
+                              color: active ? "#0a1420" : "var(--mute)",
+                              fontWeight: active ? 800 : 500,
+                              transform: active ? "scale(1.08)" : "scale(1)",
+                            }}
+                            onClick={() => {
+                              setScores(prev => ({ ...prev, [metric.key]: n }));
+                              setSaved(false);
+                            }}
+                          >
+                            {n}
+                          </button>
+                        );
+                      })}
                     </div>
+
+                    {/* Selected label + meaning */}
+                    {val > 0 && selectedDef && (
+                      <div style={{
+                        ...s.selectedLabel,
+                        borderLeftColor: scoreColor(metric.key, val),
+                      }}>
+                        <span style={{ fontWeight: 700, color: scoreColor(metric.key, val) }}>
+                          {selectedDef.label}
+                        </span>
+                        {" — "}
+                        <span style={{ color: "var(--mute)" }}>{selectedDef.meaning}</span>
+                      </div>
+                    )}
+                    {val > 0 && !selectedDef && (
+                      <div style={s.genericLabel}>Score: {val} / 5</div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Good / Better / How */}
+            {/* ── Good / Better / How ── */}
             <div style={s.section}>
               <div style={s.sectionLabel}>Reflection</div>
 
-              <div style={s.textField}>
-                <div style={s.textFieldLabel}>
-                  <span style={{ color: "#69DB7C" }}>↑</span> {config?.reflection_good_prompt ?? "What went well this week?"}
+              {([
+                { field: "good",   value: good,   set: (v: string) => { setGood(v);   setSaved(false); }, color: "#69DB7C", arrow: "↑", prompt: config?.reflection_good_prompt   ?? "What went well this week?" },
+                { field: "better", value: better, set: (v: string) => { setBetter(v); setSaved(false); }, color: "#FFA94D", arrow: "↗", prompt: config?.reflection_better_prompt ?? "What could have been better?" },
+                { field: "how",    value: how,    set: (v: string) => { setHow(v);    setSaved(false); }, color: "var(--accent)", arrow: "→", prompt: config?.reflection_how_prompt    ?? "How will you improve next week?" },
+              ] as const).map(({ field, value, set, color, arrow, prompt }) => (
+                <div key={field} style={s.textField}>
+                  <div style={s.textFieldLabel}>
+                    <span style={{ color, fontSize: 15, marginRight: 4 }}>{arrow}</span>
+                    {prompt}
+                  </div>
+                  <textarea
+                    style={s.textarea}
+                    value={value}
+                    onChange={e => set(e.target.value)}
+                    placeholder="Write freely…"
+                    rows={3}
+                  />
                 </div>
-                <textarea
-                  style={s.textarea}
-                  value={good}
-                  onChange={e => { setGood(e.target.value); setSaved(false); }}
-                  placeholder="Write freely…"
-                  rows={3}
-                />
-              </div>
-
-              <div style={s.textField}>
-                <div style={s.textFieldLabel}>
-                  <span style={{ color: "#FFA94D" }}>↗</span> {config?.reflection_better_prompt ?? "What could have been better?"}
-                </div>
-                <textarea
-                  style={s.textarea}
-                  value={better}
-                  onChange={e => { setBetter(e.target.value); setSaved(false); }}
-                  placeholder="Write freely…"
-                  rows={3}
-                />
-              </div>
-
-              <div style={s.textField}>
-                <div style={s.textFieldLabel}>
-                  <span style={{ color: "var(--accent)" }}>→</span> {config?.reflection_how_prompt ?? "How will you improve next week?"}
-                </div>
-                <textarea
-                  style={s.textarea}
-                  value={how}
-                  onChange={e => { setHow(e.target.value); setSaved(false); }}
-                  placeholder="Write freely…"
-                  rows={3}
-                />
-              </div>
+              ))}
             </div>
 
             <button
-              style={{
-                ...s.saveBtn,
-                opacity: saving || (!allScored && !good && !better && !how) ? 0.5 : 1,
-              }}
-              disabled={saving || (!allScored && !good && !better && !how)}
+              style={{ ...s.saveBtn, opacity: (!hasAnyInput || saving) ? 0.45 : 1 }}
+              disabled={!hasAnyInput || saving}
               onClick={handleSave}
             >
               {saving ? "Saving…" : saved ? "Update reflection" : "Save reflection"}
             </button>
+
           </div>
         )}
       </div>
@@ -211,49 +255,58 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
 
 const s: Record<string, React.CSSProperties> = {
   overlay: {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)",
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)",
     display: "flex", alignItems: "flex-end", justifyContent: "center",
     zIndex: 300, padding: 0,
   },
   modal: {
-    background: "var(--panel)", borderRadius: "16px 16px 0 0",
-    width: "100%", maxWidth: 520, maxHeight: "90vh",
+    background: "var(--panel)", borderRadius: "18px 18px 0 0",
+    width: "100%", maxWidth: 520, maxHeight: "92vh",
     display: "flex", flexDirection: "column", overflow: "hidden",
   },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "flex-start",
     padding: "16px 18px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0,
   },
-  title: { fontSize: 17, fontWeight: 700, color: "var(--text)" },
+  title:    { fontSize: 17, fontWeight: 700, color: "var(--text)" },
   subtitle: { fontSize: 12, color: "var(--mute)", marginTop: 2 },
   closeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", padding: 4 },
   errorBox: { background: "#2a0c0c", color: "#FF6B6B", borderRadius: 8, padding: "8px 12px", fontSize: 13, margin: "10px 18px 0", flexShrink: 0 },
-  loading: { padding: 24, textAlign: "center" as const, color: "var(--mute)", fontSize: 14 },
+  loading:  { padding: 32, textAlign: "center" as const, color: "var(--mute)", fontSize: 14 },
   savedBanner: {
     background: "#0a1e0a", border: "1px solid var(--good)44", color: "var(--good)",
-    borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, flexShrink: 0,
+    borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600,
   },
-  body: { overflowY: "auto", padding: "14px 18px 24px", display: "flex", flexDirection: "column", gap: 16 },
-  section: { display: "flex", flexDirection: "column", gap: 12 },
-  sectionLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.06em" },
-  metricRow: { display: "flex", flexDirection: "column" as const, gap: 6 },
-  metricLabel: { fontSize: 13, fontWeight: 600, color: "var(--text)" },
-  scoreRow: { display: "flex", alignItems: "center", gap: 6 },
+  body: {
+    overflowY: "auto", padding: "14px 18px 32px",
+    display: "flex", flexDirection: "column", gap: 20,
+  },
+  section:      { display: "flex", flexDirection: "column", gap: 14 },
+  sectionLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.07em" },
+  metricBlock:  { display: "flex", flexDirection: "column", gap: 8, background: "var(--ink)", borderRadius: 12, padding: "12px 14px" },
+  metricTitle:  { fontSize: 14, fontWeight: 700, color: "var(--text)" },
+  scoreRow:     { display: "flex", gap: 8 },
   scoreBtn: {
-    width: 38, height: 38, borderRadius: 8, fontSize: 14, cursor: "pointer",
-    flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+    flex: 1, height: 44, borderRadius: 10, fontSize: 15,
+    cursor: "pointer", flexShrink: 0,
+    display: "flex", alignItems: "center", justifyContent: "center",
     transition: "all 0.15s",
   },
-  textField: { display: "flex", flexDirection: "column", gap: 6 },
+  selectedLabel: {
+    fontSize: 12, lineHeight: 1.5,
+    borderLeft: "3px solid", paddingLeft: 8, marginTop: 2,
+  },
+  genericLabel: { fontSize: 12, color: "var(--mute)" },
+  textField:      { display: "flex", flexDirection: "column", gap: 6 },
   textFieldLabel: { fontSize: 13, fontWeight: 600, color: "var(--text)" },
   textarea: {
     background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)",
     borderRadius: 10, padding: "10px 12px", fontSize: 13, fontFamily: "inherit",
-    resize: "vertical" as const, lineHeight: 1.5,
+    resize: "vertical" as const, lineHeight: 1.6, minHeight: 80,
   },
   saveBtn: {
     background: "var(--accent)", color: "#0a1420", border: "none",
-    borderRadius: 10, padding: "14px 0", fontSize: 14, fontWeight: 700,
-    cursor: "pointer", width: "100%",
+    borderRadius: 12, padding: "15px 0", fontSize: 15, fontWeight: 700,
+    cursor: "pointer", width: "100%", marginTop: 4,
   },
 };

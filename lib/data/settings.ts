@@ -6,17 +6,74 @@ import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 
 export type ReportFrequency = 4 | 8 | 12 | "monthly";
 
+export interface ReflectionScoreOption {
+  score: number;
+  label: string;
+  meaning: string;
+}
+
 export interface ReflectionMetric {
   key: string;
   label: string;
+  scores?: ReflectionScoreOption[]; // if omitted, uses generic 1–5
 }
 
 export const DEFAULT_REFLECTION_METRICS: ReflectionMetric[] = [
-  { key: "energy",      label: "Energy levels" },
-  { key: "sleep",       label: "Sleep quality" },
-  { key: "stress",      label: "Stress / life load" },
-  { key: "motivation",  label: "Motivation to train" },
-  { key: "performance", label: "Training performance" },
+  {
+    key: "intent",
+    label: "Intent & effort",
+    scores: [
+      { score: 5, label: "Pushed hard",        meaning: "Chased high-quality outputs, strong intent, competitive reps" },
+      { score: 4, label: "Solid intent",        meaning: "Good effort, mostly purposeful" },
+      { score: 3, label: "Cruised / maintained",meaning: "Did the work, but not much intent to push" },
+      { score: 2, label: "Under-cooked",        meaning: "Low intent, avoided hard efforts" },
+      { score: 1, label: "Slacked off",         meaning: "Poor effort, distracted, lazy week" },
+    ],
+  },
+  {
+    key: "consistency",
+    label: "Consistency / adherence",
+    scores: [
+      { score: 5, label: "Completed everything", meaning: "All planned sessions and reps completed" },
+      { score: 4, label: "Mostly completed",     meaning: "Minor reductions" },
+      { score: 3, label: "Partially completed",  meaning: "Missed some work" },
+      { score: 2, label: "Poor consistency",     meaning: "Missed major parts" },
+      { score: 1, label: "Not enough data",      meaning: "Barely trained or did not log" },
+    ],
+  },
+  {
+    key: "load",
+    label: "Training load",
+    scores: [
+      { score: 5, label: "Too light",             meaning: "Load was too light this week" },
+      { score: 4, label: "Slightly under",        meaning: "Load was slightly under capability" },
+      { score: 3, label: "Ideal",                 meaning: "Load was ideal" },
+      { score: 2, label: "Slightly high",         meaning: "Load was slightly high" },
+      { score: 1, label: "Too high",              meaning: "Load was too high this week" },
+    ],
+  },
+  {
+    key: "recovery",
+    label: "Recovery & readiness",
+    scores: [
+      { score: 5, label: "Fresh",     meaning: "Felt great, recovered well" },
+      { score: 4, label: "Good",      meaning: "Minor fatigue" },
+      { score: 3, label: "Okay",      meaning: "Manageable soreness" },
+      { score: 2, label: "Poor",      meaning: "Fatigue affected output" },
+      { score: 1, label: "Not ready", meaning: "Pain, poor sleep, illness, high fatigue" },
+    ],
+  },
+  {
+    key: "stress",
+    label: "Stress / Life Load",
+    scores: [
+      { score: 5, label: "Very high", meaning: "Very high stress this week" },
+      { score: 4, label: "High",      meaning: "High stress" },
+      { score: 3, label: "Moderate",  meaning: "Moderate stress" },
+      { score: 2, label: "Some",      meaning: "Some stress" },
+      { score: 1, label: "Low",       meaning: "Low stress — felt in control" },
+    ],
+  },
 ];
 
 export interface OrgSettings {
