@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { listAthletes } from "@/lib/data/athletes";
 import { listAllSessionDates, getWeekCompletionData } from "@/lib/data/sessions";
 import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-utils";
+import { getOrgSettings } from "@/lib/data/settings";
+import { listRecentOrgPBs, type PersonalBest } from "@/lib/data/personal-bests";
 import type { Athlete } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -24,6 +26,12 @@ interface TestAlert {
   athlete: Athlete;
   nextTestDate: string;
   daysUntilTest: number; // negative = overdue
+}
+
+interface ReportDue {
+  athlete: Athlete;
+  lastReportDate: string | null;
+  daysOverdue: number;
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -64,6 +72,8 @@ export default function DashboardPage() {
   const [notTrained, setNotTrained] = useState<WeekAlert[]>([]);
   const [lowCompletion, setLowCompletion] = useState<WeekAlert[]>([]);
   const [testsDue, setTestsDue] = useState<TestAlert[]>([]);
+  const [reportsDue, setReportsDue] = useState<ReportDue[]>([]);
+  const [recentPBs, setRecentPBs] = useState<PersonalBest[]>([]);
   const [weekLabel, setWeekLabel] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -147,6 +157,30 @@ export default function DashboardPage() {
         }
 
         setTestsDue(testAlerts.sort((a, b) => a.daysUntilTest - b.daysUntilTest));
+
+        // ── Reports due ───────────────────────────────────────────────────────
+        const orgSettings = await getOrgSettings().catch(() => null);
+        if (orgSettings) {
+          const freq = orgSettings.report_frequency_weeks;
+          const freqDays = freq === "monthly" ? 30 : (freq as number) * 7;
+          const reportAlerts: ReportDue[] = [];
+
+          for (const athlete of athletes) {
+            const lastReport = (athlete as any).last_report_date as string | null;
+            const daysSince = lastReport
+              ? daysBetween(lastReport, today)
+              : daysBetween(athlete.created_at?.slice(0, 10) ?? today, today);
+            if (daysSince >= freqDays) {
+              reportAlerts.push({ athlete, lastReportDate: lastReport, daysOverdue: daysSince - freqDays });
+            }
+          }
+          setReportsDue(reportAlerts.sort((a, b) => b.daysOverdue - a.daysOverdue));
+        }
+
+        // ── Recent PBs (last 7 days) ──────────────────────────────────────────
+        const pbs = await listRecentOrgPBs(7).catch(() => [] as PersonalBest[]);
+        setRecentPBs(pbs);
+
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not load dashboard");
       } finally {
@@ -250,6 +284,53 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+
+          {/* Reports due */}
+          <div style={st.panel}>
+            <div style={st.panelHead}>
+              <span style={st.panelDot({ color: reportsDue.length ? "var(--warn)" : "var(--good)" })} />
+              <span style={st.panelTitle}>Reports due</span>
+              <span style={st.panelCount(reportsDue.length)}>{reportsDue.length}</span>
+            </div>
+            {reportsDue.length === 0 ? (
+              <div style={st.panelEmpty}>All reports up to date ✓</div>
+            ) : (
+              <div style={st.athleteList}>
+                {reportsDue.map((r) => (
+                  <button key={r.athlete.id} style={st.athleteChip}
+                    onClick={() => router.push(`/athletes/${r.athlete.id}`)}>
+                    {r.athlete.name}
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--warn)", background: "#3a2c10", borderRadius: 4, padding: "1px 5px" }}>
+                      {r.lastReportDate ? `${r.daysOverdue}d overdue` : "no report yet"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent PBs */}
+          {recentPBs.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={{ fontSize: 14, marginRight: -4 }}>🏆</span>
+                <span style={st.panelTitle}>Recent PBs</span>
+                <span style={st.panelCount(recentPBs.length)}>{recentPBs.length}</span>
+              </div>
+              <div style={st.athleteList}>
+                {recentPBs.slice(0, 8).map((pb) => (
+                  <button key={pb.id} style={st.athleteChip} onClick={() => router.push("/community")}>
+                    <span style={{ fontWeight: 400, color: "var(--mute)" }}>{(pb as any).athlete?.name}</span>
+                    <span>· {pb.exercise_name}</span>
+                    {pb.weight_kg && <span style={{ color: "var(--accent)", fontWeight: 700 }}>{pb.weight_kg}kg</span>}
+                  </button>
+                ))}
+              </div>
+              <button style={st.viewPBsBtn} onClick={() => router.push("/community")}>
+                React &amp; comment on PBs →
+              </button>
+            </div>
+          )}
 
         </div>
       </div>
@@ -362,6 +443,7 @@ const st: Record<string, any> = {
     borderRadius: 4, padding: "1px 5px",
   }),
   testHint: { fontSize: 11, color: "var(--mute)", fontStyle: "italic", marginTop: 8 },
+  viewPBsBtn: { width: "100%", marginTop: 8, background: "transparent", border: "1px solid var(--line)", color: "var(--accent)", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" },
 
   // Programme expiry (existing styles preserved)
   sectionLabelWarn: { fontSize: 12, fontWeight: 700, color: "var(--warn)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 },

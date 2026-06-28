@@ -415,10 +415,15 @@ export default function AthleteProfilePage() {
               position: "relative" as const, flexShrink: 0, transition: "background 0.2s",
             }}
             onClick={async () => {
-              const next = !((athlete as any).hyrox_enabled !== false);
-              const supabase = createClient();
-              await supabase.from("athletes").update({ hyrox_enabled: next }).eq("id", athleteId);
+              const current = (athlete as any).hyrox_enabled;
+              const next = current === false ? true : false;
               setAthlete((prev) => prev ? { ...prev, hyrox_enabled: next } as any : prev);
+              const supabase = createClient();
+              const { error: upErr } = await supabase.from("athletes").update({ hyrox_enabled: next }).eq("id", athleteId);
+              if (upErr) {
+                setAthlete((prev) => prev ? { ...prev, hyrox_enabled: current } as any : prev);
+                setError("Could not update Hyrox setting: " + upErr.message);
+              }
             }}
           >
             <div style={{

@@ -5,6 +5,7 @@ import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
 import type { Athlete, Session, SessionType } from "@/types";
+import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/components/WeeklyReflectionModal";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
@@ -41,18 +42,20 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true,
+  athlete, sessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true,
 }: {
   athlete: Athlete;
   sessions: Session[];
   token: string;
   branding?: ResolvedBranding;
   hyroxEnabled?: boolean;
+  reflectionEnabled?: boolean;
 }) {
   const router = useRouter();
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const [calView, setCalView] = useState<"month" | "week">("week");
+  const [reflectionOpen, setReflectionOpen] = useState(false);
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
     const dow = d.getDay();
@@ -260,6 +263,24 @@ export default function AthleteLinkShell({
         </div>
         )} {/* end week/month */}
 
+        {/* Weekly reflection prompt — visible on Sundays */}
+        {reflectionEnabled && (() => {
+          const today = new Date();
+          const isSunday = today.getDay() === 0;
+          const ws = currentWeekStart();
+          if (!isSunday) return null;
+          return (
+            <button style={st.reflectionPrompt} onClick={() => setReflectionOpen(true)}>
+              <span style={{ fontSize: 18 }}>📝</span>
+              <div style={{ flex: 1, textAlign: "left" as const }}>
+                <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>Weekly Reflection</div>
+                <div style={{ fontSize: 11, color: "var(--mute)" }}>{weekStartLabel(ws)}</div>
+              </div>
+              <span style={{ color: "var(--accent)", fontSize: 12, fontWeight: 700 }}>Complete →</span>
+            </button>
+          );
+        })()}
+
         {/* Legend */}
         <div style={st.legend}>
           {Object.entries(TYPE_META).filter(([type]) => type !== "hyrox" || hyroxEnabled).map(([type, meta]) => (
@@ -310,6 +331,15 @@ export default function AthleteLinkShell({
           </div>
         )}
       </div>
+
+      {reflectionOpen && reflectionEnabled && (
+        <WeeklyReflectionModal
+          token={token}
+          weekStart={currentWeekStart()}
+          weekLabel={weekStartLabel(currentWeekStart())}
+          onClose={() => setReflectionOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -334,6 +364,11 @@ const st: Record<string, React.CSSProperties> = {
   dayNum: { fontSize: 10, color: "var(--mute)", textAlign: "right" as const, paddingRight: 2 },
   chip: { fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 3px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", textAlign: "center" as const, width: "100%" },
   legend: { display: "flex", gap: 12, justifyContent: "center", marginTop: 10 },
+  reflectionPrompt: {
+    display: "flex", alignItems: "center", gap: 10, width: "100%",
+    background: "var(--accent-dim)", border: "1px solid var(--accent)44",
+    borderRadius: 10, padding: "10px 14px", cursor: "pointer", marginTop: 10,
+  },
   legendItem: { display: "flex", alignItems: "center", gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: "50%" },
   legendLabel: { fontSize: 11, color: "var(--mute)" },

@@ -316,6 +316,127 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* ── Reports ── */}
+      <div style={s.section}>
+        <div style={s.sectionTitle}>Reports</div>
+        <div style={s.card}>
+          <div style={s.cardLabel}>Report reminder frequency</div>
+          <div style={s.cardDesc}>
+            How often you want to be reminded to produce a report for each athlete.
+            Athletes with no report in this period will appear on your dashboard.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" as const }}>
+            {([
+              { value: 4,         label: "4 weeks" },
+              { value: 8,         label: "8 weeks" },
+              { value: 12,        label: "12 weeks" },
+              { value: "monthly", label: "Monthly" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                style={{
+                  ...s.chipBtn,
+                  ...(settings.report_frequency_weeks === opt.value ? s.chipBtnActive : {}),
+                }}
+                onClick={() => setSettings((prev) => ({ ...prev, report_frequency_weeks: opt.value }))}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Weekly Reflection ── */}
+      <div style={s.section}>
+        <div style={s.sectionTitle}>Weekly Reflection</div>
+
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable weekly reflections</div>
+              <div style={s.cardDesc}>
+                Athletes see a reflection prompt every Sunday on their calendar.
+                They score the week on key metrics and write a short reflection.
+              </div>
+            </div>
+            <button
+              style={{ ...s.toggleSwitch, background: settings.reflection_enabled ? "var(--accent)" : "var(--panel2)" }}
+              onClick={() => setSettings((prev) => ({ ...prev, reflection_enabled: !prev.reflection_enabled }))}
+            >
+              <div style={{ ...s.toggleThumb, transform: settings.reflection_enabled ? "translateX(20px)" : "translateX(0)" }} />
+            </button>
+          </div>
+        </div>
+
+        {settings.reflection_enabled && (
+          <>
+            {/* Score metrics */}
+            <div style={s.card}>
+              <div style={s.cardLabel}>Score metrics</div>
+              <div style={s.cardDesc}>Athletes will rate each of these 1–5 every week. Drag to reorder.</div>
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 8, marginTop: 10 }}>
+                {settings.reflection_metrics.map((metric, i) => (
+                  <div key={metric.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      style={s.metricInput}
+                      value={metric.label}
+                      onChange={(e) => setSettings((prev) => ({
+                        ...prev,
+                        reflection_metrics: prev.reflection_metrics.map((m, j) =>
+                          j === i ? { ...m, label: e.target.value } : m
+                        ),
+                      }))}
+                    />
+                    <button
+                      style={s.removeMetricBtn}
+                      onClick={() => setSettings((prev) => ({
+                        ...prev,
+                        reflection_metrics: prev.reflection_metrics.filter((_, j) => j !== i),
+                      }))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  style={s.addMetricBtn}
+                  onClick={() => setSettings((prev) => ({
+                    ...prev,
+                    reflection_metrics: [
+                      ...prev.reflection_metrics,
+                      { key: `custom_${Date.now()}`, label: "" },
+                    ],
+                  }))}
+                >
+                  + Add metric
+                </button>
+              </div>
+            </div>
+
+            {/* Reflection prompts */}
+            <div style={s.card}>
+              <div style={s.cardLabel}>Reflection prompts</div>
+              <div style={s.cardDesc}>The three questions athletes answer in free text.</div>
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 10, marginTop: 10 }}>
+                {(["reflection_good_prompt", "reflection_better_prompt", "reflection_how_prompt"] as const).map((field, i) => (
+                  <div key={field}>
+                    <div style={{ fontSize: 11, color: ["#69DB7C", "#FFA94D", "var(--accent)"][i], fontWeight: 700, marginBottom: 4 }}>
+                      {["↑ Good", "↗ Better", "→ How"][i]}
+                    </div>
+                    <input
+                      style={s.metricInput}
+                      value={settings[field]}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, [field]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* ── Save ── */}
       <div style={s.saveRow}>
         {saved && <span style={s.savedMsg}>✓ Settings saved</span>}
@@ -347,6 +468,11 @@ const s: Record<string, React.CSSProperties> = {
   subtitle: { fontSize: 13, color: "var(--mute)", margin: "0 0 28px" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
   section: { marginBottom: 28 },
+  chipBtn: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  chipBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)", color: "var(--accent)" },
+  metricInput: { flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" },
+  removeMetricBtn: { background: "transparent", border: "1px solid var(--line)", color: "#FF6B6B", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" },
+  addMetricBtn: { background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 0", fontSize: 13, cursor: "pointer" },
   sectionTitle: { fontSize: 12, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 18, display: "flex", flexDirection: "column", gap: 14 },
   cardLabel: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
