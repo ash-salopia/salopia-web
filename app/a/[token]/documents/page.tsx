@@ -85,8 +85,11 @@ export default function AthleteDocumentsPage() {
       {/* Header */}
       <div style={s.header}>
         <button style={s.backBtn} onClick={() => router.push(`/a/${token}`)}>← Back</button>
-        <div style={s.brand}>📁 Documents</div>
+        <div style={s.brand}>AthletiQ</div>
         <div style={{ width: 60 }} />
+      </div>
+      <div style={{ padding: "12px 16px 0", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
+        📁 Documents
       </div>
 
       <div style={s.content}>

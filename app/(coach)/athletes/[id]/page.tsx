@@ -26,6 +26,7 @@ import AssignProgrammeModal from "@/components/AssignProgrammeModal";
 import GoalsManager from "@/components/GoalsManager";
 import ExportModal from "@/components/ExportModal";
 import type { Athlete, Session, SessionType, Template } from "@/types";
+import { getOrgSettings } from "@/lib/data/settings";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
@@ -89,6 +90,7 @@ export default function AthleteDetailPage() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [typePicker, setTypePicker] = useState(false);
+  const [hyroxEnabled, setHyroxEnabled] = useState(true);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   const [calView, setCalView] = useState<"month" | "week">("month");
   const [weekStart, setWeekStart] = useState<string>(() => {
@@ -170,6 +172,7 @@ export default function AthleteDetailPage() {
 
   useEffect(() => {
     if (athleteId) load();
+    getOrgSettings().then((s) => setHyroxEnabled(s.hyrox_enabled !== false)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
 
@@ -518,7 +521,7 @@ export default function AthleteDetailPage() {
                   {new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
                 </div>
               )}
-              {(Object.keys(TYPE_META) as SessionType[]).filter(t => t !== "hyrox" || true).map((t) => (
+              {(Object.keys(TYPE_META) as SessionType[]).filter(t => t !== "hyrox" || hyroxEnabled).map((t) => (
                 <button
                   key={t}
                   style={styles.typeOption}

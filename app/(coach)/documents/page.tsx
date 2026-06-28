@@ -70,6 +70,7 @@ export default function DocumentsPage() {
   const [selectedAthleteId, setSelectedAthleteId] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [athleteSearch, setAthleteSearch] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<Set<string>>(new Set());
 
   // Add doc state
   const [addMode, setAddMode] = useState<null | "file" | "link" | "group-file" | "group-link">(null);
@@ -120,10 +121,8 @@ export default function DocumentsPage() {
 
   const filteredDocs = docs.filter((doc) => {
     if (filterMode === "athlete" && selectedAthleteId) return doc.athlete_id === selectedAthleteId;
-    if (filterMode === "group" && selectedGroupId) {
-      const groupAthletes = athletes.filter((a) => a.group === selectedGroupId);
-      return groupAthletes.some((a) => a.id === doc.athlete_id);
-    }
+    if (filterMode === "group" && selectedGroupId && groupMemberIds.size > 0) return groupMemberIds.has(doc.athlete_id);
+    if (filterMode === "group" && selectedGroupId && groupMemberIds.size === 0) return false;
     return true;
   });
 
@@ -452,7 +451,7 @@ export default function DocumentsPage() {
           <button
             key={mode}
             style={{ ...s.filterBtn, ...(filterMode === mode ? s.filterBtnActive : {}) }}
-            onClick={() => { setFilterMode(mode); setSelectedAthleteId(""); setSelectedGroupId(""); setAthleteSearch(""); }}
+            onClick={() => { setFilterMode(mode); setSelectedAthleteId(""); setSelectedGroupId(""); setAthleteSearch(""); setGroupMemberIds(new Set()); }}
           >
             {mode === "all" ? "All documents" : mode === "athlete" ? "By athlete" : "By group"}
           </button>
@@ -479,7 +478,20 @@ export default function DocumentsPage() {
         )}
 
         {filterMode === "group" && (
-          <select value={selectedGroupId} onChange={(e) => setSelectedGroupId(e.target.value)} style={s.select}>
+          <select
+            value={selectedGroupId}
+            onChange={async (e) => {
+              const gid = e.target.value;
+              setSelectedGroupId(gid);
+              if (gid) {
+                const members = await listGroupMembers(gid);
+                setGroupMemberIds(new Set(members.map(m => m.athlete_id)));
+              } else {
+                setGroupMemberIds(new Set());
+              }
+            }}
+            style={s.select}
+          >
             <option value="">Select group…</option>
             {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>

@@ -365,9 +365,10 @@ export default function AthleteProfilePage() {
         </div>
       )}
 
-      {/* PBs section */}
+      {/* Settings section */}
       <div style={p.section}>
-        <div style={p.sectionTitle}>Check-in</div>
+        <div style={p.sectionTitle}>Settings</div>
+
         <div style={p.checkinCard}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Session check-in</div>
@@ -394,6 +395,36 @@ export default function AthleteProfilePage() {
               position: "absolute" as const, top: 3, left: 3, width: 18, height: 18,
               borderRadius: "50%", background: "#fff", transition: "transform 0.2s",
               transform: (athlete as any).checkin_enabled !== false ? "translateX(20px)" : "translateX(0)",
+            }} />
+          </button>
+        </div>
+
+        <div style={{ ...p.checkinCard, marginTop: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Hyrox sessions</div>
+            <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
+              {(athlete as any).hyrox_enabled !== false
+                ? "Hyrox sessions are enabled for this athlete."
+                : "Hyrox sessions are hidden for this athlete — they won’t see the Hyrox type when sessions are created."}
+            </div>
+          </div>
+          <button
+            style={{
+              width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
+              background: (athlete as any).hyrox_enabled !== false ? "var(--accent)" : "var(--panel2)",
+              position: "relative" as const, flexShrink: 0, transition: "background 0.2s",
+            }}
+            onClick={async () => {
+              const next = !((athlete as any).hyrox_enabled !== false);
+              const supabase = createClient();
+              await supabase.from("athletes").update({ hyrox_enabled: next }).eq("id", athleteId);
+              setAthlete((prev) => prev ? { ...prev, hyrox_enabled: next } as any : prev);
+            }}
+          >
+            <div style={{
+              position: "absolute" as const, top: 3, left: 3, width: 18, height: 18,
+              borderRadius: "50%", background: "#fff", transition: "transform 0.2s",
+              transform: (athlete as any).hyrox_enabled !== false ? "translateX(20px)" : "translateX(0)",
             }} />
           </button>
         </div>

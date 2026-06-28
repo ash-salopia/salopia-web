@@ -41,12 +41,13 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions, token, branding = DEFAULT_BRANDING,
+  athlete, sessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true,
 }: {
   athlete: Athlete;
   sessions: Session[];
   token: string;
   branding?: ResolvedBranding;
+  hyroxEnabled?: boolean;
 }) {
   const router = useRouter();
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -261,7 +262,7 @@ export default function AthleteLinkShell({
 
         {/* Legend */}
         <div style={st.legend}>
-          {Object.entries(TYPE_META).map(([type, meta]) => (
+          {Object.entries(TYPE_META).filter(([type]) => type !== "hyrox" || hyroxEnabled).map(([type, meta]) => (
             <div key={type} style={st.legendItem}>
               <span style={{ ...st.legendDot, background: meta.color }} />
               <span style={st.legendLabel}>{meta.label}</span>

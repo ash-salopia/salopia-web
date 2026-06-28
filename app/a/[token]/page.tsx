@@ -30,5 +30,15 @@ export default async function AthleteLinkPage({
     ? resolveBranding({ name: org.name, tier: org.tier ?? "standard", branding: org.branding ?? {} })
     : DEFAULT_BRANDING;
 
-  return <AthleteLinkShell athlete={athlete} sessions={sessions} token={token} branding={branding} />;
+  // Fetch org settings for hyrox toggle
+  const { data: orgSettings } = await supabase
+    .from("organisations")
+    .select("settings")
+    .eq("id", athlete.organisation_id)
+    .single();
+  const orgHyroxEnabled = (orgSettings?.settings as any)?.hyrox_enabled !== false;
+  // Per-athlete override: if athlete.hyrox_enabled is explicitly false, hide hyrox
+  const hyroxEnabled = orgHyroxEnabled && (athlete as any).hyrox_enabled !== false;
+
+  return <AthleteLinkShell athlete={athlete} sessions={sessions} token={token} branding={branding} hyroxEnabled={hyroxEnabled} />;
 }
