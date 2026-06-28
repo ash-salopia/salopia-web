@@ -518,7 +518,7 @@ export default function AthleteDetailPage() {
                   {new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
                 </div>
               )}
-              {(Object.keys(TYPE_META) as SessionType[]).map((t) => (
+              {(Object.keys(TYPE_META) as SessionType[]).filter(t => t !== "hyrox" || true).map((t) => (
                 <button
                   key={t}
                   style={styles.typeOption}

@@ -9,6 +9,7 @@ export interface OrgSettings {
   weight_unit: WeightUnit;
   checkin_enabled: boolean;
   checkin_rules: CheckInRules;
+  hyrox_enabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: OrgSettings = {
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   weight_unit: "kg",
   checkin_enabled: true,
   checkin_rules: DEFAULT_CHECKIN_RULES,
+  hyrox_enabled: true,
 };
 
 // ── Coach-side (uses authenticated client) ────────────────────────────────────

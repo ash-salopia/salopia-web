@@ -587,7 +587,7 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, coachId, coachName, o
   return (
     <div style={s.pbCard}>
       <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
-      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
+      <div style={s.pbExercise}>📈 {pb.exercise_name}</div>
       <div style={s.pbWeight}>
         {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
         {pb.reps ? ` × ${pb.reps} reps` : ""}

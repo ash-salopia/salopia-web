@@ -12,21 +12,17 @@ export async function GET(request: Request) {
 
   const supabase = createServiceRoleClient();
 
-  const { data: groupMemberships } = await supabase
-    .from("group_members").select("group_id").eq("athlete_id", athlete.id);
-  const groupIds = (groupMemberships ?? []).map((m: any) => m.group_id);
-
-  let athleteIds: string[] = [athlete.id];
-  if (groupIds.length > 0) {
-    const { data: groupAthletes } = await supabase
-      .from("group_members").select("athlete_id").in("group_id", groupIds);
-    athleteIds = [...new Set([athlete.id, ...(groupAthletes ?? []).map((m: any) => m.athlete_id)])];
-  }
+  // Show all PBs from athletes in the same organisation
+  const { data: orgAthletes } = await supabase
+    .from("athletes")
+    .select("id")
+    .eq("organisation_id", athlete.organisation_id);
+  const athleteIds = (orgAthletes ?? []).map((a: any) => a.id);
 
   const { data, error } = await supabase
     .from("personal_bests")
     .select("*, athlete:athletes(id, name), reactions:pb_reactions(*)")
-    .in("athlete_id", athleteIds)
+    .in("athlete_id", athleteIds.length ? athleteIds : [athlete.id])
     .order("created_at", { ascending: false })
     .limit(30);
 

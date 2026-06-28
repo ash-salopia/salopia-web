@@ -234,7 +234,7 @@ function CompCard({ comp, athleteId, formatDate, daysUntil, onReact, commentText
         <div>
           <div style={s.cardTitle}>{comp.title}</div>
           <div style={s.cardMeta}>
-            {(comp.athlete?.name ?? "Coach") } · {formatDate(comp.competition_date)}
+            {comp.athlete?.name ?? "Team"} · {formatDate(comp.competition_date)}
             {comp.location && ` · ${comp.location}`}
           </div>
         </div>
