@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import type { ResolvedBranding } from "@/types/branding";
+import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
 import type { Athlete, Session, SessionType } from "@/types";
 
-// power_speed added
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
   hyrox:    { label: "Hyrox",    color: "#B388FF", short: "Hyr" },
   cardio:   { label: "Cardio",   color: "#4DC3FF", short: "Car" },
+  power_speed: { label: "Power/Speed", color: "#A855F7", short: "P/S" },
 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -39,11 +41,12 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions, token,
+  athlete, sessions, token, branding = DEFAULT_BRANDING,
 }: {
   athlete: Athlete;
   sessions: Session[];
   token: string;
+  branding?: ResolvedBranding;
 }) {
   const router = useRouter();
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -88,7 +91,7 @@ export default function AthleteLinkShell({
     return d.toISOString().slice(0, 10);
   });
 
-  const weekTitle = (() => {
+  const weekTitle = ((): string => {
     const s = new Date(weekStart + "T12:00:00Z");
     const e = new Date(weekStart + "T12:00:00Z");
     e.setDate(e.getDate() + 6);
@@ -123,7 +126,7 @@ export default function AthleteLinkShell({
       {/* Header */}
       <div style={st.header}>
         <div>
-          <div style={st.brand}>AthletiQ</div>
+          <div style={st.brand}>{branding?.displayName ?? "AthletiQ"}</div>
           <div style={st.athleteName}>{athlete.name}</div>
         </div>
       </div>
@@ -140,7 +143,6 @@ export default function AthleteLinkShell({
 
       {/* Calendar */}
       <div style={st.calWrap}>
-        {/* Month/Week nav */}
         <div style={st.calHeader}>
           <button style={st.navBtn} onClick={calView === "month" ? prevMonth : prevWeek}>‹</button>
           <div style={st.calTitleGroup}>
@@ -151,8 +153,8 @@ export default function AthleteLinkShell({
           </div>
           <button style={st.navBtn} onClick={calView === "month" ? nextMonth : nextWeek}>›</button>
         </div>
-        <div style={{ display: "flex", gap: 4, padding: "0 0 8px" }}>
-          {(["month", "week"] as const).map(v => (
+        <div style={{ display: "flex", gap: 6, padding: "4px 0 8px" }}>
+          {(["week", "month"] as const).map(v => (
             <button key={v} onClick={() => setCalView(v)}
               style={{ flex: 1, background: calView === v ? "var(--accent-dim)" : "var(--ink)", border: calView === v ? "1px solid var(--accent)" : "1px solid var(--line)", color: calView === v ? "var(--accent)" : "var(--mute)", borderRadius: 8, padding: "7px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               {v === "month" ? "Month" : "Week"}
@@ -161,32 +163,32 @@ export default function AthleteLinkShell({
         </div>
 
         {calView === "week" ? (
-          /* Week view — stacked day columns for mobile */
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {weekDates.map((iso, di) => {
-              const daySessions = (sessionsByDate.get(iso) ?? []).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+              const daySess = (sessionsByDate.get(iso) ?? []);
               const dayDate = new Date(iso + "T12:00:00Z");
-              const isToday = iso === new Date().toISOString().slice(0, 10);
+              const isToday = iso === todayStr;
               const dayLabel = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][di];
               return (
-                <div key={iso} style={{ background: isToday ? "rgba(59,139,235,0.06)" : "var(--panel)", border: isToday ? "1px solid var(--accent)44" : "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+                <div key={iso} style={{ background: "var(--panel)", border: isToday ? "1px solid var(--accent)44" : "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
                   <div style={{ padding: "8px 12px", background: "var(--ink)", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>{dayLabel}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "var(--accent)" : "var(--mute)", textTransform: "uppercase" as const }}>{dayLabel}</span>
                     <span style={{ fontSize: 13, color: isToday ? "var(--accent)" : "var(--mute)", fontWeight: isToday ? 700 : 400 }}>
                       {dayDate.getDate()} {dayDate.toLocaleDateString("en-GB", { month: "short" })}
                     </span>
                   </div>
                   <div style={{ padding: 8, display: "flex", flexDirection: "column" as const, gap: 6 }}>
-                    {daySessions.length === 0 && <div style={{ fontSize: 12, color: "var(--line)", padding: "8px 0" }}>Rest day</div>}
-                    {daySessions.map(session => {
+                    {daySess.length === 0 && <div style={{ fontSize: 12, color: "var(--line)", padding: "4px 0" }}>Rest</div>}
+                    {daySess.map(session => {
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                       return (
-                        <button key={session.id} style={{ background: meta.color + "18", border: "1px solid " + meta.color + "44", borderLeft: "3px solid " + meta.color, borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left" as const, width: "100%" }}
-                          onClick={() => router.push(`/a/${token}/sessions/${session.id}`)}>
+                        <button key={session.id}
+                          style={{ background: meta.color + "18", border: "1px solid " + meta.color + "44", borderLeft: "3px solid " + meta.color, borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left" as const, width: "100%" }}
+                          onClick={() => router.push("/a/" + token + "/sessions/" + session.id)}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const, marginBottom: 2 }}>{meta.label}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{session.name}</div>
                           {session.exercises && session.exercises.length > 0 && (
-                            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{session.exercises.length} exercises</div>
+                            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</div>
                           )}
                         </button>
                       );
@@ -197,7 +199,6 @@ export default function AthleteLinkShell({
             })}
           </div>
         ) : (
-        /* Month view */
         <div style={st.grid}>
           {DAYS.map((d) => (
             <div key={d} style={st.dayHeader}>{d}</div>
@@ -253,6 +254,7 @@ export default function AthleteLinkShell({
             })
           )}
         </div>
+        )} {/* end week/month */}
 
         {/* Legend */}
         <div style={st.legend}>
@@ -263,7 +265,6 @@ export default function AthleteLinkShell({
             </div>
           ))}
         </div>
-        )} {/* end week/month */}
       </div>
 
       {/* Upcoming sessions list below calendar */}
