@@ -18,6 +18,7 @@ import { listLibrary } from "@/lib/data/library";
 import { saveSessionAsTemplate } from "@/lib/data/templates";
 import ExerciseCard from "@/components/ExerciseCard";
 import HyroxTimer from "@/components/HyroxTimer";
+import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import CheckInModal from "@/components/CheckInModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
@@ -47,6 +48,9 @@ export default function SessionDetailPage() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [timerOpen, setTimerOpen] = useState(false);
+  const [timerWork, setTimerWork] = useState(40);
+  const [timerRest, setTimerRest] = useState(20);
+  const [timerRounds, setTimerRounds] = useState(8);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkinEnabled, setCheckinEnabled] = useState(true);
@@ -420,21 +424,25 @@ export default function SessionDetailPage() {
     }
   };
 
-  // Simple interval config shape: {workSec, restSec, totalRounds}.
-  // This covers the most common Hyrox/Cardio interval and circuit
-  // timing — the prototype's fuller config builder (cycling supersets,
-  // EMOM, fixed-step workouts) isn't ported yet, see HyroxTimer.tsx.
-  const handleConfigChange = async (patch: { workSec?: number; restSec?: number; totalRounds?: number }) => {
+  const handleSessionTypeChange = async (hyroxType: string | null, cardioType: string | null) => {
+    if (!session) return;
+    const patch: Partial<Session> = {};
+    if (hyroxType !== null) patch.hyrox_type = hyroxType as any;
+    if (cardioType !== null) patch.cardio_type = cardioType as any;
+    setSession((prev) => (prev ? { ...prev, ...patch } : prev));
+    try { await updateSession(sessionId, patch); } catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
+  const handleConfigChange = async (newConfig: object) => {
     if (!session) return;
     const field = session.type === "cardio" ? "cardio_config" : "hyrox_config";
-    const currentConfig = (session.type === "cardio" ? session.cardio_config : session.hyrox_config) || {};
-    const newConfig = { ...currentConfig, ...patch };
     setSession((prev) => (prev ? { ...prev, [field]: newConfig } : prev));
-    try {
-      await updateSession(sessionId, { [field]: newConfig } as Partial<Session>);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save timer settings");
-    }
+    try { await updateSession(sessionId, { [field]: newConfig } as Partial<Session>); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save config"); }
+  };
+
+  const handleStartTimer = (workSec: number, restSec: number, rounds: number) => {
+    setTimerWork(workSec); setTimerRest(restSec); setTimerRounds(rounds); setTimerOpen(true);
   };
 
   if (loading) return <div style={styles.empty}>Loading…</div>;
@@ -694,33 +702,20 @@ export default function SessionDetailPage() {
           </button>
         </>
       ) : (
-        <HyroxCardioConfig
-          config={(session.type === "cardio" ? session.cardio_config : session.hyrox_config) as
-            | { workSec?: number; restSec?: number; totalRounds?: number }
-            | null}
-          sessionTypeColor={session.type === "cardio" ? "#4DC3FF" : "#B388FF"}
-          onChange={handleConfigChange}
-          onStartTimer={() => setTimerOpen(true)}
+        <HyroxCardioBuilder
+          session={session}
+          color={session.type === "cardio" ? "#4DC3FF" : "#B388FF"}
+          onTypeChange={handleSessionTypeChange}
+          onConfigChange={handleConfigChange}
+          onStartTimer={handleStartTimer}
         />
       )}
 
       {timerOpen && (
         <HyroxTimer
-          workSec={
-            ((session.type === "cardio" ? session.cardio_config : session.hyrox_config) as
-              | { workSec?: number }
-              | null)?.workSec || 40
-          }
-          restSec={
-            ((session.type === "cardio" ? session.cardio_config : session.hyrox_config) as
-              | { restSec?: number }
-              | null)?.restSec || 20
-          }
-          totalRounds={
-            ((session.type === "cardio" ? session.cardio_config : session.hyrox_config) as
-              | { totalRounds?: number }
-              | null)?.totalRounds || 8
-          }
+          workSec={timerWork}
+          restSec={timerRest}
+          totalRounds={timerRounds}
           label={session.name}
           onClose={() => setTimerOpen(false)}
         />
@@ -764,62 +759,6 @@ export default function SessionDetailPage() {
   );
 }
 
-function HyroxCardioConfig({
-  config,
-  sessionTypeColor,
-  onChange,
-  onStartTimer,
-}: {
-  config: { workSec?: number; restSec?: number; totalRounds?: number } | null;
-  sessionTypeColor: string;
-  onChange: (patch: { workSec?: number; restSec?: number; totalRounds?: number }) => void;
-  onStartTimer: () => void;
-}) {
-  const workSec = config?.workSec ?? 40;
-  const restSec = config?.restSec ?? 20;
-  const totalRounds = config?.totalRounds ?? 8;
-
-  return (
-    <div style={styles.configCard}>
-      <div style={styles.configRow}>
-        <ConfigField label="Work (sec)" value={workSec} onChange={(v) => onChange({ workSec: v })} />
-        <ConfigField label="Rest (sec)" value={restSec} onChange={(v) => onChange({ restSec: v })} />
-        <ConfigField label="Rounds" value={totalRounds} onChange={(v) => onChange({ totalRounds: v })} />
-      </div>
-      <button
-        style={{ ...styles.startTimerBtn, background: sessionTypeColor }}
-        onClick={onStartTimer}
-      >
-        ▶ Start Timer
-      </button>
-    </div>
-  );
-}
-
-function ConfigField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div style={{ flex: 1 }}>
-      <div style={styles.fieldLabel}>{label}</div>
-      <input
-        value={value}
-        inputMode="numeric"
-        onChange={(e) => {
-          const n = parseInt(e.target.value, 10);
-          onChange(isNaN(n) ? 0 : n);
-        }}
-        style={styles.configInput}
-      />
-    </div>
-  );
-}
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 700 },
