@@ -48,7 +48,7 @@ export default function AthleteLinkShell({
   const router = useRouter();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const [calView, setCalView] = useState<"month" | "week">("month");
+  const [calView, setCalView] = useState<"month" | "week">("week");
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
     const dow = d.getDay();

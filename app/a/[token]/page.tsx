@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getAthleteByShareToken, getAthleteSessions } from "@/lib/data/athlete-share-link";
 import AthleteLinkShell from "@/components/AthleteLinkShell";
+import { createClient } from "@/lib/supabase-server";
+import { resolveBranding, DEFAULT_BRANDING } from "@/types/branding";
 
 export default async function AthleteLinkPage({
   params,
@@ -16,5 +18,17 @@ export default async function AthleteLinkPage({
 
   const sessions = await getAthleteSessions(athlete.id);
 
-  return <AthleteLinkShell athlete={athlete} sessions={sessions} token={token} />;
+  // Fetch org branding
+  const supabase = await createClient();
+  const { data: org } = await supabase
+    .from("organisations")
+    .select("name, tier, branding")
+    .eq("id", athlete.organisation_id)
+    .single();
+
+  const branding = org
+    ? resolveBranding({ name: org.name, tier: org.tier ?? "standard", branding: org.branding ?? {} })
+    : DEFAULT_BRANDING;
+
+  return <AthleteLinkShell athlete={athlete} sessions={sessions} token={token} branding={branding} />;
 }
