@@ -1,5 +1,4 @@
 "use client";
-import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
 
 import { useState, useEffect } from "react";
 import {
@@ -15,7 +14,7 @@ import {
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
 
-type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
+type Tab = "groups" | "announcements" | "feed" | "chat";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,24 +42,13 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [coachId, setCoachId] = useState("");
-  const [orgId, setOrgId] = useState("");
-  const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [coachName, setCoachName] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
-    (async () => {
-      const { data } = await supabase.from("coaches").select("id, name, organisation_id").single();
-      if (data) {
-        setCoachId(data.id);
-        setCoachName(data.name);
-        if (data.organisation_id) {
-          setOrgId(data.organisation_id);
-          const { data: compsData } = await supabase.from("competitions").select("*, athlete:athletes(id, name), reactions:competition_reactions(*), comments:competition_comments(*)").eq("organisation_id", data.organisation_id).order("competition_date", { ascending: true });
-          setCompetitions(compsData ?? []);
-        }
-      }
-    })();
+    supabase.from("coaches").select("id, name").single().then(({ data }) => {
+      if (data) { setCoachId(data.id); setCoachName(data.name); }
+    });
     loadAll();
   }, []);
 
@@ -93,7 +81,7 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).map((t) => (
+        {(["groups", "announcements", "feed", "chat"] as Tab[]).map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
@@ -102,8 +90,7 @@ export default function CommunityPage() {
             {t === "groups" ? `👥 Groups (${groups.length})` :
              t === "announcements" ? `📢 Announcements` :
              t === "feed" ? `🏆 PB Feed` :
-             t === "chat" ? `💬 Chat` :
-             `🏆 Comps`}
+             `💬 Chat`}
           </button>
         ))}
       </div>
@@ -131,18 +118,6 @@ export default function CommunityPage() {
               coachId={coachId}
               coachName={coachName}
               onPbsChange={setPbs}
-            />
-          )}
-          {tab === "comps" && (
-            <CompetitionFeed
-              competitions={competitions}
-              athleteId=""
-              athleteName={coachName}
-              token=""
-              coachId={coachId}
-              coachName={coachName}
-              organisationId={orgId}
-              onUpdated={setCompetitions}
             />
           )}
           {tab === "chat" && (
@@ -587,7 +562,7 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, coachId, coachName, o
   return (
     <div style={s.pbCard}>
       <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
-      <div style={s.pbExercise}>📈 {pb.exercise_name}</div>
+      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
       <div style={s.pbWeight}>
         {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
         {pb.reps ? ` × ${pb.reps} reps` : ""}

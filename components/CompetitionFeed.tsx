@@ -25,34 +25,35 @@ export interface Competition {
   comments: { id: string; author_id: string; author_name: string; body: string; created_at: string }[];
 }
 
+export interface AthleteOption { id: string; name: string; }
+
 interface Props {
   competitions: Competition[];
-  athleteId: string;      // athlete whose comp we're adding (for coach: selected athlete or "")
+  athleteId: string;
   athleteName: string;
-  token: string;          // share token (athlete mobile) — empty string on coach side
-  // Coach identity — used when token is empty
+  token: string;
   coachId?: string;
   coachName?: string;
   organisationId?: string;
+  athletes?: AthleteOption[];  // list of org athletes for coach to pick from
   onUpdated: (comps: Competition[]) => void;
 }
 
-export default function CompetitionFeed({ competitions, athleteId, athleteName, token, coachId, coachName, organisationId, onUpdated }: Props) {
+export default function CompetitionFeed({ competitions, athleteId, athleteName, token, coachId, coachName, organisationId, athletes = [], onUpdated }: Props) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", competition_date: "", location: "", notes: "" });
+  const [selectedAthleteId, setSelectedAthleteId] = useState(athleteId || "");
+  const [athleteSearch, setAthleteSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [commentText, setCommentText] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
 
   async function apiPost(body: object) {
-    const identity = token
-      ? { token }
-      : { athlete_id: athleteId || undefined, organisation_id: organisationId, actor_id: coachId, actor_name: coachName, actor_type: "coach" };
     const res = await fetch("/api/athlete-link/competitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...identity, ...body }),
+      body: JSON.stringify({ token, ...body }),
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -63,7 +64,7 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
     setSaving(true);
     setError("");
     try {
-      await apiPost({ action: "add_competition", ...form });
+      await apiPost({ action: "add_competition", athlete_id_override: selectedAthleteId || undefined, ...form });
       // Reload
       const res = await fetch(`/api/athlete-link/competitions?organisation_id=${organisationId || ""}&token=${token}`);
       const data = await res.json();
@@ -127,6 +128,36 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
       {/* Add form */}
       {adding && (
         <div style={s.formCard}>
+          {/* Athlete selector — coach side only */}
+          {!token && athletes.length > 0 && (
+            <div>
+              <div style={s.fieldLabel}>For athlete</div>
+              <input
+                value={athleteSearch}
+                onChange={e => setAthleteSearch(e.target.value)}
+                placeholder="Search athlete..."
+                style={s.input}
+              />
+              {athleteSearch.trim() && (
+                <div style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, marginTop: 4, maxHeight: 160, overflowY: "auto" as const }}>
+                  {athletes
+                    .filter(a => a.name.toLowerCase().includes(athleteSearch.toLowerCase()))
+                    .map(a => (
+                      <button key={a.id}
+                        style={{ width: "100%", padding: "8px 12px", background: selectedAthleteId === a.id ? "var(--accent-dim)" : "transparent", border: "none", color: selectedAthleteId === a.id ? "var(--accent)" : "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const }}
+                        onClick={() => { setSelectedAthleteId(a.id); setAthleteSearch(a.name); }}
+                      >{a.name}</button>
+                    ))
+                  }
+                </div>
+              )}
+              {selectedAthleteId && !athleteSearch.includes(athletes.find(a => a.id === selectedAthleteId)?.name ?? "") && (
+                <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 2 }}>
+                  Selected: {athletes.find(a => a.id === selectedAthleteId)?.name}
+                </div>
+              )}
+            </div>
+          )}
           <div style={s.fieldLabel}>Competition / event</div>
           <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             placeholder="e.g. National Championships 100m" style={s.input} autoFocus />
@@ -234,7 +265,7 @@ function CompCard({ comp, athleteId, formatDate, daysUntil, onReact, commentText
         <div>
           <div style={s.cardTitle}>{comp.title}</div>
           <div style={s.cardMeta}>
-            {comp.athlete?.name ?? "Team"} · {formatDate(comp.competition_date)}
+            {comp.athlete.name} · {formatDate(comp.competition_date)}
             {comp.location && ` · ${comp.location}`}
           </div>
         </div>
