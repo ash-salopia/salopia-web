@@ -2,18 +2,13 @@
 import BrandingSettings from "@/components/BrandingSettings";
 
 import { useState, useEffect } from "react";
-import { getOrgSettings, updateOrgSettings } from "@/lib/data/settings";
+import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
 import { FORMULAS, type OneRMFormula, type WeightUnit } from "@/lib/one-rm";
 import { CHECKIN_CONDITIONS, CHECKIN_RULE_OPTIONS, DEFAULT_CHECKIN_RULES, type CheckInAction, type CheckInRules } from "@/lib/checkin";
 import type { OrgSettings } from "@/lib/data/settings";
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<OrgSettings>({
-    one_rm_formula: "lander",
-    weight_unit: "kg",
-    checkin_enabled: true,
-    checkin_rules: DEFAULT_CHECKIN_RULES,
-  });
+  const [settings, setSettings] = useState<OrgSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [orgId, setOrgId] = useState("");
