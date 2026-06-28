@@ -263,6 +263,7 @@ export default function AthleteLinkShell({
             </div>
           ))}
         </div>
+        )} {/* end week/month */}
       </div>
 
       {/* Upcoming sessions list below calendar */}
