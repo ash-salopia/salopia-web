@@ -139,6 +139,9 @@ export default function AthleteLinkShell({
         <button style={st.tab} onClick={() => router.push(`/a/${token}/goals`)}>
           🎯 Goals
         </button>
+        <button style={st.tab} onClick={() => router.push(`/a/${token}/documents`)}>
+          📁 Docs
+        </button>
       </div>
 
       {/* Calendar */}
