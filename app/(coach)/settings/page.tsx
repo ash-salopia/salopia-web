@@ -374,12 +374,33 @@ export default function SettingsPage() {
             {/* Score metrics */}
             <div style={s.card}>
               <div style={s.cardLabel}>Score metrics</div>
-              <div style={s.cardDesc}>Athletes will rate each of these 1–5 every week. Drag to reorder.</div>
-              <div style={{ display: "flex", flexDirection: "column" as const, gap: 8, marginTop: 10 }}>
+              <div style={s.cardDesc}>Athletes will rate each of these 1–5 every week. Drag ☰ to reorder.</div>
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginTop: 10 }}>
                 {settings.reflection_metrics.map((metric, i) => (
-                  <div key={metric.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div
+                    key={metric.key}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(i)); e.dataTransfer.effectAllowed = "move"; }}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; (e.currentTarget as HTMLElement).style.outline = "1px solid var(--accent)"; }}
+                    onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.outline = "none"; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      (e.currentTarget as HTMLElement).style.outline = "none";
+                      const from = parseInt(e.dataTransfer.getData("text/plain"));
+                      const to = i;
+                      if (from === to) return;
+                      setSettings((prev) => {
+                        const arr = [...prev.reflection_metrics];
+                        const [moved] = arr.splice(from, 1);
+                        arr.splice(to, 0, moved);
+                        return { ...prev, reflection_metrics: arr };
+                      });
+                    }}
+                    style={{ display: "flex", gap: 8, alignItems: "center", borderRadius: 6 }}
+                  >
+                    <span style={{ color: "var(--mute)", cursor: "grab", fontSize: 16, userSelect: "none", padding: "0 2px" }}>☰</span>
                     <input
-                      style={s.metricInput}
+                      style={{ ...s.metricInput, flex: 1 }}
                       value={metric.label}
                       onChange={(e) => setSettings((prev) => ({
                         ...prev,

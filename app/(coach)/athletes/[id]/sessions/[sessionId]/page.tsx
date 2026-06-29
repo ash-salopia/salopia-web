@@ -705,9 +705,9 @@ export default function SessionDetailPage() {
         <HyroxCardioBuilder
           session={session}
           color={session.type === "cardio" ? "#4DC3FF" : "#B388FF"}
+          library={library}
           onTypeChange={handleSessionTypeChange}
           onConfigChange={handleConfigChange}
-          onStartTimer={handleStartTimer}
         />
       )}
 
