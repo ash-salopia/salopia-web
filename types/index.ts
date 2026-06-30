@@ -35,6 +35,8 @@ export interface Athlete {
   share_token: string;
   archived: boolean;
   in_live_group: boolean;
+  sex: "male" | "female" | null;
+  date_of_birth: string | null; // YYYY-MM-DD
   created_at: string;
 }
 
@@ -250,6 +252,13 @@ export interface TestMetric {
   better_direction: "higher" | "lower";
   requires_bodyweight: boolean;
   is_bilateral: boolean;
+  screening_only: boolean; // e.g. Single Leg CMJ — never rated, asymmetry screen only
+  what_it_measures: string;
+  why_it_matters: string;
+  commentary_excellent: string;
+  commentary_good: string;
+  commentary_average: string;
+  commentary_needs_work: string;
   notes: string;
   created_at: string;
 }
@@ -267,8 +276,11 @@ export interface TestBenchmark {
   sex: "male" | "female" | null;
   age_min: number | null;
   age_max: number | null;
-  green_threshold: number;
-  amber_threshold: number;
+  // 4-tier model: a result worse than average_threshold is "needs_work" by
+  // elimination — there is no separate needs_work_threshold to set.
+  average_threshold: number;
+  good_threshold: number;
+  excellent_threshold: number;
   created_at: string;
 }
 
@@ -304,4 +316,6 @@ export interface Report {
 
 // RAG status derived from comparing a value against a TestBenchmark.
 // Not a database type — computed client-side / server-side at read time.
-export type RagStatus = "red" | "amber" | "green";
+// 4-tier (not 3) — matches the original tool's "Exceptional collapses into
+// Excellent" decision: there is no 5th tier, both scales share these 4.
+export type RagStatus = "excellent" | "good" | "average" | "needs_work";
