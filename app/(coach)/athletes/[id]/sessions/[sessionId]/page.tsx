@@ -288,6 +288,10 @@ export default function SessionDetailPage() {
 
   // Moves one exercise to a new 1-based position in the list and
   // renumbers every exercise's sort_order to match the new ordering.
+  // Also re-syncs the visible "order" label for any exercise whose label
+  // is a plain number (so the box reflects the new position after a move) —
+  // exercises using letter-suffixed superset labels (1A/1B) are left
+  // untouched so reordering doesn't clobber those.
   // targetPos is clamped to the valid range rather than rejected, so
   // typing "99" in a 4-exercise session just moves it to the end
   // rather than doing nothing.
@@ -304,14 +308,17 @@ export default function SessionDetailPage() {
     const [moved] = current.splice(fromIdx, 1);
     current.splice(toIdx, 0, moved);
 
-    const reordered = current.map((e, i) => ({ ...e, sort_order: i }));
+    const reordered = current.map((e, i) => {
+      const wasCleanInteger = /^\d+$/.test((e.order ?? "").trim());
+      return wasCleanInteger ? { ...e, sort_order: i, order: String(i + 1) } : { ...e, sort_order: i };
+    });
     setSession((prev) => (prev ? { ...prev, exercises: reordered } : prev));
 
     try {
-      // Persist every exercise's sort_order, not just the moved one,
-      // since shifting it changes the position of everyone between
-      // the old and new spot too.
-      await Promise.all(reordered.map((e) => updateExercise(e.id, { sort_order: e.sort_order })));
+      // Persist every exercise's sort_order (and order label where it
+      // changed), not just the moved one, since shifting it changes the
+      // position of everyone between the old and new spot too.
+      await Promise.all(reordered.map((e) => updateExercise(e.id, { sort_order: e.sort_order, order: e.order })));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reorder exercises");
     }
@@ -674,7 +681,7 @@ export default function SessionDetailPage() {
       {session.type === "strength" ? (
         <>
           <div style={styles.exerciseList}>
-            {exercises.map((ex) => (
+            {exercises.map((ex, i) => (
               <ExerciseCard
                 key={ex.id}
                 exercise={ex}
@@ -685,6 +692,8 @@ export default function SessionDetailPage() {
                 onRemove={() => handleRemoveExercise(ex.id)}
                 onLogChange={(log) => handleLogChange(ex.id, log)}
                 onApplyFuture={(patch) => handleApplyFuture(ex.name, patch)}
+                onMoveUp={i > 0 ? () => handleReorderExercise(ex.id, i) : undefined}
+                onMoveDown={i < exercises.length - 1 ? () => handleReorderExercise(ex.id, i + 2) : undefined}
               />
             ))}
           </div>

@@ -11,6 +11,7 @@ import {
   deleteSession,
   copySessionsRange,
   deleteSessionsRange,
+  updateSession,
 } from "@/lib/data/sessions";
 import { todayISO } from "@/lib/date-utils";
 import { listTemplates, loadTemplateForAthlete } from "@/lib/data/templates";
@@ -212,6 +213,27 @@ export default function AthleteDetailPage() {
     });
     await reorderSessionsOnDay(athleteId, date, orderedIds);
   };
+
+  // Moves a session to a different day, appending it to the end of that
+  // day's existing sessions. Used by the drag-and-drop handlers below.
+  const handleMoveSessionToDay = async (sessionId: string, newDate: string) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session || session.date === newDate) return;
+    const targetDaySess = sessionsByDate.get(newDate) ?? [];
+    const newSortOrder = targetDaySess.length;
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, date: newDate, sort_order: newSortOrder } as any : s))
+    );
+    try {
+      await updateSession(sessionId, { date: newDate });
+      await reorderSessionsOnDay(athleteId, newDate, [...targetDaySess.map((s) => s.id), sessionId]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not move session");
+    }
+  };
+
+  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
   const handleDeleteSession = async (session: Session) => {
     if (!confirm(`Delete "${session.name}"? This can't be undone.`)) return;
@@ -565,6 +587,7 @@ export default function AthleteDetailPage() {
         </div>
 
         {calView === "week" ? (
+          <div style={styles.weekScrollWrap}>
           <div style={styles.weekGrid}>
             {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((dayLabel, di) => {
               const iso = weekDates[di];
@@ -579,11 +602,30 @@ export default function AthleteDetailPage() {
                       {dayDate.getDate()} {dayDate.toLocaleDateString("en-GB", { month: "short" })}
                     </div>
                   </div>
-                  <div style={styles.weekDayBody} onClick={() => { setCalendarAddDate(iso); setTypePicker(false); }}>
+                  <div
+                    style={{
+                      ...styles.weekDayBody,
+                      ...(dragOverDate === iso ? { background: "var(--accent-dim)", outline: "2px dashed var(--accent)" } : {}),
+                    }}
+                    onClick={() => { setCalendarAddDate(iso); setTypePicker(false); }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverDate(iso); }}
+                    onDragLeave={() => setDragOverDate((d) => (d === iso ? null : d))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOverDate(null);
+                      if (draggingSessionId) handleMoveSessionToDay(draggingSessionId, iso);
+                    }}
+                  >
                     {daySess.map((session, si) => {
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                       return (
-                        <div key={session.id} style={{ ...styles.weekSessionCard, borderLeftColor: meta.color }}>
+                        <div
+                          key={session.id}
+                          draggable
+                          onDragStart={(e) => { e.stopPropagation(); setDraggingSessionId(session.id); }}
+                          onDragEnd={() => { setDraggingSessionId(null); setDragOverDate(null); }}
+                          style={{ ...styles.weekSessionCard, borderLeftColor: meta.color, cursor: "grab", opacity: draggingSessionId === session.id ? 0.4 : 1 }}
+                        >
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ fontSize: 9, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const }}>{meta.label}</span>
                             <div style={{ display: "flex", gap: 2 }}>
@@ -607,6 +649,7 @@ export default function AthleteDetailPage() {
               );
             })}
           </div>
+          </div>
         ) : (
         <div style={styles.calGrid}>
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -619,15 +662,28 @@ export default function AthleteDetailPage() {
               const isToday = iso === todayStr;
               const daySess = [...(sessionsByDate.get(iso) ?? [])].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
               return (
-                <div key={iso} style={{ ...styles.calCell, opacity: isCurrentMonth ? 1 : 0.35, background: calendarAddDate === iso ? "var(--accent-dim)" : isToday ? "rgba(59,139,235,0.08)" : "var(--panel)", borderColor: calendarAddDate === iso ? "var(--accent)" : isToday ? "var(--accent)44" : "var(--line)", cursor: isCurrentMonth ? "pointer" : "default" }}
-                  onClick={() => { if (!isCurrentMonth) return; setCalendarAddDate(iso); setTypePicker(false); }}>
+                <div key={iso} style={{ ...styles.calCell, opacity: isCurrentMonth ? 1 : 0.35, background: dragOverDate === iso ? "var(--accent-dim)" : calendarAddDate === iso ? "var(--accent-dim)" : isToday ? "rgba(59,139,235,0.08)" : "var(--panel)", borderColor: dragOverDate === iso ? "var(--accent)" : calendarAddDate === iso ? "var(--accent)" : isToday ? "var(--accent)44" : "var(--line)", cursor: isCurrentMonth ? "pointer" : "default" }}
+                  onClick={() => { if (!isCurrentMonth) return; setCalendarAddDate(iso); setTypePicker(false); }}
+                  onDragOver={(e) => { if (!isCurrentMonth) return; e.preventDefault(); setDragOverDate(iso); }}
+                  onDragLeave={() => setDragOverDate((d) => (d === iso ? null : d))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverDate(null);
+                    if (isCurrentMonth && draggingSessionId) handleMoveSessionToDay(draggingSessionId, iso);
+                  }}>
                   <div style={{ ...styles.calDayNum, color: isToday ? "var(--accent)" : isCurrentMonth ? "var(--mute)" : "var(--line)", fontWeight: isToday ? 700 : 400 }}>
                     {day.getDate()}
                   </div>
                   {daySess.map((session, si) => {
                     const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                     return (
-                      <div key={session.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <div
+                        key={session.id}
+                        draggable
+                        onDragStart={(e) => { e.stopPropagation(); setDraggingSessionId(session.id); }}
+                        onDragEnd={() => { setDraggingSessionId(null); setDragOverDate(null); }}
+                        style={{ display: "flex", alignItems: "center", gap: 2, cursor: "grab", opacity: draggingSessionId === session.id ? 0.4 : 1 }}
+                      >
                         <div style={{ display: "flex", flexDirection: "column" as const }}>
                           <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "up", session.id); }}>▴</button>
                           <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
@@ -795,6 +851,17 @@ export default function AthleteDetailPage() {
           <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>10m, 20m, CMJ, RSI, Broad Jump, 505 →</div>
         </div>
         <span style={{ fontSize: 20, color: "#A855F7" }}>›</span>
+      </button>
+
+      <button
+        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #4DC3FF44", background: "#4DC3FF08", marginTop: 10 }}
+        onClick={() => router.push(`/athletes/${athleteId}/testing`)}
+      >
+        <div>
+          <div style={{ ...styles.testingTitle, color: "#4DC3FF" }}>🧪 Testing</div>
+          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>Log test sessions, track progress, generate reports →</div>
+        </div>
+        <span style={{ fontSize: 20, color: "#4DC3FF" }}>›</span>
       </button>
 
       {/* Testing schedule card */}
@@ -1074,8 +1141,9 @@ const styles: Record<string, React.CSSProperties> = {
   viewTabBtnActive: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--accent)" },
   reorderBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 8, cursor: "pointer", padding: "1px 2px", lineHeight: 1 },
   copySessionBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 4, fontSize: 10, cursor: "pointer", padding: "1px 4px", flexShrink: 0 },
-  weekGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginTop: 8 },
-  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, display: "flex", flexDirection: "column" as const },
+  weekScrollWrap: { overflowX: "auto" as const, marginTop: 8 },
+  weekGrid: { display: "flex", gap: 6, minWidth: "fit-content" },
+  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, minWidth: 150, width: 150, flexShrink: 0, display: "flex", flexDirection: "column" as const },
   weekDayHeader: { padding: "8px 10px", borderBottom: "1px solid var(--line)", background: "var(--ink)" },
   weekDayBody: { flex: 1, padding: 8, display: "flex", flexDirection: "column" as const, gap: 6, cursor: "pointer" },
   weekSessionCard: { background: "var(--ink)", border: "1px solid var(--line)", borderLeft: "3px solid", borderRadius: 6, padding: "6px 8px", display: "flex", flexDirection: "column" as const, gap: 3 },

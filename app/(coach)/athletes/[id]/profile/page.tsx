@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { updatePB, deletePB, createManualPB } from "@/lib/data/personal-bests";
+import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete } from "@/lib/data/athletes";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
@@ -165,6 +166,8 @@ export default function AthleteProfilePage() {
   const [savingPB, setSavingPB] = useState(false);
   const [addingPB, setAddingPB] = useState(false);
   const [newPB, setNewPB] = useState({ exercise_name: "", weight: "", reps: "", date: "" });
+  const [library, setLibrary] = useState<{ name: string }[]>([]);
+  const [pbNameDropdownOpen, setPbNameDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(false);
   const [error, setError] = useState("");
@@ -173,6 +176,7 @@ export default function AthleteProfilePage() {
   useEffect(() => {
     if (!athleteId) return;
     load();
+    listLibrary().then((entries) => setLibrary(entries)).catch(() => {});
   }, [athleteId]);
 
   const load = async () => {
@@ -455,12 +459,32 @@ export default function AthleteProfilePage() {
         {addingPB && (
           <div style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={p.sectionTitle}>Add manual PB</div>
-            <input
-              placeholder="Exercise name"
-              value={newPB.exercise_name}
-              onChange={e => setNewPB(v => ({ ...v, exercise_name: e.target.value }))}
-              style={p.editInput}
-            />
+            <div style={{ position: "relative" as const }}>
+              <input
+                placeholder="Exercise name"
+                value={newPB.exercise_name}
+                onChange={e => { setNewPB(v => ({ ...v, exercise_name: e.target.value })); setPbNameDropdownOpen(true); }}
+                onFocus={() => setPbNameDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setPbNameDropdownOpen(false), 150)}
+                style={p.editInput}
+              />
+              {pbNameDropdownOpen && newPB.exercise_name.trim() && (
+                <div style={p.pbNameDropdown}>
+                  {library
+                    .filter(entry => entry.name.toLowerCase().includes(newPB.exercise_name.toLowerCase()))
+                    .slice(0, 8)
+                    .map((entry, i) => (
+                      <button
+                        key={i}
+                        style={p.pbNameDropdownItem}
+                        onMouseDown={() => { setNewPB(v => ({ ...v, exercise_name: entry.name })); setPbNameDropdownOpen(false); }}
+                      >
+                        {entry.name}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 placeholder="Weight (kg)"
@@ -712,6 +736,15 @@ const p: Record<string, React.CSSProperties> = {
     color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit",
   },
   editLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em", marginBottom: 3 },
+  pbNameDropdown: {
+    position: "absolute" as const, top: "100%", left: 0, right: 0, marginTop: 4,
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8,
+    zIndex: 20, maxHeight: 200, overflowY: "auto" as const,
+  },
+  pbNameDropdownItem: {
+    width: "100%", textAlign: "left" as const, padding: "8px 10px", background: "transparent",
+    border: "none", borderBottom: "1px solid var(--line)", color: "var(--text)", fontSize: 13, cursor: "pointer",
+  },
 };
 
 const c: Record<string, React.CSSProperties> = {

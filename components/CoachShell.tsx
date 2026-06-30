@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/live",        label: "Live group",  icon: "⭐" },
   { href: "/community",   label: "Community",   icon: "💬" },
   { href: "/documents",   label: "Documents",   icon: "📁" },
+  { href: "/testing",     label: "Testing",     icon: "🧪" },
   { href: "/templates",   label: "Templates",   icon: "▦"  },
   { href: "/programmes",  label: "Programmes",  icon: "🗂"  },
   { href: "/library",     label: "Library",     icon: "📚" },

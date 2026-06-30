@@ -14,6 +14,8 @@ interface Props {
   onRemove: () => void;
   onLogChange: (log: SetLog[]) => void;
   onApplyFuture?: (patch: Partial<SessionExercise>) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 export default function ExerciseCard({
@@ -25,6 +27,8 @@ export default function ExerciseCard({
   onRemove,
   onLogChange,
   onApplyFuture,
+  onMoveUp,
+  onMoveDown,
 }: Props) {
   const [applyFutureOn, setApplyFutureOn] = useState(false);
   const [eachSideInfoOpen, setEachSideInfoOpen] = useState(false);
@@ -84,6 +88,24 @@ export default function ExerciseCard({
   return (
     <div style={styles.card}>
       <div style={styles.cardHead}>
+        <div style={styles.moveBtnCol}>
+          <button
+            style={{ ...styles.moveBtn, opacity: onMoveUp ? 1 : 0.25 }}
+            onClick={onMoveUp}
+            disabled={!onMoveUp}
+            title="Move up"
+          >
+            ▴
+          </button>
+          <button
+            style={{ ...styles.moveBtn, opacity: onMoveDown ? 1 : 0.25 }}
+            onClick={onMoveDown}
+            disabled={!onMoveDown}
+            title="Move down"
+          >
+            ▾
+          </button>
+        </div>
         <input
           value={exercise.order}
           onChange={(e) => onEdit({ order: e.target.value })}
@@ -343,6 +365,20 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 4px",
     fontSize: 13,
     fontWeight: 700,
+  },
+  moveBtnCol: {
+    display: "flex",
+    flexDirection: "column",
+    flexShrink: 0,
+  },
+  moveBtn: {
+    background: "transparent",
+    border: "none",
+    color: "var(--mute)",
+    cursor: "pointer",
+    fontSize: 11,
+    lineHeight: 1,
+    padding: "1px 4px",
   },
   nameFieldWrap: { flex: 1, position: "relative", minWidth: 0 },
   nameInput: {
