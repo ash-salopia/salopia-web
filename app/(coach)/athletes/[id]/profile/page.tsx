@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { updatePB, deletePB, createManualPB } from "@/lib/data/personal-bests";
 import { archiveAthlete } from "@/lib/data/athletes";
+import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
 import type { Athlete } from "@/types";
 
@@ -49,13 +50,13 @@ function ProgressChart({ points, exerciseName }: { points: ProgressPoint[]; exer
   const maxW = Math.max(...points.map((p) => p.weight));
   const range = maxW - minW || 1;
 
-  const dates = points.map((p) => new Date(p.date).getTime());
+  const dates = points.map((p) => new Date(p.date + "T12:00:00Z").getTime());
   const minD = Math.min(...dates);
   const maxD = Math.max(...dates);
   const dateRange = maxD - minD || 1;
 
   const toX = (date: string) =>
-    PAD.left + ((new Date(date).getTime() - minD) / dateRange) * plotW;
+    PAD.left + ((new Date(date + "T12:00:00Z").getTime() - minD) / dateRange) * plotW;
   const toY = (w: number) =>
     PAD.top + plotH - ((w - minW) / range) * plotH;
 
@@ -178,7 +179,7 @@ export default function AthleteProfilePage() {
     setLoading(true);
     setError("");
     const supabase = createClient();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     const monthStart = today.slice(0, 7) + "-01";
 
     try {
@@ -268,7 +269,7 @@ export default function AthleteProfilePage() {
         .select("log, sessions!inner(date, athlete_id)")
         .ilike("name", exerciseName)
         .eq("sessions.athlete_id", athleteId)
-        .order("sessions(date)", { ascending: true });
+        .order("date", { ascending: true, foreignTable: "sessions" });
 
       const points: ProgressPoint[] = [];
       for (const row of data ?? []) {

@@ -48,6 +48,7 @@ export default function SessionDetailPage() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [timerOpen, setTimerOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [timerWork, setTimerWork] = useState(40);
   const [timerRest, setTimerRest] = useState(20);
   const [timerRounds, setTimerRounds] = useState(8);
@@ -392,12 +393,12 @@ export default function SessionDetailPage() {
   };
 
   const handleDeleteSession = async () => {
-    if (!confirm("Delete this session? This can't be undone.")) return;
     try {
       await deleteSession(sessionId);
       router.push(`/athletes/${athleteId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete session");
+      setConfirmDelete(false);
     }
   };
 
@@ -603,9 +604,17 @@ export default function SessionDetailPage() {
         >
           Save as template
         </button>
-        <button style={styles.ghostBtn} onClick={handleDeleteSession}>
-          Delete session
-        </button>
+        {confirmDelete ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, color: "var(--mute)" }}>Delete this session?</span>
+            <button style={styles.dangerBtn} onClick={handleDeleteSession}>Yes, delete</button>
+            <button style={styles.ghostBtn} onClick={() => setConfirmDelete(false)}>Cancel</button>
+          </div>
+        ) : (
+          <button style={styles.ghostBtn} onClick={() => setConfirmDelete(true)}>
+            Delete session
+          </button>
+        )}
       </div>
 
       {checkInOpen && <CheckInModal onClose={() => setCheckInOpen(false)} />}

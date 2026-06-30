@@ -522,15 +522,22 @@ export function generateRepeatDates(
 
   while (cursor <= end) {
     if (days.includes(cursor.getDay())) {
-      dates.push(cursor.toISOString().slice(0, 10));
+      // Use UTC date parts (consistent with T12:00:00Z construction above)
+      const y = cursor.getUTCFullYear();
+      const m = String(cursor.getUTCMonth() + 1).padStart(2, "0");
+      const d = String(cursor.getUTCDate()).padStart(2, "0");
+      dates.push(`${y}-${m}-${d}`);
     }
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return dates;
 }
 
 export function endDateFromWeeks(startDate: string, weeks: number): string {
   const d = new Date(startDate + "T12:00:00Z");
-  d.setDate(d.getDate() + weeks * 7 - 1);
-  return d.toISOString().slice(0, 10);
+  d.setUTCDate(d.getUTCDate() + weeks * 7 - 1);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }

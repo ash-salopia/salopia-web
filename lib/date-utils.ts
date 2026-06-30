@@ -6,7 +6,14 @@
 // implementation; don't simplify it back to the naive version.
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC-offset issues (e.g. BST at 11pm would
+  // return tomorrow's UTC date via toISOString, causing PBs/sessions to show
+  // the wrong date). getFullYear/Month/Date use local time.
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export function addDaysISO(iso: string, n: number): string {

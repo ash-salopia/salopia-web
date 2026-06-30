@@ -61,7 +61,7 @@ export default function ExerciseHistoryModal({ athleteId, exerciseName, currentS
         .select("session_id, log, sessions!inner(id, name, date, athlete_id)")
         .ilike("name", exerciseName)
         .eq("sessions.athlete_id", athleteId)
-        .order("sessions(date)", { ascending: false })
+        .order("date", { ascending: false, foreignTable: "sessions" })
         .limit(20);
 
       if (exErr) throw exErr;

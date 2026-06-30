@@ -195,7 +195,7 @@ const styles: Record<string, React.CSSProperties> = {
   typeBadge: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" },
   exList: { display: "flex", flexDirection: "column", gap: 6 },
   exRow: { display: "flex", alignItems: "center", gap: 8 },
-  exOrder: { fontSize: 11, fontWeight: 700, color: "var(--accent)", width: 18, flexShrink: 0 },
+  exOrder: { fontSize: 11, fontWeight: 700, color: "var(--accent)", minWidth: 22, flexShrink: 0, whiteSpace: "nowrap" },
   exName: { fontSize: 12, color: "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   dots: { display: "flex", gap: 4 },
   dot: { width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--line)", background: "transparent", cursor: "pointer", padding: 0 },

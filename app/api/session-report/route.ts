@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         .ilike("name", ex.name)
         .eq("sessions.athlete_id", athlete.id)
         .neq("session_id", sessionId)
-        .order("sessions(date)", { ascending: false })
+        .order("date", { ascending: false, foreignTable: "sessions" })
         .limit(10);
 
       let bestPrev = 0;

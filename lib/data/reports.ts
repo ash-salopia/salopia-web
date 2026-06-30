@@ -17,6 +17,8 @@ export type ExerciseMap = Record<string, ReportRow[]>;
 export interface ReportData {
   exMap: ExerciseMap;
   hyroxSessions: Session[];
+  cardioSessions: Session[];
+  powerSpeedSessions: Session[];
   rangeStart: string | null;
   rangeEnd: string | null;
   generated: string;
@@ -106,9 +108,19 @@ export async function generateReport(
     .filter((s) => s.type === "hyrox")
     .filter((s) => s.hyrox_config || (s.exercises ?? []).some((e) => (e.log ?? []).some((l) => l.done)));
 
+  const cardioSessions = allSessions
+    .filter((s) => s.type === "cardio")
+    .filter((s) => (s as any).cardio_config);
+
+  const powerSpeedSessions = allSessions
+    .filter((s) => s.type === "power_speed")
+    .filter((s) => (s.exercises ?? []).some((e) => (e.log ?? []).some((l) => l.done)));
+
   return {
     exMap,
     hyroxSessions,
+    cardioSessions,
+    powerSpeedSessions,
     rangeStart,
     rangeEnd,
     generated: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),

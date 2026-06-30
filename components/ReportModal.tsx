@@ -25,9 +25,11 @@ export default function ReportModal({
   athleteGroup?: string;
   onClose: () => void;
 }) {
-  const { exMap, hyroxSessions, generated, rangeStart, rangeEnd } = data;
+  const { exMap, hyroxSessions, cardioSessions = [], powerSpeedSessions = [], generated, rangeStart, rangeEnd } = data;
   const hasStrength = Object.keys(exMap).length > 0;
   const hasHyrox = hyroxSessions.length > 0;
+  const hasCardio = cardioSessions.length > 0;
+  const hasPowerSpeed = powerSpeedSessions.length > 0;
 
   const handleCopy = () => {
     const el = document.getElementById("report-content");
@@ -70,7 +72,7 @@ export default function ReportModal({
         </div>
 
         <div id="report-content" style={{ padding: 20 }}>
-          {!hasStrength && !hasHyrox && (
+          {!hasStrength && !hasHyrox && !hasCardio && !hasPowerSpeed && (
             <div style={styles.emptyNote}>
               No logged data found in this range. Log weights in strength sessions to generate a
               load report.
@@ -142,6 +144,34 @@ export default function ReportModal({
               <div style={{ ...styles.sectionTitle, marginTop: hasStrength ? 24 : 0 }}>Hyrox Sessions</div>
               <div style={styles.hyroxList}>
                 {hyroxSessions.map((s) => (
+                  <div key={s.id} style={styles.hyroxRow}>
+                    <span>{fmtDate(s.date)}</span>
+                    <span>{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {hasCardio && (
+            <>
+              <div style={{ ...styles.sectionTitle, marginTop: (hasStrength || hasHyrox) ? 24 : 0 }}>Cardio Sessions</div>
+              <div style={styles.hyroxList}>
+                {cardioSessions.map((s) => (
+                  <div key={s.id} style={styles.hyroxRow}>
+                    <span>{fmtDate(s.date)}</span>
+                    <span>{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {hasPowerSpeed && (
+            <>
+              <div style={{ ...styles.sectionTitle, marginTop: (hasStrength || hasHyrox || hasCardio) ? 24 : 0 }}>Power / Speed Sessions</div>
+              <div style={styles.hyroxList}>
+                {powerSpeedSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
                     <span>{fmtDate(s.date)}</span>
                     <span>{s.name}</span>

@@ -127,20 +127,38 @@ export default function PowerSpeedDashboard() {
         .from("athletes").select("name").eq("id", athleteId).single();
       setAthleteName(athlete?.name ?? "");
 
-      // Get all power/speed session exercises for this athlete
-      const { data: exercises, error: exErr } = await supabase
-        .from("session_exercises")
-        .select("name, log, sessions!inner(athlete_id, date, type)")
-        .eq("sessions.athlete_id", athleteId)
-        .eq("sessions.type", "power_speed")
-        .not("sessions", "is", null)
-        .order("sessions.date", { ascending: true });
+      // Get all power/speed session exercises for this athlete.
+      // Query the sessions table first to get IDs, then get exercises.
+      // This avoids the problematic cross-table .not() filter.
+      const { data: psSessions, error: sessErr } = await supabase
+        .from("sessions")
+        .select("id, date")
+        .eq("athlete_id", athleteId)
+        .eq("type", "power_speed")
+        .order("date", { ascending: true });
 
-      if (exErr) throw exErr;
+      if (sessErr) throw sessErr;
+
+      const psSessionIds = (psSessions ?? []).map((s: any) => s.id);
+      const sessionDateMap: Record<string, string> = {};
+      (psSessions ?? []).forEach((s: any) => { sessionDateMap[s.id] = s.date; });
+
+      let exercises: any[] = [];
+      if (psSessionIds.length > 0) {
+        const { data: exData, error: exErr } = await supabase
+          .from("session_exercises")
+          .select("name, log, session_id")
+          .in("session_id", psSessionIds);
+        if (exErr) throw exErr;
+        exercises = (exData ?? []).map((e: any) => ({
+          ...e,
+          sessions: { date: sessionDateMap[e.session_id] ?? "" },
+        }));
+      }
 
       // Process each benchmark
       const processed: BenchmarkResult[] = BENCHMARKS.map(def => {
-        const matches = (exercises ?? []).filter((ex: any) => {
+        const matches = exercises.filter((ex: any) => {
           const exName = ex.name?.toLowerCase().trim() ?? "";
           return def.exerciseNames.some(n => exName.includes(n.toLowerCase()));
         });
@@ -148,7 +166,7 @@ export default function PowerSpeedDashboard() {
         const history: { date: string; value: number }[] = [];
 
         for (const ex of matches) {
-          const date = (ex.sessions as any)?.date ?? "";
+          const date = ex.sessions?.date ?? "";
           const log: any[] = ex.log ?? [];
           for (const set of log) {
             if (!set.done) continue;
@@ -213,7 +231,7 @@ export default function PowerSpeedDashboard() {
 
       {loading ? (
         <div style={s.loading}>Loading benchmarks…</div>
-      ) : !hasData ? (
+      ) : !hasData && !error ? (
         <div style={s.empty}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>No data yet</div>
