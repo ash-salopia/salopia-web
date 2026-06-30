@@ -36,10 +36,18 @@ export interface ReviewExercise {
 
 export interface ReviewSession {
   name: string;
+  type: string;          // "strength" | "power_speed" | "cardio" | "hyrox"
   dayOffset: number;
   weekNumber: number;
   exercises: ReviewExercise[];
 }
+
+export const SESSION_TYPE_META: Record<string, { label: string; color: string }> = {
+  strength:     { label: "Strength",      color: "#3B8BEB" },
+  hyrox:        { label: "Hyrox",         color: "#B388FF" },
+  cardio:       { label: "Cardio",        color: "#4DC3FF" },
+  power_speed:  { label: "Power / Speed", color: "#A855F7" },
+};
 
 // ── Exported helpers — call these when converting Claude output ───────────────
 
@@ -243,12 +251,31 @@ export default function SessionReviewEditor({
         </div>
       )}
 
-      {sessions.map((session, si) => (
+      {sessions.map((session, si) => {
+        const typeMeta = SESSION_TYPE_META[session.type] ?? SESSION_TYPE_META.strength;
+        return (
         <div key={si} style={s.sessionBlock}>
-          {/* Session header — only show when multi-session */}
-          {multiSession && (
-            <div style={s.sessionLabel}>{session.name}</div>
-          )}
+          {/* Session header — name (multi-session only) + type selector (always) */}
+          <div style={s.sessionHeaderRow}>
+            {multiSession && (
+              <div style={s.sessionLabel}>{session.name}</div>
+            )}
+            <div style={s.typeSelectWrap}>
+              <span style={{ ...s.typeDot, background: typeMeta.color }} />
+              <select
+                value={session.type}
+                onChange={(e) => {
+                  const next = sessions.map((sess, idx) => idx === si ? { ...sess, type: e.target.value } : sess);
+                  onChange(next);
+                }}
+                style={{ ...s.typeSelect, color: typeMeta.color, borderColor: typeMeta.color + "55" }}
+              >
+                {Object.entries(SESSION_TYPE_META).map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {session.exercises.length === 0 && (
             <div style={s.empty}>No exercises in this session</div>
@@ -518,7 +545,8 @@ export default function SessionReviewEditor({
             );
           })}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -612,6 +640,34 @@ const s: Record<string, React.CSSProperties> = {
     paddingBottom: 2,
     borderBottom: "1px solid var(--line)",
     marginBottom: 2,
+  },
+  sessionHeaderRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  typeSelectWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: "auto",
+  },
+  typeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  typeSelect: {
+    background: "var(--ink)",
+    border: "1px solid var(--line)",
+    borderRadius: 6,
+    padding: "3px 8px",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
   },
   empty: {
     fontSize: 12,

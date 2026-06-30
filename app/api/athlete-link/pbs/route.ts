@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("personal_bests")
-    .select("*, athlete:athletes(id, name), reactions:pb_reactions(*)")
+    .select("*, athlete:athletes(id, name), reactions:pb_reactions(*), comments:pb_comments(*)")
     .in("athlete_id", athleteIds.length ? athleteIds : [athlete.id])
     .order("created_at", { ascending: false })
     .limit(30);

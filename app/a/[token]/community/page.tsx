@@ -215,29 +215,17 @@ export default function AthleteCommunityPage() {
               {pbs.length === 0 && (
                 <div style={s.empty}>No personal bests yet. They appear here automatically when you or your teammates log new records.</div>
               )}
-              {pbs.map((pb) => {
-                const reactionGroups = (pb.reactions ?? []).reduce(
-                  (acc: Record<string, number>, r: any) => { acc[r.emoji] = (acc[r.emoji] ?? 0) + 1; return acc; }, {} as Record<string, number>
-                );
-                return (
-                  <div key={pb.id} style={s.pbCard}>
-                    <div style={s.pbAthlete}>{pb.athlete?.name}</div>
-                    <div style={s.pbExercise}>{pb.exercise_name}</div>
-                    <div style={s.pbWeight}>
-                      {pb.weight_kg ? `${pb.weight_kg}kg` : ""}
-                      {pb.reps ? ` x ${pb.reps} reps` : ""}
-                    </div>
-                    <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
-                    {Object.keys(reactionGroups).length > 0 && (
-                      <div style={s.reactions}>
-                        {Object.entries(reactionGroups).map(([emoji, count]) => (
-                          <span key={emoji} style={s.reactionChip}>{emoji} {count as number}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {pbs.map((pb) => (
+                <AthletePBCard
+                  key={pb.id}
+                  pb={pb}
+                  token={token as string}
+                  athleteId={athleteId}
+                  athleteName={athleteName}
+                  onPbUpdated={(updated) => setPbs((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))}
+                  s={s}
+                />
+              ))}
             </div>
           )}
 
@@ -341,6 +329,139 @@ export default function AthleteCommunityPage() {
   );
 }
 
+// ── PB Card (athlete-side, interactive) ─────────────────────────────────────
+
+const REACTION_EMOJIS = ["🔥", "💪", "⭐", "👏"];
+
+function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, s }: {
+  pb: any;
+  token: string;
+  athleteId: string;
+  athleteName: string;
+  onPbUpdated: (pb: any) => void;
+  s: Record<string, React.CSSProperties>;
+}) {
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [reacting, setReacting] = useState(false);
+
+  const reactions: any[] = pb.reactions ?? [];
+  const comments: any[] = pb.comments ?? [];
+  const reactionGroups = reactions.reduce(
+    (acc: Record<string, number>, r: any) => { acc[r.emoji] = (acc[r.emoji] ?? 0) + 1; return acc; },
+    {} as Record<string, number>
+  );
+  const myReaction = reactions.find((r) => r.reactor_type === "athlete" && r.reactor_id === athleteId);
+
+  const handleReact = async (emoji: string) => {
+    if (reacting) return;
+    setReacting(true);
+    try {
+      if (myReaction?.emoji === emoji) {
+        // Toggle off — remove my reaction
+        await fetch(`/api/athlete-link/pb-reactions?token=${token}&pb_id=${pb.id}`, { method: "DELETE" });
+        onPbUpdated({ ...pb, reactions: reactions.filter((r) => r !== myReaction) });
+      } else {
+        const res = await fetch("/api/athlete-link/pb-reactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, pb_id: pb.id, emoji }),
+        });
+        const data = await res.json();
+        if (data.reaction) {
+          const nextReactions = reactions.filter((r) => !(r.reactor_type === "athlete" && r.reactor_id === athleteId));
+          nextReactions.push(data.reaction);
+          onPbUpdated({ ...pb, reactions: nextReactions });
+        }
+      }
+    } finally {
+      setReacting(false);
+    }
+  };
+
+  const handleComment = async () => {
+    if (!commentText.trim() || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/athlete-link/pb-comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, pb_id: pb.id, body: commentText.trim() }),
+      });
+      const data = await res.json();
+      if (data.comment) {
+        onPbUpdated({ ...pb, comments: [...comments, data.comment] });
+        setCommentText("");
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={s.pbCard}>
+      <div style={s.pbAthlete}>{pb.athlete?.name}</div>
+      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
+      <div style={s.pbWeight}>
+        {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
+        {pb.reps ? ` × ${pb.reps} reps` : ""}
+      </div>
+      <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
+
+      <div style={s.reactionArea}>
+        {Object.entries(reactionGroups).map(([emoji, count]) => (
+          <span key={emoji} style={s.reactionChip}>{emoji} {count as number}</span>
+        ))}
+        {REACTION_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            style={{ ...s.reactionBtn, ...(myReaction?.emoji === emoji ? s.reactionBtnActive : {}) }}
+            onClick={() => handleReact(emoji)}
+            disabled={reacting}
+          >
+            {emoji}
+          </button>
+        ))}
+        <button
+          style={s.commentToggleBtn}
+          onClick={() => setShowComments((v) => !v)}
+        >
+          💬 {comments.length > 0 ? comments.length : ""} {showComments ? "▴" : "▾"}
+        </button>
+      </div>
+
+      {showComments && (
+        <div style={s.commentArea}>
+          {comments.map((c: any) => (
+            <div key={c.id} style={s.commentRow}>
+              <span style={s.commentAuthor}>{c.author_name}</span>
+              <span style={s.commentBody}>{c.body}</span>
+            </div>
+          ))}
+          {comments.length === 0 && <div style={s.commentEmpty}>No comments yet</div>}
+          <div style={s.commentInputRow}>
+            <input
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleComment(); }}
+              placeholder="Add a comment..."
+              style={s.commentInput}
+            />
+            <button
+              style={{ ...s.commentSendBtn, opacity: sending ? 0.5 : 1 }}
+              onClick={handleComment}
+              disabled={sending}
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" },
   header: { height: 56, background: "var(--ink)", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", flexShrink: 0 },
@@ -366,6 +487,34 @@ const s: Record<string, React.CSSProperties> = {
   pbDate: { fontSize: 11, color: "var(--mute)", marginTop: 4 },
   reactions: { display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" as const },
   reactionChip: { background: "var(--ink)", borderRadius: 6, padding: "2px 8px", fontSize: 13 },
+  reactionArea: { display: "flex", alignItems: "center", gap: 6, marginTop: 10, flexWrap: "wrap" as const },
+  reactionBtn: {
+    width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)",
+    background: "var(--ink)", fontSize: 15, cursor: "pointer", display: "flex",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  reactionBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)" },
+  commentToggleBtn: {
+    background: "transparent", border: "none", color: "var(--mute)", fontSize: 12,
+    cursor: "pointer", display: "flex", alignItems: "center", gap: 4, marginLeft: "auto",
+  },
+  commentArea: {
+    borderTop: "1px solid var(--line)", paddingTop: 8, marginTop: 10,
+    display: "flex", flexDirection: "column" as const, gap: 6,
+  },
+  commentRow: { fontSize: 12, display: "flex", gap: 6 },
+  commentAuthor: { fontWeight: 700, color: "var(--text)", flexShrink: 0 },
+  commentBody: { color: "var(--mute)" },
+  commentEmpty: { fontSize: 12, color: "var(--mute)" },
+  commentInputRow: { display: "flex", gap: 6, marginTop: 4 },
+  commentInput: {
+    flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)",
+    borderRadius: 8, padding: "6px 10px", fontSize: 12,
+  },
+  commentSendBtn: {
+    background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8,
+    padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+  },
   chatPage: { display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" },
   groupPicker: { display: "flex", gap: 8, padding: "10px 16px", flexWrap: "wrap" as const, borderBottom: "1px solid var(--line)" },
   groupBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" },

@@ -229,7 +229,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             notes: e.notes,
             time: e.time, each_side: e.each_side, video_url: e.video_url,
           }));
-        const sessionType = ((s as any).type ?? "strength") as any;
+        const sessionType = (s.type ?? "strength") as any;
         const session = await createSession(athleteId, sessionType, date, name, exInputs);
         created.push(session);
       }

@@ -82,7 +82,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
     try {
       const result = await callParse(`Parse these programme sessions:\n\n${notes}`, []);
       setSessions(result.sessions.map((s: any) => ({
-        name: s.name, dayOffset: s.dayOffset, weekNumber: s.weekNumber,
+        name: s.name, type: s.type ?? "strength", dayOffset: s.dayOffset, weekNumber: s.weekNumber,
         exercises: enrichWithLibrary(s.exercises, library),
       })));
       setSessionNames(result.sessions.map((s: any) => s.name));
@@ -100,8 +100,11 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
     setCorrecting(true);
     try {
       const result = await callParse(`Correction: ${corrText}\n\nCurrent sessions: ${JSON.stringify(sessions)}`, history);
-      setSessions(result.sessions.map((s: any) => ({
-        name: s.name, dayOffset: s.dayOffset, weekNumber: s.weekNumber,
+      setSessions(result.sessions.map((s: any, i: number) => ({
+        // Preserve the coach's existing type unless the AI explicitly redetects one —
+        // a text correction about exercises shouldn't silently reset the session type.
+        name: s.name, type: s.type ?? sessions[i]?.type ?? "strength",
+        dayOffset: s.dayOffset, weekNumber: s.weekNumber,
         exercises: enrichWithLibrary(s.exercises, library),
       })));
       setAiMessage(result.message);
@@ -129,7 +132,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
       const rows = sessions.map((s, i) => ({
         programme_id: programme.id,
         name: sessionNames[i] ?? s.name,
-        type: "strength",
+        type: s.type ?? "strength",
         exercises: s.exercises.map((e, j) => ({
           name: e.name, order: String(j + 1), sets: e.sets, reps: e.reps,
           time: e.time, rest: e.rest, target_load: e.target_load,

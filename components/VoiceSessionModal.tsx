@@ -102,8 +102,9 @@ export default function VoiceSessionModal({
     };
   }, []);
 
-  const toReviewSessions = (exercises: ParsedExercise[]): ReviewSession[] => [{
+  const toReviewSessions = (exercises: ParsedExercise[], type?: string): ReviewSession[] => [{
     name: sessionName,
+    type: type || detectedType || "strength",
     dayOffset: 0,
     weekNumber: 1,
     exercises: enrichWithLibrary(exercises, library),
@@ -167,7 +168,7 @@ export default function VoiceSessionModal({
         setPhase("parsing");
         try {
           const result = await callParse(`Parse this ${mode === "template" ? "template" : mode === "programme" ? "programme" : "strength & conditioning session"}: ${transcript}`, []);
-          setSessions(toReviewSessions(result.exercises));
+          setSessions(toReviewSessions(result.exercises, result.session_type));
           setHistory(result.history);
           setAiMessage(result.message);
           if (result.session_type) setDetectedType(result.session_type);
@@ -192,6 +193,7 @@ export default function VoiceSessionModal({
     setError("");
     const capturedHistory = history;
     const capturedExercises = sessions[0]?.exercises ?? [];
+    const capturedType = sessions[0]?.type;
     const recorder = await startMediaRecorder(
       async (blob) => {
         setCorrecting(false);
@@ -203,7 +205,10 @@ export default function VoiceSessionModal({
         setPhase("parsing");
         try {
           const result = await callParse(`Correction: ${transcript}\n\nCurrent exercises: ${JSON.stringify(capturedExercises)}`, capturedHistory);
-          setSessions(toReviewSessions(result.exercises));
+          // Preserve the coach's existing/corrected session type — a spoken
+          // correction about exercises shouldn't silently reset the type
+          // back to the AI's original (possibly wrong) detection.
+          setSessions(toReviewSessions(result.exercises, capturedType));
           setHistory(result.history);
           setAiMessage(result.message);
           setPhase("review");
@@ -241,7 +246,7 @@ export default function VoiceSessionModal({
     try {
       if (mode === "new") {
         const session = await createSession(
-          athleteId!, (detectedType as any) || "strength", sessionDate,
+          athleteId!, (sessions[0]?.type as any) || "strength", sessionDate,
           sessionName.trim() || `Session ${sessionCount + 1}`, exInputs
         );
         onCreated?.(session);
@@ -362,11 +367,6 @@ export default function VoiceSessionModal({
               )}
 
               {aiMessage && <div style={s.aiMsg}>{aiMessage}</div>}
-              {detectedType && detectedType !== "strength" && (
-                <div style={{ fontSize: 12, color: "#A855F7", background: "#A855F715", border: "1px solid #A855F744", borderRadius: 6, padding: "5px 10px" }}>
-                  Detected as <strong>{detectedType.replace("_", " / ")}</strong> session
-                </div>
-              )}
 
               <SessionReviewEditor
                 sessions={sessions}
