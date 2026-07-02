@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
@@ -42,7 +42,7 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true,
+  athlete, sessions: initialSessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true,
 }: {
   athlete: Athlete;
   sessions: Session[];
@@ -53,17 +53,29 @@ export default function AthleteLinkShell({
 }) {
   const router = useRouter();
 
-  // Re-fetch server data whenever the athlete returns to this tab so that
-  // coach edits (exercises, session names, dates) appear without a manual
-  // hard refresh. router.refresh() re-runs all server components in the
-  // current route, bypassing both the Router Cache and the Data Cache.
+  // Sessions start from the server-rendered prop (fast initial render) but
+  // are immediately owned in state so client-side refetches can update them.
+  const [sessions, setSessions] = useState<Session[]>(initialSessions);
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/athlete-link/sessions?token=${token}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.sessions) setSessions(data.sessions);
+    } catch { /* silent — stale data is better than a crash */ }
+  }, [token]);
+
+  // Refresh on mount (catches changes made while the app was closed/backgrounded)
+  // and whenever the tab becomes visible again.
   useEffect(() => {
+    fetchSessions();
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") router.refresh();
+      if (document.visibilityState === "visible") fetchSessions();
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [router]);
+  }, [fetchSessions]);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const [calView, setCalView] = useState<"month" | "week">("week");
