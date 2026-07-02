@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken, getAthleteSessions } from "@/lib/data/athlete-share-link";
 
-// GET /api/athlete-link/sessions?token=...
-// Returns all sessions (with exercises) for the athlete. Used by the
-// athlete shell to client-side fetch fresh data so coach edits are
-// visible without a hard page reload.
+// force-dynamic makes every fetch() call inside this route use no-store,
+// so Next.js Data Cache never serves a stale Supabase response.
+// Without this, the Supabase queries are cached server-side even though
+// the client is requesting with cache:"no-store".
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
