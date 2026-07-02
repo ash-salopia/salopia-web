@@ -76,10 +76,10 @@ export default function AthleteSessionView({
     // the local change stays visible rather than snapping back, since
     // a flickering UI is worse for someone mid-set than a brief
     // inconsistency that a retry/refresh will resolve.
-    setSession((prev) => ({
+    setSession((prev) => prev ? ({
       ...prev,
       exercises: prev.exercises?.map((e) => (e.id === exerciseId ? { ...e, log: newLog } : e)),
-    }));
+    }) : prev);
 
     setSaving(exerciseId);
     setError("");
