@@ -1,11 +1,7 @@
 import { notFound } from "next/navigation";
-import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken, getAthleteSessions } from "@/lib/data/athlete-share-link";
 import AthleteSessionView from "@/components/AthleteSessionView";
 
-// Do NOT fetch sessions server-side here. The server cache may not include
-// sessions recently added by the coach, causing notFound() to fire for valid
-// sessions. Instead, pass sessionId down to AthleteSessionView which fetches
-// client-side from /api/athlete-link/sessions (always fresh).
 export const dynamic = "force-dynamic";
 
 export default async function AthleteLinkSessionPage({
@@ -15,13 +11,23 @@ export default async function AthleteLinkSessionPage({
 }) {
   const { token, sessionId } = await params;
 
-  // Still validate the token server-side — never let an invalid token
-  // reach the client component where it could be probed.
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) notFound();
 
+  // Try to find the session server-side. For sessions recently added by
+  // the coach the server cache may miss them — in that case pass undefined
+  // and let AthleteSessionView client-fetch via /api/athlete-link/sessions.
+  let session;
+  try {
+    const sessions = await getAthleteSessions(athlete.id);
+    session = sessions.find((s) => s.id === sessionId);
+  } catch {
+    session = undefined;
+  }
+
   return (
     <AthleteSessionView
+      session={session}
       sessionId={sessionId}
       athleteName={athlete.name}
       token={token}
