@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
@@ -52,6 +52,18 @@ export default function AthleteLinkShell({
   reflectionEnabled?: boolean;
 }) {
   const router = useRouter();
+
+  // Re-fetch server data whenever the athlete returns to this tab so that
+  // coach edits (exercises, session names, dates) appear without a manual
+  // hard refresh. router.refresh() re-runs all server components in the
+  // current route, bypassing both the Router Cache and the Data Cache.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [router]);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const [calView, setCalView] = useState<"month" | "week">("week");
