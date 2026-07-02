@@ -35,7 +35,8 @@ export async function middleware(request: NextRequest) {
   const isPublicPath =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
-    path.startsWith("/a/"); // athlete share-link view, see app/a/[token]
+    path.startsWith("/a/") || // athlete share-link view, see app/a/[token]
+    path.startsWith("/api/athlete-link/"); // athlete API routes — no auth, token-validated instead
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
