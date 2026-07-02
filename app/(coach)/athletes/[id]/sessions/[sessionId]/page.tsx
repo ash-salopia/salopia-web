@@ -10,7 +10,9 @@ import {
   deleteExercise,
   deleteSession,
   applyToFutureSessions,
+  propagateFutureOccurrences,
   updateExerciseLog,
+  type PropagateScope,
 } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { importCsv } from "@/lib/csv-import";
@@ -60,6 +62,8 @@ export default function SessionDetailPage() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [report, setReport] = useState("");
+  const [propagateScope, setPropagateScope] = useState<PropagateScope | "none">("none");
+  const [propagating, setPropagating] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
 
   // Convert DB session exercise to PSExercise shape
@@ -399,6 +403,26 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handlePropagate = async () => {
+    if (!session || propagateScope === "none") return;
+    setPropagating(true);
+    setError("");
+    try {
+      const count = await propagateFutureOccurrences(session, propagateScope);
+      showFlash(
+        count > 0
+          ? `Updated ${count} future session${count !== 1 ? "s" : ""}`
+          : propagateScope === "same_day"
+          ? "No future sessions found on this day of the week"
+          : "No future sessions found to update"
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not propagate changes");
+    } finally {
+      setPropagating(false);
+    }
+  };
+
   const handleDeleteSession = async () => {
     try {
       await deleteSession(sessionId);
@@ -678,6 +702,40 @@ export default function SessionDetailPage() {
         sessionType={session.type}
       />
 
+      {/* ── Update future occurrences banner ── */}
+      {(session as any).source_session_id && (
+        <div style={styles.propagateBanner}>
+          <div style={styles.propagateLabel}>Update future occurrences</div>
+          <div style={styles.propagateOptions}>
+            {([
+              { value: "none",     label: "This session only" },
+              { value: "all",      label: "All future" },
+              { value: "same_day", label: "Same day of week only" },
+            ] as const).map(({ value, label }) => (
+              <button
+                key={value}
+                style={{
+                  ...styles.propagateOpt,
+                  ...(propagateScope === value ? styles.propagateOptActive : {}),
+                }}
+                onClick={() => setPropagateScope(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {propagateScope !== "none" && (
+            <button
+              style={{ ...styles.propagateBtn, opacity: propagating ? 0.6 : 1 }}
+              disabled={propagating}
+              onClick={handlePropagate}
+            >
+              {propagating ? "Updating…" : `Apply to future sessions →`}
+            </button>
+          )}
+        </div>
+      )}
+
       {session.type === "strength" ? (
         <>
           <div style={styles.exerciseList}>
@@ -845,6 +903,44 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   exerciseList: { display: "flex", flexDirection: "column", gap: 12 },
+  propagateBanner: {
+    background: "var(--ink)",
+    border: "1px solid var(--accent)",
+    borderRadius: 12,
+    padding: "12px 14px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 10,
+    marginBottom: 4,
+  },
+  propagateLabel: { fontSize: 12, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase" as const, letterSpacing: "0.06em" },
+  propagateOptions: { display: "flex", gap: 6, flexWrap: "wrap" as const },
+  propagateOpt: {
+    background: "var(--panel)",
+    border: "1px solid var(--line)",
+    color: "var(--mute)",
+    borderRadius: 8,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  propagateOptActive: {
+    background: "var(--accent-dim)",
+    border: "1px solid var(--accent)",
+    color: "var(--accent)",
+  },
+  propagateBtn: {
+    background: "var(--accent)",
+    color: "#0a1420",
+    border: "none",
+    borderRadius: 8,
+    padding: "8px 16px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+    alignSelf: "flex-start" as const,
+  },
   addExerciseBtn: {
     marginTop: 14,
     width: "100%",

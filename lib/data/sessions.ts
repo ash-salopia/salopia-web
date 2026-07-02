@@ -244,9 +244,10 @@ export async function copySessionsRange(
       hyrox_config: s.hyrox_config,
       cardio_type: s.cardio_type,
       cardio_config: s.cardio_config,
-      // sourceSessionId is carried through client-side only, not a
-      // real column — used below to look up which exercises to copy
-      // for each newly created session, then stripped before insert.
+      // Track the original session so the coach can propagate exercise
+      // changes to all future copies. Carry forward existing source if
+      // these source sessions were themselves copies.
+      source_session_id: s.source_session_id ?? s.id,
       _sourceSessionId: s.id,
     }))
   );
@@ -342,6 +343,108 @@ export async function applyToFutureSessions(
   if (updateError) throw updateError;
 
   return ids.length;
+}
+
+// ------------------------------------------------------------
+// Propagate all exercise changes to future copies of a session
+// ------------------------------------------------------------
+// Used by the "Update future occurrences" feature on the session
+// editor. Finds future sessions that share the same source as the
+// current session, then syncs exercises:
+//   ADD  — exercises in source not yet in target
+//   UPDATE — prescription fields (sets/reps/etc.) for matching exercises
+//            leaving any logged weight/reps data untouched
+//   DELETE — exercises in target but not source, only if no sets logged
+
+export type PropagateScope = "all" | "same_day";
+
+export async function propagateFutureOccurrences(
+  session: Session,        // current (already-saved) session
+  scope: PropagateScope
+): Promise<number> {
+  const supabase = createClient();
+  const sourceId = (session as any).source_session_id ?? session.id;
+  const sessionDayOfWeek = new Date(session.date + "T12:00:00Z").getDay();
+
+  // Find future sessions that share this source
+  const { data: futures, error: findErr } = await supabase
+    .from("sessions")
+    .select("id, date, session_exercises(*)")
+    .eq("source_session_id", sourceId)
+    .gt("date", session.date)
+    .order("date", { ascending: true });
+  if (findErr) throw findErr;
+  if (!futures || futures.length === 0) return 0;
+
+  const targets = scope === "same_day"
+    ? futures.filter((s: any) => new Date(s.date + "T12:00:00Z").getDay() === sessionDayOfWeek)
+    : futures;
+
+  if (!targets.length) return 0;
+
+  const sourceExercises = (session.exercises ?? []) as SessionExercise[];
+
+  for (const target of targets) {
+    const targetExercises: any[] = target.session_exercises ?? [];
+    const targetByName = new Map(targetExercises.map((e: any) => [e.name.toLowerCase().trim(), e]));
+    const sourceByName = new Map(sourceExercises.map((e) => [e.name.toLowerCase().trim(), e]));
+
+    // ADD: in source, not in target
+    const toAdd = sourceExercises.filter((e) => !targetByName.has(e.name.toLowerCase().trim()));
+    if (toAdd.length) {
+      const maxSort = targetExercises.length
+        ? Math.max(...targetExercises.map((e: any) => e.sort_order ?? 0))
+        : -1;
+      const rows = toAdd.map((e, i) => ({
+        session_id: target.id,
+        name: e.name,
+        order: e.order ?? "",
+        sets: e.sets ?? 3,
+        reps: e.reps ?? "",
+        time: e.time ?? "",
+        rest: e.rest ?? "",
+        target_load: e.target_load ?? "",
+        tempo: e.tempo ?? "",
+        each_side: e.each_side ?? false,
+        notes: e.notes ?? "",
+        video_url: e.video_url ?? "",
+        sort_order: maxSort + i + 1,
+        log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
+      }));
+      const { error } = await supabase.from("session_exercises").insert(rows);
+      if (error) throw error;
+    }
+
+    // UPDATE: in both — update prescription, leave log alone
+    for (const [nameLower, targetEx] of targetByName) {
+      const sourceEx = sourceByName.get(nameLower);
+      if (!sourceEx) continue;
+      const { error } = await supabase.from("session_exercises").update({
+        sets: sourceEx.sets,
+        reps: sourceEx.reps,
+        time: sourceEx.time,
+        rest: sourceEx.rest,
+        target_load: sourceEx.target_load,
+        tempo: sourceEx.tempo,
+        each_side: sourceEx.each_side,
+        notes: sourceEx.notes,
+        video_url: sourceEx.video_url,
+        order: sourceEx.order,
+      }).eq("id", targetEx.id);
+      if (error) throw error;
+    }
+
+    // DELETE: in target but not source — only if no sets have been logged
+    const toDelete = targetExercises.filter((e: any) => !sourceByName.has(e.name.toLowerCase().trim()));
+    for (const ex of toDelete) {
+      const hasLog = (ex.log ?? []).some((s: any) => s.done || (s.weight && s.weight !== ""));
+      if (hasLog) continue; // never delete a set the athlete has already logged
+      const { error } = await supabase.from("session_exercises").delete().eq("id", ex.id);
+      if (error) throw error;
+    }
+  }
+
+  return targets.length;
 }
 
 // ------------------------------------------------------------
@@ -457,6 +560,9 @@ export async function copySessionToDates(
         cardio_type: source.cardio_type ?? null,
         cardio_config: source.cardio_config ?? null,
         session_notes: source.session_notes ?? null,
+        // Track which session this was copied from so the coach can
+        // propagate exercise changes to all future occurrences later.
+        source_session_id: source.source_session_id ?? source.id,
       })
       .select()
       .single();

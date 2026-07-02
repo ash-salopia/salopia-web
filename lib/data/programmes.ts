@@ -179,6 +179,9 @@ export async function loadProgrammeSessionForAthlete(
       hyrox_config: programmeSession.hyrox_config,
       cardio_type: programmeSession.cardio_type,
       cardio_config: programmeSession.cardio_config,
+      // Store the programme session ID so the coach can propagate
+      // exercise changes to all future occurrences of this session.
+      source_session_id: programmeSession.id,
     })
     .select()
     .single();
