@@ -37,6 +37,7 @@ export interface Athlete {
   in_live_group: boolean;
   sex: "male" | "female" | null;
   date_of_birth: string | null; // YYYY-MM-DD
+  bodyweight_kg: number | null; // 0028 — default for test sessions / IMTP relative strength
   created_at: string;
 }
 
