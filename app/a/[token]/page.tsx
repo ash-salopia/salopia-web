@@ -4,6 +4,11 @@ import AthleteLinkShell from "@/components/AthleteLinkShell";
 import { createClient } from "@/lib/supabase-server";
 import { resolveBranding, DEFAULT_BRANDING } from "@/types/branding";
 
+// Force this route to re-render on every request — never serve a cached
+// version. Without this, Next.js 14's Data Cache can hold stale Supabase
+// fetch results so coach-side session edits don't show on athlete refresh.
+export const dynamic = "force-dynamic";
+
 export default async function AthleteLinkPage({
   params,
 }: {
