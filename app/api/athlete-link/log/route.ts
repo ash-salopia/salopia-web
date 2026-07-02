@@ -20,7 +20,9 @@ export async function POST(request: Request) {
     detectPBAsync(athlete.id, exerciseId, sessionId, log).catch(() => {});
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not save" }, { status: 400 });
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[log route] save failed:", msg, { sessionId, exerciseId });
+    return NextResponse.json({ error: msg || "Could not save" }, { status: 400 });
   }
 }
 

@@ -1,5 +1,4 @@
 import "server-only";
-import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import type { Athlete, Session, SessionExercise, SetLog } from "@/types";
 
@@ -23,10 +22,6 @@ export async function getAthleteByShareToken(token: string): Promise<Athlete | n
 // this file's callers, since that would let a visitor with one valid
 // token request another athlete's data by guessing IDs.
 export async function getAthleteSessions(athleteId: string): Promise<Session[]> {
-  // Opt out of Next.js Data Cache so Supabase always returns live data.
-  // This is the correct Next.js 14 way to bypass caching without touching
-  // the fetch implementation (which breaks write operations).
-  noStore();
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("sessions")
