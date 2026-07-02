@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 
 export async function GET(req: NextRequest) {
@@ -9,16 +9,11 @@ export async function GET(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   const { data, error } = await supabase
     .from("competitions")
-    .select(`
-      *,
-      athlete:athletes(id, name),
-      reactions:competition_reactions(*),
-      comments:competition_comments(* )
-    `)
+    .select(`*, athlete:athletes(id, name), reactions:competition_reactions(*), comments:competition_comments(*)`)
     .eq("organisation_id", athlete.organisation_id)
     .order("competition_date", { ascending: true });
 
@@ -34,17 +29,14 @@ export async function POST(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
-  // Add a competition
   if (action === "add_competition") {
     const { title, competition_date, location, notes, athlete_id_override } = rest;
     if (!title || !competition_date) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
-    // Allow coach to add a competition for a different athlete in the same org
     let targetAthleteId = athlete.id;
     if (athlete_id_override && athlete_id_override !== athlete.id) {
-      // Verify the override athlete is in the same organisation
       const { data: overrideAthlete } = await supabase
         .from("athletes")
         .select("id, organisation_id")
@@ -62,18 +54,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ competition: data });
   }
 
-  // React to a competition
   if (action === "react") {
     const { competition_id, emoji } = rest;
     const { error } = await supabase
       .from("competition_reactions")
-      .upsert({ competition_id, reactor_id: athlete.id, reactor_type: "athlete", reactor_name: (athlete as any).name ?? "Athlete", emoji })
-      .select();
+      .upsert({ competition_id, reactor_id: athlete.id, reactor_type: "athlete", reactor_name: (athlete as any).name ?? "Athlete", emoji });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
-  // Comment on a competition
   if (action === "comment") {
     const { competition_id, body: commentBody } = rest;
     if (!commentBody?.trim()) return NextResponse.json({ error: "Empty comment" }, { status: 400 });
@@ -83,6 +72,17 @@ export async function POST(req: NextRequest) {
       .select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ comment: data });
+  }
+
+  if (action === "delete_comment") {
+    const { comment_id } = rest;
+    const { error } = await supabase
+      .from("competition_comments")
+      .delete()
+      .eq("id", comment_id)
+      .eq("author_id", athlete.id); // can only delete own comments
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

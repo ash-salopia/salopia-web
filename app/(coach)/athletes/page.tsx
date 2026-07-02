@@ -25,6 +25,7 @@ export default function AthletesPage() {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newGroup, setNewGroup] = useState("");
+  const [newBodyweight, setNewBodyweight] = useState("");
   const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -51,10 +52,11 @@ export default function AthletesPage() {
     if (!newName.trim()) return;
     setSaving(true);
     try {
-      const athlete = await createAthlete(newName.trim(), newGroup.trim());
+      const athlete = await createAthlete(newName.trim(), newGroup.trim(), newBodyweight ? parseFloat(newBodyweight) : null);
       setAthletes((prev) => [...prev, athlete].sort((a, b) => a.name.localeCompare(b.name)));
       setNewName("");
       setNewGroup("");
+      setNewBodyweight("");
       setAdding(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add athlete");
@@ -164,6 +166,14 @@ export default function AthletesPage() {
             placeholder="Group (e.g. U15 Squad) — optional"
             value={newGroup}
             onChange={(e) => setNewGroup(e.target.value)}
+            style={styles.input}
+          />
+          <input
+            type="number"
+            step="0.1"
+            placeholder="Bodyweight kg — optional"
+            value={newBodyweight}
+            onChange={(e) => setNewBodyweight(e.target.value)}
             style={styles.input}
           />
           <button type="submit" disabled={saving || !newName.trim()} style={styles.primaryBtn}>

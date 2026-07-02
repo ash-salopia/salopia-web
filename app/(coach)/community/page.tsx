@@ -14,7 +14,7 @@ import {
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
 
-type Tab = "groups" | "announcements" | "feed" | "chat";
+type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,10 +39,12 @@ export default function CommunityPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [pbs, setPbs] = useState<PersonalBest[]>([]);
+  const [competitions, setCompetitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
+  const [orgAthletes, setOrgAthletes] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -56,14 +58,19 @@ export default function CommunityPage() {
     setLoading(true);
     setError("");
     try {
-      const [g, a, p] = await Promise.all([
+      const supabase = createClient();
+      const [g, a, p, compsRes, athletesRes] = await Promise.all([
         listGroups(),
         listAnnouncements(),
         listRecentOrgPBs(),
+        fetch("/api/competitions").then((r) => r.json()),
+        supabase.from("athletes").select("id, name").eq("archived", false).order("name"),
       ]);
       setGroups(g);
       setAnnouncements(a);
       setPbs(p);
+      setCompetitions(compsRes.competitions ?? []);
+      setOrgAthletes(athletesRes.data ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load community data");
     } finally {
@@ -81,7 +88,7 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat"] as Tab[]).map((t) => (
+        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
@@ -90,6 +97,7 @@ export default function CommunityPage() {
             {t === "groups" ? `👥 Groups (${groups.length})` :
              t === "announcements" ? `📢 Announcements` :
              t === "feed" ? `🏆 PB Feed` :
+             t === "comps" ? `🏁 Competitions` :
              `💬 Chat`}
           </button>
         ))}
@@ -122,6 +130,15 @@ export default function CommunityPage() {
           )}
           {tab === "chat" && (
             <ChatTab groups={groups} coachId={coachId} coachName={coachName} />
+          )}
+          {tab === "comps" && (
+            <CoachCompsTab
+              competitions={competitions}
+              onCompetitionsChange={setCompetitions}
+              coachId={coachId}
+              coachName={coachName}
+              athletes={orgAthletes}
+            />
           )}
         </>
       )}
@@ -512,6 +529,12 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
             reactionGroups={reactionGroups}
             onReact={(emoji) => handleReaction(pb, emoji)}
             onDelete={() => handleDelete(pb.id)}
+            onCommentDeleted={(commentId) => {
+              onPbsChange(pbs.map(p => p.id === pb.id
+                ? { ...p, comments: (p.comments ?? []).filter((c: any) => c.id !== commentId) }
+                : p
+              ));
+            }}
             coachId={coachId}
             coachName={coachName}
             onCommentAdded={(comment) => {
@@ -530,12 +553,13 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
 
 // ── PB Card ──────────────────────────────────────────────────────────────────
 
-function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, coachId, coachName, onCommentAdded, s }: {
+function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, onCommentDeleted, coachId, coachName, onCommentAdded, s }: {
   pb: PersonalBest;
   myReaction: any;
   reactionGroups: Record<string, number>;
   onReact: (emoji: string) => void;
   onDelete: () => void;
+  onCommentDeleted: (commentId: string) => void;
   coachId: string;
   coachName: string;
   onCommentAdded: (comment: any) => void;
@@ -544,7 +568,22 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, coachId, co
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
+  const [deletingComment, setDeletingComment] = useState<string | null>(null);
   const comments = pb.comments ?? [];
+
+  const handleDeleteComment = async (commentId: string) => {
+    setDeletingComment(commentId);
+    try {
+      await fetch("/api/pb-comments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment_id: commentId }),
+      });
+      onCommentDeleted(commentId);
+    } finally {
+      setDeletingComment(null);
+    }
+  };
 
   const handleComment = async () => {
     if (!commentText.trim() || sending) return;
@@ -614,9 +653,15 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, coachId, co
       {showComments && (
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 8, marginTop: 4, display: "flex", flexDirection: "column" as const, gap: 6 }}>
           {comments.map((c: any) => (
-            <div key={c.id} style={{ fontSize: 12, display: "flex", gap: 6 }}>
+            <div key={c.id} style={{ fontSize: 12, display: "flex", gap: 6, alignItems: "flex-start" }}>
               <span style={{ fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{c.author_name}</span>
-              <span style={{ color: "var(--mute)" }}>{c.body}</span>
+              <span style={{ color: "var(--mute)", flex: 1 }}>{c.body}</span>
+              <button
+                onClick={() => handleDeleteComment(c.id)}
+                disabled={deletingComment === c.id}
+                style={{ background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer", padding: "0 2px", opacity: deletingComment === c.id ? 0.4 : 0.6, flexShrink: 0 }}
+                title="Delete comment"
+              >✕</button>
             </div>
           ))}
           {comments.length === 0 && <div style={{ fontSize: 12, color: "var(--mute)" }}>No comments yet</div>}
@@ -635,6 +680,239 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, coachId, co
             >Send</button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Competitions tab (coach side) ─────────────────────────────────────────────
+
+const COMP_REACTION_EMOJIS = ["👍", "💪", "🏆", "🤞", "🔥", "❤️"];
+
+function CoachCompsTab({ competitions, onCompetitionsChange, coachId, coachName, athletes }: {
+  competitions: any[];
+  onCompetitionsChange: (c: any[]) => void;
+  coachId: string;
+  coachName: string;
+  athletes: { id: string; name: string }[];
+}) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ title: "", competition_date: "", location: "", notes: "" });
+  const [selectedAthleteId, setSelectedAthleteId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [commentText, setCommentText] = useState<Record<string, string>>({});
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [deletingComp, setDeletingComp] = useState<string | null>(null);
+
+  const apiPost = async (body: object) => {
+    const res = await fetch("/api/competitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  };
+
+  const reload = async () => {
+    const res = await fetch("/api/competitions");
+    const data = await res.json();
+    onCompetitionsChange(data.competitions ?? []);
+  };
+
+  const handleAdd = async () => {
+    if (!form.title.trim() || !form.competition_date || !selectedAthleteId) return;
+    setSaving(true); setError("");
+    try {
+      await apiPost({ action: "add_competition", athlete_id: selectedAthleteId, ...form });
+      await reload();
+      setAdding(false);
+      setForm({ title: "", competition_date: "", location: "", notes: "" });
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (compId: string) => {
+    setDeletingComp(compId);
+    try {
+      await apiPost({ action: "delete_competition", competition_id: compId });
+      onCompetitionsChange(competitions.filter((c) => c.id !== compId));
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not delete"); }
+    finally { setDeletingComp(null); }
+  };
+
+  const handleReact = async (compId: string, emoji: string) => {
+    const comp = competitions.find((c) => c.id === compId);
+    const myReaction = comp?.reactions?.find((r: any) => r.reactor_id === coachId && r.reactor_type === "coach");
+    try {
+      if (myReaction?.emoji === emoji) {
+        await apiPost({ action: "remove_react", competition_id: compId });
+        onCompetitionsChange(competitions.map((c) => c.id === compId
+          ? { ...c, reactions: c.reactions.filter((r: any) => !(r.reactor_id === coachId && r.reactor_type === "coach")) }
+          : c
+        ));
+      } else {
+        await apiPost({ action: "react", competition_id: compId, emoji });
+        await reload();
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleComment = async (compId: string) => {
+    const body = commentText[compId]?.trim();
+    if (!body) return;
+    try {
+      const data = await apiPost({ action: "comment", competition_id: compId, body });
+      if (data.comment) {
+        onCompetitionsChange(competitions.map((c) => c.id === compId
+          ? { ...c, comments: [...(c.comments ?? []), data.comment] }
+          : c
+        ));
+        setCommentText((prev) => ({ ...prev, [compId]: "" }));
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDeleteComment = async (compId: string, commentId: string) => {
+    try {
+      await apiPost({ action: "delete_comment", comment_id: commentId });
+      onCompetitionsChange(competitions.map((c) => c.id === compId
+        ? { ...c, comments: (c.comments ?? []).filter((cm: any) => cm.id !== commentId) }
+        : c
+      ));
+    } catch (e) { console.error(e); }
+  };
+
+  const now = new Date().toISOString().slice(0, 10);
+  const upcoming = competitions.filter((c) => c.competition_date >= now).sort((a: any, b: any) => a.competition_date < b.competition_date ? -1 : 1);
+  const past = competitions.filter((c) => c.competition_date < now).sort((a: any, b: any) => b.competition_date < a.competition_date ? -1 : 1);
+
+  const renderComp = (comp: any) => {
+    const myReaction = comp.reactions?.find((r: any) => r.reactor_id === coachId && r.reactor_type === "coach");
+    const reactionGroups = (comp.reactions ?? []).reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] ?? 0) + 1; return acc; }, {});
+    const showComments = expandedComments[comp.id];
+    const athlete = athletes.find((a) => a.id === comp.athlete_id);
+
+    return (
+      <div key={comp.id} style={s.compCard}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={s.compAthlete}>{comp.athlete?.name ?? athlete?.name ?? "Unknown"}</div>
+            <div style={s.compTitle}>{comp.title}</div>
+            <div style={s.compMeta}>
+              📅 {comp.competition_date}
+              {comp.location ? ` · 📍 ${comp.location}` : ""}
+            </div>
+            {comp.notes && <div style={s.compNotes}>{comp.notes}</div>}
+          </div>
+          <button
+            onClick={() => handleDelete(comp.id)}
+            disabled={deletingComp === comp.id}
+            style={{ background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 14, padding: "0 0 0 8px", opacity: deletingComp === comp.id ? 0.4 : 0.7 }}
+            title="Delete competition"
+          >✕</button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, flexWrap: "wrap" as const }}>
+          {Object.entries(reactionGroups).map(([emoji, count]) => (
+            <span key={emoji} style={s.reactionBadge}>{emoji} {count as number}</span>
+          ))}
+          {COMP_REACTION_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              style={{ ...s.reactionBtn, ...(myReaction?.emoji === emoji ? s.reactionBtnActive : {}) }}
+              onClick={() => handleReact(comp.id, emoji)}
+            >{emoji}</button>
+          ))}
+          <button
+            style={{ ...s.reactionBtn, width: "auto", padding: "0 8px", fontSize: 12, color: "var(--mute)" }}
+            onClick={() => setExpandedComments((prev) => ({ ...prev, [comp.id]: !prev[comp.id] }))}
+          >
+            💬 {comp.comments?.length > 0 ? comp.comments.length : ""} {showComments ? "▴" : "▾"}
+          </button>
+        </div>
+
+        {showComments && (
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 8, marginTop: 6, display: "flex", flexDirection: "column" as const, gap: 6 }}>
+            {(comp.comments ?? []).map((c: any) => (
+              <div key={c.id} style={{ fontSize: 12, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                <span style={{ fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{c.author_name}</span>
+                <span style={{ color: "var(--mute)", flex: 1 }}>{c.body}</span>
+                <button
+                  onClick={() => handleDeleteComment(comp.id, c.id)}
+                  style={{ background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer", padding: "0 2px", opacity: 0.6, flexShrink: 0 }}
+                  title="Delete comment"
+                >✕</button>
+              </div>
+            ))}
+            {comp.comments?.length === 0 && <div style={{ fontSize: 12, color: "var(--mute)" }}>No comments yet</div>}
+            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+              <input
+                value={commentText[comp.id] ?? ""}
+                onChange={(e) => setCommentText((prev) => ({ ...prev, [comp.id]: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") handleComment(comp.id); }}
+                placeholder="Add a comment…"
+                style={{ flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}
+              />
+              <button
+                onClick={() => handleComment(comp.id)}
+                style={{ background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+              >Send</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={s.tabContent}>
+      {error && <div style={s.errorBox}>{error}</div>}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={s.sectionTitle}>Competitions</div>
+        <button style={s.primaryBtn} onClick={() => setAdding(true)}>+ Add</button>
+      </div>
+
+      {adding && (
+        <div style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: 16, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>Add Competition</div>
+          <select
+            style={s.input}
+            value={selectedAthleteId}
+            onChange={(e) => setSelectedAthleteId(e.target.value)}
+          >
+            <option value="">— Select athlete —</option>
+            {athletes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <input placeholder="Event name / title" style={s.input} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+          <input type="date" style={s.input} value={form.competition_date} onChange={(e) => setForm((f) => ({ ...f, competition_date: e.target.value }))} />
+          <input placeholder="Location (optional)" style={s.input} value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
+          <input placeholder="Notes (optional)" style={s.input} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={s.ghostBtn} onClick={() => setAdding(false)}>Cancel</button>
+            <button style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} disabled={saving || !form.title.trim() || !form.competition_date || !selectedAthleteId} onClick={handleAdd}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 8 }}>Upcoming</div>
+          {upcoming.map(renderComp)}
+        </>
+      )}
+      {past.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "16px 0 8px" }}>Past</div>
+          {past.map(renderComp)}
+        </>
+      )}
+      {competitions.length === 0 && !adding && (
+        <div style={s.empty}>No competitions yet. Add one above to get started.</div>
       )}
     </div>
   );
@@ -750,4 +1028,9 @@ const s: Record<string, React.CSSProperties> = {
   reactionBadge: { fontSize: 12, background: "var(--ink)", borderRadius: 6, padding: "2px 8px" },
   reactionBtn: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 6, width: 28, height: 28, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
   reactionBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)" },
+  compCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 10 },
+  compAthlete: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.05em" },
+  compTitle: { fontSize: 16, fontWeight: 700, color: "var(--text)", marginTop: 4 },
+  compMeta: { fontSize: 12, color: "var(--mute)", marginTop: 4 },
+  compNotes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" as const },
 };

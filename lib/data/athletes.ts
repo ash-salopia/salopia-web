@@ -67,13 +67,13 @@ export async function unarchiveAthlete(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function createAthlete(name: string, group: string): Promise<Athlete> {
+export async function createAthlete(name: string, group: string, bodyweightKg: number | null = null): Promise<Athlete> {
   const supabase = createClient();
   const organisation_id = await getMyOrganisationId();
 
   const { data, error } = await supabase
     .from("athletes")
-    .insert({ name, group, organisation_id })
+    .insert({ name, group, organisation_id, bodyweight_kg: bodyweightKg ?? null })
     .select()
     .single();
   if (error) throw error;
@@ -82,7 +82,7 @@ export async function createAthlete(name: string, group: string): Promise<Athlet
 
 export async function updateAthlete(
   id: string,
-  patch: Partial<Pick<Athlete, "name" | "group">>
+  patch: Partial<Pick<Athlete, "name" | "group" | "bodyweight_kg">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("athletes").update(patch).eq("id", id);

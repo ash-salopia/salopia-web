@@ -12,7 +12,7 @@
 //   • Blocks save while any exercise is unmatched (returns hasUnresolved)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { saveLibraryEntry } from "@/lib/data/library";
 import type { LibraryEntry } from "@/types";
 
@@ -123,8 +123,23 @@ export default function SessionReviewEditor({
   const [propagation, setPropagation] = useState<PropagationState>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const dragSrc = useRef<{ si: number; ei: number } | null>(null);
 
   const multiSession = sessions.length > 1;
+
+  // ── Drag-to-reorder exercises ────────────────────────────────────────────────
+  const handleDragStart = (si: number, ei: number) => { dragSrc.current = { si, ei }; };
+  const handleDragOver = (e: React.DragEvent, si: number, ei: number) => {
+    e.preventDefault();
+    const src = dragSrc.current;
+    if (!src || src.si !== si || src.ei === ei) return;
+    const exs = [...sessions[si].exercises];
+    const [moved] = exs.splice(src.ei, 1);
+    exs.splice(ei, 0, moved);
+    dragSrc.current = { si, ei };
+    onChange(sessions.map((sess, idx) => idx === si ? { ...sess, exercises: exs } : sess));
+  };
+  const handleDragEnd = () => { dragSrc.current = null; };
 
   // ── Update helpers ──────────────────────────────────────────────────────────
 
@@ -287,9 +302,18 @@ export default function SessionReviewEditor({
               propagation?.si === si && propagation?.ei === ei;
 
             return (
-              <div key={ei} style={s.exCard}>
+              <div
+                key={ei}
+                style={s.exCard}
+                draggable
+                onDragStart={() => handleDragStart(si, ei)}
+                onDragOver={(e) => handleDragOver(e, si, ei)}
+                onDragEnd={handleDragEnd}
+              >
                 {/* ── Exercise name row ── */}
                 <div style={s.exNameRow}>
+                  {/* Drag handle */}
+                  <span style={s.dragHandle} title="Drag to reorder">⠿</span>
                   {/* Match badge */}
                   <div
                     style={{
@@ -683,6 +707,15 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 6,
+    cursor: "grab",
+  },
+  dragHandle: {
+    fontSize: 16,
+    color: "var(--mute)",
+    cursor: "grab",
+    flexShrink: 0,
+    userSelect: "none",
+    lineHeight: 1,
   },
   exNameRow: {
     display: "flex",

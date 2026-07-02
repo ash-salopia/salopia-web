@@ -22,6 +22,23 @@ export default function AthleteSessionView({
   const [saving, setSaving] = useState<string | null>(null);
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [historyModal, setHistoryModal] = useState<{
+    exerciseName: string;
+    history: { date: string; bestSet: { weight: string; reps: string } | null; allSets: any[] }[];
+    pb: { weight_kg: number; reps: number | null; date: string } | null;
+    loading: boolean;
+  } | null>(null);
+
+  const openHistory = async (exerciseName: string) => {
+    setHistoryModal({ exerciseName, history: [], pb: null, loading: true });
+    try {
+      const res = await fetch(`/api/athlete-link/exercise-history?token=${encodeURIComponent(token)}&exercise_name=${encodeURIComponent(exerciseName)}`);
+      const data = await res.json();
+      setHistoryModal({ exerciseName, history: data.history ?? [], pb: data.pb ?? null, loading: false });
+    } catch {
+      setHistoryModal((prev) => prev ? { ...prev, loading: false } : null);
+    }
+  };
 
   const exercises = (session.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
@@ -111,14 +128,23 @@ export default function AthleteSessionView({
           <div key={ex.id} style={styles.card}>
             <div style={styles.exHeadRow}>
               <div style={styles.exName}>{ex.name || "Exercise"}</div>
-              {ex.video_url && (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button
-                  style={styles.watchBtn}
-                  onClick={() => setVideoModal({ url: ex.video_url, title: ex.name })}
+                  style={styles.historyBtn}
+                  onClick={() => openHistory(ex.name)}
+                  title="View exercise history & PB"
                 >
-                  ▶ Watch
+                  📈
                 </button>
-              )}
+                {ex.video_url && (
+                  <button
+                    style={styles.watchBtn}
+                    onClick={() => setVideoModal({ url: ex.video_url, title: ex.name })}
+                  >
+                    ▶ Watch
+                  </button>
+                )}
+              </div>
             </div>
             <div style={styles.prescLine}>
               {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
@@ -182,6 +208,50 @@ export default function AthleteSessionView({
           title={videoModal.title}
           onClose={() => setVideoModal(null)}
         />
+      )}
+
+      {historyModal && (
+        <div style={styles.overlay}>
+          <div style={styles.historyModal}>
+            <div style={styles.historyHeader}>
+              <div style={styles.historyTitle}>📈 {historyModal.exerciseName}</div>
+              <button style={styles.closeBtn} onClick={() => setHistoryModal(null)}>✕</button>
+            </div>
+
+            {historyModal.pb && (
+              <div style={styles.pbBanner}>
+                <span style={styles.pbLabel}>🏆 Current PB</span>
+                <span style={styles.pbValue}>
+                  {historyModal.pb.weight_kg ? `${historyModal.pb.weight_kg}kg` : "Bodyweight"}
+                  {historyModal.pb.reps ? ` × ${historyModal.pb.reps}` : ""}
+                </span>
+                <span style={styles.pbDate}>{historyModal.pb.date}</span>
+              </div>
+            )}
+
+            {historyModal.loading ? (
+              <div style={styles.historyEmpty}>Loading…</div>
+            ) : historyModal.history.length === 0 ? (
+              <div style={styles.historyEmpty}>No previous sessions found for this exercise.</div>
+            ) : (
+              <div style={styles.historyList}>
+                {historyModal.history.map((h, i) => (
+                  <div key={i} style={styles.historyRow}>
+                    <div style={styles.historyDate}>{h.date}</div>
+                    <div style={styles.historySets}>
+                      {h.allSets.filter((s: any) => s.done).map((s: any, j: number) => (
+                        <span key={j} style={styles.historySet}>
+                          {s.weight ? `${s.weight}kg` : "BW"}
+                          {s.reps ? ` ×${s.reps}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -284,4 +354,39 @@ const styles: Record<string, React.CSSProperties> = {
   doneBtnOn: { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
   savingLabel: { fontSize: 11, color: "var(--mute)", marginTop: 6 },
   empty: { color: "var(--mute)", fontSize: 14, padding: "20px 0", textAlign: "center" },
+  historyBtn: {
+    background: "transparent", border: "none", fontSize: 16, cursor: "pointer",
+    padding: "2px 4px", lineHeight: 1, flexShrink: 0,
+  },
+  overlay: {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex",
+    alignItems: "flex-end", justifyContent: "center", zIndex: 100,
+  },
+  historyModal: {
+    background: "var(--panel)", borderTop: "1px solid var(--line)", borderRadius: "16px 16px 0 0",
+    padding: 20, width: "100%", maxWidth: 480, maxHeight: "70vh", overflowY: "auto",
+    display: "flex", flexDirection: "column", gap: 12,
+  },
+  historyHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  historyTitle: { fontSize: 16, fontWeight: 700, color: "var(--text)" },
+  closeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 20, cursor: "pointer" },
+  pbBanner: {
+    background: "var(--accent-dim)", border: "1px solid var(--accent)", borderRadius: 10,
+    padding: "10px 14px", display: "flex", alignItems: "center", gap: 10,
+  },
+  pbLabel: { fontSize: 12, fontWeight: 700, color: "var(--accent)" },
+  pbValue: { fontSize: 18, fontWeight: 700, color: "var(--text)", flex: 1 },
+  pbDate: { fontSize: 11, color: "var(--mute)" },
+  historyEmpty: { fontSize: 14, color: "var(--mute)", padding: "12px 0" },
+  historyList: { display: "flex", flexDirection: "column", gap: 8 },
+  historyRow: {
+    background: "var(--ink)", borderRadius: 8, padding: "10px 12px",
+    display: "flex", flexDirection: "column", gap: 4,
+  },
+  historyDate: { fontSize: 12, fontWeight: 700, color: "var(--mute)" },
+  historySets: { display: "flex", flexWrap: "wrap", gap: 6 },
+  historySet: {
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6,
+    padding: "3px 8px", fontSize: 12, color: "var(--text)",
+  },
 };

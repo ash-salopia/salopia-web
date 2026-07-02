@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 
 export async function POST(req: NextRequest) {
@@ -25,4 +24,14 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ comment: data });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { comment_id } = await req.json();
+  if (!comment_id) return NextResponse.json({ error: "Missing comment_id" }, { status: 400 });
+
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("pb_comments").delete().eq("id", comment_id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

@@ -223,6 +223,7 @@ export default function AthleteCommunityPage() {
                   athleteId={athleteId}
                   athleteName={athleteName}
                   onPbUpdated={(updated) => setPbs((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))}
+                  onPbDeleted={(pbId) => setPbs((prev) => prev.filter((p) => p.id !== pbId))}
                   s={s}
                 />
               ))}
@@ -333,18 +334,21 @@ export default function AthleteCommunityPage() {
 
 const REACTION_EMOJIS = ["🔥", "💪", "⭐", "👏"];
 
-function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, s }: {
+function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, onPbDeleted, s }: {
   pb: any;
   token: string;
   athleteId: string;
   athleteName: string;
   onPbUpdated: (pb: any) => void;
+  onPbDeleted: (pbId: string) => void;
   s: Record<string, React.CSSProperties>;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
   const [reacting, setReacting] = useState(false);
+  const [deletingComment, setDeletingComment] = useState<string | null>(null);
+  const [confirmDeletePB, setConfirmDeletePB] = useState(false);
 
   const reactions: any[] = pb.reactions ?? [];
   const comments: any[] = pb.comments ?? [];
@@ -399,9 +403,56 @@ function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, s }: {
     }
   };
 
+  const handleDeleteComment = async (commentId: string) => {
+    setDeletingComment(commentId);
+    try {
+      await fetch("/api/athlete-link/pb-comments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, comment_id: commentId }),
+      });
+      onPbUpdated({ ...pb, comments: comments.filter((c: any) => c.id !== commentId) });
+    } finally {
+      setDeletingComment(null);
+    }
+  };
+
+  const handleDeletePB = async () => {
+    try {
+      await fetch("/api/athlete-link/pbs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, pb_id: pb.id }),
+      });
+      onPbDeleted(pb.id);
+    } catch { /* silent */ }
+  };
+
   return (
     <div style={s.pbCard}>
-      <div style={s.pbAthlete}>{pb.athlete?.name}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={s.pbAthlete}>{pb.athlete?.name}</div>
+        {pb.athlete_id === athleteId && (
+          confirmDeletePB ? (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                style={{ background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}
+                onClick={handleDeletePB}
+              >Delete</button>
+              <button
+                style={{ background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer" }}
+                onClick={() => setConfirmDeletePB(false)}
+              >Cancel</button>
+            </div>
+          ) : (
+            <button
+              style={{ background: "transparent", border: "none", color: "var(--mute)", fontSize: 14, cursor: "pointer", padding: "0 0 0 8px", opacity: 0.6 }}
+              onClick={() => setConfirmDeletePB(true)}
+              title="Delete this PB"
+            >✕</button>
+          )
+        )}
+      </div>
       <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
       <div style={s.pbWeight}>
         {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
@@ -436,7 +487,15 @@ function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, s }: {
           {comments.map((c: any) => (
             <div key={c.id} style={s.commentRow}>
               <span style={s.commentAuthor}>{c.author_name}</span>
-              <span style={s.commentBody}>{c.body}</span>
+              <span style={{ ...s.commentBody, flex: 1 }}>{c.body}</span>
+              {c.author_id === athleteId && c.author_type === "athlete" && (
+                <button
+                  onClick={() => handleDeleteComment(c.id)}
+                  disabled={deletingComment === c.id}
+                  style={{ background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer", padding: "0 2px", opacity: deletingComment === c.id ? 0.3 : 0.5, flexShrink: 0 }}
+                  title="Delete comment"
+                >✕</button>
+              )}
             </div>
           ))}
           {comments.length === 0 && <div style={s.commentEmpty}>No comments yet</div>}
