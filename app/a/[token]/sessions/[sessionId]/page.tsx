@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 import { getAthleteByShareToken, getAthleteSessions } from "@/lib/data/athlete-share-link";
 import AthleteSessionView from "@/components/AthleteSessionView";
 
+// Force fresh data on every request — without this, Next.js 14 may serve
+// a cached version of the session so coach edits don't appear immediately.
+export const dynamic = "force-dynamic";
+
 export default async function AthleteLinkSessionPage({
   params,
 }: {
