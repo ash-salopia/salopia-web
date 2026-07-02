@@ -39,7 +39,7 @@ export default function AthleteSessionView({
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
 
-  const exercises = (session.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
+  const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
   const doneSets = exercises.reduce(
     (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
@@ -48,7 +48,7 @@ export default function AthleteSessionView({
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
 
   const handleSetUpdate = async (exerciseId: string, setIndex: number, patch: Partial<SetLog>) => {
-    const exercise = session.exercises?.find((e) => e.id === exerciseId);
+    const exercise = session?.exercises?.find((e) => e.id === exerciseId);
     if (!exercise) return;
     const newLog = (exercise.log ?? []).map((s, i) => (i === setIndex ? { ...s, ...patch } : s));
 
@@ -68,7 +68,7 @@ export default function AthleteSessionView({
       const res = await fetch("/api/athlete-link/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, sessionId: session.id, exerciseId, log: newLog }),
+        body: JSON.stringify({ token, sessionId: session?.id, exerciseId, log: newLog }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
