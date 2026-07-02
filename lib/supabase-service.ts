@@ -25,5 +25,14 @@ export function createServiceRoleClient() {
   }
   return createSupabaseClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      // Force every Supabase fetch to bypass Next.js's Data Cache.
+      // Without this, @supabase/supabase-js (unlike @supabase/ssr) doesn't
+      // respect force-dynamic or cache:"no-store" on the route — it captures
+      // the fetch reference at instantiation and caches responses independently,
+      // which is why coach edits weren't showing in the athlete app on mobile.
+      fetch: (input: RequestInfo | URL, init: RequestInit = {}) =>
+        fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }
