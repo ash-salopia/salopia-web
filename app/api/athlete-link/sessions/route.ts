@@ -13,5 +13,7 @@ export async function GET(req: NextRequest) {
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
   const sessions = await getAthleteSessions(athlete.id);
-  return NextResponse.json({ sessions });
+  return NextResponse.json({ sessions }, {
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
 }

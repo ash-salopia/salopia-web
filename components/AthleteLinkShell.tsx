@@ -59,7 +59,7 @@ export default function AthleteLinkShell({
 
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/athlete-link/sessions?token=${token}`);
+      const res = await fetch(`/api/athlete-link/sessions?token=${token}`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       if (data.sessions) setSessions(data.sessions);

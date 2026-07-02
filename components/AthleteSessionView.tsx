@@ -31,7 +31,7 @@ export default function AthleteSessionView({
   useEffect(() => {
     const id = sessionId ?? initialSession?.id;
     if (!id) return;
-    fetch(`/api/athlete-link/sessions?token=${encodeURIComponent(token)}`)
+    fetch(`/api/athlete-link/sessions?token=${encodeURIComponent(token)}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         const found = (data.sessions ?? []).find((s: Session) => s.id === id);
@@ -145,7 +145,12 @@ export default function AthleteSessionView({
         {exercises.map((ex) => (
           <div key={ex.id} style={styles.card}>
             <div style={styles.exHeadRow}>
-              <div style={styles.exName}>{ex.name || "Exercise"}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                {ex.order && (
+                  <span style={styles.orderBadge}>{ex.order}</span>
+                )}
+                <div style={styles.exName}>{ex.name || "Exercise"}</div>
+              </div>
               {ex.video_url && (
                 <button
                   style={styles.watchBtn}
@@ -266,6 +271,11 @@ const styles: Record<string, React.CSSProperties> = {
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
   exHeadRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
   exName: { fontWeight: 700, fontSize: 15, color: "var(--text)" },
+  orderBadge: {
+    fontSize: 12, fontWeight: 800, color: "var(--accent)",
+    background: "var(--accent-dim)", borderRadius: 6, padding: "2px 7px",
+    flexShrink: 0, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.02em",
+  },
   watchBtn: {
     background: "var(--accent-dim)",
     border: "none",
