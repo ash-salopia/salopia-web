@@ -25,7 +25,7 @@ export default function AthleteSessionView({
   useEffect(() => {
     const id = sessionId ?? initialSession?.id;
     if (!id || initialSession) return; // server already gave us the session
-    fetch(\`/api/athlete-link/sessions?token=\${encodeURIComponent(token)}\`, { cache: "no-store" })
+    fetch(`/api/athlete-link/sessions?token=${encodeURIComponent(token)}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         const found = (data.sessions ?? []).find((s: Session) => s.id === id);
@@ -88,7 +88,7 @@ export default function AthleteSessionView({
         <div style={{ fontSize: 16, color: "var(--text)", fontWeight: 700 }}>{loadError}</div>
         <button
           style={{ marginTop: 16, background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          onClick={() => router.push(\`/a/\${token}\`)}
+          onClick={() => router.push(`/a/${token}`)}
         >← Back to calendar</button>
       </div>
     );
