@@ -123,12 +123,35 @@ export default function SessionReviewEditor({
   const [propagation, setPropagation] = useState<PropagationState>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
-  const dragSrc = useRef<{ si: number; ei: number } | null>(null);
 
   const multiSession = sessions.length > 1;
 
-  // ── Drag-to-reorder exercises ────────────────────────────────────────────────
+  // ── Drag-to-reorder exercises ─────────────────────────────────────────────
+  const dragSrc = useRef<{ si: number; ei: number } | null>(null);
+
+  // After drag, renumber exercises whose order label is a plain integer
+  // (e.g. "1", "2", "3") to match the new position. Superset labels
+  // ("1A", "1B", "2A" etc.) are left untouched.
+  function renumberOrders(exs: typeof sessions[0]["exercises"]) {
+    let counter = 1;
+    return exs.map((ex) => {
+      const isPlainInt = /^\d+$/.test((ex.order ?? "").trim());
+      if (isPlainInt) {
+        const updated = { ...ex, order: String(counter) };
+        counter++;
+        return updated;
+      }
+      // Non-integer label (superset like "1A") — still advance counter if
+      // it's a new base number so that the next plain exercise gets the
+      // right number.
+      const baseNum = parseInt(ex.order ?? "");
+      if (!isNaN(baseNum)) counter = baseNum + 1;
+      return ex;
+    });
+  }
+
   const handleDragStart = (si: number, ei: number) => { dragSrc.current = { si, ei }; };
+
   const handleDragOver = (e: React.DragEvent, si: number, ei: number) => {
     e.preventDefault();
     const src = dragSrc.current;
@@ -137,8 +160,11 @@ export default function SessionReviewEditor({
     const [moved] = exs.splice(src.ei, 1);
     exs.splice(ei, 0, moved);
     dragSrc.current = { si, ei };
-    onChange(sessions.map((sess, idx) => idx === si ? { ...sess, exercises: exs } : sess));
+    onChange(sessions.map((sess, idx) =>
+      idx === si ? { ...sess, exercises: renumberOrders(exs) } : sess
+    ));
   };
+
   const handleDragEnd = () => { dragSrc.current = null; };
 
   // ── Update helpers ──────────────────────────────────────────────────────────
@@ -314,6 +340,10 @@ export default function SessionReviewEditor({
                 <div style={s.exNameRow}>
                   {/* Drag handle */}
                   <span style={s.dragHandle} title="Drag to reorder">⠿</span>
+                  {/* Order / superset label */}
+                  {ex.order && (
+                    <span style={s.orderLabel}>{ex.order}</span>
+                  )}
                   {/* Match badge */}
                   <div
                     style={{
@@ -714,8 +744,19 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--mute)",
     cursor: "grab",
     flexShrink: 0,
-    userSelect: "none",
+    userSelect: "none" as const,
     lineHeight: 1,
+  },
+  orderLabel: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: "var(--accent)",
+    background: "var(--accent-dim)",
+    borderRadius: 5,
+    padding: "2px 6px",
+    flexShrink: 0,
+    fontFamily: "'Barlow Condensed', sans-serif",
+    letterSpacing: "0.02em",
   },
   exNameRow: {
     display: "flex",

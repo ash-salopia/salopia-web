@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 
+// Normalise a raw competition row from Supabase so CompetitionFeed never
+// receives null for reactions or comments (supabase-js v2 returns null for
+// embedded selects with no matching rows, but the component calls .find()
+// and .forEach() on them which crash on null).
+function normalise(c: any) {
+  return {
+    ...c,
+    athlete: c.athlete ?? { id: "", name: "Unknown" },
+    reactions: c.reactions ?? [],
+    comments: c.comments ?? [],
+  };
+}
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
@@ -18,7 +31,7 @@ export async function GET(req: NextRequest) {
     .order("competition_date", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ competitions: data ?? [] });
+  return NextResponse.json({ competitions: (data ?? []).map(normalise) });
 }
 
 export async function POST(req: NextRequest) {
@@ -48,8 +61,16 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("competitions")
-      .insert({ athlete_id: targetAthleteId, organisation_id: athlete.organisation_id, title, competition_date, location: location ?? null, notes: notes ?? null })
-      .select().single();
+      .insert({
+        athlete_id: targetAthleteId,
+        organisation_id: athlete.organisation_id,
+        title,
+        competition_date,
+        location: location ?? null,
+        notes: notes ?? null,
+      })
+      .select()
+      .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ competition: data });
   }
@@ -58,7 +79,10 @@ export async function POST(req: NextRequest) {
     const { competition_id, emoji } = rest;
     const { error } = await supabase
       .from("competition_reactions")
-      .upsert({ competition_id, reactor_id: athlete.id, reactor_type: "athlete", reactor_name: (athlete as any).name ?? "Athlete", emoji });
+      .upsert(
+        { competition_id, reactor_id: athlete.id, reactor_type: "athlete", reactor_name: (athlete as any).name ?? "Athlete", emoji },
+        { onConflict: "competition_id,reactor_id,reactor_type" }
+      );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
@@ -68,8 +92,15 @@ export async function POST(req: NextRequest) {
     if (!commentBody?.trim()) return NextResponse.json({ error: "Empty comment" }, { status: 400 });
     const { data, error } = await supabase
       .from("competition_comments")
-      .insert({ competition_id, author_id: athlete.id, author_type: "athlete", author_name: (athlete as any).name ?? "Athlete", body: commentBody.trim() })
-      .select().single();
+      .insert({
+        competition_id,
+        author_id: athlete.id,
+        author_type: "athlete",
+        author_name: (athlete as any).name ?? "Athlete",
+        body: commentBody.trim(),
+      })
+      .select()
+      .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ comment: data });
   }
@@ -80,7 +111,7 @@ export async function POST(req: NextRequest) {
       .from("competition_comments")
       .delete()
       .eq("id", comment_id)
-      .eq("author_id", athlete.id); // can only delete own comments
+      .eq("author_id", athlete.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
