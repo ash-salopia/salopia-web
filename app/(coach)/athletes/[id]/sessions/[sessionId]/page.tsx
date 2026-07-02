@@ -703,7 +703,7 @@ export default function SessionDetailPage() {
       />
 
       {/* ── Update future occurrences banner ── */}
-      {(session as any).source_session_id && (
+      {session.source_session_id && (
         <div style={styles.propagateBanner}>
           <div style={styles.propagateLabel}>Update future occurrences</div>
           <div style={styles.propagateOptions}>

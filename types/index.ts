@@ -37,7 +37,6 @@ export interface Athlete {
   in_live_group: boolean;
   sex: "male" | "female" | null;
   date_of_birth: string | null; // YYYY-MM-DD
-  bodyweight_kg: number | null; // 0028_athlete_bodyweight — default for test sessions
   created_at: string;
 }
 
@@ -148,6 +147,8 @@ export type HyroxConfig =
   | Record<string, never>;
 
 export interface CardioConfig {
+  // Mirrors the prototype's CardioConfig shape — kept loose/JSONB since
+  // it's read and written as one unit, same reasoning as hyrox_config.
   [key: string]: unknown;
 }
 
@@ -167,6 +168,7 @@ export interface Session {
   created_at: string;
   updated_at: string;
   session_notes: string | null;
+  source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation
   exercises?: SessionExercise[];
 }
 
@@ -186,8 +188,8 @@ export interface TemplateDef {
   template_id: string;
   name: string;
   type: SessionType;
-  days: number[];
-  exercises: PrescribedExercise[];
+  days: number[]; // 0=Sun..6=Sat
+  exercises: PrescribedExercise[]; // stored as JSONB directly on this row
   hyrox_type: HyroxType | null;
   hyrox_config: HyroxConfig | null;
   cardio_type: string | null;
@@ -206,7 +208,7 @@ export interface Programme {
   description: string;
   created_at: string;
   sessions?: ProgrammeSession[];
-  assigned_to?: string[];
+  assigned_to?: string[]; // athlete ids, derived from programme_assignments
 }
 
 export interface ProgrammeSession {
@@ -214,7 +216,7 @@ export interface ProgrammeSession {
   programme_id: string;
   name: string;
   type: SessionType;
-  exercises: PrescribedExercise[];
+  exercises: PrescribedExercise[]; // snapshot, stored as JSONB directly here
   hyrox_type: HyroxType | null;
   hyrox_config: HyroxConfig | null;
   cardio_type: string | null;
@@ -229,7 +231,9 @@ export interface ProgrammeAssignment {
 }
 
 // ------------------------------------------------------------
-// Testing system
+// Testing system (youth athlete physical testing — see migration
+// 0005_testing_system.sql for the full design rationale, ported
+// from the proven Python/ReportLab tool's data model)
 // ------------------------------------------------------------
 export interface TestBattery {
   id: string;
@@ -237,7 +241,7 @@ export interface TestBattery {
   name: string;
   description: string;
   created_at: string;
-  metrics?: TestMetric[];
+  metrics?: TestMetric[]; // via test_battery_metrics join
 }
 
 export interface TestMetric {
@@ -248,7 +252,7 @@ export interface TestMetric {
   better_direction: "higher" | "lower";
   requires_bodyweight: boolean;
   is_bilateral: boolean;
-  screening_only: boolean;
+  screening_only: boolean; // e.g. Single Leg CMJ — never rated, asymmetry screen only
   what_it_measures: string;
   why_it_matters: string;
   commentary_excellent: string;
@@ -272,6 +276,8 @@ export interface TestBenchmark {
   sex: "male" | "female" | null;
   age_min: number | null;
   age_max: number | null;
+  // 4-tier model: a result worse than average_threshold is "needs_work" by
+  // elimination — there is no separate needs_work_threshold to set.
   average_threshold: number;
   good_threshold: number;
   excellent_threshold: number;
@@ -282,7 +288,7 @@ export interface TestSession {
   id: string;
   athlete_id: string;
   test_battery_id: string | null;
-  date: string;
+  date: string; // YYYY-MM-DD
   bodyweight_kg: number | null;
   notes: string;
   created_at: string;
@@ -308,4 +314,8 @@ export interface Report {
   generated_at: string;
 }
 
+// RAG status derived from comparing a value against a TestBenchmark.
+// Not a database type — computed client-side / server-side at read time.
+// 4-tier (not 3) — matches the original tool's "Exceptional collapses into
+// Excellent" decision: there is no 5th tier, both scales share these 4.
 export type RagStatus = "excellent" | "good" | "average" | "needs_work";

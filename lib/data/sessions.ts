@@ -363,7 +363,7 @@ export async function propagateFutureOccurrences(
   scope: PropagateScope
 ): Promise<number> {
   const supabase = createClient();
-  const sourceId = (session as any).source_session_id ?? session.id;
+  const sourceId = session.source_session_id ?? session.id;
   const sessionDayOfWeek = new Date(session.date + "T12:00:00Z").getDay();
 
   // Find future sessions that share this source
