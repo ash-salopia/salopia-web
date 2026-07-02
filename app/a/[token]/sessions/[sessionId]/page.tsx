@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
-import { getAthleteByShareToken, getAthleteSessions } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import AthleteSessionView from "@/components/AthleteSessionView";
 
-// Force fresh data on every request — without this, Next.js 14 may serve
-// a cached version of the session so coach edits don't appear immediately.
+// Do NOT fetch sessions server-side here. The server cache may not include
+// sessions recently added by the coach, causing notFound() to fire for valid
+// sessions. Instead, pass sessionId down to AthleteSessionView which fetches
+// client-side from /api/athlete-link/sessions (always fresh).
 export const dynamic = "force-dynamic";
 
 export default async function AthleteLinkSessionPage({
@@ -12,17 +14,17 @@ export default async function AthleteLinkSessionPage({
   params: Promise<{ token: string; sessionId: string }>;
 }) {
   const { token, sessionId } = await params;
+
+  // Still validate the token server-side — never let an invalid token
+  // reach the client component where it could be probed.
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) notFound();
 
-  const sessions = await getAthleteSessions(athlete.id);
-  const session = sessions.find((s) => s.id === sessionId);
-  // Same reasoning as the athlete lookup: if this session doesn't
-  // belong to this athlete (wrong ID, or someone else's session
-  // entirely), treat it identically to "doesn't exist" — never
-  // confirm or deny that a given session ID is real but just
-  // inaccessible, since that's information leakage too.
-  if (!session) notFound();
-
-  return <AthleteSessionView session={session} athleteName={athlete.name} token={token} />;
+  return (
+    <AthleteSessionView
+      sessionId={sessionId}
+      athleteName={athlete.name}
+      token={token}
+    />
+  );
 }

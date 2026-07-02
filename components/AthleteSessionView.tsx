@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import VideoModal from "@/components/VideoModal";
 import CheckInModal from "@/components/CheckInModal";
@@ -9,19 +9,54 @@ import type { Session, SetLog } from "@/types";
 
 export default function AthleteSessionView({
   session: initialSession,
+  sessionId,
   athleteName,
   token,
 }: {
-  session: Session;
+  session?: Session;
+  sessionId?: string;
   athleteName: string;
   token: string;
 }) {
   const router = useRouter();
-  const [session, setSession] = useState(initialSession);
+  const [session, setSession] = useState<Session | null>(initialSession ?? null);
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
+
+  // If no session was passed from the server (new session the server
+  // cache didn't know about), fetch it client-side from the API.
+  useEffect(() => {
+    const id = sessionId ?? initialSession?.id;
+    if (!id) return;
+    fetch(`/api/athlete-link/sessions?token=${encodeURIComponent(token)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const found = (data.sessions ?? []).find((s: Session) => s.id === id);
+        if (found) setSession(found);
+        else if (!initialSession) setLoadError("Session not found.");
+      })
+      .catch(() => { if (!initialSession) setLoadError("Could not load session."); });
+  }, [token, sessionId, initialSession]);
+
+  if (loadError) {
+    return (
+      <div style={{ padding: 32, textAlign: "center", color: "var(--mute)" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>?</div>
+        <div style={{ fontSize: 16, color: "var(--text)", fontWeight: 700 }}>{loadError}</div>
+        <button
+          style={{ marginTop: 16, background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+          onClick={() => router.push(`/a/${token}`)}
+        >← Back to calendar</button>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <div style={{ padding: 32, textAlign: "center", color: "var(--mute)", fontSize: 14 }}>Loading…</div>;
+  }
 
   const exercises = (session.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
@@ -110,12 +145,7 @@ export default function AthleteSessionView({
         {exercises.map((ex) => (
           <div key={ex.id} style={styles.card}>
             <div style={styles.exHeadRow}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                {ex.order && (
-                  <span style={styles.orderBadge}>{ex.order}</span>
-                )}
-                <div style={styles.exName}>{ex.name || "Exercise"}</div>
-              </div>
+              <div style={styles.exName}>{ex.name || "Exercise"}</div>
               {ex.video_url && (
                 <button
                   style={styles.watchBtn}
@@ -236,17 +266,6 @@ const styles: Record<string, React.CSSProperties> = {
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
   exHeadRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
   exName: { fontWeight: 700, fontSize: 15, color: "var(--text)" },
-  orderBadge: {
-    fontSize: 12,
-    fontWeight: 800,
-    color: "var(--accent)",
-    background: "var(--accent-dim)",
-    borderRadius: 6,
-    padding: "2px 7px",
-    flexShrink: 0,
-    fontFamily: "'Barlow Condensed', sans-serif",
-    letterSpacing: "0.02em",
-  },
   watchBtn: {
     background: "var(--accent-dim)",
     border: "none",
