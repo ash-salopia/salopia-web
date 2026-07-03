@@ -11,6 +11,16 @@ import TestReportModal from "@/components/TestReportModal";
 import type { Athlete, TestBattery, TestMetric, TestBenchmark, TestSession } from "@/types";
 import { todayISO } from "@/lib/date-utils";
 
+function calcAgeAtDate(dob: string | null, testDate: string): number | null {
+  if (!dob) return null;
+  const d = new Date(dob + "T00:00:00Z");
+  const t = new Date(testDate + "T00:00:00Z");
+  let age = t.getFullYear() - d.getFullYear();
+  const m = t.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age--;
+  return age;
+}
+
 function fmtDate(iso: string) {
   return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -34,6 +44,7 @@ export default function AthleteTestingPage() {
   const [logBatteryId, setLogBatteryId] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayISO());
   const [logBodyweight, setLogBodyweight] = useState<string>("");
+  const [logAge, setLogAge] = useState<string>("");
   const [logNotes, setLogNotes] = useState("");
   const [logResults, setLogResults] = useState<Record<string, { left: string[]; right: string[]; single: string[] }>>({});
   const [saving, setSaving] = useState(false);
@@ -200,6 +211,9 @@ export default function AthleteTestingPage() {
                     {session.bodyweight_kg && (
                       <div style={s.sessionMeta}>⚖️ {session.bodyweight_kg}kg bodyweight</div>
                     )}
+                    {athlete?.date_of_birth && (
+                      <div style={s.sessionMeta}>🎂 Age at test: {calcAgeAtDate(athlete.date_of_birth, session.date)}</div>
+                    )}
                     {session.notes && <div style={s.sessionMeta}>{session.notes}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -264,6 +278,25 @@ export default function AthleteTestingPage() {
                 value={logBodyweight}
                 onChange={(e) => setLogBodyweight(e.target.value)}
               />
+            </div>
+
+            <div style={s.field}>
+              <label style={s.label}>Age at test date — auto from DOB, or enter manually</label>
+              <input
+                type="number"
+                step="1"
+                min="5"
+                max="100"
+                placeholder={athlete?.date_of_birth ? String(calcAgeAtDate(athlete.date_of_birth, logDate) ?? "") : "e.g. 14"}
+                style={s.input}
+                value={logAge}
+                onChange={(e) => setLogAge(e.target.value)}
+              />
+              {athlete?.date_of_birth && !logAge && (
+                <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 3 }}>
+                  Auto-calculated: age {calcAgeAtDate(athlete.date_of_birth, logDate)} from DOB {athlete.date_of_birth}
+                </div>
+              )}
             </div>
 
             <div style={s.field}>

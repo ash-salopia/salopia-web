@@ -439,32 +439,47 @@ export default function AthleteProfilePage() {
           </button>
         </div>
 
-        {/* Bodyweight */}
-        <div style={{ ...p.checkinCard, marginTop: 8, flexDirection: "column" as const, alignItems: "flex-start", gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Bodyweight (kg)</div>
-          <div style={{ fontSize: 12, color: "var(--mute)" }}>
-            Used as the default when logging test sessions — needed for IMTP relative strength (N/kg).
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="number"
-              step="0.1"
-              placeholder="e.g. 68.5"
-              defaultValue={athlete?.bodyweight_kg ?? ""}
-              key={athlete?.bodyweight_kg ?? "bw"}
-              style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 14, width: 110 }}
-              onBlur={async (e) => {
-                const val = e.target.value.trim();
-                const kg = val ? parseFloat(val) : null;
-                const supabase = createClient();
-                await supabase.from("athletes").update({ bodyweight_kg: kg }).eq("id", athleteId);
-                setAthlete((prev) => prev ? { ...prev, bodyweight_kg: kg } : prev);
-              }}
-            />
-            <span style={{ fontSize: 12, color: "var(--mute)" }}>kg</span>
+        {/* Date of birth + sex — used for testing age calculation */}
+        <div style={{ ...p.checkinCard, marginTop: 8, flexDirection: "column" as const, alignItems: "flex-start", gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Athlete details</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" as const, width: "100%" }}>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, flex: 1, minWidth: 140 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>Date of birth</label>
+              <input
+                type="date"
+                defaultValue={athlete?.date_of_birth ?? ""}
+                key={athlete?.date_of_birth ?? "dob"}
+                style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 13 }}
+                onBlur={async (e) => {
+                  const val = e.target.value || null;
+                  const supabase = createClient();
+                  await supabase.from("athletes").update({ date_of_birth: val }).eq("id", athleteId);
+                  setAthlete((prev) => prev ? { ...prev, date_of_birth: val } : prev);
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, flex: 1, minWidth: 120 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>Sex</label>
+              <select
+                value={athlete?.sex ?? ""}
+                style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 13 }}
+                onChange={async (e) => {
+                  const val = (e.target.value as "male" | "female") || null;
+                  const supabase = createClient();
+                  await supabase.from("athletes").update({ sex: val }).eq("id", athleteId);
+                  setAthlete((prev) => prev ? { ...prev, sex: val } : prev);
+                }}
+              >
+                <option value="">— Not set —</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* PBs */}
       <div style={p.section}>
         <div style={p.sectionTitle}>🏆 Personal bests</div>
         <p style={p.sectionHint}>Click any exercise to see weight progression over time.</p>

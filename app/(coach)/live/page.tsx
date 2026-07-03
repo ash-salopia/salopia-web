@@ -126,9 +126,11 @@ export default function LiveGroupPage() {
     : allAthletes.filter((a) => a.group === (selGroup || groups[0] || ""));
 
   const athleteSessions = (athleteId: string): Session[] => {
-    const cutoff = addDays(todayISO(), -1);
+    const today  = todayISO();
+    const cutoff = addDays(today, -1);   // include yesterday's late sessions
+    const ahead  = addDays(today, 7);    // only show up to 1 week ahead
     return sessions
-      .filter((s) => s.athlete_id === athleteId && s.date >= cutoff)
+      .filter((s) => s.athlete_id === athleteId && s.date >= cutoff && s.date <= ahead)
       .sort((a, b) => a.date < b.date ? -1 : 1);
   };
 
@@ -351,7 +353,7 @@ export default function LiveGroupPage() {
                                   defaultValue={set.weight}
                                   type="number"
                                   step="0.5"
-                                  placeholder="—"
+                                  placeholder={ex.target_load || "kg"}
                                   inputMode="decimal"
                                   style={s.setInput}
                                   onBlur={(e) => {
@@ -364,7 +366,7 @@ export default function LiveGroupPage() {
                                   key={`r-${ex.id}-${si}-${set.reps}`}
                                   defaultValue={set.reps}
                                   type="number"
-                                  placeholder="—"
+                                  placeholder={ex.reps || "—"}
                                   inputMode="numeric"
                                   style={s.setInput}
                                   onBlur={(e) => {
