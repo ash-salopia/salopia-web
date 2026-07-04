@@ -170,6 +170,8 @@ export interface Session {
   updated_at: string;
   session_notes: string | null;
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation
+  rpe: number | null;              // 0031 — post-session RPE (1-10) logged by athlete
+  rpe_logged_at: string | null;
   exercises?: SessionExercise[];
 }
 
