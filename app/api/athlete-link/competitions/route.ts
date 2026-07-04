@@ -45,24 +45,17 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceRoleClient();
 
   if (action === "add_competition") {
-    const { title, competition_date, location, notes, athlete_id_override } = rest;
+    const { title, competition_date, location, notes } = rest;
     if (!title || !competition_date) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
-    let targetAthleteId = athlete.id;
-    if (athlete_id_override && athlete_id_override !== athlete.id) {
-      const { data: overrideAthlete } = await supabase
-        .from("athletes")
-        .select("id, organisation_id")
-        .eq("id", athlete_id_override)
-        .eq("organisation_id", athlete.organisation_id)
-        .single();
-      if (overrideAthlete) targetAthleteId = overrideAthlete.id;
-    }
-
+    // SECURITY: competitions are always created under the athlete resolved
+    // from THEIR OWN token — never a caller-supplied athlete_id. An earlier
+    // version accepted an "athlete_id_override" here, which would have let
+    // any athlete create a competition entry impersonating a teammate.
     const { data, error } = await supabase
       .from("competitions")
       .insert({
-        athlete_id: targetAthleteId,
+        athlete_id: athlete.id,
         organisation_id: athlete.organisation_id,
         title,
         competition_date,
