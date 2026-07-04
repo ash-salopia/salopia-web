@@ -13,6 +13,8 @@ export type HyroxType = "fixed" | "cycling" | "emom" | "interval" | "circuit";
 export interface Organisation {
   id: string;
   name: string;
+  plan: string;
+  seat_limit: number | null;
   created_at: string;
 }
 
