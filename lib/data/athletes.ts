@@ -79,7 +79,7 @@ export async function createAthlete(name: string, group: string, bodyweightKg: n
   if (error) {
     // Raised by the check_seat_limit() trigger (0030_seat_licensing.sql)
     // when the organisation's plan has no free seats left.
-    if (error.message.includes("SEAT_LIMIT_EXCEEDED")) {
+    if (error.message.includes("SEAT_LIMIT_REACHED")) {
       throw new Error("You've reached the athlete limit for your current plan. Archive an athlete to free up a seat, or contact support to upgrade.");
     }
     throw error;
