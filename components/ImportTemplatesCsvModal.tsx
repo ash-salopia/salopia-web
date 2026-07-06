@@ -72,7 +72,11 @@ export default function ImportTemplatesCsvModal({ onCreated, onClose }: {
     try {
       const result = await parseTemplatesCsv(file, library);
       if (!result.templates.length) {
-        setError("No valid rows found — check the Template Name / Session Name / Exercise Name columns are present.");
+        setError(
+          result.parseErrors.length
+            ? `No valid rows found:\n${result.parseErrors.join("\n")}`
+            : "No valid rows found — check the Template Name / Session Name / Exercise Name columns are present."
+        );
         setPhase("select");
         return;
       }
@@ -389,7 +393,7 @@ const s: Record<string, React.CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, color: "var(--text)" },
   closeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 22, cursor: "pointer", padding: "0 4px" },
-  errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13 },
+  errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, whiteSpace: "pre-wrap" as const },
   hint: { fontSize: 13, color: "var(--mute)", lineHeight: 1.5, margin: 0 },
   primaryBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%" },
   ghostBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
