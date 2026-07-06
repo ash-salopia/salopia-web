@@ -32,6 +32,8 @@ export interface ReviewExercise {
   notes: string;
   time: string;
   each_side: boolean;
+  rpe?: number | null;
+  percent_1rm?: number | null;
 }
 
 export interface ReviewSession {
@@ -84,6 +86,8 @@ export function enrichWithLibrary(
       notes: e.notes,
       time: e.time,
       each_side: e.each_side,
+      rpe: e.rpe ?? null,
+      percent_1rm: e.percent_1rm ?? null,
     };
   });
 }
@@ -96,7 +100,7 @@ type PropagationState = {
   si: number;
   ei: number;
   field: string;
-  value: string | number;
+  value: string | number | null;
   matchCount: number;
 } | null;
 
@@ -263,7 +267,16 @@ export default function SessionReviewEditor({
 
   const commitEdit = (si: number, ei: number, field: string, raw: string) => {
     setEditingCell(null);
-    const value = field === "sets" ? Math.max(1, parseInt(raw, 10) || 1) : raw.trim();
+    let value: string | number | null;
+    if (field === "sets") {
+      value = Math.max(1, parseInt(raw, 10) || 1);
+    } else if (field === "rpe" || field === "percent_1rm") {
+      const trimmed = raw.trim();
+      value = trimmed === "" ? null : parseFloat(trimmed);
+      if (typeof value === "number" && isNaN(value)) value = null;
+    } else {
+      value = raw.trim();
+    }
     const matchCount = multiSession ? countMatches(si, ei) : 0;
 
     if (matchCount > 0) {
@@ -559,6 +572,60 @@ export default function SessionReviewEditor({
                           }
                           onCommit={(v) => commitEdit(si, ei, "tempo", v)}
                           width={72}
+                        />
+                      </>
+                    )}
+
+                    {/* RPE */}
+                    {ex.rpe != null && (
+                      <>
+                        <span style={s.chipSep}>· RPE</span>
+                        <EditChip
+                          label={String(ex.rpe)}
+                          isEditing={
+                            editingCell?.si === si &&
+                            editingCell?.ei === ei &&
+                            editingCell?.field === "rpe"
+                          }
+                          value={
+                            editingCell?.si === si && editingCell?.ei === ei &&
+                            editingCell?.field === "rpe"
+                              ? editingCell.value
+                              : String(ex.rpe)
+                          }
+                          onStartEdit={() => startEditing(si, ei, "rpe")}
+                          onChange={(v) =>
+                            setEditingCell((c) => c ? { ...c, value: v } : c)
+                          }
+                          onCommit={(v) => commitEdit(si, ei, "rpe", v)}
+                          width={40}
+                        />
+                      </>
+                    )}
+
+                    {/* % 1RM */}
+                    {ex.percent_1rm != null && (
+                      <>
+                        <span style={s.chipSep}>·</span>
+                        <EditChip
+                          label={`${ex.percent_1rm}%1RM`}
+                          isEditing={
+                            editingCell?.si === si &&
+                            editingCell?.ei === ei &&
+                            editingCell?.field === "percent_1rm"
+                          }
+                          value={
+                            editingCell?.si === si && editingCell?.ei === ei &&
+                            editingCell?.field === "percent_1rm"
+                              ? editingCell.value
+                              : String(ex.percent_1rm)
+                          }
+                          onStartEdit={() => startEditing(si, ei, "percent_1rm")}
+                          onChange={(v) =>
+                            setEditingCell((c) => c ? { ...c, value: v } : c)
+                          }
+                          onCommit={(v) => commitEdit(si, ei, "percent_1rm", v)}
+                          width={60}
                         />
                       </>
                     )}

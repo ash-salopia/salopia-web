@@ -2,18 +2,10 @@ import Papa from "papaparse";
 import { createClient } from "@/lib/supabase-browser";
 import { findLibraryEntryByName } from "@/lib/data/library";
 import { todayISO, datesInRange, parseRepeatDays } from "@/lib/date-utils";
+import { pickCsvField as pick } from "@/lib/csv-utils";
 import type { NewExerciseInput } from "@/lib/data/sessions";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-// Looks up a value across several possible column-header spellings,
-// case-insensitively. Matches the prototype's `pick` helper exactly.
-function pick(row: Record<string, string>, keys: string[]): string {
-  for (const k of Object.keys(row)) {
-    if (keys.includes(k.trim().toLowerCase())) return row[k] ?? "";
-  }
-  return "";
-}
 
 export interface CsvImportResult {
   sessionsCreated: number;

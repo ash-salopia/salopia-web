@@ -252,6 +252,7 @@ function TemplateDefEditor({
           <option value="strength">Strength</option>
           <option value="hyrox">Hyrox</option>
           <option value="cardio">Cardio</option>
+          <option value="power_speed">Power / Speed</option>
         </select>
       </div>
 
@@ -290,6 +291,20 @@ function TemplateDefEditor({
                   value={ex.reps}
                   onChange={(e) => updateExercise(ex.id, { reps: e.target.value })}
                   placeholder="Reps"
+                  style={styles.exMiniInput}
+                />
+                <input
+                  value={ex.rpe ?? ""}
+                  onChange={(e) => updateExercise(ex.id, { rpe: e.target.value === "" ? null : parseFloat(e.target.value) || null })}
+                  placeholder="RPE"
+                  inputMode="decimal"
+                  style={styles.exMiniInput}
+                />
+                <input
+                  value={ex.percent_1rm ?? ""}
+                  onChange={(e) => updateExercise(ex.id, { percent_1rm: e.target.value === "" ? null : parseFloat(e.target.value) || null })}
+                  placeholder="%1RM"
+                  inputMode="decimal"
                   style={styles.exMiniInput}
                 />
                 <button style={styles.exRemoveBtn} onClick={() => removeExercise(ex.id)}>

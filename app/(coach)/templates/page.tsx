@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { listTemplates, createTemplate, deleteTemplate } from "@/lib/data/templates";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesTemplateModal from "@/components/NotesTemplateModal";
+import ImportTemplatesCsvModal from "@/components/ImportTemplatesCsvModal";
 import NoteTemplatesManager from "@/components/NoteTemplatesManager";
 import type { Template } from "@/types";
 
@@ -17,6 +18,7 @@ export default function TemplatesPage() {
   const [creating, setCreating] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [csvOpen, setCsvOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -73,6 +75,7 @@ export default function TemplatesPage() {
         <div style={{ display: "flex", gap: 8 }}>
           <button style={styles.ghostBtn} onClick={() => setVoiceOpen(true)}>🎤 Voice</button>
           <button style={styles.ghostBtn} onClick={() => setNotesOpen(true)}>📝 Notes</button>
+          <button style={styles.ghostBtn} onClick={() => setCsvOpen(true)}>📄 Import CSV</button>
           <button style={styles.primaryBtn} disabled={creating} onClick={handleCreate}>
             {creating ? "Creating…" : "+ New template"}
           </button>
@@ -131,6 +134,12 @@ export default function TemplatesPage() {
         <NotesTemplateModal
           onCreated={() => { setNotesOpen(false); load(); }}
           onClose={() => setNotesOpen(false)}
+        />
+      )}
+      {csvOpen && (
+        <ImportTemplatesCsvModal
+          onCreated={() => { setCsvOpen(false); load(); }}
+          onClose={() => setCsvOpen(false)}
         />
       )}
     </div>

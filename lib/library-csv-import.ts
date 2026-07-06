@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import { saveLibraryEntry, findLibraryEntryByName } from "@/lib/data/library";
+import { pickCsvField } from "@/lib/csv-utils";
 import type { LibraryEntry } from "@/types";
 
 const LIBRARY_HEADER_MAP = {
@@ -18,11 +19,7 @@ const LIBRARY_HEADER_MAP = {
 type LibraryField = keyof typeof LIBRARY_HEADER_MAP;
 
 function pickLibraryField(row: Record<string, string>, field: LibraryField): string {
-  const keys: readonly string[] = LIBRARY_HEADER_MAP[field];
-  for (const k of Object.keys(row)) {
-    if (keys.includes(k.trim().toLowerCase())) return (row[k] ?? "").trim();
-  }
-  return "";
+  return pickCsvField(row, LIBRARY_HEADER_MAP[field]);
 }
 
 export interface LibraryCsvImportResult {

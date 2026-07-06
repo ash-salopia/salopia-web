@@ -86,6 +86,8 @@ export interface ExerciseBase {
   each_side: boolean;
   notes: string;
   video_url: string;
+  rpe?: number | null; // 0032 — prescribed RPE (1-10)
+  percent_1rm?: number | null; // 0032 — prescribed load as a % of 1RM
 }
 
 export interface SessionExercise extends ExerciseBase {
