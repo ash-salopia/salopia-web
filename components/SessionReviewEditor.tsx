@@ -14,6 +14,7 @@
 
 import { useState, useRef } from "react";
 import { saveLibraryEntry } from "@/lib/data/library";
+import { normalizeExerciseName } from "@/lib/exercise-name-match";
 import type { LibraryEntry } from "@/types";
 
 // ── Exported types — used by both modals ──────────────────────────────────────
@@ -69,9 +70,17 @@ export function enrichWithLibrary(
   library: LibraryEntry[]
 ): ReviewExercise[] {
   return exercises.map((e) => {
-    const lib = library.find(
+    let lib = library.find(
       (l) => l.name.toLowerCase() === e.name.toLowerCase().trim()
     );
+    // Fall back to a normalized match (abbreviations like DB/BB/KB/SL/SA
+    // expanded, simple trailing-s plurals stripped) — catches names a
+    // coach would consider obviously the same exercise (e.g. "DB Lateral
+    // Raises" vs "Dumbbell Lateral Raise") without exact string equality.
+    if (!lib) {
+      const normalizedTarget = normalizeExerciseName(e.name);
+      lib = library.find((l) => normalizeExerciseName(l.name) === normalizedTarget);
+    }
     return {
       name: lib?.name ?? e.name,
       order: String((e as any).order ?? ""),   // preserve superset label
