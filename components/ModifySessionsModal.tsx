@@ -14,16 +14,29 @@ import { listLibrary, saveLibraryEntry } from "@/lib/data/library";
 import { normalizeExerciseName } from "@/lib/exercise-name-match";
 import type { Session, LibraryEntry } from "@/types";
 
+interface NewExercise {
+  name: string;
+  order: string;
+  sets: number;
+  reps: string;
+  rest: string;
+  target_load: string;
+  tempo: string;
+  notes: string;
+  each_side: boolean;
+}
+
 interface SessionChange {
   session_id: string;
   session_name: string;
   exercise_id: string;
   exercise_name: string;
-  action: "update" | "delete";
+  action: "update" | "delete" | "add";
   field: string;
   old_value: string;
   new_value: string;
   reason: string;
+  new_exercise?: NewExercise;
 }
 
 type ConvMessage = { role: "user" | "assistant"; content: string };
@@ -77,10 +90,11 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
     };
   }, []);
 
-  // A "name" field change swaps which exercise this is — check whether the
-  // new name is already in the library so the coach can add it if not
-  // (matches the same exact + normalized matching used by the CSV/Voice/
-  // Notes template flows), rather than silently leaving it unlinked.
+  // A "name" field change or a brand new "add"ed exercise both introduce an
+  // exercise identity that may or may not already be in the library — check
+  // whether it is so the coach can add it if not (matches the same exact +
+  // normalized matching used by the CSV/Voice/Notes template flows), rather
+  // than silently leaving it unlinked.
   const isInLibrary = (name: string): boolean => {
     const target = name.toLowerCase().trim();
     if (library.some((l) => l.name.toLowerCase() === target)) return true;
@@ -88,11 +102,21 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
     return library.some((l) => normalizeExerciseName(l.name) === normalizedTarget);
   };
 
+  // The exercise name a change introduces that's worth checking against the
+  // library, or null if this change doesn't introduce one (e.g. a sets/reps
+  // tweak on an already-existing exercise).
+  const libraryCheckName = (change: SessionChange): string | null => {
+    if (change.action === "update" && change.field === "name") return change.new_value;
+    if (change.action === "add") return change.new_exercise?.name ?? null;
+    return null;
+  };
+
   const addChangeToLibrary = async (index: number) => {
-    const change = changes[index];
+    const name = libraryCheckName(changes[index]);
+    if (!name) return;
     setAddingToLibrary(index);
     try {
-      const entry = await saveLibraryEntry({ name: change.new_value });
+      const entry = await saveLibraryEntry({ name });
       setLibrary((prev) => [...prev, entry]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add to library");
@@ -237,6 +261,46 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
 
     try {
       for (const change of toApply) {
+        if (change.action === "add") {
+          const ne = change.new_exercise;
+          if (!ne) continue;
+
+          const { data: existing, error: fetchErr } = await supabase
+            .from("session_exercises")
+            .select("sort_order")
+            .eq("session_id", change.session_id)
+            .order("sort_order", { ascending: false })
+            .limit(1);
+
+          if (fetchErr) {
+            console.error(`Could not add "${ne.name}" (${change.session_name}):`, fetchErr);
+            throw new Error(`${ne.name} (${change.session_name}): ${fetchErr.message}${fetchErr.hint ? ` — ${fetchErr.hint}` : ""}`);
+          }
+          const nextSortOrder = existing?.length ? existing[0].sort_order + 1 : 0;
+          const sets = ne.sets || 3;
+
+          const { error: insertErr } = await supabase.from("session_exercises").insert({
+            session_id: change.session_id,
+            name: ne.name,
+            order: ne.order ?? "",
+            sets,
+            reps: ne.reps ?? "",
+            rest: ne.rest ?? "",
+            target_load: ne.target_load ?? "",
+            tempo: ne.tempo ?? "",
+            each_side: ne.each_side ?? false,
+            notes: ne.notes ?? "",
+            sort_order: nextSortOrder,
+            log: Array.from({ length: sets }, () => ({ weight: "", done: false, reps: "" })),
+          });
+
+          if (insertErr) {
+            console.error(`Could not add "${ne.name}" (${change.session_name}):`, insertErr);
+            throw new Error(`${ne.name} (${change.session_name}): ${insertErr.message}${insertErr.hint ? ` — ${insertErr.hint}` : ""}`);
+          }
+          continue;
+        }
+
         if (change.action === "delete") {
           const { data: deletedRows, error: deleteErr } = await supabase
             .from("session_exercises")
@@ -391,17 +455,26 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                     </div>
                   </div>
                   {changes.map((change, i) => {
-                    const isNameChange = change.action === "update" && change.field === "name";
-                    const matched = isNameChange && isInLibrary(change.new_value);
+                    const checkName = libraryCheckName(change);
+                    const matched = checkName ? isInLibrary(checkName) : false;
+                    const displayName = change.action === "add" ? (change.new_exercise?.name ?? change.exercise_name) : change.exercise_name;
                     return (
                       <div key={i} style={{ ...s.changeCard, ...(accepted.has(i) ? s.changeCardAccepted : s.changeCardSkipped) }}>
                         <div style={s.changeTop}>
                           <div style={s.changeInfo}>
-                            <div style={s.changeExercise}>{change.exercise_name}</div>
+                            <div style={s.changeExercise}>{displayName}</div>
                             <div style={s.changeSession}>{change.session_name}</div>
                             {change.action === "delete" ? (
                               <div style={s.changeDiff}>
                                 <span style={{ ...s.fieldLabel2, color: "#FF6B6B" }}>🗑 Remove</span>
+                              </div>
+                            ) : change.action === "add" ? (
+                              <div style={s.changeDiff}>
+                                <span style={{ ...s.fieldLabel2, color: "var(--good)" }}>+ Add</span>
+                                <span style={s.newValue}>
+                                  {change.new_exercise?.order ? `${change.new_exercise.order} · ` : ""}
+                                  {change.new_exercise?.sets}x{change.new_exercise?.reps}
+                                </span>
                               </div>
                             ) : (
                               <div style={s.changeDiff}>
@@ -411,7 +484,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                                 <span style={s.newValue}>{change.new_value}</span>
                               </div>
                             )}
-                            {isNameChange && (
+                            {checkName && (
                               <div style={s.libraryRow}>
                                 {matched ? (
                                   <span style={s.libraryMatched}>✓ In your exercise library</span>
@@ -423,7 +496,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                                       disabled={addingToLibrary === i}
                                       onClick={() => addChangeToLibrary(i)}
                                     >
-                                      {addingToLibrary === i ? "Adding…" : `+ Add "${change.new_value}"`}
+                                      {addingToLibrary === i ? "Adding…" : `+ Add "${checkName}"`}
                                     </button>
                                   </>
                                 )}

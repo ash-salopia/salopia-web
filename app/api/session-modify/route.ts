@@ -2,16 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 
 type ConvMessage = { role: "user" | "assistant"; content: string };
 
+export interface NewExercise {
+  name: string;
+  order: string;
+  sets: number;
+  reps: string;
+  rest: string;
+  target_load: string;
+  tempo: string;
+  notes: string;
+  each_side: boolean;
+}
+
 export interface SessionChange {
   session_id: string;
   session_name: string;
-  exercise_id: string;
+  exercise_id: string; // "" when action is "add"
   exercise_name: string;
-  action: "update" | "delete";
+  action: "update" | "delete" | "add";
   field: "name" | "sets" | "reps" | "target_load" | "rest" | "tempo" | "notes" | "";
   old_value: string;
   new_value: string;
   reason: string;
+  new_exercise?: NewExercise; // only present when action is "add"
 }
 
 const SYSTEM = `You are a strength & conditioning assistant helping a coach modify an athlete's upcoming training sessions.
@@ -24,7 +37,7 @@ Always respond with valid JSON only - no markdown, no backticks:
     {
       "session_id": "exact uuid from the data",
       "session_name": "session name for display",
-      "exercise_id": "exact uuid from the data",
+      "exercise_id": "exact uuid from the data, or \"\" when action is \"add\"",
       "exercise_name": "exercise name for display",
       "action": "update",
       "field": "sets",
@@ -36,16 +49,37 @@ Always respond with valid JSON only - no markdown, no backticks:
   "message": "Brief summary of proposed changes."
 }
 
-Action options: "update" (change one field on an exercise) or "delete" (remove the exercise from its session entirely)
+Action options:
+- "update": change one field on an existing exercise
+- "delete": remove an existing exercise from its session entirely
+- "add": add a brand new exercise to a session that doesn't currently have it
+
 Field options (only used when action is "update"): name, sets, reps, target_load, rest, tempo, notes
 All values are strings (e.g. sets: "4" not 4, reps: "8-10")
 
+When action is "add", leave exercise_id/field/old_value/new_value as "" and instead include a
+"new_exercise" object on that change:
+{
+  "name": "exercise name",
+  "order": "an order label - infer a sensible one from the existing exercises' order labels in that session (e.g. continue a superset group like \"1C\" if asked to add it alongside \"1A\"/\"1B\", or a plain trailing number/position if asked to add it \"at the end\")",
+  "sets": 3,
+  "reps": "8-12",
+  "rest": "",
+  "target_load": "",
+  "tempo": "",
+  "notes": "",
+  "each_side": false
+}
+Note: fields inside new_exercise use their real types (sets is a number), unlike old_value/new_value
+which are always strings.
+
 Rules:
 - Use exact session_id and exercise_id UUIDs from the provided data
-- Only modify exercises that exist in the upcoming sessions
+- For "update"/"delete", only touch exercises that exist in the upcoming sessions; for "add", only add to sessions that actually match the coach's criteria (e.g. "sessions with pull ups in")
 - Be specific - only change what the coach mentioned
 - To replace one exercise with a different one (e.g. "replace X with Y"), use action "update", field "name", old_value the current exercise name, new_value the replacement name - this changes which exercise it is, not just a parameter of it
 - To remove an exercise entirely (e.g. "delete/remove X"), use action "delete" - set field to "" and new_value to "" (old_value can still hold the current exercise name for display). NEVER represent a removal by setting field "name" to something like "DELETED" or "REMOVED" - always use action "delete" for that
+- To add a brand new exercise that doesn't already exist in a session (e.g. "add X to session Y"), use action "add" with a "new_exercise" object - NEVER represent an addition as an "update" to an invented/placeholder exercise_id
 - If the instruction is vague ("reduce volume"), apply a sensible interpretation and explain it in reason
 - Return an empty changes array if nothing applicable was found
 - Keep reasons brief and factual`;
@@ -78,6 +112,7 @@ export async function POST(req: NextRequest) {
     exercises: (s.exercises ?? []).map((e: any) => ({
       id: e.id,
       name: e.name,
+      order: e.order,
       sets: e.sets,
       reps: e.reps,
       target_load: e.target_load,
@@ -133,7 +168,7 @@ export async function POST(req: NextRequest) {
   // field update rather than letting the client crash on an unknown value.
   const changes = (parsed.changes ?? []).map((c) => ({
     ...c,
-    action: c.action === "delete" ? "delete" : "update",
+    action: c.action === "delete" ? "delete" : c.action === "add" ? "add" : "update",
   }));
 
   return NextResponse.json({

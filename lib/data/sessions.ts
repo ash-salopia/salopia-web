@@ -430,6 +430,7 @@ export async function propagateFutureOccurrences(
         notes: sourceEx.notes,
         video_url: sourceEx.video_url,
         order: sourceEx.order,
+        sort_order: sourceEx.sort_order,
       }).eq("id", targetEx.id);
       if (error) throw error;
     }
