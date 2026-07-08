@@ -7,7 +7,8 @@ export interface SessionChange {
   session_name: string;
   exercise_id: string;
   exercise_name: string;
-  field: "name" | "sets" | "reps" | "target_load" | "rest" | "tempo" | "notes";
+  action: "update" | "delete";
+  field: "name" | "sets" | "reps" | "target_load" | "rest" | "tempo" | "notes" | "";
   old_value: string;
   new_value: string;
   reason: string;
@@ -25,6 +26,7 @@ Always respond with valid JSON only - no markdown, no backticks:
       "session_name": "session name for display",
       "exercise_id": "exact uuid from the data",
       "exercise_name": "exercise name for display",
+      "action": "update",
       "field": "sets",
       "old_value": "3",
       "new_value": "4",
@@ -34,14 +36,16 @@ Always respond with valid JSON only - no markdown, no backticks:
   "message": "Brief summary of proposed changes."
 }
 
-Field options: name, sets, reps, target_load, rest, tempo, notes
+Action options: "update" (change one field on an exercise) or "delete" (remove the exercise from its session entirely)
+Field options (only used when action is "update"): name, sets, reps, target_load, rest, tempo, notes
 All values are strings (e.g. sets: "4" not 4, reps: "8-10")
 
 Rules:
 - Use exact session_id and exercise_id UUIDs from the provided data
 - Only modify exercises that exist in the upcoming sessions
 - Be specific - only change what the coach mentioned
-- To replace one exercise with a different one (e.g. "replace X with Y"), use field "name" with old_value the current exercise name and new_value the replacement name - this changes which exercise it is, not just a parameter of it
+- To replace one exercise with a different one (e.g. "replace X with Y"), use action "update", field "name", old_value the current exercise name, new_value the replacement name - this changes which exercise it is, not just a parameter of it
+- To remove an exercise entirely (e.g. "delete/remove X"), use action "delete" - set field to "" and new_value to "" (old_value can still hold the current exercise name for display). NEVER represent a removal by setting field "name" to something like "DELETED" or "REMOVED" - always use action "delete" for that
 - If the instruction is vague ("reduce volume"), apply a sensible interpretation and explain it in reason
 - Return an empty changes array if nothing applicable was found
 - Keep reasons brief and factual`;
@@ -124,8 +128,16 @@ export async function POST(req: NextRequest) {
     { role: "assistant", content: raw },
   ];
 
+  // Defensive default in case the model (or stale conversation history)
+  // omits the new "action" field — treat anything unrecognized as a plain
+  // field update rather than letting the client crash on an unknown value.
+  const changes = (parsed.changes ?? []).map((c) => ({
+    ...c,
+    action: c.action === "delete" ? "delete" : "update",
+  }));
+
   return NextResponse.json({
-    changes: parsed.changes ?? [],
+    changes,
     message: parsed.message ?? "",
     history: updatedHistory,
   });

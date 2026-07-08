@@ -10,13 +10,16 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import type { Session } from "@/types";
+import { listLibrary, saveLibraryEntry } from "@/lib/data/library";
+import { normalizeExerciseName } from "@/lib/exercise-name-match";
+import type { Session, LibraryEntry } from "@/types";
 
 interface SessionChange {
   session_id: string;
   session_name: string;
   exercise_id: string;
   exercise_name: string;
+  action: "update" | "delete";
   field: string;
   old_value: string;
   new_value: string;
@@ -57,6 +60,8 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
   const [error, setError] = useState("");
   const [corrText, setCorrText] = useState("");
   const [correcting, setCorrecting] = useState(false);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [addingToLibrary, setAddingToLibrary] = useState<number | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -64,12 +69,37 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    listLibrary().then(setLibrary).catch(() => {});
     return () => {
       timerRef.current && clearInterval(timerRef.current);
       recorderRef.current?.state !== "inactive" && recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  // A "name" field change swaps which exercise this is — check whether the
+  // new name is already in the library so the coach can add it if not
+  // (matches the same exact + normalized matching used by the CSV/Voice/
+  // Notes template flows), rather than silently leaving it unlinked.
+  const isInLibrary = (name: string): boolean => {
+    const target = name.toLowerCase().trim();
+    if (library.some((l) => l.name.toLowerCase() === target)) return true;
+    const normalizedTarget = normalizeExerciseName(name);
+    return library.some((l) => normalizeExerciseName(l.name) === normalizedTarget);
+  };
+
+  const addChangeToLibrary = async (index: number) => {
+    const change = changes[index];
+    setAddingToLibrary(index);
+    try {
+      const entry = await saveLibraryEntry({ name: change.new_value });
+      setLibrary((prev) => [...prev, entry]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add to library");
+    } finally {
+      setAddingToLibrary(null);
+    }
+  };
 
   // Accept all by default when changes arrive
   const setChangesAndAcceptAll = (newChanges: SessionChange[]) => {
@@ -207,6 +237,25 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
 
     try {
       for (const change of toApply) {
+        if (change.action === "delete") {
+          const { data: deletedRows, error: deleteErr } = await supabase
+            .from("session_exercises")
+            .delete()
+            .eq("id", change.exercise_id)
+            .select("id");
+
+          if (deleteErr) {
+            console.error(`Could not remove "${change.exercise_name}" (${change.session_name}):`, deleteErr);
+            throw new Error(
+              `${change.exercise_name} (${change.session_name}): ${deleteErr.message}${deleteErr.hint ? ` — ${deleteErr.hint}` : ""}`
+            );
+          }
+          if (!deletedRows?.length) {
+            throw new Error(`${change.exercise_name} (${change.session_name}): exercise no longer exists — it may have already been removed.`);
+          }
+          continue;
+        }
+
         const value = change.field === "sets"
           ? parseInt(change.new_value, 10) || 3
           : change.new_value;
@@ -341,29 +390,57 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                       </button>
                     </div>
                   </div>
-                  {changes.map((change, i) => (
-                    <div key={i} style={{ ...s.changeCard, ...(accepted.has(i) ? s.changeCardAccepted : s.changeCardSkipped) }}>
-                      <div style={s.changeTop}>
-                        <div style={s.changeInfo}>
-                          <div style={s.changeExercise}>{change.exercise_name}</div>
-                          <div style={s.changeSession}>{change.session_name}</div>
-                          <div style={s.changeDiff}>
-                            <span style={s.fieldLabel2}>{FIELD_LABELS[change.field] ?? change.field}</span>
-                            <span style={s.oldValue}>{change.old_value}</span>
-                            <span style={s.arrow}>→</span>
-                            <span style={s.newValue}>{change.new_value}</span>
+                  {changes.map((change, i) => {
+                    const isNameChange = change.action === "update" && change.field === "name";
+                    const matched = isNameChange && isInLibrary(change.new_value);
+                    return (
+                      <div key={i} style={{ ...s.changeCard, ...(accepted.has(i) ? s.changeCardAccepted : s.changeCardSkipped) }}>
+                        <div style={s.changeTop}>
+                          <div style={s.changeInfo}>
+                            <div style={s.changeExercise}>{change.exercise_name}</div>
+                            <div style={s.changeSession}>{change.session_name}</div>
+                            {change.action === "delete" ? (
+                              <div style={s.changeDiff}>
+                                <span style={{ ...s.fieldLabel2, color: "#FF6B6B" }}>🗑 Remove</span>
+                              </div>
+                            ) : (
+                              <div style={s.changeDiff}>
+                                <span style={s.fieldLabel2}>{FIELD_LABELS[change.field] ?? change.field}</span>
+                                <span style={s.oldValue}>{change.old_value}</span>
+                                <span style={s.arrow}>→</span>
+                                <span style={s.newValue}>{change.new_value}</span>
+                              </div>
+                            )}
+                            {isNameChange && (
+                              <div style={s.libraryRow}>
+                                {matched ? (
+                                  <span style={s.libraryMatched}>✓ In your exercise library</span>
+                                ) : (
+                                  <>
+                                    <span style={s.libraryUnmatched}>⚠ Not in your exercise library</span>
+                                    <button
+                                      style={s.libraryAddBtn}
+                                      disabled={addingToLibrary === i}
+                                      onClick={() => addChangeToLibrary(i)}
+                                    >
+                                      {addingToLibrary === i ? "Adding…" : `+ Add "${change.new_value}"`}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                            <div style={s.changeReason}>{change.reason}</div>
                           </div>
-                          <div style={s.changeReason}>{change.reason}</div>
+                          <button
+                            style={{ ...s.toggleBtn, ...(accepted.has(i) ? s.toggleBtnAccepted : s.toggleBtnSkipped) }}
+                            onClick={() => toggleAccepted(i)}
+                          >
+                            {accepted.has(i) ? "✓ Accept" : "✗ Skip"}
+                          </button>
                         </div>
-                        <button
-                          style={{ ...s.toggleBtn, ...(accepted.has(i) ? s.toggleBtnAccepted : s.toggleBtnSkipped) }}
-                          onClick={() => toggleAccepted(i)}
-                        >
-                          {accepted.has(i) ? "✓ Accept" : "✗ Skip"}
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -454,6 +531,10 @@ const s: Record<string, React.CSSProperties> = {
   arrow: { fontSize: 13, color: "var(--mute)" },
   newValue: { fontSize: 13, fontWeight: 700, color: "var(--good)" },
   changeReason: { fontSize: 11, color: "var(--mute)", marginTop: 4, fontStyle: "italic" },
+  libraryRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" as const },
+  libraryMatched: { fontSize: 11, color: "var(--good)" },
+  libraryUnmatched: { fontSize: 11, color: "#f5a623" },
+  libraryAddBtn: { background: "transparent", border: "1px dashed var(--accent)", color: "var(--accent)", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
   toggleBtn: { borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0 },
   toggleBtnAccepted: { background: "var(--good)", color: "#0a1420" },
   toggleBtnSkipped: { background: "var(--panel2)", color: "var(--mute)" },
