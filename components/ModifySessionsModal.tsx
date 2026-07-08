@@ -211,12 +211,21 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
           ? parseInt(change.new_value, 10) || 3
           : change.new_value;
 
-        const { error: updateErr } = await supabase
+        const { data: updatedRows, error: updateErr } = await supabase
           .from("session_exercises")
           .update({ [change.field]: value })
-          .eq("id", change.exercise_id);
+          .eq("id", change.exercise_id)
+          .select("id");
 
-        if (updateErr) throw updateErr;
+        if (updateErr) {
+          console.error(`Could not update "${change.exercise_name}" (${change.session_name}):`, updateErr);
+          throw new Error(
+            `${change.exercise_name} (${change.session_name}): ${updateErr.message}${updateErr.hint ? ` — ${updateErr.hint}` : ""}`
+          );
+        }
+        if (!updatedRows?.length) {
+          throw new Error(`${change.exercise_name} (${change.session_name}): exercise no longer exists — it may have been edited or removed since this was proposed.`);
+        }
       }
       onApplied();
     } catch (e) {
