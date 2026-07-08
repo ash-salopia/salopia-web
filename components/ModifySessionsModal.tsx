@@ -41,7 +41,7 @@ function getBestMimeType(): string {
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  sets: "Sets", reps: "Reps", target_load: "Load",
+  name: "Exercise", sets: "Sets", reps: "Reps", target_load: "Load",
   rest: "Rest", tempo: "Tempo", notes: "Notes",
 };
 

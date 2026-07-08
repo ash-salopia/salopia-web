@@ -7,7 +7,7 @@ export interface SessionChange {
   session_name: string;
   exercise_id: string;
   exercise_name: string;
-  field: "sets" | "reps" | "target_load" | "rest" | "tempo" | "notes";
+  field: "name" | "sets" | "reps" | "target_load" | "rest" | "tempo" | "notes";
   old_value: string;
   new_value: string;
   reason: string;
@@ -34,13 +34,14 @@ Always respond with valid JSON only - no markdown, no backticks:
   "message": "Brief summary of proposed changes."
 }
 
-Field options: sets, reps, target_load, rest, tempo, notes
+Field options: name, sets, reps, target_load, rest, tempo, notes
 All values are strings (e.g. sets: "4" not 4, reps: "8-10")
 
 Rules:
 - Use exact session_id and exercise_id UUIDs from the provided data
 - Only modify exercises that exist in the upcoming sessions
 - Be specific - only change what the coach mentioned
+- To replace one exercise with a different one (e.g. "replace X with Y"), use field "name" with old_value the current exercise name and new_value the replacement name - this changes which exercise it is, not just a parameter of it
 - If the instruction is vague ("reduce volume"), apply a sensible interpretation and explain it in reason
 - Return an empty changes array if nothing applicable was found
 - Keep reasons brief and factual`;
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 4096, // bulk multi-session edits (e.g. "from the 9th onwards") can produce many change objects
       system: SYSTEM,
       messages,
     }),
