@@ -105,6 +105,23 @@ export default function AthleteSessionView({
     }
   };
 
+  const handleAthleteNotesChange = async (athlete_notes: string) => {
+    setSession((prev) => (prev ? { ...prev, athlete_notes } : prev));
+    try {
+      const res = await fetch("/api/athlete-link/session-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, sessionId: session?.id, notes: athlete_notes }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Could not save");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save your note");
+    }
+  };
+
   const handleSetUpdate = async (exerciseId: string, setIndex: number, patch: Partial<SetLog>) => {
     const exercise = session?.exercises?.find((e) => e.id === exerciseId);
     if (!exercise) return;
@@ -192,9 +209,17 @@ export default function AthleteSessionView({
       {error && <div style={styles.errorBox}>{error}</div>}
 
       <SessionNotesBlock
-        value={(session as any).session_notes ?? ""}
+        value={session.session_notes ?? ""}
         onChange={() => {}}
         readOnly={true}
+      />
+
+      <SessionNotesBlock
+        value={session.athlete_notes ?? ""}
+        onChange={handleAthleteNotesChange}
+        label="Your Notes"
+        icon="📝"
+        placeholder="How did the session feel? Anything to flag for your coach…"
       />
 
       <div style={styles.exerciseList}>

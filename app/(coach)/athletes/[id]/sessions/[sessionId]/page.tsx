@@ -702,6 +702,16 @@ export default function SessionDetailPage() {
         sessionType={session.type}
       />
 
+      {session.athlete_notes && (
+        <SessionNotesBlock
+          value={session.athlete_notes}
+          onChange={() => {}}
+          readOnly={true}
+          label="Athlete's Notes"
+          icon="📝"
+        />
+      )}
+
       {/* ── Update future occurrences banner ── */}
       {session.source_session_id && (
         <div style={styles.propagateBanner}>

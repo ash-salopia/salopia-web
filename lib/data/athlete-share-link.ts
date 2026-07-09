@@ -96,3 +96,27 @@ export async function updateAthleteProgress(
   const { error } = await supabase.from("session_exercises").update({ progress }).eq("id", exerciseId);
   if (error) throw error;
 }
+
+// Athlete's own note on a session (separate from the coach's
+// session_notes — see 0033_athlete_session_notes.sql). Deliberately
+// its own function, same pattern as the two above, rather than a
+// generic session-patch endpoint.
+export async function updateAthleteSessionNotes(
+  sessionId: string,
+  athleteId: string,
+  athleteNotes: string
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) {
+    throw new Error("This session does not belong to you");
+  }
+
+  const { error } = await supabase.from("sessions").update({ athlete_notes: athleteNotes }).eq("id", sessionId);
+  if (error) throw error;
+}

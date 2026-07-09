@@ -8,9 +8,20 @@ interface Props {
   onChange: (val: string) => void;
   readOnly?: boolean;
   sessionType?: string;
+  label?: string;
+  icon?: string;
+  placeholder?: string;
 }
 
-export default function SessionNotesBlock({ value, onChange, readOnly = false, sessionType }: Props) {
+export default function SessionNotesBlock({
+  value,
+  onChange,
+  readOnly = false,
+  sessionType,
+  label = "Session Notes",
+  icon = "📋",
+  placeholder = "Warm-up protocol, coaching cues, drill progressions…",
+}: Props) {
   const [isOpen, setIsOpen] = useState(!!value);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
@@ -45,8 +56,8 @@ export default function SessionNotesBlock({ value, onChange, readOnly = false, s
     <div style={s.wrap}>
       <button style={s.header} onClick={() => setIsOpen(o => !o)}>
         <span style={s.headerLeft}>
-          <span style={s.icon}>📋</span>
-          <span style={s.label}>Session Notes</span>
+          <span style={s.icon}>{icon}</span>
+          <span style={s.label}>{label}</span>
           {value && <span style={s.badge}>{lineCount} line{lineCount !== 1 ? "s" : ""}</span>}
         </span>
         <span style={{ ...s.chevron, transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
@@ -82,7 +93,7 @@ export default function SessionNotesBlock({ value, onChange, readOnly = false, s
               ref={textareaRef}
               value={value}
               onChange={e => onChange(e.target.value)}
-              placeholder={`Warm-up protocol, coaching cues, drill progressions…`}
+              placeholder={placeholder}
               rows={6}
               style={s.textarea}
             />
