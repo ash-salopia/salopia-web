@@ -5,6 +5,7 @@ import { listLibrary, saveLibraryEntry, deleteLibraryEntry } from "@/lib/data/li
 import { importLibraryCsv } from "@/lib/library-csv-import";
 import YouTubeImportDialog from "@/components/YouTubeImportDialog";
 import VideoModal from "@/components/VideoModal";
+import LibraryEntryForm from "@/components/LibraryEntryForm";
 import type { LibraryEntry } from "@/types";
 
 export default function LibraryPage() {
@@ -50,6 +51,7 @@ export default function LibraryPage() {
 
   const handleSave = async (entry: Partial<LibraryEntry> & { name: string }) => {
     try {
+      const wasNew = !entry.id;
       const saved = await saveLibraryEntry(entry);
       setLibrary((prev) => {
         const exists = prev.some((e) => e.id === saved.id);
@@ -58,6 +60,8 @@ export default function LibraryPage() {
       });
       setSelected(saved);
       setAdding(false);
+      setFlash(`"${saved.name}" ${wasNew ? "added to" : "updated in"} your library`);
+      setTimeout(() => setFlash(""), 4000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save entry");
     }
@@ -196,7 +200,7 @@ export default function LibraryPage() {
         </div>
 
         {(selected || adding) && (
-          <LibraryEntryEditor
+          <LibraryEntryForm
             key={selected?.id ?? "new"}
             entry={selected}
             onSave={handleSave}
@@ -231,129 +235,12 @@ export default function LibraryPage() {
   );
 }
 
-function LibraryEntryEditor({
-  entry,
-  onSave,
-  onClose,
-}: {
-  entry: LibraryEntry | null;
-  onSave: (entry: Partial<LibraryEntry> & { name: string }) => void;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState(entry?.name ?? "");
-  const [videoUrl, setVideoUrl] = useState(entry?.video_url ?? "");
-  const [sets, setSets] = useState(entry?.sets ?? "");
-  const [reps, setReps] = useState(entry?.reps ?? "");
-  const [rest, setRest] = useState(entry?.rest ?? "");
-  const [targetLoad, setTargetLoad] = useState(entry?.target_load ?? "");
-  const [tempo, setTempo] = useState(entry?.tempo ?? "2-0-2");
-  const [notes, setNotes] = useState(entry?.notes ?? "");
-  const [types, setTypes] = useState<string[]>(entry?.types ?? []);
-
-  const SESSION_TYPES = ["Strength", "Power/Speed", "Cardio", "Hyrox"];
-  const toggleType = (t: string) =>
-    setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onSave({
-      id: entry?.id,
-      name: name.trim(),
-      video_url: videoUrl.trim(),
-      sets,
-      reps,
-      rest,
-      target_load: targetLoad,
-      tempo,
-      notes,
-      types,
-    } as Partial<LibraryEntry> & { name: string });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={styles.editorPane}>
-      <div style={styles.headerRow}>
-        <h2 style={styles.editorTitle}>{entry ? "Edit exercise" : "New exercise"}</h2>
-        <button type="button" style={styles.closeBtn} onClick={onClose}>
-          ×
-        </button>
-      </div>
-      <FieldRow label="Name">
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} style={styles.input} />
-      </FieldRow>
-      <FieldRow label="Video URL">
-        <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." style={styles.input} />
-      </FieldRow>
-      <div style={{ display: "flex", gap: 8 }}>
-        <FieldRow label="Sets"><input value={sets} onChange={(e) => setSets(e.target.value)} style={styles.input} /></FieldRow>
-        <FieldRow label="Reps"><input value={reps} onChange={(e) => setReps(e.target.value)} style={styles.input} /></FieldRow>
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <FieldRow label="Rest"><input value={rest} onChange={(e) => setRest(e.target.value)} style={styles.input} /></FieldRow>
-        <FieldRow label="Tempo">
-          <input
-            value={tempo}
-            onChange={(e) => setTempo(e.target.value.replace(/[^0-9-]/g, ""))}
-            style={styles.input}
-          />
-        </FieldRow>
-      </div>
-      <FieldRow label="Default load">
-        <input value={targetLoad} onChange={(e) => setTargetLoad(e.target.value)} placeholder="e.g. 60kg" style={styles.input} />
-      </FieldRow>
-      <FieldRow label="Notes">
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...styles.input, minHeight: 70 }} />
-      </FieldRow>
-      <FieldRow label="Session types">
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {SESSION_TYPES.map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => toggleType(t)}
-              style={{
-                background: types.includes(t) ? "var(--accent-dim)" : "var(--ink)",
-                border: `1px solid ${types.includes(t) ? "var(--accent)" : "var(--line)"}`,
-                color: types.includes(t) ? "var(--accent)" : "var(--mute)",
-                borderRadius: 6,
-                padding: "5px 10px",
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
-          Tag which session types this exercise appears in
-        </div>
-      </FieldRow>
-      <button type="submit" style={styles.primaryBtn}>
-        Save
-      </button>
-    </form>
-  );
-}
-
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 12, flex: 1 }}>
-      <div style={styles.fieldLabel}>{label}</div>
-      {children}
-    </div>
-  );
-}
-
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 1000 },
   layout: { display: "flex", gap: 20 },
   listPane: { flex: 1, minWidth: 0 },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, margin: 0 },
-  editorTitle: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, margin: 0 },
   primaryBtn: {
     background: "var(--accent)",
     color: "#0a1420",
@@ -436,14 +323,4 @@ const styles: Record<string, React.CSSProperties> = {
   rowName: { fontWeight: 700, fontSize: 14, color: "var(--text)" },
   rowTypes: { fontSize: 11, color: "var(--mute)", marginTop: 2 },
   deleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 16, cursor: "pointer" },
-  editorPane: {
-    width: 320,
-    flexShrink: 0,
-    background: "var(--panel)",
-    border: "1px solid var(--line)",
-    borderRadius: 12,
-    padding: 16,
-    height: "fit-content",
-  },
-  fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4, fontWeight: 600 },
 };

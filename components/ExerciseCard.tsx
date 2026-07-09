@@ -3,6 +3,8 @@
 import { useState } from "react";
 import VideoModal from "@/components/VideoModal";
 import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
+import LibraryEntryForm from "@/components/LibraryEntryForm";
+import { saveLibraryEntry } from "@/lib/data/library";
 import type { SessionExercise, SetLog, LibraryEntry } from "@/types";
 
 interface Props {
@@ -35,6 +37,8 @@ export default function ExerciseCard({
   const [videoOpen, setVideoOpen] = useState(false);
   const [nameDropdownOpen, setNameDropdownOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [addToLibraryOpen, setAddToLibraryOpen] = useState(false);
+  const [addToLibraryError, setAddToLibraryError] = useState("");
 
   // Wraps onEdit: always updates this exercise, and if the "apply to
   // future" toggle is on, also pushes the same patch to every future
@@ -55,6 +59,7 @@ export default function ExerciseCard({
   const nameMatches = nameQuery
     ? library.filter((l) => l.name.toLowerCase().includes(nameQuery)).slice(0, 8)
     : [];
+  const hasExactMatch = nameQuery && library.some((l) => l.name.toLowerCase() === nameQuery);
 
   // Picking a library entry copies its preset fields onto this
   // exercise — video, sets, reps, time, rest, load, tempo, notes —
@@ -76,6 +81,17 @@ export default function ExerciseCard({
     if (entry.notes) patch.notes = entry.notes;
     onEdit(patch);
     setNameDropdownOpen(false);
+  };
+
+  const handleAddToLibrary = async (entry: Partial<LibraryEntry> & { name: string }) => {
+    setAddToLibraryError("");
+    try {
+      const saved = await saveLibraryEntry(entry);
+      setAddToLibraryOpen(false);
+      applyLibraryPreset(saved);
+    } catch (e) {
+      setAddToLibraryError(e instanceof Error ? e.message : "Could not save to library");
+    }
   };
 
   const log = exercise.log || [];
@@ -125,7 +141,7 @@ export default function ExerciseCard({
             placeholder="Exercise name"
             style={styles.nameInput}
           />
-          {nameDropdownOpen && nameMatches.length > 0 && (
+          {nameDropdownOpen && nameQuery && (nameMatches.length > 0 || !hasExactMatch) && (
             <div style={styles.nameDropdown}>
               {nameMatches.map((entry) => (
                 <button
@@ -140,6 +156,17 @@ export default function ExerciseCard({
                   {entry.video_url && <span style={styles.nameDropdownVideoTag}>▶</span>}
                 </button>
               ))}
+              {!hasExactMatch && (
+                <button
+                  style={styles.nameDropdownAddBtn}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setAddToLibraryOpen(true);
+                  }}
+                >
+                  + Add &quot;{exercise.name.trim()}&quot; to library
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -187,6 +214,21 @@ export default function ExerciseCard({
           currentSessionId={currentSessionId ?? ""}
           onClose={() => setHistoryOpen(false)}
         />
+      )}
+
+      {addToLibraryOpen && (
+        <div style={styles.addToLibraryOverlay} onClick={() => setAddToLibraryOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}>
+            {addToLibraryError && <div style={styles.addToLibraryError}>{addToLibraryError}</div>}
+            <LibraryEntryForm
+              entry={null}
+              initialName={exercise.name.trim()}
+              title={`Add "${exercise.name.trim()}" to library`}
+              onSave={handleAddToLibrary}
+              onClose={() => setAddToLibraryOpen(false)}
+            />
+          </div>
+        </div>
       )}
 
       {onApplyFuture && (
@@ -431,6 +473,39 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "left",
   },
   nameDropdownVideoTag: { color: "var(--accent)", fontSize: 11 },
+  nameDropdownAddBtn: {
+    display: "block",
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 7,
+    border: "1px dashed var(--accent)",
+    background: "var(--accent-dim)",
+    color: "var(--accent)",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    textAlign: "left",
+    marginTop: 4,
+  },
+  addToLibraryOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(6,9,12,.82)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 80,
+    padding: 16,
+  },
+  addToLibraryError: {
+    background: "#2a0c0c",
+    border: "1px solid #FF6B6B44",
+    color: "#FF6B6B",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 13,
+    marginBottom: 8,
+  },
   removeBtn: {
     background: "transparent",
     border: "none",
