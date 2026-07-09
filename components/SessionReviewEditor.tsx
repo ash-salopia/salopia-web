@@ -202,6 +202,16 @@ export default function SessionReviewEditor({
     );
   };
 
+  const removeExercise = (si: number, ei: number) => {
+    onChange(
+      sessions.map((session, sIdx) =>
+        sIdx === si
+          ? { ...session, exercises: renumberOrders(session.exercises.filter((_, eIdx) => eIdx !== ei)) }
+          : session
+      )
+    );
+  };
+
   const countMatches = (si: number, ei: number): number => {
     const targetName = sessions[si].exercises[ei].name;
     let count = 0;
@@ -389,6 +399,14 @@ export default function SessionReviewEditor({
                   >
                     {ex.name || "Unnamed"}
                     <span style={s.nameCaret}>▾</span>
+                  </button>
+
+                  <button
+                    style={s.removeExBtn}
+                    title="Remove this exercise"
+                    onClick={() => removeExercise(si, ei)}
+                  >
+                    ×
                   </button>
                 </div>
 
@@ -861,11 +879,23 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 4,
     textAlign: "left" as const,
+    flex: 1,
+    minWidth: 0,
   },
   nameCaret: {
     fontSize: 9,
     color: "var(--mute)",
     opacity: 0.6,
+  },
+  removeExBtn: {
+    background: "transparent",
+    border: "none",
+    color: "var(--mute)",
+    fontSize: 18,
+    lineHeight: 1,
+    cursor: "pointer",
+    padding: "0 2px",
+    flexShrink: 0,
   },
   // Picker
   picker: {
