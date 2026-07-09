@@ -157,6 +157,16 @@ export default function ExerciseCard({
             📈
           </button>
         )}
+        {exercise.progress === "yes" && (
+          <span style={styles.progressBadgeYes} title="Athlete said they could progress this next time">
+            👍 progress
+          </span>
+        )}
+        {exercise.progress === "no" && (
+          <span style={styles.progressBadgeNo} title="Athlete said they couldn't progress this yet">
+            👎 hold
+          </span>
+        )}
         <button style={styles.removeBtn} onClick={onRemove}>
           ×
         </button>
@@ -453,6 +463,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+  },
+  progressBadgeYes: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--good)",
+    background: "var(--good-dim)",
+    borderRadius: 6,
+    padding: "4px 8px",
+    flexShrink: 0,
+    whiteSpace: "nowrap" as const,
+  },
+  progressBadgeNo: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--mute)",
+    background: "var(--panel2)",
+    borderRadius: 6,
+    padding: "4px 8px",
+    flexShrink: 0,
+    whiteSpace: "nowrap" as const,
   },
   checkboxRow: {
     display: "flex",

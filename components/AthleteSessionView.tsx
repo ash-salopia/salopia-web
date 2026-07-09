@@ -7,19 +7,46 @@ import CheckInModal from "@/components/CheckInModal";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { Session, SetLog } from "@/types";
 
+// Most recent PRIOR occurrence (by date) of each exercise name for this
+// athlete, keyed by lowercased/trimmed name, mapped to that occurrence's
+// own progress answer. Used to show "you said you could progress this
+// last time" — deliberately only looks at the single most recent prior
+// occurrence, not any earlier one, so a "no" always clears the reminder
+// for next time regardless of an older "yes" further back.
+function computePriorProgress(
+  allSessions: Session[],
+  currentSession: Session
+): Map<string, "yes" | "no" | ""> {
+  const prior = allSessions
+    .filter((s) => s.id !== currentSession.id && s.date < currentSession.date)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // most recent first
+
+  const result = new Map<string, "yes" | "no" | "">();
+  for (const s of prior) {
+    for (const ex of s.exercises ?? []) {
+      const key = ex.name.toLowerCase().trim();
+      if (!result.has(key)) result.set(key, ex.progress || "");
+    }
+  }
+  return result;
+}
+
 export default function AthleteSessionView({
   session: initialSession,
+  allSessions: initialAllSessions,
   sessionId,
   athleteName,
   token,
 }: {
   session?: Session;
+  allSessions?: Session[];
   sessionId?: string;
   athleteName: string;
   token: string;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(initialSession ?? null);
+  const [allSessions, setAllSessions] = useState<Session[]>(initialAllSessions ?? []);
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
@@ -28,9 +55,14 @@ export default function AthleteSessionView({
     fetch(`/api/athlete-link/sessions?token=${encodeURIComponent(token)}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
-        const found = (data.sessions ?? []).find((s: Session) => s.id === id);
-        if (found) setSession(found);
-        else setLoadError("Session not found.");
+        const sessions: Session[] = data.sessions ?? [];
+        const found = sessions.find((s) => s.id === id);
+        if (found) {
+          setSession(found);
+          setAllSessions(sessions);
+        } else {
+          setLoadError("Session not found.");
+        }
       })
       .catch(() => setLoadError("Could not load session."));
   }, [token, sessionId, initialSession]);
@@ -46,6 +78,32 @@ export default function AthleteSessionView({
     0
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
+  const priorProgress = session ? computePriorProgress(allSessions, session) : new Map();
+
+  const handleProgressAnswer = async (exerciseId: string, progress: "yes" | "no") => {
+    const exercise = session?.exercises?.find((e) => e.id === exerciseId);
+    if (!exercise) return;
+
+    // Optimistic update, same pattern as handleSetUpdate below.
+    setSession((prev) => prev ? ({
+      ...prev,
+      exercises: prev.exercises?.map((e) => (e.id === exerciseId ? { ...e, progress } : e)),
+    }) : prev);
+
+    try {
+      const res = await fetch("/api/athlete-link/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, exerciseId, progress }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Could not save");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save your answer");
+    }
+  };
 
   const handleSetUpdate = async (exerciseId: string, setIndex: number, patch: Partial<SetLog>) => {
     const exercise = session?.exercises?.find((e) => e.id === exerciseId);
@@ -140,7 +198,10 @@ export default function AthleteSessionView({
       />
 
       <div style={styles.exerciseList}>
-        {exercises.map((ex) => (
+        {exercises.map((ex) => {
+          const priorAnswer = priorProgress.get(ex.name.toLowerCase().trim());
+          const allSetsDone = (ex.log ?? []).length > 0 && (ex.log ?? []).every((s) => s.done);
+          return (
           <div key={ex.id} style={styles.card}>
             <div style={styles.exHeadRow}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
@@ -162,6 +223,9 @@ export default function AthleteSessionView({
               {ex.target_load ? ` · ${ex.target_load}` : ""}
             </div>
             {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
+            {priorAnswer === "yes" && (
+              <div style={styles.progressReminder}>💪 Last time you said you could progress this — try more weight or reps!</div>
+            )}
 
             <div style={styles.setGrid}>
               {(ex.log ?? []).map((set, i) => {
@@ -207,8 +271,22 @@ export default function AthleteSessionView({
               })}
             </div>
             {saving === ex.id && <div style={styles.savingLabel}>Saving…</div>}
+            {allSetsDone && !ex.progress && (
+              <div style={styles.progressPrompt}>
+                <span style={styles.progressPromptLabel}>Could you have progressed this next session?</span>
+                <div style={styles.progressPromptBtns}>
+                  <button style={styles.progressYesBtn} onClick={() => handleProgressAnswer(ex.id, "yes")}>
+                    Yes
+                  </button>
+                  <button style={styles.progressNoBtn} onClick={() => handleProgressAnswer(ex.id, "no")}>
+                    No
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
         {!exercises.length && <div style={styles.empty}>No exercises in this session.</div>}
       </div>
 
@@ -321,4 +399,45 @@ const styles: Record<string, React.CSSProperties> = {
   doneBtnOn: { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
   savingLabel: { fontSize: 11, color: "var(--mute)", marginTop: 6 },
   empty: { color: "var(--mute)", fontSize: 14, padding: "20px 0", textAlign: "center" },
+  progressReminder: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--accent)",
+    background: "var(--accent-dim)",
+    borderRadius: 8,
+    padding: "8px 10px",
+    marginTop: 8,
+  },
+  progressPrompt: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    background: "var(--panel2)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    marginTop: 10,
+  },
+  progressPromptLabel: { fontSize: 12, color: "var(--text)", fontWeight: 600, flex: 1 },
+  progressPromptBtns: { display: "flex", gap: 8, flexShrink: 0 },
+  progressYesBtn: {
+    background: "var(--good-dim)",
+    color: "var(--good)",
+    border: "none",
+    borderRadius: 6,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  progressNoBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--mute)",
+    borderRadius: 6,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
 };

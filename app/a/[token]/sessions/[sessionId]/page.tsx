@@ -18,16 +18,20 @@ export default async function AthleteLinkSessionPage({
   // the coach the server cache may miss them — in that case pass undefined
   // and let AthleteSessionView client-fetch via /api/athlete-link/sessions.
   let session;
+  let allSessions;
   try {
     const sessions = await getAthleteSessions(athlete.id);
     session = sessions.find((s) => s.id === sessionId);
+    allSessions = sessions;
   } catch {
     session = undefined;
+    allSessions = undefined;
   }
 
   return (
     <AthleteSessionView
       session={session}
+      allSessions={allSessions}
       sessionId={sessionId}
       athleteName={athlete.name}
       token={token}
