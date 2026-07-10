@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import VideoModal from "@/components/VideoModal";
 import CheckInModal from "@/components/CheckInModal";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
 import type { Session, SetLog } from "@/types";
 
 // Most recent PRIOR occurrence (by date) of each exercise name for this
@@ -70,6 +71,7 @@ export default function AthleteSessionView({
   const [saving, setSaving] = useState<string | null>(null);
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [historyExercise, setHistoryExercise] = useState<string | null>(null);
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
@@ -233,14 +235,25 @@ export default function AthleteSessionView({
                 {ex.order && <span style={styles.orderBadge}>{ex.order}</span>}
                 <div style={styles.exName}>{ex.name || "Exercise"}</div>
               </div>
-              {ex.video_url && (
-                <button
-                  style={styles.watchBtn}
-                  onClick={() => setVideoModal({ url: ex.video_url, title: ex.name })}
-                >
-                  ▶ Watch
-                </button>
-              )}
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {ex.name.trim() && (
+                  <button
+                    style={styles.historyBtn}
+                    onClick={() => setHistoryExercise(ex.name)}
+                    title="View history & PB"
+                  >
+                    📈
+                  </button>
+                )}
+                {ex.video_url && (
+                  <button
+                    style={styles.watchBtn}
+                    onClick={() => setVideoModal({ url: ex.video_url, title: ex.name })}
+                  >
+                    ▶ Watch
+                  </button>
+                )}
+              </div>
             </div>
             <div style={styles.prescLine}>
               {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
@@ -322,6 +335,14 @@ export default function AthleteSessionView({
           onClose={() => setVideoModal(null)}
         />
       )}
+
+      {historyExercise && (
+        <AthleteExerciseHistoryModal
+          token={token}
+          exerciseName={historyExercise}
+          onClose={() => setHistoryExercise(null)}
+        />
+      )}
     </div>
   );
 }
@@ -382,6 +403,20 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     flexShrink: 0,
     whiteSpace: "nowrap",
+  },
+  historyBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--mute)",
+    fontSize: 14,
+    cursor: "pointer",
+    borderRadius: 8,
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   prescLine: { fontSize: 13, color: "var(--mute)", marginTop: 4 },
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
