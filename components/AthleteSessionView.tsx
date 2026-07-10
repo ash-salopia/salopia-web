@@ -107,19 +107,32 @@ export default function AthleteSessionView({
     }
   };
 
-  const handleAthleteNotesChange = async (athlete_notes: string) => {
+  const handleAthleteNotesChange = (athlete_notes: string) => {
     setSession((prev) => (prev ? { ...prev, athlete_notes } : prev));
+  };
+
+  // Fires once, when the athlete leaves the notes field, rather than on
+  // every keystroke — a save fired per keystroke can race on a patchy
+  // gym connection (an earlier, shorter in-flight request landing after
+  // a later, fuller one) and leave a truncated note. One retry covers a
+  // save that fails outright rather than just arriving out of order.
+  const saveAthleteNotes = async (sessionId: string, notes: string, attempt = 1) => {
     try {
       const res = await fetch("/api/athlete-link/session-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, sessionId: session?.id, notes: athlete_notes }),
+        body: JSON.stringify({ token, sessionId, notes }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Could not save");
       }
+      setError("");
     } catch (e) {
+      if (attempt < 2) {
+        setTimeout(() => saveAthleteNotes(sessionId, notes, attempt + 1), 1500);
+        return;
+      }
       setError(e instanceof Error ? e.message : "Could not save your note");
     }
   };
@@ -219,6 +232,7 @@ export default function AthleteSessionView({
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}
         onChange={handleAthleteNotesChange}
+        onBlur={() => saveAthleteNotes(session.id, session.athlete_notes ?? "")}
         label="Your Notes"
         icon="📝"
         placeholder="How did the session feel? Anything to flag for your coach…"

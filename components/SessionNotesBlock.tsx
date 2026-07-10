@@ -6,6 +6,7 @@ import { listNoteTemplates, type NoteTemplate } from "@/lib/data/note-templates"
 interface Props {
   value: string;
   onChange: (val: string) => void;
+  onBlur?: () => void;
   readOnly?: boolean;
   sessionType?: string;
   label?: string;
@@ -16,6 +17,7 @@ interface Props {
 export default function SessionNotesBlock({
   value,
   onChange,
+  onBlur,
   readOnly = false,
   sessionType,
   label = "Session Notes",
@@ -93,6 +95,7 @@ export default function SessionNotesBlock({
               ref={textareaRef}
               value={value}
               onChange={e => onChange(e.target.value)}
+              onBlur={onBlur}
               placeholder={placeholder}
               rows={6}
               style={s.textarea}
