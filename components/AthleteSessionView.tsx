@@ -6,6 +6,7 @@ import VideoModal from "@/components/VideoModal";
 import CheckInModal from "@/components/CheckInModal";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
+import { saveWithRetry, usePendingSaveCount } from "@/lib/save-queue";
 import type { Session, SetLog } from "@/types";
 
 // Most recent PRIOR occurrence (by date) of each exercise name for this
@@ -72,6 +73,7 @@ export default function AthleteSessionView({
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
+  const pendingSaves = usePendingSaveCount();
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
@@ -92,18 +94,13 @@ export default function AthleteSessionView({
       exercises: prev.exercises?.map((e) => (e.id === exerciseId ? { ...e, progress } : e)),
     }) : prev);
 
-    try {
-      const res = await fetch("/api/athlete-link/progress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, exerciseId, progress }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Could not save");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save your answer");
+    const result = await saveWithRetry(
+      `progress:${session?.id}:${exerciseId}`,
+      "/api/athlete-link/progress",
+      { token, exerciseId, progress }
+    );
+    if (!result.ok && !result.queued) {
+      setError(result.error);
     }
   };
 
@@ -114,26 +111,17 @@ export default function AthleteSessionView({
   // Fires once, when the athlete leaves the notes field, rather than on
   // every keystroke — a save fired per keystroke can race on a patchy
   // gym connection (an earlier, shorter in-flight request landing after
-  // a later, fuller one) and leave a truncated note. One retry covers a
-  // save that fails outright rather than just arriving out of order.
-  const saveAthleteNotes = async (sessionId: string, notes: string, attempt = 1) => {
-    try {
-      const res = await fetch("/api/athlete-link/session-notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, sessionId, notes }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Could not save");
-      }
+  // a later, fuller one) and leave a truncated note.
+  const saveAthleteNotes = async (sessionId: string, notes: string) => {
+    const result = await saveWithRetry(`notes:${sessionId}`, "/api/athlete-link/session-notes", {
+      token,
+      sessionId,
+      notes,
+    });
+    if (result.ok) {
       setError("");
-    } catch (e) {
-      if (attempt < 2) {
-        setTimeout(() => saveAthleteNotes(sessionId, notes, attempt + 1), 1500);
-        return;
-      }
-      setError(e instanceof Error ? e.message : "Could not save your note");
+    } else if (!result.queued) {
+      setError(result.error);
     }
   };
 
@@ -154,21 +142,15 @@ export default function AthleteSessionView({
 
     setSaving(exerciseId);
     setError("");
-    try {
-      const res = await fetch("/api/athlete-link/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, sessionId: session?.id, exerciseId, log: newLog }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Could not save");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save your set");
-    } finally {
-      setSaving(null);
+    const result = await saveWithRetry(
+      `log:${session?.id}:${exerciseId}`,
+      "/api/athlete-link/log",
+      { token, sessionId: session?.id, exerciseId, log: newLog }
+    );
+    if (!result.ok && !result.queued) {
+      setError(result.error);
     }
+    setSaving(null);
   };
 
   if (loadError) {
@@ -222,6 +204,12 @@ export default function AthleteSessionView({
       )}
 
       {error && <div style={styles.errorBox}>{error}</div>}
+
+      {pendingSaves > 0 && (
+        <div style={styles.pendingBox}>
+          ☁️ {pendingSaves} change{pendingSaves !== 1 ? "s" : ""} waiting for a connection — will save automatically
+        </div>
+      )}
 
       <SessionNotesBlock
         value={session.session_notes ?? ""}
@@ -399,6 +387,16 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     padding: "10px 12px",
     fontSize: 13,
+    marginBottom: 16,
+  },
+  pendingBox: {
+    background: "var(--accent-dim)",
+    border: "1px solid var(--accent)44",
+    color: "var(--accent)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 12,
+    fontWeight: 600,
     marginBottom: 16,
   },
   exerciseList: { display: "flex", flexDirection: "column", gap: 12 },
