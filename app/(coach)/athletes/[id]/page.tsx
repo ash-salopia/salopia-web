@@ -93,6 +93,14 @@ export default function AthleteDetailPage() {
   const [typePicker, setTypePicker] = useState(false);
   const [hyroxEnabled, setHyroxEnabled] = useState(true);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
+  // Last-used copy-to-range dates, shared across CopySessionModal opens
+  // for different sessions within this programme-editing visit — a
+  // fresh CopySessionModal mount is created every open/close cycle
+  // (see the `copyModal &&` render below), so without this it resets
+  // to blank each time even when copying several session types to the
+  // same date range back to back.
+  const [lastCopyRangeStart, setLastCopyRangeStart] = useState("");
+  const [lastCopyRangeEnd, setLastCopyRangeEnd] = useState("");
   const [calView, setCalView] = useState<"month" | "week">("month");
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
@@ -532,6 +540,9 @@ export default function AthleteDetailPage() {
           sessionName={copyModal.sessionName}
           sessionDate={copyModal.sessionDate}
           athleteId={athleteId}
+          initialRangeStart={lastCopyRangeStart}
+          initialRangeEnd={lastCopyRangeEnd}
+          onRangeChange={(start, end) => { setLastCopyRangeStart(start); setLastCopyRangeEnd(end); }}
           onDone={(count) => { setCopyModal(null); load(); setFlash("Copied to " + count + " date" + (count !== 1 ? "s" : "")); setTimeout(() => setFlash(""), 3000); }}
           onClose={() => setCopyModal(null)}
         />

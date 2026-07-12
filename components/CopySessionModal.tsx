@@ -22,6 +22,9 @@ interface Props {
   sessionName: string;
   sessionDate: string;
   athleteId: string;
+  initialRangeStart?: string;
+  initialRangeEnd?: string;
+  onRangeChange?: (start: string, end: string) => void;
   onDone: (count: number) => void;
   onClose: () => void;
 }
@@ -40,7 +43,9 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEK_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
 
 export default function CopySessionModal({
-  sessionId, sessionName, sessionDate, athleteId, onDone, onClose,
+  sessionId, sessionName, sessionDate, athleteId,
+  initialRangeStart, initialRangeEnd, onRangeChange,
+  onDone, onClose,
 }: Props) {
   const [mode, setMode] = useState<"single" | "repeat">("single");
   const [targetDate, setTargetDate] = useState("");
@@ -48,10 +53,19 @@ export default function CopySessionModal({
   const [customDays, setCustomDays] = useState<number[]>([1, 3, 5]);
   const [durationType, setDurationType] = useState<"weeks" | "range">("weeks");
   const [weeks, setWeeks] = useState(4);
-  const [rangeStart, setRangeStart] = useState("");
-  const [rangeEnd, setRangeEnd] = useState("");
+  const [rangeStart, setRangeStart] = useState(initialRangeStart ?? "");
+  const [rangeEnd, setRangeEnd] = useState(initialRangeEnd ?? "");
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState("");
+
+  function updateRangeStart(v: string) {
+    setRangeStart(v);
+    onRangeChange?.(v, rangeEnd);
+  }
+  function updateRangeEnd(v: string) {
+    setRangeEnd(v);
+    onRangeChange?.(rangeStart, v);
+  }
 
   // Preview dates
   const previewDates = (() => {
@@ -195,12 +209,12 @@ export default function CopySessionModal({
                   <div style={{ flex: 1 }}>
                     <div style={s.label}>From</div>
                     <input type="date" value={rangeStart}
-                      onChange={e => setRangeStart(e.target.value)} style={s.input} />
+                      onChange={e => updateRangeStart(e.target.value)} style={s.input} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={s.label}>To</div>
                     <input type="date" value={rangeEnd}
-                      onChange={e => setRangeEnd(e.target.value)} style={s.input} />
+                      onChange={e => updateRangeEnd(e.target.value)} style={s.input} />
                   </div>
                 </div>
               )}
