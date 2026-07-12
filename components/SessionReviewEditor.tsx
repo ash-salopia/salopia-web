@@ -136,6 +136,7 @@ export default function SessionReviewEditor({
   const [propagation, setPropagation] = useState<PropagationState>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [flash, setFlash] = useState("");
 
   const multiSession = sessions.length > 1;
 
@@ -263,6 +264,8 @@ export default function SessionReviewEditor({
         video_url: "",
       });
       closePicker();
+      setFlash(`"${entry.name}" added to your library`);
+      setTimeout(() => setFlash(""), 3000);
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : "Could not create exercise");
     } finally {
@@ -318,6 +321,8 @@ export default function SessionReviewEditor({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {flash && <div style={s.flashBox}>{flash}</div>}
+
       {hasUnresolved && (
         <div style={s.unresolvedBanner}>
           ⚠️ Link or create unmatched exercises before saving — historical reporting depends on library links
@@ -958,9 +963,20 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "left" as const,
   },
   createError: {
-    fontSize: 11,
+    background: "#2a0c0c",
+    border: "1px solid #FF6B6B44",
     color: "#FF6B6B",
-    padding: "0 2px",
+    borderRadius: 8,
+    padding: "8px 10px",
+    fontSize: 12,
+  },
+  flashBox: {
+    background: "var(--good-dim)",
+    border: "1px solid var(--good)",
+    color: "var(--good)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 13,
   },
   pickerCancel: {
     background: "transparent",
