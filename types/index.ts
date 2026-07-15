@@ -99,6 +99,9 @@ export interface SessionExercise extends ExerciseBase {
   sort_order: number;
   log: SetLog[];
   created_at: string;
+  alternative_names: string[]; // 0035 — coach-approved swap options for this exercise instance
+  swapped_from: string | null; // 0035 — original prescribed name, set when the athlete swaps
+  opted_out: boolean;          // 0035 — athlete skipped this exercise, no replacement
 }
 
 // A lighter-weight exercise shape used inside templates/programmes,
@@ -177,6 +180,7 @@ export interface Session {
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation
   rpe: number | null;              // 0031 — post-session RPE (1-10) logged by athlete
   rpe_logged_at: string | null;
+  session_source: "programme" | "library"; // 0034 — 'library' = athlete-started informal session, excluded from calendar + Training Load Report
   exercises?: SessionExercise[];
 }
 
@@ -204,6 +208,18 @@ export interface TemplateDef {
   cardio_config: CardioConfig | null;
   sort_order: number;
   created_at: string;
+}
+
+// 0034 — Session Library: a coach grants an athlete access to a
+// template, which they can then browse and log informally via their
+// own "Library" tab, separate from their assigned programme.
+export interface AthleteTemplateAccess {
+  id: string;
+  athlete_id: string;
+  template_id: string;
+  organisation_id: string;
+  granted_by: string; // coaches.id
+  granted_at: string;
 }
 
 // ------------------------------------------------------------

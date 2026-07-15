@@ -39,6 +39,8 @@ export default function ExerciseCard({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addToLibraryOpen, setAddToLibraryOpen] = useState(false);
   const [addToLibraryError, setAddToLibraryError] = useState("");
+  const [altPickerOpen, setAltPickerOpen] = useState(false);
+  const [altSearch, setAltSearch] = useState("");
 
   // Wraps onEdit: always updates this exercise, and if the "apply to
   // future" toggle is on, also pushes the same patch to every future
@@ -184,6 +186,15 @@ export default function ExerciseCard({
             📈
           </button>
         )}
+        {athleteId && exercise.name.trim() && (
+          <button
+            style={styles.historyBtn}
+            onClick={() => setAltPickerOpen(true)}
+            title="Set approved alternative exercises the athlete can swap to"
+          >
+            🔀{exercise.alternative_names?.length ? ` ${exercise.alternative_names.length}` : ""}
+          </button>
+        )}
         {exercise.progress === "yes" && (
           <span style={styles.progressBadgeYes} title="Athlete said they could progress this next time">
             👍 progress
@@ -192,6 +203,16 @@ export default function ExerciseCard({
         {exercise.progress === "no" && (
           <span style={styles.progressBadgeNo} title="Athlete said they couldn't progress this yet">
             👎 hold
+          </span>
+        )}
+        {exercise.swapped_from && (
+          <span style={styles.swappedBadge} title={`Athlete swapped this from "${exercise.swapped_from}"`}>
+            🔀 was &quot;{exercise.swapped_from}&quot;
+          </span>
+        )}
+        {exercise.opted_out && (
+          <span style={styles.optedOutBadge} title="Athlete opted out of this exercise for this session">
+            ⏭ skipped
           </span>
         )}
         <button style={styles.removeBtn} onClick={onRemove}>
@@ -214,6 +235,66 @@ export default function ExerciseCard({
           currentSessionId={currentSessionId ?? ""}
           onClose={() => setHistoryOpen(false)}
         />
+      )}
+
+      {altPickerOpen && (
+        <div style={styles.addToLibraryOverlay} onClick={() => { setAltPickerOpen(false); setAltSearch(""); }}>
+          <div style={styles.altPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.altTitle}>Alternatives for &quot;{exercise.name}&quot;</div>
+            <div style={styles.altHint}>
+              The athlete can swap to any of these, or freely search their whole library, when logging this session.
+            </div>
+
+            {(exercise.alternative_names ?? []).length > 0 && (
+              <div style={styles.altChips}>
+                {(exercise.alternative_names ?? []).map((name) => (
+                  <span key={name} style={styles.altChip}>
+                    {name}
+                    <button
+                      style={styles.altChipRemove}
+                      onClick={() => onEdit({
+                        alternative_names: (exercise.alternative_names ?? []).filter((n) => n !== name),
+                      })}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <input
+              value={altSearch}
+              onChange={(e) => setAltSearch(e.target.value)}
+              placeholder="Search library to add…"
+              style={styles.altSearchInput}
+              autoFocus
+            />
+            <div style={styles.altResults}>
+              {library
+                .filter((l) => l.name.toLowerCase() !== exercise.name.trim().toLowerCase())
+                .filter((l) => !(exercise.alternative_names ?? []).includes(l.name))
+                .filter((l) => !altSearch.trim() || l.name.toLowerCase().includes(altSearch.trim().toLowerCase()))
+                .slice(0, 20)
+                .map((entry) => (
+                  <button
+                    key={entry.id}
+                    style={styles.altResultItem}
+                    onClick={() => {
+                      onEdit({ alternative_names: [...(exercise.alternative_names ?? []), entry.name] });
+                      setAltSearch("");
+                    }}
+                  >
+                    + {entry.name}
+                  </button>
+                ))}
+            </div>
+
+            <button style={styles.altDoneBtn} onClick={() => { setAltPickerOpen(false); setAltSearch(""); }}>
+              Done
+            </button>
+          </div>
+        </div>
       )}
 
       {addToLibraryOpen && (
@@ -558,6 +639,66 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "4px 8px",
     flexShrink: 0,
     whiteSpace: "nowrap" as const,
+  },
+  swappedBadge: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--accent)",
+    background: "var(--accent-dim)",
+    borderRadius: 6,
+    padding: "4px 8px",
+    flexShrink: 0,
+    whiteSpace: "nowrap" as const,
+  },
+  optedOutBadge: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#FF6B6B",
+    background: "#2a0c0c",
+    borderRadius: 6,
+    padding: "4px 8px",
+    flexShrink: 0,
+    whiteSpace: "nowrap" as const,
+  },
+  altPanel: {
+    background: "var(--panel)",
+    border: "1px solid var(--line)",
+    borderRadius: 16,
+    padding: 18,
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "80vh",
+    overflowY: "auto" as const,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 10,
+  },
+  altTitle: { fontSize: 16, fontWeight: 700, color: "var(--text)" },
+  altHint: { fontSize: 12, color: "var(--mute)", lineHeight: 1.5 },
+  altChips: { display: "flex", flexWrap: "wrap" as const, gap: 6 },
+  altChip: {
+    display: "flex", alignItems: "center", gap: 4,
+    fontSize: 12, fontWeight: 600, color: "var(--accent)",
+    background: "var(--accent-dim)", border: "1px solid var(--accent)44",
+    borderRadius: 6, padding: "4px 4px 4px 8px",
+  },
+  altChipRemove: {
+    background: "transparent", border: "none", color: "var(--accent)",
+    fontSize: 14, cursor: "pointer", padding: "0 2px", lineHeight: 1,
+  },
+  altSearchInput: {
+    background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)",
+    borderRadius: 8, padding: "9px 12px", fontSize: 14, width: "100%",
+  },
+  altResults: { display: "flex", flexDirection: "column" as const, gap: 2, maxHeight: 200, overflowY: "auto" as const },
+  altResultItem: {
+    background: "transparent", border: "none", color: "var(--text)",
+    fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const,
+    padding: "7px 8px", borderRadius: 6,
+  },
+  altDoneBtn: {
+    background: "var(--accent)", color: "#0a1420", border: "none",
+    borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer",
   },
   checkboxRow: {
     display: "flex",

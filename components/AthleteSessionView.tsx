@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import VideoModal from "@/components/VideoModal";
 import CheckInModal from "@/components/CheckInModal";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
+import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import { saveWithRetry, usePendingSaveCount } from "@/lib/save-queue";
 import type { Session, SetLog } from "@/types";
 
@@ -51,9 +52,12 @@ export default function AthleteSessionView({
   const [allSessions, setAllSessions] = useState<Session[]>(initialAllSessions ?? []);
   const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
+  // Reusable so a swap/opt-out action can pull the freshly updated
+  // exercise row without having to replicate the server's field logic
+  // (e.g. which name counts as "the original" for a revert) client-side.
+  const refetchSession = useCallback(() => {
     const id = sessionId ?? initialSession?.id;
-    if (!id || initialSession) return; // server already gave us the session
+    if (!id) return;
     fetch(`/api/athlete-link/sessions?token=${encodeURIComponent(token)}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
@@ -68,16 +72,26 @@ export default function AthleteSessionView({
       })
       .catch(() => setLoadError("Could not load session."));
   }, [token, sessionId, initialSession]);
+
+  useEffect(() => {
+    if (initialSession) return; // server already gave us the session
+    refetchSession();
+  }, [initialSession, refetchSession]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
+  const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
   const pendingSaves = usePendingSaveCount();
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
-  const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
-  const doneSets = exercises.reduce(
+  // Opted-out exercises have no sets to log, so they're excluded from
+  // progress totals — otherwise a skipped exercise would permanently
+  // depress the session's completion percentage.
+  const loggableExercises = exercises.filter((e) => !e.opted_out);
+  const totalSets = loggableExercises.reduce((n, e) => n + (e.log ?? []).length, 0);
+  const doneSets = loggableExercises.reduce(
     (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
     0
   );
@@ -101,6 +115,22 @@ export default function AthleteSessionView({
     );
     if (!result.ok && !result.queued) {
       setError(result.error);
+    }
+  };
+
+  const handleUndoOptOut = async (exerciseId: string) => {
+    setError("");
+    try {
+      const res = await fetch("/api/athlete-link/opt-out-exercise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, sessionId: session?.id, exerciseId, optedOut: false }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Could not update");
+      refetchSession();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update");
     }
   };
 
@@ -247,6 +277,15 @@ export default function AthleteSessionView({
                     📈
                   </button>
                 )}
+                {!ex.opted_out && (
+                  <button
+                    style={styles.historyBtn}
+                    onClick={() => setSwapExerciseId(ex.id)}
+                    title="Swap or skip this exercise"
+                  >
+                    🔀
+                  </button>
+                )}
                 {ex.video_url && (
                   <button
                     style={styles.watchBtn}
@@ -257,72 +296,90 @@ export default function AthleteSessionView({
                 )}
               </div>
             </div>
-            <div style={styles.prescLine}>
-              {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
-              {ex.rest ? ` · rest ${ex.rest}` : ""}
-              {ex.target_load ? ` · ${ex.target_load}` : ""}
-            </div>
-            {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
-            {priorAnswer === "yes" && (
-              <div style={styles.progressReminder}>💪 Last time you said you could progress this — try more weight or reps!</div>
+
+            {ex.swapped_from && (
+              <div style={styles.swappedNote}>🔀 Swapped from &quot;{ex.swapped_from}&quot;</div>
             )}
 
-            <div style={styles.setGrid}>
-              {(ex.log ?? []).map((set, i) => {
-                const hasWeight = (set.weight ?? "").trim().length > 0;
-                return (
-                  <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
-                    <div style={styles.setIdx}>{i + 1}</div>
-                    <input
-                      key={`${ex.id}-${i}-w-${set.weight}`}
-                      defaultValue={set.weight}
-                      onBlur={(e) => {
-                        const v = e.target.value;
-                        if (v === set.weight) return;
-                        const shouldBeDone = v.trim().length > 0;
-                        const patch: Partial<SetLog> = { weight: v };
-                        if (shouldBeDone !== set.done) patch.done = shouldBeDone;
-                        const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
-                        if (shouldBeDone && !set.reps.trim() && ex.reps && !isAmrap) {
-                          const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
-                          if (lower) patch.reps = lower;
-                        }
-                        handleSetUpdate(ex.id, i, patch);
-                      }}
-                      placeholder="kg"
-                      inputMode="decimal"
-                      style={styles.setInput}
-                    />
-                    <input
-                      value={set.reps}
-                      onChange={(e) => handleSetUpdate(ex.id, i, { reps: e.target.value })}
-                      placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (ex.reps || "reps")}
-                      inputMode="numeric"
-                      style={styles.setInput}
-                    />
-                    <button
-                      style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
-                      onClick={() => handleSetUpdate(ex.id, i, { done: !set.done })}
-                    >
-                      ✓
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            {saving === ex.id && <div style={styles.savingLabel}>Saving…</div>}
-            {allSetsDone && !ex.progress && (
-              <div style={styles.progressPrompt}>
-                <span style={styles.progressPromptLabel}>Could you have progressed this next session?</span>
-                <div style={styles.progressPromptBtns}>
-                  <button style={styles.progressYesBtn} onClick={() => handleProgressAnswer(ex.id, "yes")}>
-                    Yes
-                  </button>
-                  <button style={styles.progressNoBtn} onClick={() => handleProgressAnswer(ex.id, "no")}>
-                    No
-                  </button>
-                </div>
+            {ex.opted_out ? (
+              <div style={styles.optedOutRow}>
+                <span style={styles.optedOutLabel}>⏭ Skipped for this session</span>
+                <button style={styles.undoSkipBtn} onClick={() => handleUndoOptOut(ex.id)}>
+                  ↩ Undo
+                </button>
               </div>
+            ) : (
+              <>
+                <div style={styles.prescLine}>
+                  {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
+                  {ex.rest ? ` · rest ${ex.rest}` : ""}
+                  {ex.target_load ? ` · ${ex.target_load}` : ""}
+                </div>
+                {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
+                {priorAnswer === "yes" && (
+                  <div style={styles.progressReminder}>💪 Last time you said you could progress this — try more weight or reps!</div>
+                )}
+
+                <div style={styles.setGrid}>
+                  {(ex.log ?? []).map((set, i) => {
+                    const hasWeight = (set.weight ?? "").trim().length > 0;
+                    return (
+                      <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
+                        <div style={styles.setIdx}>{i + 1}</div>
+                        <input
+                          key={`${ex.id}-${i}-w-${set.weight}`}
+                          defaultValue={set.weight}
+                          onFocus={(e) => e.target.select()}
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            if (v === set.weight) return;
+                            const shouldBeDone = v.trim().length > 0;
+                            const patch: Partial<SetLog> = { weight: v };
+                            if (shouldBeDone !== set.done) patch.done = shouldBeDone;
+                            const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
+                            if (shouldBeDone && !set.reps.trim() && ex.reps && !isAmrap) {
+                              const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
+                              if (lower) patch.reps = lower;
+                            }
+                            handleSetUpdate(ex.id, i, patch);
+                          }}
+                          placeholder="kg"
+                          inputMode="decimal"
+                          style={styles.setInput}
+                        />
+                        <input
+                          value={set.reps}
+                          onChange={(e) => handleSetUpdate(ex.id, i, { reps: e.target.value })}
+                          onFocus={(e) => e.target.select()}
+                          placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (ex.reps || "reps")}
+                          inputMode="numeric"
+                          style={styles.setInput}
+                        />
+                        <button
+                          style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
+                          onClick={() => handleSetUpdate(ex.id, i, { done: !set.done })}
+                        >
+                          ✓
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {saving === ex.id && <div style={styles.savingLabel}>Saving…</div>}
+                {allSetsDone && !ex.progress && (
+                  <div style={styles.progressPrompt}>
+                    <span style={styles.progressPromptLabel}>Could you have progressed this next session?</span>
+                    <div style={styles.progressPromptBtns}>
+                      <button style={styles.progressYesBtn} onClick={() => handleProgressAnswer(ex.id, "yes")}>
+                        Yes
+                      </button>
+                      <button style={styles.progressNoBtn} onClick={() => handleProgressAnswer(ex.id, "no")}>
+                        No
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
           );
@@ -345,6 +402,23 @@ export default function AthleteSessionView({
           onClose={() => setHistoryExercise(null)}
         />
       )}
+
+      {swapExerciseId && session && (() => {
+        const ex = session.exercises?.find((e) => e.id === swapExerciseId);
+        if (!ex) return null;
+        return (
+          <AthleteSwapExerciseModal
+            token={token}
+            sessionId={session.id}
+            exerciseId={ex.id}
+            currentName={ex.name}
+            alternativeNames={ex.alternative_names ?? []}
+            swappedFrom={ex.swapped_from}
+            onDone={() => { setSwapExerciseId(null); refetchSession(); }}
+            onClose={() => setSwapExerciseId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -403,6 +477,16 @@ const styles: Record<string, React.CSSProperties> = {
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
   exHeadRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
   exName: { fontWeight: 700, fontSize: 15, color: "var(--text)" },
+  swappedNote: { fontSize: 11, color: "var(--accent)", fontWeight: 600, marginTop: 4 },
+  optedOutRow: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    gap: 10, marginTop: 8, background: "var(--panel2)", borderRadius: 8, padding: "10px 12px",
+  },
+  optedOutLabel: { fontSize: 13, color: "var(--mute)", fontWeight: 600 },
+  undoSkipBtn: {
+    background: "transparent", border: "1px solid var(--line)", color: "var(--accent)",
+    borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+  },
   orderBadge: { fontSize: 12, fontWeight: 800, color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 6, padding: "2px 7px", flexShrink: 0, fontFamily: "'Barlow Condensed', sans-serif" },
   watchBtn: {
     background: "var(--accent-dim)",

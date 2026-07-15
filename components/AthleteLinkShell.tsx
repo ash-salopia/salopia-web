@@ -96,14 +96,23 @@ export default function AthleteLinkShell({
     return { year: d.getFullYear(), month: d.getMonth() };
   });
 
+  // Library sessions (started informally from the Session Library tab)
+  // are excluded from the calendar so they don't read as an extra,
+  // unscheduled session on whatever day the athlete happened to log
+  // one — they're browsable via their own tab instead.
+  const scheduledSessions = useMemo(
+    () => sessions.filter((s) => s.session_source !== "library"),
+    [sessions]
+  );
+
   const sessionsByDate = useMemo(() => {
     const map = new Map<string, Session[]>();
-    for (const s of sessions) {
+    for (const s of scheduledSessions) {
       const list = map.get(s.date) ?? [];
       map.set(s.date, [...list, s]);
     }
     return map;
-  }, [sessions]);
+  }, [scheduledSessions]);
 
   const calendarWeeks = useMemo(() =>
     getMonthWeeks(calendarMonth.year, calendarMonth.month),
@@ -147,7 +156,7 @@ export default function AthleteLinkShell({
 
   // Count sessions in current month for the header
   const monthStr = `${calendarMonth.year}-${String(calendarMonth.month + 1).padStart(2, "0")}`;
-  const monthSessionCount = sessions.filter((s) => s.date.startsWith(monthStr)).length;
+  const monthSessionCount = scheduledSessions.filter((s) => s.date.startsWith(monthStr)).length;
 
   return (
     <div style={st.page}>
@@ -169,6 +178,9 @@ export default function AthleteLinkShell({
         </button>
         <button style={st.tab} onClick={() => router.push(`/a/${token}/documents`)}>
           📁 Docs
+        </button>
+        <button style={st.tab} onClick={() => router.push(`/a/${token}/library`)}>
+          📚 Library
         </button>
       </div>
 
@@ -319,7 +331,7 @@ export default function AthleteLinkShell({
       {/* Upcoming sessions list below calendar */}
       <div style={st.upcomingSection}>
         <div style={st.upcomingTitle}>Upcoming sessions</div>
-        {sessions
+        {scheduledSessions
           .filter((s) => s.date >= todayStr)
           .sort((a, b) => a.date < b.date ? -1 : 1)
           .slice(0, 5)
@@ -346,12 +358,12 @@ export default function AthleteLinkShell({
               </button>
             );
           })}
-        {sessions.filter((s) => s.date >= todayStr).length === 0 && (
+        {scheduledSessions.filter((s) => s.date >= todayStr).length === 0 && (
           <div style={st.empty}>No upcoming sessions scheduled.</div>
         )}
-        {sessions.filter((s) => s.date >= todayStr).length > 5 && (
+        {scheduledSessions.filter((s) => s.date >= todayStr).length > 5 && (
           <div style={st.moreNote}>
-            +{sessions.filter((s) => s.date >= todayStr).length - 5} more — navigate the calendar above to see all sessions
+            +{scheduledSessions.filter((s) => s.date >= todayStr).length - 5} more — navigate the calendar above to see all sessions
           </div>
         )}
       </div>

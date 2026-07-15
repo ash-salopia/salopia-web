@@ -48,7 +48,11 @@ export async function generateReport(
   let query = supabase
     .from("sessions")
     .select("*, session_exercises(*)")
-    .eq("athlete_id", athleteId);
+    .eq("athlete_id", athleteId)
+    // Library sessions are informal/standalone (started by the athlete
+    // from their Session Library, separate from their assigned
+    // programme) — they must never count toward Training Load.
+    .eq("session_source", "programme");
   if (rangeStart && rangeEnd) {
     query = query.gte("date", rangeStart).lte("date", rangeEnd);
   }

@@ -24,6 +24,7 @@ import NotesSessionModal from "@/components/NotesSessionModal";
 import ModifySessionsModal from "@/components/ModifySessionsModal";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
 import AssignProgrammeModal from "@/components/AssignProgrammeModal";
+import SessionLibraryAccessModal from "@/components/SessionLibraryAccessModal";
 import GoalsManager from "@/components/GoalsManager";
 import ExportModal from "@/components/ExportModal";
 import type { Athlete, Session, SessionType, Template } from "@/types";
@@ -101,6 +102,7 @@ export default function AthleteDetailPage() {
   // same date range back to back.
   const [lastCopyRangeStart, setLastCopyRangeStart] = useState("");
   const [lastCopyRangeEnd, setLastCopyRangeEnd] = useState("");
+  const [libraryAccessOpen, setLibraryAccessOpen] = useState(false);
   const [calView, setCalView] = useState<"month" | "week">("month");
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
@@ -363,9 +365,13 @@ export default function AthleteDetailPage() {
   };
 
   // Calendar helpers — must be before any early returns (Rules of Hooks)
+  // Library sessions (athlete-started, informal) are excluded from the
+  // calendar so they don't read as an extra, unscheduled session on
+  // whatever day the athlete happened to log one.
   const sessionsByDate = useMemo(() => {
     const map = new Map<string, Session[]>();
     for (const s of sessions) {
+      if (s.session_source === "library") continue;
       const list = map.get(s.date) ?? [];
       map.set(s.date, [...list, s]);
     }
@@ -486,6 +492,9 @@ export default function AthleteDetailPage() {
             }}
           >
             Load template
+          </button>
+          <button style={styles.ghostBtn} onClick={() => setLibraryAccessOpen(true)}>
+            📚 Session Library
           </button>
           <button style={styles.ghostBtn} onClick={() => setReportRangeOpen(true)}>
             📊 Reports
@@ -964,6 +973,14 @@ export default function AthleteDetailPage() {
           athleteId={athleteId}
           athleteName={athlete?.name}
           onClose={() => setExportOpen(false)}
+        />
+      )}
+
+      {libraryAccessOpen && athlete && (
+        <SessionLibraryAccessModal
+          athleteId={athleteId}
+          athleteName={athlete.name}
+          onClose={() => setLibraryAccessOpen(false)}
         />
       )}
 
