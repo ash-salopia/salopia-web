@@ -81,10 +81,12 @@ Response format:
 }
 
 Library matching rules:
-- Match each exercise to the closest library entry using fuzzy logic
-- Common abbreviations: BS=Back Squat, RDL=Romanian Deadlift, BP=Bench Press, DL=Deadlift, OHP=Overhead Press, SQ=Squat, DB=Dumbbell, BB=Barbell, BW=Bodyweight
+- Only match an exercise to a library entry if it is genuinely the SAME exercise under a different name — an abbreviation, plural, or equipment-naming variant of the identical movement (e.g. "DB Lateral Raises" = "Dumbbell Lateral Raise", "RDL" = "Romanian Deadlift").
+- NEVER match just because two names share a family or keyword. Split Squat, Bulgarian Split Squat, Lunge, Step-Up, Front Squat, Back Squat, Goblet Squat, and Overhead Squat are all DIFFERENT exercises even though "squat" appears in several. The same applies to every other family: Deadlift variants (RDL, Sumo, Deficit, Single-Leg), Press variants (Bench, Incline, Overhead, Push Press), Row variants, Curl variants, etc. Match only true synonyms of the identical exercise — never the "closest relative."
+- If genuinely uncertain whether two names are the same exercise, do NOT match (matched=false) — the coach can create it as a new library entry in one tap, which is cheap and safe. A wrong match silently attaches logged data to the wrong exercise's history and PBs, which is much worse than an unmatched exercise.
+- Common abbreviations for genuinely identical exercises: BS=Back Squat, RDL=Romanian Deadlift, BP=Bench Press, DL=Deadlift, OHP=Overhead Press, SQ=Squat, DB=Dumbbell, BB=Barbell, BW=Bodyweight
 - If matched: use the EXACT library name, set matched=true
-- If no reasonable match: use best interpretation from the notes, set matched=false
+- If no confident match: use the coach's own wording from the notes, set matched=false
 - List all unmatched names in unmatchedExercises
 
 Session type detection:

@@ -18,14 +18,28 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceRoleClient();
 
-  // Past sets — ilike so casing differences don't break it
-  const { data: exercises, error } = await supabase
-    .from("session_exercises")
-    .select("name, log, sessions!inner(date)")
-    .eq("sessions.athlete_id", athlete.id)
-    .ilike("name", exerciseName)
-    .order("sessions(date)", { ascending: false })
-    .limit(20);
+  // Two separate queries rather than an embedded `sessions!inner(date)`
+  // join — that pattern has previously caused silent failures here
+  // (see detectPBAsync's docstring in app/api/athlete-link/log/route.ts
+  // for the same lesson learned the hard way).
+  const { data: athleteSessions, error: sessErr } = await supabase
+    .from("sessions")
+    .select("id, date")
+    .eq("athlete_id", athlete.id)
+    .order("date", { ascending: false })
+    .limit(500);
+  if (sessErr) return NextResponse.json({ error: sessErr.message }, { status: 500 });
+
+  const sessionDateById = new Map((athleteSessions ?? []).map((s) => [s.id, s.date]));
+  const sessionIds = [...sessionDateById.keys()];
+
+  const { data: exercises, error } = sessionIds.length
+    ? await supabase
+        .from("session_exercises")
+        .select("session_id, log")
+        .in("session_id", sessionIds)
+        .ilike("name", exerciseName)
+    : { data: [], error: null };
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -40,16 +54,19 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   // Build a per-session summary (best set each session)
-  const history = (exercises ?? []).map((e: any) => {
-    const sessions = e.sessions;
-    const date = Array.isArray(sessions) ? sessions[0]?.date : sessions?.date;
-    const doneSets = (e.log ?? []).filter((s: any) => s.done);
-    const bestSet = doneSets.reduce((best: any, s: any) => {
-      const w = parseFloat(s.weight) || 0;
-      return w > (parseFloat(best?.weight) || 0) ? s : best;
-    }, doneSets[0] ?? null);
-    return { date, bestSet, allSets: e.log ?? [] };
-  }).filter((h: any) => h.date && h.bestSet);
+  const history = (exercises ?? [])
+    .map((e: any) => {
+      const date = sessionDateById.get(e.session_id);
+      const doneSets = (e.log ?? []).filter((s: any) => s.done);
+      const bestSet = doneSets.reduce((best: any, s: any) => {
+        const w = parseFloat(s.weight) || 0;
+        return w > (parseFloat(best?.weight) || 0) ? s : best;
+      }, doneSets[0] ?? null);
+      return { date, bestSet, allSets: e.log ?? [] };
+    })
+    .filter((h: any) => h.date && h.bestSet)
+    .sort((a: any, b: any) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, 20);
 
   return NextResponse.json({ history, pb: pbRow ?? null });
 }
