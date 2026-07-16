@@ -212,7 +212,13 @@ export async function updateAthleteSessionNotes(
     throw new Error("This session does not belong to you");
   }
 
-  const { error } = await supabase.from("sessions").update({ athlete_notes: athleteNotes }).eq("id", sessionId);
+  // A new/changed non-empty note needs the coach's attention again —
+  // reset acknowledged so it (re)surfaces on the dashboard. Clearing
+  // the note back to empty needs no review, so mark it acknowledged.
+  const { error } = await supabase
+    .from("sessions")
+    .update({ athlete_notes: athleteNotes, athlete_notes_acknowledged: !athleteNotes.trim() })
+    .eq("id", sessionId);
   if (error) throw error;
 }
 

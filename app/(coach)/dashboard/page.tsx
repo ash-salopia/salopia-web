@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listAthletes } from "@/lib/data/athletes";
-import { listAllSessionDates, getWeekCompletionData } from "@/lib/data/sessions";
+import {
+  listAllSessionDates,
+  getWeekCompletionData,
+  listUnacknowledgedSessionNotes,
+  acknowledgeSessionNote,
+  type SessionNoteAlert,
+} from "@/lib/data/sessions";
 import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-utils";
 import { getOrgSettings } from "@/lib/data/settings";
 import { listRecentOrgPBs, type PersonalBest } from "@/lib/data/personal-bests";
@@ -74,6 +80,8 @@ export default function DashboardPage() {
   const [testsDue, setTestsDue] = useState<TestAlert[]>([]);
   const [reportsDue, setReportsDue] = useState<ReportDue[]>([]);
   const [recentPBs, setRecentPBs] = useState<PersonalBest[]>([]);
+  const [sessionNotes, setSessionNotes] = useState<SessionNoteAlert[]>([]);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [weekLabel, setWeekLabel] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -181,6 +189,10 @@ export default function DashboardPage() {
         const pbs = await listRecentOrgPBs(7).catch(() => [] as PersonalBest[]);
         setRecentPBs(pbs);
 
+        // ── Unread session comments ───────────────────────────────────────────
+        const notes = await listUnacknowledgedSessionNotes().catch(() => [] as SessionNoteAlert[]);
+        setSessionNotes(notes);
+
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not load dashboard");
       } finally {
@@ -189,6 +201,19 @@ export default function DashboardPage() {
     };
     load();
   }, []);
+
+  const handleDismissNote = async (sessionId: string) => {
+    setDismissingId(sessionId);
+    const prev = sessionNotes;
+    setSessionNotes((cur) => cur.filter((n) => n.sessionId !== sessionId)); // optimistic
+    try {
+      await acknowledgeSessionNote(sessionId);
+    } catch {
+      setSessionNotes(prev); // failed — put it back
+    } finally {
+      setDismissingId(null);
+    }
+  };
 
   if (loading) return <div style={st.empty}>Loading…</div>;
   if (error) return <div style={st.errorBox}>{error}</div>;
@@ -208,6 +233,40 @@ export default function DashboardPage() {
         </div>
 
         <div style={st.panels}>
+
+          {/* Session comments — athlete notes the coach hasn't dismissed yet */}
+          {sessionNotes.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={st.panelDot({ color: "var(--accent)" })} />
+                <span style={st.panelTitle}>Session comments</span>
+                <span style={st.panelCount(sessionNotes.length)}>{sessionNotes.length}</span>
+              </div>
+              <div style={st.noteList}>
+                {sessionNotes.map((n) => (
+                  <div key={n.sessionId} style={st.noteRow}>
+                    <button
+                      style={st.noteMain}
+                      onClick={() => router.push(`/athletes/${n.athleteId}/sessions/${n.sessionId}`)}
+                    >
+                      <div style={st.noteMeta}>
+                        {n.athleteName} · {n.sessionName} · {n.date}
+                      </div>
+                      <div style={st.noteText}>{n.note}</div>
+                    </button>
+                    <button
+                      style={st.noteDismissBtn}
+                      onClick={() => handleDismissNote(n.sessionId)}
+                      disabled={dismissingId === n.sessionId}
+                      title="Mark as read — no action needed"
+                    >
+                      {dismissingId === n.sessionId ? "…" : "✓"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Not trained */}
           <div style={st.panel}>
@@ -424,6 +483,19 @@ const st: Record<string, any> = {
     background: "var(--panel2)", borderRadius: 5, padding: "2px 7px",
   }),
   panelEmpty: { fontSize: 12, color: "var(--mute)", fontStyle: "italic" },
+
+  noteList: { display: "flex", flexDirection: "column", gap: 6 },
+  noteRow: {
+    display: "flex", alignItems: "flex-start", gap: 8,
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 8px 8px 12px",
+  },
+  noteMain: { flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 },
+  noteMeta: { fontSize: 11, fontWeight: 700, color: "var(--mute)" },
+  noteText: { fontSize: 13, color: "var(--text)", marginTop: 2, lineHeight: 1.4, whiteSpace: "pre-wrap" },
+  noteDismissBtn: {
+    flexShrink: 0, background: "var(--good-dim)", border: "1px solid var(--good)", color: "var(--good)",
+    borderRadius: 6, width: 28, height: 28, fontSize: 13, fontWeight: 700, cursor: "pointer",
+  },
 
   athleteList: { display: "flex", flexWrap: "wrap", gap: 6 },
   athleteChip: {

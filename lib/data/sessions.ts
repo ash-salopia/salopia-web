@@ -16,6 +16,51 @@ export async function listAllSessionDates(): Promise<{ athlete_id: string; date:
   return data ?? [];
 }
 
+export interface SessionNoteAlert {
+  sessionId: string;
+  athleteId: string;
+  athleteName: string;
+  sessionName: string;
+  date: string;
+  note: string;
+}
+
+// Athlete session notes the coach hasn't acknowledged yet, for the
+// dashboard's "Session comments" panel — org-wide via RLS, not scoped
+// to a single athlete. Non-inner embedded join, no ordering on the
+// joined table, same safe pattern as listRecentOrgPBs.
+export async function listUnacknowledgedSessionNotes(): Promise<SessionNoteAlert[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id, name, date, athlete_notes, athlete:athletes(id, name)")
+    .eq("athlete_notes_acknowledged", false)
+    .not("athlete_notes", "is", null)
+    .neq("athlete_notes", "")
+    .order("date", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((s: any) => {
+    const athlete = Array.isArray(s.athlete) ? s.athlete[0] : s.athlete;
+    return {
+      sessionId: s.id,
+      athleteId: athlete?.id ?? "",
+      athleteName: athlete?.name ?? "Athlete",
+      sessionName: s.name,
+      date: s.date,
+      note: s.athlete_notes ?? "",
+    };
+  });
+}
+
+export async function acknowledgeSessionNote(sessionId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("sessions")
+    .update({ athlete_notes_acknowledged: true })
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
 export async function listSessionsForAthlete(athleteId: string): Promise<Session[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -130,7 +175,15 @@ export async function createSession(
     .single();
   if (sessionError) throw sessionError;
 
-  const rows = (exercises.length ? exercises : [{ name: "" }]).map((e, i) => ({
+  // No fallback blank exercise — a session created with none should
+  // land on the "+ Add exercise" empty state, same as after deleting
+  // the last exercise, rather than always carrying a stray empty row
+  // (which used to linger even after building the rest via notes/voice).
+  if (!exercises.length) {
+    return { ...session, exercises: [] };
+  }
+
+  const rows = exercises.map((e, i) => ({
     session_id: session.id,
     ...exerciseDefaults(e),
     sort_order: i,
