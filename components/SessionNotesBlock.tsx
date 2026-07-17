@@ -12,6 +12,13 @@ interface Props {
   label?: string;
   icon?: string;
   placeholder?: string;
+  // Coach note templates are read via the browser Supabase client under
+  // RLS, which requires an authenticated coach session — the athlete
+  // app has no such session (share-token only), so its "Your Notes"
+  // instance must never attempt this fetch. Without this flag it fails
+  // with a 401 on every open, silently swallowed but still a real
+  // failed request. Coach-side callers keep the default (true).
+  enableTemplates?: boolean;
 }
 
 export default function SessionNotesBlock({
@@ -23,6 +30,7 @@ export default function SessionNotesBlock({
   label = "Session Notes",
   icon = "📋",
   placeholder = "Warm-up protocol, coaching cues, drill progressions…",
+  enableTemplates = true,
 }: Props) {
   const [isOpen, setIsOpen] = useState(!!value);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -30,10 +38,10 @@ export default function SessionNotesBlock({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!readOnly) {
+    if (!readOnly && enableTemplates) {
       listNoteTemplates().then(setTemplates).catch(() => {});
     }
-  }, [readOnly]);
+  }, [readOnly, enableTemplates]);
 
   function applyTemplate(content: string) {
     onChange(value ? `${value}\n\n${content}` : content);
@@ -67,7 +75,7 @@ export default function SessionNotesBlock({
 
       {isOpen && (
         <div style={s.body}>
-          {!readOnly && relevantTemplates.length > 0 && (
+          {!readOnly && enableTemplates && relevantTemplates.length > 0 && (
             <div style={s.templateRow}>
               <button style={s.templateBtn} onClick={() => setShowTemplates(v => !v)}>
                 Load template ▾

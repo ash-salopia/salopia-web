@@ -7,15 +7,25 @@ import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, 
 // Looks up the athlete matching a share token. Returns null if the
 // token doesn't match anything — the route should treat that exactly
 // like a 404, never revealing whether a token was "close" to valid.
+// share_token is a uuid column, so a malformed token (not valid UUID
+// syntax — e.g. a bot probing random strings) makes Postgres error
+// instead of just returning no rows; treated identically to "not
+// found" here rather than left to throw, which previously crashed any
+// route that didn't separately wrap this call in its own try/catch
+// with a raw 500 instead of a clean "Invalid link" response.
 export async function getAthleteByShareToken(token: string): Promise<Athlete | null> {
   const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from("athletes")
-    .select("*")
-    .eq("share_token", token)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from("athletes")
+      .select("*")
+      .eq("share_token", token)
+      .maybeSingle();
+    if (error) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 // Fetches sessions + exercises for exactly one athlete ID. The athlete

@@ -254,6 +254,7 @@ export default function AthleteSessionView({
         label="Your Notes"
         icon="📝"
         placeholder="How did the session feel? Anything to flag for your coach…"
+        enableTemplates={false}
       />
 
       <div style={styles.exerciseList}>
