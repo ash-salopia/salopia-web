@@ -68,14 +68,15 @@ export function pendingSaveCount(): number {
   return readQueue().length;
 }
 
-// Attempts a save immediately. Resolves { ok: true } on success,
+// Attempts a save immediately. Resolves { ok: true, data } on success
+// (data is the parsed response body — e.g. the log route's { pb }),
 // { ok: false, queued: true } if it was queued for automatic retry, or
 // { ok: false, queued: false, error } if the server rejected it outright.
 export async function saveWithRetry(
   key: string,
   url: string,
   body: Record<string, unknown>
-): Promise<{ ok: true } | { ok: false; queued: true } | { ok: false; queued: false; error: string }> {
+): Promise<{ ok: true; data: any } | { ok: false; queued: true } | { ok: false; queued: false; error: string }> {
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -83,7 +84,7 @@ export async function saveWithRetry(
       body: JSON.stringify(body),
       cache: "no-store",
     });
-    if (res.ok) return { ok: true };
+    if (res.ok) return { ok: true, data: await res.json().catch(() => ({})) };
     const errBody = await res.json().catch(() => ({}));
     return { ok: false, queued: false, error: errBody.error || "Could not save" };
   } catch {

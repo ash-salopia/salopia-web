@@ -7,8 +7,15 @@ import CheckInModal from "@/components/CheckInModal";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
+import PBCelebrationModal from "@/components/PBCelebrationModal";
 import { saveWithRetry, usePendingSaveCount } from "@/lib/save-queue";
 import type { Session, SetLog } from "@/types";
+
+interface DetectedPB {
+  exerciseName: string;
+  weightKg: number;
+  reps: number | null;
+}
 
 // Most recent PRIOR occurrence (by date) of each exercise name for this
 // athlete, keyed by lowercased/trimmed name, mapped to that occurrence's
@@ -83,6 +90,7 @@ export default function AthleteSessionView({
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
+  const [pbCelebration, setPbCelebration] = useState<DetectedPB | null>(null);
   const pendingSaves = usePendingSaveCount();
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
@@ -179,6 +187,9 @@ export default function AthleteSessionView({
     );
     if (!result.ok && !result.queued) {
       setError(result.error);
+    }
+    if (result.ok && result.data?.pb) {
+      setPbCelebration(result.data.pb);
     }
     setSaving(null);
   };
@@ -420,6 +431,15 @@ export default function AthleteSessionView({
           />
         );
       })()}
+
+      {pbCelebration && (
+        <PBCelebrationModal
+          exerciseName={pbCelebration.exerciseName}
+          weightKg={pbCelebration.weightKg}
+          reps={pbCelebration.reps}
+          onClose={() => setPbCelebration(null)}
+        />
+      )}
     </div>
   );
 }
