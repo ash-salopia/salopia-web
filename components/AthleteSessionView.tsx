@@ -194,6 +194,63 @@ export default function AthleteSessionView({
     setSaving(null);
   };
 
+  // Lets an athlete log more sets than the coach prescribed (e.g. they
+  // felt good and did an extra set) without touching ex.sets itself —
+  // that field is the coach's prescription and stays coach-only (see
+  // updateAthleteSetLog's docstring). Reuses the same log save path as
+  // handleSetUpdate, just with one more blank entry appended.
+  const handleAddSet = async (exerciseId: string) => {
+    const exercise = session?.exercises?.find((e) => e.id === exerciseId);
+    if (!exercise) return;
+    const newLog = [...(exercise.log ?? []), { weight: "", reps: "", done: false }];
+
+    setSession((prev) => prev ? ({
+      ...prev,
+      exercises: prev.exercises?.map((e) => (e.id === exerciseId ? { ...e, log: newLog } : e)),
+    }) : prev);
+
+    setSaving(exerciseId);
+    setError("");
+    const result = await saveWithRetry(
+      `log:${session?.id}:${exerciseId}`,
+      "/api/athlete-link/log",
+      { token, sessionId: session?.id, exerciseId, log: newLog }
+    );
+    if (!result.ok && !result.queued) {
+      setError(result.error);
+    }
+    setSaving(null);
+  };
+
+  // Undo for an accidental tap — only ever removes a trailing set
+  // that's still empty, so there's no path to silently discarding a
+  // set the athlete actually logged.
+  const handleRemoveLastSet = async (exerciseId: string) => {
+    const exercise = session?.exercises?.find((e) => e.id === exerciseId);
+    if (!exercise) return;
+    const log = exercise.log ?? [];
+    const last = log[log.length - 1];
+    if (!last || last.done || (last.weight ?? "").trim()) return;
+    const newLog = log.slice(0, -1);
+
+    setSession((prev) => prev ? ({
+      ...prev,
+      exercises: prev.exercises?.map((e) => (e.id === exerciseId ? { ...e, log: newLog } : e)),
+    }) : prev);
+
+    setSaving(exerciseId);
+    setError("");
+    const result = await saveWithRetry(
+      `log:${session?.id}:${exerciseId}`,
+      "/api/athlete-link/log",
+      { token, sessionId: session?.id, exerciseId, log: newLog }
+    );
+    if (!result.ok && !result.queued) {
+      setError(result.error);
+    }
+    setSaving(null);
+  };
+
   if (loadError) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "var(--mute)" }}>
@@ -377,6 +434,21 @@ export default function AthleteSessionView({
                     );
                   })}
                 </div>
+                <div style={styles.addSetRow}>
+                  <button style={styles.addSetBtn} onClick={() => handleAddSet(ex.id)}>
+                    + Add set
+                  </button>
+                  {(() => {
+                    const log = ex.log ?? [];
+                    const last = log[log.length - 1];
+                    const canRemove = log.length > 0 && last && !last.done && !(last.weight ?? "").trim();
+                    return canRemove ? (
+                      <button style={styles.removeSetBtn} onClick={() => handleRemoveLastSet(ex.id)}>
+                        − Remove
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
                 {saving === ex.id && <div style={styles.savingLabel}>Saving…</div>}
                 {allSetsDone && !ex.progress && (
                   <div style={styles.progressPrompt}>
@@ -538,6 +610,15 @@ const styles: Record<string, React.CSSProperties> = {
   prescLine: { fontSize: 13, color: "var(--mute)", marginTop: 4 },
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
   setGrid: { display: "flex", flexDirection: "column", gap: 6, marginTop: 12 },
+  addSetRow: { display: "flex", gap: 8, marginTop: 8 },
+  addSetBtn: {
+    flex: 1, background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)",
+    borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer",
+  },
+  removeSetBtn: {
+    background: "transparent", border: "1px solid var(--line)", color: "var(--mute)",
+    borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const,
+  },
   setChip: { display: "flex", alignItems: "center", gap: 6, background: "var(--ink)", borderRadius: 8, padding: 6 },
   setChipDone: { boxShadow: "inset 0 0 0 1px var(--good)" },
   setIdx: {
