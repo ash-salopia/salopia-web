@@ -118,7 +118,6 @@ export async function createManualPB(params: {
       weight_kg: params.weightKg,
       reps: params.reps,
       date: params.date,
-      is_manual: true,
     })
     .select()
     .single();
