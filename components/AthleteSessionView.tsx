@@ -392,6 +392,8 @@ export default function AthleteSessionView({
                 <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
                     const hasWeight = (set.weight ?? "").trim().length > 0;
+                    const prevSet = i > 0 ? (ex.log ?? [])[i - 1] : null;
+                    const canCopyPrev = !hasWeight && !set.done && prevSet && ((prevSet.weight ?? "").trim() || prevSet.done);
                     return (
                       <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
                         <div style={styles.setIdx}>{i + 1}</div>
@@ -424,6 +426,15 @@ export default function AthleteSessionView({
                           inputMode="numeric"
                           style={styles.setInput}
                         />
+                        {canCopyPrev && (
+                          <button
+                            style={styles.copyLastBtn}
+                            onClick={() => handleSetUpdate(ex.id, i, { weight: prevSet!.weight, reps: prevSet!.reps, done: true })}
+                            title="Copy the previous set"
+                          >
+                            ↑ Same
+                          </button>
+                        )}
                         <button
                           style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
                           onClick={() => handleSetUpdate(ex.id, i, { done: !set.done })}
@@ -655,6 +666,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
   doneBtnOn: { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
+  copyLastBtn: {
+    flexShrink: 0, background: "var(--accent-dim)", border: "1px solid var(--accent)44", color: "var(--accent)",
+    borderRadius: 6, padding: "0 8px", height: 32, fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const,
+  },
   savingLabel: { fontSize: 11, color: "var(--mute)", marginTop: 6 },
   empty: { color: "var(--mute)", fontSize: 14, padding: "20px 0", textAlign: "center" },
   progressReminder: {
