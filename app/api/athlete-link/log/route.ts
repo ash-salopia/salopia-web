@@ -33,6 +33,15 @@ export interface DetectedPB {
   reps: number | null;
 }
 
+// Reconciles the PB for this athlete+exercise+session against the
+// current log every time a set is saved — not just "insert on
+// improvement" — so correcting a typo (e.g. 8 reps fixed to 6, or a
+// weight typed too high then corrected) after the fact updates or
+// removes the PB it produced, rather than leaving a stale row behind
+// forever. Any PB previously recorded FROM THIS SESSION for this
+// exercise is treated as "ours to keep in sync": updated if this
+// session's best set still beats every other session's best, deleted
+// if it no longer does.
 async function detectPB(athleteId: string, exerciseId: string, sessionId: string, log: SetLog[]): Promise<DetectedPB | null> {
   try {
     let maxWeight = 0;
@@ -42,7 +51,6 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
       const w = parseFloat(String(set.weight));
       if (!isNaN(w) && w > 0 && w > maxWeight) { maxWeight = w; repsAtMax = parseInt(String(set.reps)) || null; }
     }
-    if (maxWeight <= 0) return null;
 
     const supabase = createServiceRoleClient();
 
@@ -63,27 +71,58 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
 
     const sessionDate = sessData.date;
 
-    // Check current best
-    const { data: existing } = await supabase
+    // A PB already recorded from THIS session for this exercise, if any.
+    const { data: sessionPbRows } = await supabase
+      .from("personal_bests")
+      .select("id")
+      .eq("athlete_id", athleteId)
+      .ilike("exercise_name", exData.name)
+      .eq("session_id", sessionId)
+      .order("weight_kg", { ascending: false })
+      .limit(1);
+    const sessionPb = sessionPbRows?.[0] ?? null;
+
+    // The bar this session's best set must clear — every OTHER
+    // session's best for this exercise, excluding this session's own
+    // (possibly stale) row so it doesn't block itself from updating.
+    let bestOtherQuery = supabase
       .from("personal_bests")
       .select("weight_kg")
       .eq("athlete_id", athleteId)
       .ilike("exercise_name", exData.name)
       .order("weight_kg", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    if (sessionPb) bestOtherQuery = bestOtherQuery.neq("id", sessionPb.id);
+    const { data: bestOther } = await bestOtherQuery.maybeSingle();
+    const threshold = bestOther?.weight_kg ?? 0;
 
-    if (maxWeight <= (existing?.weight_kg ?? 0)) return null;
+    if (maxWeight <= 0 || maxWeight <= threshold) {
+      // Not a PB (or nothing logged as done) — remove any PB this
+      // session previously produced, since it's been corrected away.
+      if (sessionPb) {
+        const { error: delErr } = await supabase.from("personal_bests").delete().eq("id", sessionPb.id);
+        if (delErr) console.error("[detectPB] stale PB delete failed", delErr);
+      }
+      return null;
+    }
 
-    const { error: insertErr } = await supabase.from("personal_bests").insert({
-      athlete_id: athleteId,
-      exercise_name: exData.name,
-      weight_kg: maxWeight,
-      reps: repsAtMax,
-      date: sessionDate,
-      session_id: sessionId,
-    });
-    if (insertErr) { console.error("[detectPB] insert failed", insertErr); return null; }
+    if (sessionPb) {
+      const { error: updateErr } = await supabase
+        .from("personal_bests")
+        .update({ weight_kg: maxWeight, reps: repsAtMax, date: sessionDate })
+        .eq("id", sessionPb.id);
+      if (updateErr) { console.error("[detectPB] update failed", updateErr); return null; }
+    } else {
+      const { error: insertErr } = await supabase.from("personal_bests").insert({
+        athlete_id: athleteId,
+        exercise_name: exData.name,
+        weight_kg: maxWeight,
+        reps: repsAtMax,
+        date: sessionDate,
+        session_id: sessionId,
+      });
+      if (insertErr) { console.error("[detectPB] insert failed", insertErr); return null; }
+    }
 
     return { exerciseName: exData.name, weightKg: maxWeight, reps: repsAtMax };
   } catch (e) {
