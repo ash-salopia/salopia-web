@@ -4,6 +4,7 @@ import { useState } from "react";
 import VideoModal from "@/components/VideoModal";
 import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
+import RepsTimeField from "@/components/RepsTimeField";
 import { saveLibraryEntry } from "@/lib/data/library";
 import type { SessionExercise, SetLog, LibraryEntry } from "@/types";
 
@@ -361,19 +362,15 @@ export default function ExerciseCard({
             style={styles.miniInput}
           />
         </Field>
-        <Field label="Reps">
-          <input
-            value={exercise.reps}
-            onChange={(e) => {
-              const v = e.target.value;
-              // Auto-complete "A" or "a" to "AMRAP"
-              const val = v === "A" || v === "a" ? "AMRAP" : v;
-              onEditPresc({ reps: val });
-            }}
-            placeholder="—"
-            style={styles.miniInput}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <RepsTimeField
+            reps={exercise.reps}
+            time={exercise.time}
+            onChange={(patch) => onEditPresc(patch)}
+            inputStyle={styles.miniInput}
+            labelStyle={styles.fieldLabel}
           />
-        </Field>
+        </div>
         <Field label="Rest">
           <input
             value={exercise.rest}
@@ -649,6 +646,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "4px 8px",
     flexShrink: 0,
     whiteSpace: "nowrap" as const,
+  },
+  athleteExerciseNote: {
+    fontSize: 12,
+    color: "var(--text)",
+    background: "var(--ink)",
+    border: "1px solid var(--line)",
+    borderRadius: 8,
+    padding: "8px 10px",
+    lineHeight: 1.4,
+    fontStyle: "italic" as const,
   },
   optedOutBadge: {
     fontSize: 11,

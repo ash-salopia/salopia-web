@@ -11,6 +11,7 @@ import {
   deleteTemplateDef,
 } from "@/lib/data/templates";
 import { createProgrammeFromTemplate } from "@/lib/data/programmes";
+import RepsTimeField from "@/components/RepsTimeField";
 import type { Template, TemplateDef, PrescribedExercise, SessionType } from "@/types";
 
 const DOW = [
@@ -287,12 +288,14 @@ function TemplateDefEditor({
                   inputMode="numeric"
                   style={styles.exMiniInput}
                 />
-                <input
-                  value={ex.reps}
-                  onChange={(e) => updateExercise(ex.id, { reps: e.target.value })}
-                  placeholder="Reps"
-                  style={styles.exMiniInput}
-                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <RepsTimeField
+                    reps={ex.reps}
+                    time={ex.time}
+                    onChange={(patch) => updateExercise(ex.id, patch)}
+                    inputStyle={styles.exMiniInput}
+                  />
+                </div>
                 <input
                   value={ex.rpe ?? ""}
                   onChange={(e) => updateExercise(ex.id, { rpe: e.target.value === "" ? null : parseFloat(e.target.value) || null })}
