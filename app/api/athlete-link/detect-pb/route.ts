@@ -66,29 +66,45 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Mirrors detectPB in app/api/athlete-link/log/route.ts exactly — see
+// that file's docstring for the full reasoning (session-scoped
+// reconciliation, the three PB shapes driven by the explicit
+// is_bodyweight flag, and the atomic upsert on the 0039 unique
+// constraint). Keep both in sync if either changes.
 async function detectPB(athleteId: string, exerciseId: string, sessionId: string, log: SetLog[]) {
-  let maxWeight = 0;
-  let repsAtMax: number | null = null;
-  let hasBodyweight = false;
-  for (const set of log) {
-    if (!set.done) continue;
-    const w = parseFloat(String(set.weight));
-    if (!isNaN(w) && w > 0 && w > maxWeight) { maxWeight = w; repsAtMax = parseInt(String(set.reps)) || null; }
-    if (set.done && (!set.weight || set.weight === "" || w === 0)) {
-      hasBodyweight = true;
-      repsAtMax = parseInt(String(set.reps)) || null;
-    }
-  }
-  if (maxWeight <= 0 && !hasBodyweight) return;
-
   const supabase = createServiceRoleClient();
 
   const { data: exData, error: exErr } = await supabase
     .from("session_exercises")
-    .select("name, session_id")
+    .select("name, session_id, is_bodyweight, time")
     .eq("id", exerciseId)
     .maybeSingle();
   if (exErr || !exData?.name) { console.error("[detectPB coach] exercise lookup failed", exErr); return; }
+
+  const isBodyweight = !!exData.is_bodyweight;
+  const isTimeMode = isBodyweight && !!(exData.time ?? "").trim();
+
+  let maxWeight = 0;
+  let repsAtMaxWeight: number | null = null;
+  let maxReps = 0;
+  let maxTime = 0;
+  for (const set of log) {
+    if (!set.done) continue;
+    if (isBodyweight) {
+      if (isTimeMode) {
+        const t = parseFloat(String(set.time ?? ""));
+        if (!isNaN(t) && t > maxTime) maxTime = t;
+      } else {
+        const r = parseInt(String(set.reps ?? "")) || 0;
+        if (r > maxReps) maxReps = r;
+      }
+    } else {
+      const w = parseFloat(String(set.weight));
+      if (!isNaN(w) && w > 0 && w > maxWeight) { maxWeight = w; repsAtMaxWeight = parseInt(String(set.reps)) || null; }
+    }
+  }
+
+  const candidateValue = isBodyweight ? (isTimeMode ? maxTime : maxReps) : maxWeight;
 
   const { data: sessData, error: sessErr } = await supabase
     .from("sessions")
@@ -97,24 +113,54 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
     .maybeSingle();
   if (sessErr || !sessData?.date) { console.error("[detectPB coach] session lookup failed", sessErr); return; }
 
-  const { data: existing } = await supabase
+  const { data: sessionPbRows } = await supabase
     .from("personal_bests")
-    .select("weight_kg")
+    .select("id")
     .eq("athlete_id", athleteId)
     .ilike("exercise_name", exData.name)
-    .order("weight_kg", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("session_id", sessionId)
+    .limit(1);
+  const sessionPb = sessionPbRows?.[0] ?? null;
 
-  if (maxWeight <= (existing?.weight_kg ?? 0)) return;
+  let bestOtherQuery = supabase
+    .from("personal_bests")
+    .select("weight_kg, reps, time_seconds")
+    .eq("athlete_id", athleteId)
+    .ilike("exercise_name", exData.name);
+  if (isBodyweight) {
+    bestOtherQuery = isTimeMode
+      ? bestOtherQuery.not("time_seconds", "is", null).order("time_seconds", { ascending: false })
+      : bestOtherQuery.is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false });
+  } else {
+    bestOtherQuery = bestOtherQuery.not("weight_kg", "is", null).order("weight_kg", { ascending: false });
+  }
+  if (sessionPb) bestOtherQuery = bestOtherQuery.neq("id", sessionPb.id);
+  const { data: bestOther } = await bestOtherQuery.limit(1).maybeSingle();
 
-  const { error: insertErr } = await supabase.from("personal_bests").insert({
+  const threshold = isBodyweight
+    ? (isTimeMode ? (bestOther?.time_seconds ?? 0) : (bestOther?.reps ?? 0))
+    : (bestOther?.weight_kg ?? 0);
+
+  if (candidateValue <= 0 || candidateValue <= threshold) {
+    if (sessionPb) {
+      const { error: delErr } = await supabase.from("personal_bests").delete().eq("id", sessionPb.id);
+      if (delErr) console.error("[detectPB coach] stale PB delete failed", delErr);
+    }
+    return;
+  }
+
+  const row = {
     athlete_id: athleteId,
     exercise_name: exData.name,
-    weight_kg: maxWeight,
-    reps: repsAtMax,
     date: sessData.date,
     session_id: sessionId,
-  });
-  if (insertErr) console.error("[detectPB coach] insert failed", insertErr);
+    weight_kg: isBodyweight ? null : maxWeight,
+    reps: isBodyweight ? (isTimeMode ? null : maxReps) : repsAtMaxWeight,
+    time_seconds: isBodyweight && isTimeMode ? maxTime : null,
+  };
+
+  const { error: upsertErr } = await supabase
+    .from("personal_bests")
+    .upsert(row, { onConflict: "athlete_id,exercise_name,session_id" });
+  if (upsertErr) console.error("[detectPB coach] upsert failed", upsertErr);
 }
