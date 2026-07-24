@@ -9,12 +9,29 @@ import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModa
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import PBCelebrationModal from "@/components/PBCelebrationModal";
 import { saveWithRetry, usePendingSaveCount } from "@/lib/save-queue";
-import type { Session, SetLog } from "@/types";
+import type { Session, SessionExercise, SetLog } from "@/types";
 
 interface DetectedPB {
   exerciseName: string;
-  weightKg: number;
+  weightKg: number | null;
   reps: number | null;
+  timeSeconds: number | null;
+}
+
+// Whether a set has anything logged in any of its currently-visible
+// fields. Two independent toggles decide which fields are visible:
+// weight shows unless the exercise is bodyweight-only, and reps vs
+// time is decided purely by whether the exercise is prescribed in
+// time mode (ex.time set) — independent of the bodyweight flag, so a
+// weighted time-based exercise (e.g. a loaded carry) still logs a
+// weight alongside the time. Used to guard set removal so it can only
+// ever discard a genuinely empty trailing set, never real data,
+// regardless of which field that data happens to live in.
+function setHasData(exercise: SessionExercise, set: SetLog): boolean {
+  const timeMode = (exercise.time ?? "").trim().length > 0;
+  const hasWeight = !exercise.is_bodyweight && !!(set.weight ?? "").trim();
+  const hasOther = timeMode ? !!(set.time ?? "").trim() : !!(set.reps ?? "").trim();
+  return hasWeight || hasOther;
 }
 
 // Most recent PRIOR occurrence (by date) of each exercise name for this
@@ -163,6 +180,27 @@ export default function AthleteSessionView({
     }
   };
 
+  const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
+    setSession((prev) => prev ? ({
+      ...prev,
+      exercises: prev.exercises?.map((e) => (e.id === exerciseId ? { ...e, athlete_exercise_notes: notes } : e)),
+    }) : prev);
+  };
+
+  const saveExerciseNotes = async (sessionId: string, exerciseId: string, notes: string) => {
+    const result = await saveWithRetry(`exnotes:${sessionId}:${exerciseId}`, "/api/athlete-link/exercise-notes", {
+      token,
+      sessionId,
+      exerciseId,
+      notes,
+    });
+    if (result.ok) {
+      setError("");
+    } else if (!result.queued) {
+      setError(result.error);
+    }
+  };
+
   const handleSetUpdate = async (exerciseId: string, setIndex: number, patch: Partial<SetLog>) => {
     const exercise = session?.exercises?.find((e) => e.id === exerciseId);
     if (!exercise) return;
@@ -230,7 +268,7 @@ export default function AthleteSessionView({
     if (!exercise) return;
     const log = exercise.log ?? [];
     const last = log[log.length - 1];
-    if (!last || last.done || (last.weight ?? "").trim()) return;
+    if (!last || last.done || setHasData(exercise, last)) return;
     const newLog = log.slice(0, -1);
 
     setSession((prev) => prev ? ({
@@ -382,54 +420,105 @@ export default function AthleteSessionView({
                 <div style={styles.prescLine}>
                   {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
+                  {ex.is_bodyweight ? " · 🏋️ bodyweight" : ""}
                   {ex.target_load ? ` · ${ex.target_load}` : ""}
+                  {ex.percent_1rm != null
+                    ? ` · ${ex.percent_1rm}%1RM${ex.computed_target_kg != null ? ` ≈ ${ex.computed_target_kg}kg` : ""}`
+                    : ""}
                 </div>
                 {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
                 {priorAnswer === "yes" && (
                   <div style={styles.progressReminder}>💪 Last time you said you could progress this — try more weight or reps!</div>
                 )}
 
+                <SessionNotesBlock
+                  value={ex.athlete_exercise_notes ?? ""}
+                  onChange={(v) => handleExerciseNotesChange(ex.id, v)}
+                  onBlur={() => saveExerciseNotes(session.id, ex.id, ex.athlete_exercise_notes ?? "")}
+                  label="Notes"
+                  icon="📝"
+                  placeholder="Anything to note about this exercise — how it felt, form cues, niggles…"
+                  enableTemplates={false}
+                />
+
                 <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
-                    const hasWeight = (set.weight ?? "").trim().length > 0;
+                    // Two independent toggles: weight shows unless the
+                    // exercise is bodyweight-only; reps vs time is
+                    // decided purely by the exercise's time prescription,
+                    // regardless of bodyweight — so a weighted time-based
+                    // exercise (e.g. a loaded carry) still logs a weight
+                    // alongside the time, not just a bodyweight one.
+                    const showWeight = !ex.is_bodyweight;
+                    const timeMode = (ex.time ?? "").trim().length > 0;
+                    const hasWeight = showWeight && (set.weight ?? "").trim().length > 0;
+                    const hasOther = timeMode ? (set.time ?? "").trim().length > 0 : (set.reps ?? "").trim().length > 0;
+                    const hasPrimaryValue = hasWeight || hasOther;
                     const prevSet = i > 0 ? (ex.log ?? [])[i - 1] : null;
-                    const canCopyPrev = !hasWeight && !set.done && prevSet && ((prevSet.weight ?? "").trim() || prevSet.done);
+                    const prevHasData = !!prevSet && setHasData(ex, prevSet);
+                    const canCopyPrev = !hasPrimaryValue && !set.done && prevHasData;
                     return (
-                      <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
+                      <div key={i} style={{ ...styles.setChip, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
                         <div style={styles.setIdx}>{i + 1}</div>
-                        <input
-                          key={`${ex.id}-${i}-w-${set.weight}`}
-                          defaultValue={set.weight}
-                          onFocus={(e) => e.target.select()}
-                          onBlur={(e) => {
-                            const v = e.target.value;
-                            if (v === set.weight) return;
-                            const shouldBeDone = v.trim().length > 0;
-                            const patch: Partial<SetLog> = { weight: v };
-                            if (shouldBeDone !== set.done) patch.done = shouldBeDone;
-                            const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
-                            if (shouldBeDone && !set.reps.trim() && ex.reps && !isAmrap) {
-                              const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
-                              if (lower) patch.reps = lower;
-                            }
-                            handleSetUpdate(ex.id, i, patch);
-                          }}
-                          placeholder="kg"
-                          inputMode="decimal"
-                          style={styles.setInput}
-                        />
-                        <input
-                          value={set.reps}
-                          onChange={(e) => handleSetUpdate(ex.id, i, { reps: e.target.value })}
-                          onFocus={(e) => e.target.select()}
-                          placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (ex.reps || "reps")}
-                          inputMode="numeric"
-                          style={styles.setInput}
-                        />
+                        {showWeight && (
+                          <input
+                            key={`${ex.id}-${i}-w-${set.weight}`}
+                            defaultValue={set.weight}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                              const v = e.target.value;
+                              if (v === set.weight) return;
+                              const shouldBeDone = v.trim().length > 0;
+                              const patch: Partial<SetLog> = { weight: v };
+                              if (shouldBeDone !== set.done) patch.done = shouldBeDone;
+                              const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
+                              if (!timeMode && shouldBeDone && !set.reps.trim() && ex.reps && !isAmrap) {
+                                const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
+                                if (lower) patch.reps = lower;
+                              }
+                              handleSetUpdate(ex.id, i, patch);
+                            }}
+                            placeholder="kg"
+                            inputMode="decimal"
+                            style={styles.setInput}
+                          />
+                        )}
+                        {timeMode ? (
+                          <input
+                            key={`${ex.id}-${i}-t-${set.time}`}
+                            defaultValue={set.time ?? ""}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                              const v = e.target.value;
+                              if (v === (set.time ?? "")) return;
+                              const shouldBeDone = v.trim().length > 0;
+                              const patch: Partial<SetLog> = { time: v };
+                              if (shouldBeDone !== set.done) patch.done = shouldBeDone;
+                              handleSetUpdate(ex.id, i, patch);
+                            }}
+                            placeholder={ex.time || "sec"}
+                            inputMode="numeric"
+                            style={styles.setInput}
+                          />
+                        ) : (
+                          <input
+                            value={set.reps}
+                            onChange={(e) => handleSetUpdate(ex.id, i, { reps: e.target.value })}
+                            onFocus={(e) => e.target.select()}
+                            placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (ex.reps || "reps")}
+                            inputMode="numeric"
+                            style={styles.setInput}
+                          />
+                        )}
                         {canCopyPrev && (
                           <button
                             style={styles.copyLastBtn}
-                            onClick={() => handleSetUpdate(ex.id, i, { weight: prevSet!.weight, reps: prevSet!.reps, done: true })}
+                            onClick={() => {
+                              const patch: Partial<SetLog> = { done: true };
+                              if (showWeight) patch.weight = prevSet!.weight;
+                              if (timeMode) patch.time = prevSet!.time; else patch.reps = prevSet!.reps;
+                              handleSetUpdate(ex.id, i, patch);
+                            }}
                             title="Copy the previous set"
                           >
                             ↑ Same
@@ -452,7 +541,7 @@ export default function AthleteSessionView({
                   {(() => {
                     const log = ex.log ?? [];
                     const last = log[log.length - 1];
-                    const canRemove = log.length > 0 && last && !last.done && !(last.weight ?? "").trim();
+                    const canRemove = log.length > 0 && !!last && !last.done && !setHasData(ex, last);
                     return canRemove ? (
                       <button style={styles.removeSetBtn} onClick={() => handleRemoveLastSet(ex.id)}>
                         − Remove
@@ -520,6 +609,7 @@ export default function AthleteSessionView({
           exerciseName={pbCelebration.exerciseName}
           weightKg={pbCelebration.weightKg}
           reps={pbCelebration.reps}
+          timeSeconds={pbCelebration.timeSeconds}
           onClose={() => setPbCelebration(null)}
         />
       )}

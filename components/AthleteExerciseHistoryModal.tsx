@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { formatPBValue } from "@/lib/data/personal-bests";
 
 interface HistorySet {
   weight: string;
   reps: string;
+  time?: string;
   done: boolean;
 }
 
@@ -17,7 +19,15 @@ interface HistoryEntry {
 interface PBRecord {
   weight_kg: number | null;
   reps: number | null;
+  time_seconds: number | null;
   date: string;
+}
+
+function formatSetChip(set: HistorySet): string {
+  if ((set.weight ?? "").trim()) return `${set.weight}kg${set.reps ? ` × ${set.reps}` : ""}`;
+  if ((set.time ?? "").trim()) return `${set.time}s`;
+  if ((set.reps ?? "").trim()) return `${set.reps} reps`;
+  return "BW";
 }
 
 interface Props {
@@ -75,10 +85,7 @@ export default function AthleteExerciseHistoryModal({ token, exerciseName, onClo
             {pb && (
               <div style={s.pbBanner}>
                 <div style={s.pbLabel}>🏆 Personal Best</div>
-                <div style={s.pbValue}>
-                  {pb.weight_kg != null ? `${pb.weight_kg}kg` : "Bodyweight"}
-                  {pb.reps ? ` × ${pb.reps}` : ""}
-                </div>
+                <div style={s.pbValue}>{formatPBValue(pb)}</div>
                 <div style={s.pbDate}>{formatDate(pb.date)}</div>
               </div>
             )}
@@ -93,20 +100,19 @@ export default function AthleteExerciseHistoryModal({ token, exerciseName, onClo
                     <div key={`${entry.date}-${i}`} style={s.entry}>
                       <div style={s.entryHeader}>
                         <div style={s.entryDate}>{formatDate(entry.date)}</div>
-                        {entry.bestSet?.weight && (
+                        {entry.bestSet && (
                           <div style={s.entryPeak}>
-                            Peak: <strong>{entry.bestSet.weight}kg</strong>
+                            Peak: <strong>{formatSetChip(entry.bestSet)}</strong>
                           </div>
                         )}
                       </div>
                       {entry.allSets.length > 0 ? (
                         <div style={s.setsRow}>
                           {entry.allSets
-                            .filter((set) => set.done || (set.weight ?? "").trim())
+                            .filter((set) => set.done || (set.weight ?? "").trim() || (set.time ?? "").trim() || (set.reps ?? "").trim())
                             .map((set, j) => (
                               <div key={j} style={s.setChip}>
-                                {set.weight ? `${set.weight}kg` : "BW"}
-                                {set.reps ? ` × ${set.reps}` : ""}
+                                {formatSetChip(set)}
                               </div>
                             ))}
                         </div>

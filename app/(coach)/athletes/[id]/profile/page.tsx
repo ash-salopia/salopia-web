@@ -3,21 +3,32 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { updatePB, deletePB, createManualPB } from "@/lib/data/personal-bests";
+import { updatePB, deletePB, createManualPB, formatPBValue } from "@/lib/data/personal-bests";
 import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete } from "@/lib/data/athletes";
+import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
+import { getOrgSettings } from "@/lib/data/settings";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
-import type { Athlete } from "@/types";
+import type { Athlete, AthleteOneRM } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PBRecord {
   id: string;
   exercise_name: string;
-  weight_kg: number;
+  weight_kg: number | null;
   reps: number | null;
+  time_seconds: number | null;
   date: string;
+}
+
+// A single comparable "how good is this PB" number, used to pick the
+// best record and sort the list — safe across weighted/reps/time
+// shapes because a given exercise name only ever produces one shape
+// in practice (is_bodyweight is set per exercise, not per PB row).
+function pbSortValue(pb: { weight_kg: number | null; reps: number | null; time_seconds: number | null }): number {
+  return pb.weight_kg ?? pb.time_seconds ?? pb.reps ?? 0;
 }
 
 interface ProgressPoint {
@@ -168,6 +179,12 @@ export default function AthleteProfilePage() {
   const [newPB, setNewPB] = useState({ exercise_name: "", weight: "", reps: "", date: "" });
   const [library, setLibrary] = useState<{ name: string }[]>([]);
   const [pbNameDropdownOpen, setPbNameDropdownOpen] = useState(false);
+  const [oneRMs, setOneRMs] = useState<AthleteOneRM[]>([]);
+  const [oneRmSource, setOneRmSource] = useState<"rolling" | "fixed">("rolling");
+  const [addingOneRM, setAddingOneRM] = useState(false);
+  const [newOneRM, setNewOneRM] = useState({ exercise_name: "", weight: "" });
+  const [oneRmNameDropdownOpen, setOneRmNameDropdownOpen] = useState(false);
+  const [savingOneRM, setSavingOneRM] = useState(false);
   const [loading, setLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(false);
   const [error, setError] = useState("");
@@ -177,6 +194,8 @@ export default function AthleteProfilePage() {
     if (!athleteId) return;
     load();
     listLibrary().then((entries) => setLibrary(entries)).catch(() => {});
+    listAthleteOneRMs(athleteId).then(setOneRMs).catch(() => {});
+    getOrgSettings().then((s) => setOneRmSource(s.one_rm_source)).catch(() => {});
   }, [athleteId]);
 
   const load = async () => {
@@ -189,7 +208,7 @@ export default function AthleteProfilePage() {
     try {
       const [{ data: athleteData }, { data: pbData }, { data: sessionData }, { data: exerciseData }] = await Promise.all([
         supabase.from("athletes").select("*").eq("id", athleteId).single(),
-        supabase.from("personal_bests").select("id, exercise_name, weight_kg, reps, date")
+        supabase.from("personal_bests").select("id, exercise_name, weight_kg, reps, time_seconds, date")
           .eq("athlete_id", athleteId).order("weight_kg", { ascending: false }),
         supabase.from("sessions").select("date, session_exercises(log)").eq("athlete_id", athleteId),
         // Also calculate PBs directly from session logs to catch coach-logged sessions
@@ -204,12 +223,15 @@ export default function AthleteProfilePage() {
       const bestPerExercise = new Map<string, PBRecord>();
       for (const pb of pbData ?? []) {
         const key = pb.exercise_name.toLowerCase();
-        if (!bestPerExercise.has(key) || pb.weight_kg > bestPerExercise.get(key)!.weight_kg) {
-          bestPerExercise.set(key, { id: pb.id, exercise_name: pb.exercise_name, weight_kg: pb.weight_kg, reps: pb.reps, date: pb.date });
+        const record: PBRecord = { id: pb.id, exercise_name: pb.exercise_name, weight_kg: pb.weight_kg, reps: pb.reps, time_seconds: (pb as any).time_seconds ?? null, date: pb.date };
+        if (!bestPerExercise.has(key) || pbSortValue(record) > pbSortValue(bestPerExercise.get(key)!)) {
+          bestPerExercise.set(key, record);
         }
       }
 
-      // Also scan session_exercises logs to catch coach-logged sessions
+      // Also scan session_exercises logs to catch coach-logged sessions —
+      // weighted only (bodyweight PBs are reliably captured by detectPB
+      // itself now, via the personal_bests table above).
       for (const ex of exerciseData ?? []) {
         const log: any[] = ex.log ?? [];
         const session = Array.isArray(ex.sessions) ? ex.sessions[0] : ex.sessions as any;
@@ -223,19 +245,24 @@ export default function AthleteProfilePage() {
           const r = parseInt(String(set.reps)) || prescribedReps;
           const key = ex.name.toLowerCase();
           const existing = bestPerExercise.get(key);
-          if (!existing || w > existing.weight_kg) {
+          // Only ever overwrites an existing WEIGHTED record — a
+          // bodyweight PB (null weight_kg) is left alone here; it
+          // came from the real detectPB flow via personal_bests
+          // above and isn't comparable to a stray logged weight.
+          if (!existing || (existing.weight_kg != null && w > existing.weight_kg)) {
             bestPerExercise.set(key, {
               id: existing?.id ?? "",  // keep real PB id if exists
               exercise_name: ex.name,
               weight_kg: w,
               reps: r,
+              time_seconds: null,
               date: sessionDate,
             });
           }
         }
       }
 
-      setPbs(Array.from(bestPerExercise.values()).sort((a, b) => b.weight_kg - a.weight_kg));
+      setPbs(Array.from(bestPerExercise.values()).sort((a, b) => pbSortValue(b) - pbSortValue(a)));
 
       // Session stats
       let totalSets = 0, completedSets = 0, thisMonth = 0;
@@ -479,6 +506,130 @@ export default function AthleteProfilePage() {
         </div>
       </div>
 
+      {/* 1RM Tracker */}
+      <div style={p.section}>
+        <div style={p.sectionTitle}>🏋️ 1RM Tracker</div>
+        <p style={p.sectionHint}>
+          {oneRmSource === "fixed"
+            ? "These fixed values are used to turn %1RM prescriptions into kg targets in the athlete app. Exercises without a value here fall back to an estimate from training logs."
+            : "Only used when your org's 1RM source is set to \"Fixed\" in Settings — currently %1RM targets are estimated from training logs."}
+        </p>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button style={p.ghostBtn} onClick={() => setAddingOneRM(v => !v)}>
+            {addingOneRM ? "Cancel" : "+ Add 1RM"}
+          </button>
+        </div>
+
+        {addingOneRM && (
+          <div style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={p.sectionTitle}>Add 1RM</div>
+            <div style={{ position: "relative" as const }}>
+              <input
+                placeholder="Exercise name"
+                value={newOneRM.exercise_name}
+                onChange={e => { setNewOneRM(v => ({ ...v, exercise_name: e.target.value })); setOneRmNameDropdownOpen(true); }}
+                onFocus={() => setOneRmNameDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setOneRmNameDropdownOpen(false), 150)}
+                style={p.editInput}
+              />
+              {oneRmNameDropdownOpen && newOneRM.exercise_name.trim() && (
+                <div style={p.pbNameDropdown}>
+                  {library
+                    .filter(entry => entry.name.toLowerCase().includes(newOneRM.exercise_name.toLowerCase()))
+                    .slice(0, 8)
+                    .map((entry, i) => (
+                      <button
+                        key={i}
+                        style={p.pbNameDropdownItem}
+                        onMouseDown={() => { setNewOneRM(v => ({ ...v, exercise_name: entry.name })); setOneRmNameDropdownOpen(false); }}
+                      >
+                        {entry.name}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                placeholder="1RM (kg)"
+                value={newOneRM.weight}
+                onChange={e => setNewOneRM(v => ({ ...v, weight: e.target.value }))}
+                style={{ ...p.editInput, flex: 1 }}
+                inputMode="decimal"
+              />
+              <button
+                style={{ ...p.ghostBtn, background: "var(--accent)", color: "#0a1420", border: "none", opacity: (!newOneRM.exercise_name.trim() || !(parseFloat(newOneRM.weight) > 0) || savingOneRM) ? 0.5 : 1 }}
+                disabled={!newOneRM.exercise_name.trim() || !(parseFloat(newOneRM.weight) > 0) || savingOneRM}
+                onClick={async () => {
+                  setSavingOneRM(true);
+                  try {
+                    const saved = await upsertAthleteOneRM(athleteId, newOneRM.exercise_name, parseFloat(newOneRM.weight));
+                    setOneRMs(prev => [...prev.filter(r => r.id !== saved.id), saved].sort((a, b) => a.exercise_name.localeCompare(b.exercise_name)));
+                    setAddingOneRM(false);
+                    setNewOneRM({ exercise_name: "", weight: "" });
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Could not save 1RM");
+                  } finally {
+                    setSavingOneRM(false);
+                  }
+                }}
+              >
+                {savingOneRM ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {oneRMs.length === 0 ? (
+          <div style={p.empty}>No fixed 1RMs set for this athlete yet.</div>
+        ) : (
+          <div style={p.pbList}>
+            {oneRMs.map((rm) => (
+              <div key={rm.id} style={{ ...p.checkinCard, gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={p.pbExercise}>{rm.exercise_name}</div>
+                  <div style={p.pbDate}>Updated {formatDate(rm.updated_at)}</div>
+                </div>
+                <input
+                  key={`${rm.id}-${rm.one_rm_kg}`}
+                  defaultValue={String(rm.one_rm_kg)}
+                  inputMode="decimal"
+                  style={{ ...p.editInput, width: 90, textAlign: "right" as const }}
+                  onFocus={(e) => e.target.select()}
+                  onBlur={async (e) => {
+                    const val = parseFloat(e.target.value);
+                    if (isNaN(val) || val <= 0 || val === Number(rm.one_rm_kg)) return;
+                    try {
+                      const saved = await upsertAthleteOneRM(athleteId, rm.exercise_name, val);
+                      setOneRMs(prev => prev.map(r => (r.id === saved.id ? saved : r)));
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Could not update 1RM");
+                    }
+                  }}
+                />
+                <span style={{ fontSize: 12, color: "var(--mute)" }}>kg</span>
+                <button
+                  style={{ background: "transparent", border: "none", color: "#FF6B6B", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                  title="Delete this 1RM"
+                  onClick={async () => {
+                    if (!confirm(`Delete the fixed 1RM for ${rm.exercise_name}?`)) return;
+                    try {
+                      await deleteAthleteOneRM(rm.id);
+                      setOneRMs(prev => prev.filter(r => r.id !== rm.id));
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Could not delete 1RM");
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* PBs */}
       <div style={p.section}>
         <div style={p.sectionTitle}>🏆 Personal bests</div>
@@ -563,7 +714,7 @@ export default function AthleteProfilePage() {
                       reps: parseInt(newPB.reps) || null,
                       date: newPB.date,
                     });
-                    setPbs(prev => [...prev, { id: created.id, exercise_name: created.exercise_name, weight_kg: created.weight_kg ?? 0, reps: created.reps, date: created.date }].sort((a, b) => b.weight_kg - a.weight_kg));
+                    setPbs(prev => [...prev, { id: created.id, exercise_name: created.exercise_name, weight_kg: created.weight_kg, reps: created.reps, time_seconds: null, date: created.date }].sort((a, b) => pbSortValue(b) - pbSortValue(a)));
                     setAddingPB(false);
                     setNewPB({ exercise_name: "", weight: "", reps: "", date: "" });
                   } catch (e) {
@@ -686,8 +837,7 @@ export default function AthleteProfilePage() {
                           <div style={p.pbDate}>{formatDate(pb.date)}</div>
                         </div>
                         <div style={p.pbWeightGroup}>
-                          <div style={p.pbWeight}>{pb.weight_kg}kg</div>
-                          {pb.reps && <div style={p.pbReps}>× {pb.reps}</div>}
+                          <div style={p.pbWeight}>{formatPBValue(pb)}</div>
                         </div>
                         <div style={{ ...p.chevron, transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</div>
                       </button>

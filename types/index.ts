@@ -69,6 +69,7 @@ export interface SetLog {
   weight: string;
   reps: string;
   done: boolean;
+  time?: string; // 0041 — actual time achieved for a time-mode bodyweight set (e.g. a plank hold), separate from the prescribed ex.time
 }
 
 // ------------------------------------------------------------
@@ -88,6 +89,7 @@ export interface ExerciseBase {
   video_url: string;
   rpe?: number | null; // 0032 — prescribed RPE (1-10)
   percent_1rm?: number | null; // 0032 — prescribed load as a % of 1RM
+  is_bodyweight?: boolean; // 0041 — coach-set: this exercise has no load, athlete logs reps or time only
 }
 
 export interface SessionExercise extends ExerciseBase {
@@ -102,6 +104,12 @@ export interface SessionExercise extends ExerciseBase {
   alternative_names: string[]; // 0035 — coach-approved swap options for this exercise instance
   swapped_from: string | null; // 0035 — original prescribed name, set when the athlete swaps
   opted_out: boolean;          // 0035 — athlete skipped this exercise, no replacement
+  athlete_exercise_notes: string; // 0040 — athlete's own note on this exercise, separate from the coach's `notes` and session-level athlete_notes
+  // 0038 — not a DB column: computed server-side from percent_1rm + the
+  // athlete's current 1RM (fixed or rolling, per org settings), attached
+  // when sessions are fetched for the athlete app. null = %1RM prescribed
+  // but no 1RM data exists yet for this exercise.
+  computed_target_kg?: number | null;
 }
 
 // A lighter-weight exercise shape used inside templates/programmes,
@@ -221,6 +229,16 @@ export interface AthleteTemplateAccess {
   organisation_id: string;
   granted_by: string; // coaches.id
   granted_at: string;
+}
+
+// 0038 — coach-set fixed 1RM per athlete + exercise, used to compute
+// %1RM targets when the org's one_rm_source setting is "fixed".
+export interface AthleteOneRM {
+  id: string;
+  athlete_id: string;
+  exercise_name: string;
+  one_rm_kg: number;
+  updated_at: string;
 }
 
 // ------------------------------------------------------------

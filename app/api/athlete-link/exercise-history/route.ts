@@ -43,24 +43,39 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Current PB
-  const { data: pbRow } = await supabase
-    .from("personal_bests")
-    .select("weight_kg, reps, date")
-    .eq("athlete_id", athlete.id)
-    .ilike("exercise_name", exerciseName)
-    .order("weight_kg", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Current PB — could be weighted, bodyweight+reps, or bodyweight+time
+  // (see detectPB's docstring in log/route.ts for the three shapes).
+  // This endpoint only knows the exercise NAME, not whether it's
+  // currently flagged bodyweight, so check all three shapes and use
+  // whichever one this exercise actually has data in.
+  const pbSelect = "weight_kg, reps, time_seconds, date";
+  const pbBase = () =>
+    supabase.from("personal_bests").select(pbSelect).eq("athlete_id", athlete.id).ilike("exercise_name", exerciseName);
+  const [{ data: weightedPb }, { data: repsPb }, { data: timePb }] = await Promise.all([
+    pbBase().not("weight_kg", "is", null).order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
+    pbBase().is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false }).limit(1).maybeSingle(),
+    pbBase().not("time_seconds", "is", null).order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const pbRow = weightedPb ?? repsPb ?? timePb ?? null;
 
-  // Build a per-session summary (best set each session)
+  // Build a per-session summary (best set each session). Shape-agnostic
+  // heuristic — compare by weight if any set has one, else by time, else
+  // by reps — works because a given exercise only ever populates one of
+  // these fields consistently (its fixed prescription shape).
   const history = (exercises ?? [])
     .map((e: any) => {
       const date = sessionDateById.get(e.session_id);
       const doneSets = (e.log ?? []).filter((s: any) => s.done);
       const bestSet = doneSets.reduce((best: any, s: any) => {
-        const w = parseFloat(s.weight) || 0;
-        return w > (parseFloat(best?.weight) || 0) ? s : best;
+        const sw = parseFloat(s.weight) || 0;
+        const bw = parseFloat(best?.weight) || 0;
+        if (sw > 0 || bw > 0) return sw > bw ? s : best;
+        const st = parseFloat(s.time) || 0;
+        const bt = parseFloat(best?.time) || 0;
+        if (st > 0 || bt > 0) return st > bt ? s : best;
+        const sr = parseInt(s.reps) || 0;
+        const br = parseInt(best?.reps) || 0;
+        return sr > br ? s : best;
       }, doneSets[0] ?? null);
       return { date, bestSet, allSets: e.log ?? [] };
     })

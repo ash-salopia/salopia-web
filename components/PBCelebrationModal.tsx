@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { formatPBValue } from "@/lib/data/personal-bests";
 
 interface Props {
   exerciseName: string;
-  weightKg: number;
+  weightKg: number | null;
   reps: number | null;
+  timeSeconds: number | null;
   onClose: () => void;
 }
 
@@ -14,7 +16,7 @@ interface Props {
 // anywhere closes it immediately too.
 const AUTO_DISMISS_MS = 4000;
 
-export default function PBCelebrationModal({ exerciseName, weightKg, reps, onClose }: Props) {
+export default function PBCelebrationModal({ exerciseName, weightKg, reps, timeSeconds, onClose }: Props) {
   useEffect(() => {
     const t = setTimeout(onClose, AUTO_DISMISS_MS);
     return () => clearTimeout(t);
@@ -27,7 +29,7 @@ export default function PBCelebrationModal({ exerciseName, weightKg, reps, onClo
         <div style={s.title}>New PB!</div>
         <div style={s.exercise}>{exerciseName}</div>
         <div style={s.value}>
-          {weightKg}kg{reps ? ` × ${reps}` : ""}
+          {formatPBValue({ weight_kg: weightKg, reps, time_seconds: timeSeconds })}
         </div>
         <div style={s.sub}>Well done — nice work! 💪</div>
         <button style={s.closeBtn} onClick={onClose}>Nice!</button>

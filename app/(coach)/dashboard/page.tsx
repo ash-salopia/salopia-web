@@ -12,7 +12,7 @@ import {
 } from "@/lib/data/sessions";
 import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-utils";
 import { getOrgSettings } from "@/lib/data/settings";
-import { listRecentOrgPBs, type PersonalBest } from "@/lib/data/personal-bests";
+import { listRecentOrgPBs, formatPBValue, type PersonalBest } from "@/lib/data/personal-bests";
 import type { Athlete } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -381,7 +381,7 @@ export default function DashboardPage() {
                   <button key={pb.id} style={st.athleteChip} onClick={() => router.push("/community")}>
                     <span style={{ fontWeight: 400, color: "var(--mute)" }}>{(pb as any).athlete?.name}</span>
                     <span>· {pb.exercise_name}</span>
-                    {pb.weight_kg && <span style={{ color: "var(--accent)", fontWeight: 700 }}>{pb.weight_kg}kg</span>}
+                    <span style={{ color: "var(--accent)", fontWeight: 700 }}>{formatPBValue(pb)}</span>
                   </button>
                 ))}
               </div>

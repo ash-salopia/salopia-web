@@ -6,12 +6,32 @@ export interface PersonalBest {
   exercise_name: string;
   weight_kg: number | null;
   reps: number | null;
+  time_seconds: number | null; // 0041 — set for a time-mode bodyweight PB (e.g. longest plank hold); null otherwise
   date: string;
   session_id: string | null;
   created_at: string;
   athlete?: { id: string; name: string } | null;
   reactions?: PBReaction[];
   comments?: PBComment[];
+}
+
+// Shared display formatting so every PB surface (community feed,
+// athlete profile, dashboard, history modals) shows the three PB
+// shapes consistently: weighted (kg, + reps if set), bodyweight+reps,
+// bodyweight+time (longest hold).
+export function formatPBValue(pb: Pick<PersonalBest, "weight_kg" | "reps" | "time_seconds">): string {
+  if (pb.time_seconds != null) {
+    const mins = Math.floor(pb.time_seconds / 60);
+    const secs = Math.round(pb.time_seconds % 60);
+    return mins > 0 ? `${mins}m ${secs}s` : `${pb.time_seconds}s`;
+  }
+  if (pb.weight_kg != null) {
+    return `${pb.weight_kg}kg${pb.reps ? ` × ${pb.reps}` : ""}`;
+  }
+  if (pb.reps != null) {
+    return `${pb.reps} reps`;
+  }
+  return "Bodyweight";
 }
 
 export interface PBComment {

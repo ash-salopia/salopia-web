@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
+import { formatPBValue } from "@/lib/data/personal-bests";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -454,10 +455,7 @@ function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, onPbDel
         )}
       </div>
       <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
-      <div style={s.pbWeight}>
-        {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
-        {pb.reps ? ` × ${pb.reps} reps` : ""}
-      </div>
+      <div style={s.pbWeight}>{formatPBValue(pb)}</div>
       <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
 
       <div style={s.reactionArea}>

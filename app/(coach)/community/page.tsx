@@ -9,7 +9,7 @@ import {
   listAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement,
 } from "@/lib/data/announcements";
 import {
-  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, type PersonalBest,
+  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, formatPBValue, type PersonalBest,
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import GroupChat from "@/components/GroupChat";
@@ -623,10 +623,7 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, onCommentDe
         </button>
       </div>
       <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
-      <div style={s.pbWeight}>
-        {pb.weight_kg ? `${pb.weight_kg}kg` : "Bodyweight"}
-        {pb.reps ? ` × ${pb.reps} reps` : ""}
-      </div>
+      <div style={s.pbWeight}>{formatPBValue(pb)}</div>
       <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
 
       <div style={s.reactionArea}>

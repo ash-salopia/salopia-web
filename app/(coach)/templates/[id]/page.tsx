@@ -310,6 +310,15 @@ function TemplateDefEditor({
                   inputMode="decimal"
                   style={styles.exMiniInput}
                 />
+                <label style={styles.exBodyweightLabel} title="Bodyweight only — no load field, athlete logs reps/time only">
+                  <input
+                    type="checkbox"
+                    checked={!!ex.is_bodyweight}
+                    onChange={(e) => updateExercise(ex.id, { is_bodyweight: e.target.checked })}
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  BW
+                </label>
                 <button style={styles.exRemoveBtn} onClick={() => removeExercise(ex.id)}>
                   ×
                 </button>
@@ -362,6 +371,7 @@ const styles: Record<string, React.CSSProperties> = {
   exNameInput: { flex: 2, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "7px 8px", fontSize: 13 },
   exMiniInput: { flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "7px 8px", fontSize: 13 },
   exRemoveBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 16, cursor: "pointer" },
+  exBodyweightLabel: { display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "var(--mute)", fontWeight: 700, flexShrink: 0, cursor: "pointer" },
   addExBtn: { width: "100%", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "10px 0", fontSize: 13, cursor: "pointer" },
   hyroxNote: { fontSize: 12, color: "var(--mute)", background: "var(--ink)", borderRadius: 8, padding: 12 },
 };

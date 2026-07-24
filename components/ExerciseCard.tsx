@@ -313,6 +313,12 @@ export default function ExerciseCard({
         </div>
       )}
 
+      {exercise.athlete_exercise_notes && (
+        <div style={styles.athleteExerciseNote} title="Athlete's own note on this exercise">
+          📝 {exercise.athlete_exercise_notes}
+        </div>
+      )}
+
       {onApplyFuture && (
         <label style={styles.checkboxRow}>
           <input
@@ -351,6 +357,15 @@ export default function ExerciseCard({
             Leave unticked for single-side-only moves.
           </div>
         )}
+        <label style={styles.checkboxRow}>
+          <input
+            type="checkbox"
+            checked={!!exercise.is_bodyweight}
+            onChange={(e) => onEditPresc({ is_bodyweight: e.target.checked })}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          <span style={{ color: exercise.is_bodyweight ? "var(--accent)" : "var(--mute)" }}>Bodyweight only</span>
+        </label>
       </div>
 
       <div style={styles.prescRow}>
@@ -379,14 +394,16 @@ export default function ExerciseCard({
             style={styles.miniInput}
           />
         </Field>
-        <Field label="Load" grow>
-          <input
-            value={exercise.target_load}
-            onChange={(e) => onEditPresc({ target_load: e.target.value })}
-            placeholder="e.g. 60kg"
-            style={styles.miniInput}
-          />
-        </Field>
+        {!exercise.is_bodyweight && (
+          <Field label="Load" grow>
+            <input
+              value={exercise.target_load}
+              onChange={(e) => onEditPresc({ target_load: e.target.value })}
+              placeholder="e.g. 60kg"
+              style={styles.miniInput}
+            />
+          </Field>
+        )}
         <Field label="Tempo">
           <input
             value={exercise.tempo ?? "2-0-2"}
