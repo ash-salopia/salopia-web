@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
-import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
+import { getAthleteByShareToken, getOrgSettingsForAthlete } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { estimateOneRM, type OneRMFormula } from "@/lib/one-rm";
-
-async function getOrgSettingsForAthlete(athleteId: string): Promise<OrgSettings> {
-  const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from("athletes")
-    .select("organisation_id, organisations(settings)")
-    .eq("id", athleteId)
-    .single();
-  const org = Array.isArray(data?.organisations) ? data.organisations[0] : (data?.organisations as any);
-  return { ...DEFAULT_SETTINGS, ...(org?.settings ?? {}) };
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
 import { FORMULAS, type OneRMFormula, type WeightUnit } from "@/lib/one-rm";
 import { CHECKIN_CONDITIONS, CHECKIN_RULE_OPTIONS, DEFAULT_CHECKIN_RULES, type CheckInAction, type CheckInRules } from "@/lib/checkin";
-import type { OrgSettings } from "@/lib/data/settings";
+import type { OrgSettings, OneRMSource } from "@/lib/data/settings";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<OrgSettings>(DEFAULT_SETTINGS);
@@ -105,6 +105,29 @@ export default function SettingsPage() {
               {selectedFormula.description}
             </div>
           )}
+        </div>
+
+        <div style={{ ...s.card, marginTop: 10 }}>
+          <div style={s.cardLabel}>1RM source for %1RM targets</div>
+          <div style={s.cardDesc}>
+            When you prescribe an exercise as a percentage of 1RM, this decides which 1RM the
+            athlete&apos;s kg target is calculated from.
+          </div>
+          <div style={s.unitToggle}>
+            {([
+              { value: "rolling", label: "Rolling", sub: "Estimated automatically from each athlete's training logs" },
+              { value: "fixed",   label: "Fixed",   sub: "Values you set per exercise on the athlete's profile (falls back to rolling if unset)" },
+            ] as { value: OneRMSource; label: string; sub: string }[]).map((opt) => (
+              <button
+                key={opt.value}
+                style={{ ...s.unitBtn, ...(settings.one_rm_source === opt.value ? s.unitBtnActive : {}) }}
+                onClick={() => setSettings((prev) => ({ ...prev, one_rm_source: opt.value }))}
+              >
+                <div style={s.unitLabel}>{opt.label}</div>
+                <div style={s.unitSub}>{opt.sub}</div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

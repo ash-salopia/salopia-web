@@ -76,8 +76,15 @@ export const DEFAULT_REFLECTION_METRICS: ReflectionMetric[] = [
   },
 ];
 
+// 0038 — where %1RM targets get their 1RM value from:
+// "rolling" = estimated from the athlete's logged history (default),
+// "fixed"   = coach-set values in athlete_one_rms (falls back to
+//             rolling per-exercise when no fixed value is set yet).
+export type OneRMSource = "rolling" | "fixed";
+
 export interface OrgSettings {
   one_rm_formula: OneRMFormula;
+  one_rm_source: OneRMSource;
   weight_unit: WeightUnit;
   checkin_enabled: boolean;
   checkin_rules: CheckInRules;
@@ -92,6 +99,7 @@ export interface OrgSettings {
 
 export const DEFAULT_SETTINGS: OrgSettings = {
   one_rm_formula: "lander",
+  one_rm_source: "rolling",
   weight_unit: "kg",
   checkin_enabled: true,
   checkin_rules: DEFAULT_CHECKIN_RULES,
@@ -148,5 +156,5 @@ export async function updateOrgSettings(patch: Partial<OrgSettings>): Promise<vo
 }
 
 // Note: getOrgSettingsForAthlete (service role version) lives in
-// app/api/athlete-link/goals/route.ts to avoid importing server-only
+// lib/data/athlete-share-link.ts to avoid importing server-only
 // packages into client components.
