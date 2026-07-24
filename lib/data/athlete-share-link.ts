@@ -2,7 +2,24 @@ import "server-only";
 import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { todayISO } from "@/lib/date-utils";
+import { bestEstimatedOneRM, type OneRMFormula } from "@/lib/one-rm";
+import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
 import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise } from "@/types";
+
+// Service-role version of getOrgSettings, resolved via the athlete's
+// organisation rather than a coach login. Lives here (not in
+// lib/data/settings.ts) because settings.ts is imported by client
+// components and must stay free of server-only packages.
+export async function getOrgSettingsForAthlete(athleteId: string): Promise<OrgSettings> {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("athletes")
+    .select("organisation_id, organisations(settings)")
+    .eq("id", athleteId)
+    .single();
+  const org = Array.isArray(data?.organisations) ? data.organisations[0] : (data?.organisations as any);
+  return { ...DEFAULT_SETTINGS, ...(org?.settings ?? {}) };
+}
 
 // Looks up the athlete matching a share token. Returns null if the
 // token doesn't match anything — the route should treat that exactly
@@ -42,12 +59,117 @@ export async function getAthleteSessions(athleteId: string): Promise<Session[]> 
     .eq("athlete_id", athleteId)
     .order("date", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((s) => ({
+  const sessions: Session[] = (data ?? []).map((s) => ({
     ...s,
     exercises: (s.session_exercises ?? []).sort(
       (a: SessionExercise, b: SessionExercise) => a.sort_order - b.sort_order
     ),
   }));
+  await attachComputedTargets(athleteId, sessions);
+  return sessions;
+}
+
+// ── %1RM targets (0038) ───────────────────────────────────────────────────────
+
+function parseRepsStr(s: string | null | undefined): number {
+  if (!s) return 0;
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Best estimated 1RM across a set of session_exercises rows (their
+// completed logged sets), using the org's chosen formula — the same
+// rolling estimate the Goals feature computes.
+function bestRollingOneRM(
+  rows: Array<{ log?: SetLog[] | null; reps?: string | null }>,
+  formula: OneRMFormula
+): number | null {
+  let best: number | null = null;
+  for (const row of rows) {
+    const est = bestEstimatedOneRM(row.log ?? [], parseRepsStr(row.reps), formula);
+    if (est !== null && (best === null || est > best)) best = est;
+  }
+  return best;
+}
+
+// The athlete's current 1RM for one exercise, honouring the org's
+// one_rm_source setting: a coach-set fixed value when in "fixed" mode
+// (falling back to the rolling estimate if none is set yet — a coach
+// who hasn't entered a value shouldn't produce a blank target),
+// otherwise the rolling estimate from logged history. Returns null
+// only when there's no fixed value AND no logged history at all.
+export async function getCurrentOneRM(
+  athleteId: string,
+  exerciseName: string,
+  orgSettings: OrgSettings
+): Promise<number | null> {
+  const supabase = createServiceRoleClient();
+
+  if (orgSettings.one_rm_source === "fixed") {
+    const { data } = await supabase
+      .from("athlete_one_rms")
+      .select("one_rm_kg")
+      .eq("athlete_id", athleteId)
+      .ilike("exercise_name", exerciseName)
+      .limit(1);
+    const fixed = data?.[0]?.one_rm_kg;
+    if (fixed != null) return Number(fixed);
+  }
+
+  const { data: rows } = await supabase
+    .from("session_exercises")
+    .select("log, reps, sessions!inner(athlete_id)")
+    .ilike("name", exerciseName)
+    .eq("sessions.athlete_id", athleteId);
+
+  return bestRollingOneRM(rows ?? [], orgSettings.one_rm_formula);
+}
+
+// Attaches computed_target_kg to every exercise prescribed as a %1RM.
+// The sessions array already contains the athlete's complete logged
+// history, so the rolling estimate is computed in-memory from data
+// that's fetched anyway — no per-exercise queries. Only the org
+// settings (and, in fixed mode, one batch of athlete_one_rms rows)
+// cost an extra round-trip, and only when at least one %1RM exercise
+// exists.
+async function attachComputedTargets(athleteId: string, sessions: Session[]): Promise<void> {
+  const withPercent = sessions.flatMap((s) =>
+    (s.exercises ?? []).filter((e) => e.percent_1rm != null)
+  );
+  if (!withPercent.length) return;
+
+  const settings = await getOrgSettingsForAthlete(athleteId);
+
+  const fixedByName = new Map<string, number>();
+  if (settings.one_rm_source === "fixed") {
+    const supabase = createServiceRoleClient();
+    const { data } = await supabase
+      .from("athlete_one_rms")
+      .select("exercise_name, one_rm_kg")
+      .eq("athlete_id", athleteId);
+    for (const row of data ?? []) {
+      if (row.one_rm_kg != null) fixedByName.set(row.exercise_name.trim().toLowerCase(), Number(row.one_rm_kg));
+    }
+  }
+
+  const rollingByName = new Map<string, number | null>();
+  const rollingFor = (key: string): number | null => {
+    if (!rollingByName.has(key)) {
+      const rows = sessions.flatMap((s) =>
+        (s.exercises ?? []).filter((e) => e.name.trim().toLowerCase() === key)
+      );
+      rollingByName.set(key, bestRollingOneRM(rows, settings.one_rm_formula));
+    }
+    return rollingByName.get(key) ?? null;
+  };
+
+  for (const ex of withPercent) {
+    const key = ex.name.trim().toLowerCase();
+    const oneRM = fixedByName.get(key) ?? rollingFor(key);
+    ex.computed_target_kg =
+      // Nearest 0.5kg — same rounding convention as estimateOneRM.
+      oneRM != null ? Math.round(((oneRM * (ex.percent_1rm as number)) / 100) * 2) / 2 : null;
+  }
 }
 
 // Athlete-permitted update: logging a set's weight/reps/done, or
@@ -83,6 +205,37 @@ export async function updateAthleteSetLog(
   }
 
   const { error } = await supabase.from("session_exercises").update({ log }).eq("id", exerciseId);
+  if (error) throw error;
+}
+
+// Athlete's own note on one exercise (0040) — separate from the
+// coach's prescription note (session_exercises.notes) and the
+// athlete's session-level note (sessions.athlete_notes, 0033). Same
+// defence-in-depth ownership check as updateAthleteSetLog above.
+export async function updateAthleteExerciseNotes(
+  sessionId: string,
+  athleteId: string,
+  exerciseId: string,
+  notes: string
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: exercise, error: lookupError } = await supabase
+    .from("session_exercises")
+    .select("id, sessions!inner(id, athlete_id)")
+    .eq("id", exerciseId)
+    .eq("session_id", sessionId)
+    .single();
+  if (lookupError || !exercise) throw new Error("Exercise not found");
+
+  const sessionRecord = Array.isArray(exercise.sessions) ? exercise.sessions[0] : exercise.sessions;
+  if (sessionRecord?.athlete_id !== athleteId) {
+    throw new Error("This exercise does not belong to your sessions");
+  }
+
+  const { error } = await supabase
+    .from("session_exercises")
+    .update({ athlete_exercise_notes: notes })
+    .eq("id", exerciseId);
   if (error) throw error;
 }
 
