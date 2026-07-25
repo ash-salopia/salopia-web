@@ -566,7 +566,7 @@ const s: Record<string, React.CSSProperties> = {
   commentInputRow: { display: "flex", gap: 6, marginTop: 4 },
   commentInput: {
     flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)",
-    borderRadius: 8, padding: "6px 10px", fontSize: 12,
+    borderRadius: 8, padding: "6px 10px", fontSize: 16,
   },
   commentSendBtn: {
     background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8,
@@ -583,6 +583,6 @@ const s: Record<string, React.CSSProperties> = {
   bubbleThem: { background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderBottomLeftRadius: 4 },
   msgTime: { fontSize: 10, color: "var(--mute)", marginTop: 3, opacity: 0.7 },
   inputRow: { display: "flex", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--line)", background: "var(--ink)" },
-  chatInput: { flex: 1, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 10, padding: "10px 12px", fontSize: 14 },
+  chatInput: { flex: 1, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 10, padding: "10px 12px", fontSize: 16 },
   sendBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
 };

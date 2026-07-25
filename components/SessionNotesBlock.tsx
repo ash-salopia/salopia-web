@@ -128,6 +128,6 @@ const s: Record<string, React.CSSProperties> = {
   templateBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
   templateDropdown: { position: "absolute" as const, top: "calc(100% + 4px)", left: 0, zIndex: 20, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 8, padding: 4, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" as const },
   templateItem: { background: "transparent", border: "none", color: "var(--text)", padding: "8px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
-  textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "monospace", minHeight: 120 },
+  textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 16, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "monospace", minHeight: 120 },
   readOnlyText: { fontSize: 13, color: "var(--mute)", whiteSpace: "pre-wrap" as const, fontFamily: "inherit", lineHeight: 1.6, margin: 0 },
 };

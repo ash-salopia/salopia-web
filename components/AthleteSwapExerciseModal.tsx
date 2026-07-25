@@ -202,7 +202,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   searchInput: {
     width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)",
-    borderRadius: 8, padding: "9px 12px", fontSize: 14, marginBottom: 6,
+    borderRadius: 8, padding: "9px 12px", fontSize: 16, marginBottom: 6,
   },
   loading: { fontSize: 13, color: "var(--mute)", padding: "8px 0" },
   results: { display: "flex", flexDirection: "column" as const, gap: 2, maxHeight: 220, overflowY: "auto" as const },

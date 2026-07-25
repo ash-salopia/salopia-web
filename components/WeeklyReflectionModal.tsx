@@ -301,7 +301,7 @@ const s: Record<string, React.CSSProperties> = {
   textFieldLabel: { fontSize: 13, fontWeight: 600, color: "var(--text)" },
   textarea: {
     background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)",
-    borderRadius: 10, padding: "10px 12px", fontSize: 13, fontFamily: "inherit",
+    borderRadius: 10, padding: "10px 12px", fontSize: 16, fontFamily: "inherit",
     resize: "vertical" as const, lineHeight: 1.6, minHeight: 80,
   },
   saveBtn: {

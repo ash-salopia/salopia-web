@@ -776,7 +776,7 @@ const styles: Record<string, React.CSSProperties> = {
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
   exNotesTextarea: {
     width: "100%", minHeight: 60, marginTop: 8, background: "var(--ink)", border: "1px solid var(--line)",
-    color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, lineHeight: 1.5,
+    color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 16, lineHeight: 1.5,
     resize: "vertical" as const, fontFamily: "inherit",
   },
   setSectionRow: { display: "flex", gap: 8, marginTop: 12, alignItems: "stretch" },
@@ -828,7 +828,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--text)",
     borderRadius: 6,
     padding: "8px 8px",
-    fontSize: 14,
+    // iOS Safari auto-zooms on focus for any input under 16px, then
+    // doesn't reliably zoom back out on blur — 16px is the minimum
+    // that avoids triggering it.
+    fontSize: 16,
   },
   doneBtn: {
     width: 32,

@@ -327,7 +327,7 @@ const s: Record<string, React.CSSProperties> = {
   formCard: { background: "var(--panel)", border: "1px solid var(--accent)44", borderRadius: 12, padding: 14, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 8 },
   formRow: { display: "flex", gap: 8 },
   fieldLabel: { fontSize: 11, color: "var(--mute)", fontWeight: 600, textTransform: "uppercase" as const, marginBottom: 3 },
-  input: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 },
+  input: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 16 },
   saveBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   section: { marginBottom: 16 },
   sectionLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 8 },
