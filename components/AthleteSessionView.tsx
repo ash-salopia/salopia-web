@@ -442,6 +442,7 @@ export default function AthleteSessionView({
               <>
                 <div style={styles.prescLine}>
                   {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
+                  {ex.each_side ? " each side" : ""}
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
                   {ex.is_bodyweight ? " · 🏋️ bodyweight" : ""}
                   {ex.target_load ? ` · ${ex.target_load}` : ""}
@@ -478,15 +479,23 @@ export default function AthleteSessionView({
                   // so the column headers can share the same values.
                   const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
                   const timeMode = (ex.time ?? "").trim().length > 0;
+                  // Header and every row share this exact template string
+                  // so the Load/Reps/Time columns line up pixel-for-pixel —
+                  // the "copy last set" slot is always reserved as its own
+                  // fixed-width track (populated or not) so a row that
+                  // happens to show that button doesn't squeeze its input
+                  // columns narrower than the header or its sibling rows.
+                  const gridCols = showWeight ? "22px 1fr 1fr 56px 32px" : "22px 1fr 56px 32px";
                   return (
                 <div style={styles.setSectionRow}>
                   <div style={styles.setsVerticalLabel}>SETS</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={styles.setColHeaders}>
-                      <div style={styles.setColHeaderSpacer} />
+                    <div style={{ ...styles.setColHeaders, gridTemplateColumns: gridCols }}>
+                      <div />
                       {showWeight && <div style={styles.setColLabel}>Load</div>}
                       <div style={styles.setColLabel}>{timeMode ? "Time" : "Reps"}</div>
-                      <div style={styles.setColHeaderDoneSpacer} />
+                      <div />
+                      <div />
                     </div>
                     <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
@@ -497,7 +506,7 @@ export default function AthleteSessionView({
                     const prevHasData = !!prevSet && setHasData(ex, prevSet);
                     const canCopyPrev = !hasPrimaryValue && !set.done && prevHasData;
                     return (
-                      <div key={i} style={{ ...styles.setChip, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
+                      <div key={i} style={{ ...styles.setChip, gridTemplateColumns: gridCols, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
                         <div style={styles.setIdx}>{i + 1}</div>
                         {showWeight && (
                           <input
@@ -549,20 +558,22 @@ export default function AthleteSessionView({
                             style={styles.setInput}
                           />
                         )}
-                        {canCopyPrev && (
-                          <button
-                            style={styles.copyLastBtn}
-                            onClick={() => {
-                              const patch: Partial<SetLog> = { done: true };
-                              if (showWeight) patch.weight = prevSet!.weight;
-                              if (timeMode) patch.time = prevSet!.time; else patch.reps = prevSet!.reps;
-                              handleSetUpdate(ex.id, i, patch);
-                            }}
-                            title="Copy the previous set"
-                          >
-                            ↑ Same
-                          </button>
-                        )}
+                        <div style={styles.copySlot}>
+                          {canCopyPrev && (
+                            <button
+                              style={styles.copyLastBtn}
+                              onClick={() => {
+                                const patch: Partial<SetLog> = { done: true };
+                                if (showWeight) patch.weight = prevSet!.weight;
+                                if (timeMode) patch.time = prevSet!.time; else patch.reps = prevSet!.reps;
+                                handleSetUpdate(ex.id, i, patch);
+                              }}
+                              title="Copy the previous set"
+                            >
+                              ↑ Same
+                            </button>
+                          )}
+                        </div>
                         <button
                           style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
                           onClick={() => handleSetUpdate(ex.id, i, { done: !set.done })}
@@ -782,10 +793,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 3px",
     flexShrink: 0,
   },
-  setColHeaders: { display: "flex", alignItems: "center", gap: 6, padding: "0 6px", marginBottom: 4 },
-  setColHeaderSpacer: { width: 22, flexShrink: 0 },
-  setColHeaderDoneSpacer: { width: 32, flexShrink: 0 },
-  setColLabel: { flex: 1, fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: 0.5 },
+  setColHeaders: { display: "grid", alignItems: "center", gap: 6, padding: "0 6px", marginBottom: 4 },
+  setColLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: 0.5 },
   setGrid: { display: "flex", flexDirection: "column", gap: 6 },
   addSetRow: { display: "flex", gap: 8, marginTop: 8 },
   addSetBtn: {
@@ -796,7 +805,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent", border: "1px solid var(--line)", color: "var(--mute)",
     borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const,
   },
-  setChip: { display: "flex", alignItems: "center", gap: 6, background: "var(--ink)", borderRadius: 8, padding: 6 },
+  setChip: { display: "grid", alignItems: "center", gap: 6, background: "var(--ink)", borderRadius: 8, padding: 6 },
   setChipDone: { boxShadow: "inset 0 0 0 1px var(--good)" },
   setIdx: {
     width: 22,
@@ -812,7 +821,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   setInput: {
-    flex: 1,
+    width: "100%",
+    minWidth: 0,
     background: "var(--panel2)",
     border: "1px solid var(--line)",
     color: "var(--text)",
@@ -832,9 +842,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
   doneBtnOn: { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
+  copySlot: { width: "100%", minWidth: 0 },
   copyLastBtn: {
-    flexShrink: 0, background: "var(--accent-dim)", border: "1px solid var(--accent)44", color: "var(--accent)",
-    borderRadius: 6, padding: "0 8px", height: 32, fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const,
+    width: "100%", background: "var(--accent-dim)", border: "1px solid var(--accent)44", color: "var(--accent)",
+    borderRadius: 6, padding: "0 4px", height: 32, fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const,
   },
   savingLabel: { fontSize: 11, color: "var(--mute)", marginTop: 6 },
   empty: { color: "var(--mute)", fontSize: 14, padding: "20px 0", textAlign: "center" },
