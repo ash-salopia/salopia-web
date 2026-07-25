@@ -108,6 +108,14 @@ export default function AthleteSessionView({
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
   const [pbCelebration, setPbCelebration] = useState<DetectedPB | null>(null);
+  const [openNotesFor, setOpenNotesFor] = useState<Set<string>>(new Set());
+  // Bodyweight exercises hide the weight field by default, but an
+  // athlete who's progressed past bodyweight (e.g. added a vest to
+  // chin-ups) needs a way to log that load before the coach updates
+  // the prescription — this per-exercise toggle reveals it on demand,
+  // purely client-side (doesn't change the exercise's is_bodyweight
+  // flag or its PB shape).
+  const [showLoadFor, setShowLoadFor] = useState<Set<string>>(new Set());
   const pendingSaves = usePendingSaveCount();
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
@@ -178,6 +186,14 @@ export default function AthleteSessionView({
     } else if (!result.queued) {
       setError(result.error);
     }
+  };
+
+  const toggleNotesFor = (exerciseId: string) => {
+    setOpenNotesFor((prev) => {
+      const next = new Set(prev);
+      if (next.has(exerciseId)) next.delete(exerciseId); else next.add(exerciseId);
+      return next;
+    });
   };
 
   const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
@@ -393,6 +409,13 @@ export default function AthleteSessionView({
                     🔀
                   </button>
                 )}
+                <button
+                  style={{ ...styles.historyBtn, ...(ex.athlete_exercise_notes ? styles.historyBtnActive : {}) }}
+                  onClick={() => toggleNotesFor(ex.id)}
+                  title="Note on this exercise"
+                >
+                  📝
+                </button>
                 {ex.video_url && (
                   <button
                     style={styles.watchBtn}
@@ -431,15 +454,15 @@ export default function AthleteSessionView({
                   <div style={styles.progressReminder}>💪 Last time you said you could progress this — try more weight or reps!</div>
                 )}
 
-                <SessionNotesBlock
-                  value={ex.athlete_exercise_notes ?? ""}
-                  onChange={(v) => handleExerciseNotesChange(ex.id, v)}
-                  onBlur={() => saveExerciseNotes(session.id, ex.id, ex.athlete_exercise_notes ?? "")}
-                  label="Notes"
-                  icon="📝"
-                  placeholder="Anything to note about this exercise — how it felt, form cues, niggles…"
-                  enableTemplates={false}
-                />
+                {openNotesFor.has(ex.id) && (
+                  <textarea
+                    value={ex.athlete_exercise_notes ?? ""}
+                    onChange={(e) => handleExerciseNotesChange(ex.id, e.target.value)}
+                    onBlur={() => saveExerciseNotes(session.id, ex.id, ex.athlete_exercise_notes ?? "")}
+                    placeholder="Anything to note about this exercise — how it felt, form cues, niggles…"
+                    style={styles.exNotesTextarea}
+                  />
+                )}
 
                 <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
@@ -449,7 +472,11 @@ export default function AthleteSessionView({
                     // regardless of bodyweight — so a weighted time-based
                     // exercise (e.g. a loaded carry) still logs a weight
                     // alongside the time, not just a bodyweight one.
-                    const showWeight = !ex.is_bodyweight;
+                    // A bodyweight exercise can still reveal the weight
+                    // field on demand via "+ Add load", for an athlete
+                    // who's progressed past bodyweight before the coach
+                    // updates the prescription.
+                    const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
                     const timeMode = (ex.time ?? "").trim().length > 0;
                     const hasWeight = showWeight && (set.weight ?? "").trim().length > 0;
                     const hasOther = timeMode ? (set.time ?? "").trim().length > 0 : (set.reps ?? "").trim().length > 0;
@@ -538,6 +565,15 @@ export default function AthleteSessionView({
                   <button style={styles.addSetBtn} onClick={() => handleAddSet(ex.id)}>
                     + Add set
                   </button>
+                  {ex.is_bodyweight && !showLoadFor.has(ex.id) && (
+                    <button
+                      style={styles.addSetBtn}
+                      onClick={() => setShowLoadFor((prev) => new Set(prev).add(ex.id))}
+                      title="Progressed past bodyweight? Add a load for this session"
+                    >
+                      + Add load
+                    </button>
+                  )}
                   {(() => {
                     const log = ex.log ?? [];
                     const last = log[log.length - 1];
@@ -708,8 +744,14 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
   },
+  historyBtnActive: { borderColor: "var(--accent)", color: "var(--accent)" },
   prescLine: { fontSize: 13, color: "var(--mute)", marginTop: 4 },
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
+  exNotesTextarea: {
+    width: "100%", minHeight: 60, marginTop: 8, background: "var(--ink)", border: "1px solid var(--line)",
+    color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, lineHeight: 1.5,
+    resize: "vertical" as const, fontFamily: "inherit",
+  },
   setGrid: { display: "flex", flexDirection: "column", gap: 6, marginTop: 12 },
   addSetRow: { display: "flex", gap: 8, marginTop: 8 },
   addSetBtn: {
