@@ -10,7 +10,7 @@ import SessionReviewEditor, {
 } from "@/components/SessionReviewEditor";
 import type { Session, LibraryEntry } from "@/types";
 
-type ConvMessage = { role: "user" | "assistant"; content: string };
+type ConvMessage = { role: "user" | "assistant"; content: unknown };
 type Phase = "input" | "parsing" | "review" | "saving";
 
 interface ParsedSessionFromAPI {
@@ -82,10 +82,23 @@ async function readXlsxFile(file: File): Promise<string> {
   });
 }
 
+async function readPdfFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string ?? "";
+      resolve(dataUrl.split(",")[1] ?? "");
+    };
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function NotesSessionModal({ athleteId, sessionCount, onCreated, onClose, mode = "create", sessionId, onAdded }: Props) {
   const [phase, setPhase] = useState<Phase>("input");
   const [notes, setNotes] = useState("");
   const [fileName, setFileName] = useState("");
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
@@ -106,11 +119,19 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
     setError("");
     const ext = file.name.split(".").pop()?.toLowerCase();
     try {
+      if (ext === "pdf") {
+        const base64 = await readPdfFileAsBase64(file);
+        setPdfBase64(base64);
+        setNotes("");
+        setFileName(file.name);
+        return;
+      }
       let text: string;
       if (ext === "xlsx" || ext === "xls") text = await readXlsxFile(file);
       else if (ext === "txt" || ext === "csv") text = await readTextFile(file);
-      else { setError("Unsupported file type — upload a .txt or .xlsx file"); return; }
+      else { setError("Unsupported file type — upload a .txt, .xlsx, or .pdf file"); return; }
       if (!text.trim()) { setError("File appears to be empty"); return; }
+      setPdfBase64(null);
       setNotes(text);
       setFileName(file.name);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file"); }
@@ -127,11 +148,11 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       exercises: enrichWithLibrary(s.exercises, library),
     }));
 
-  const callParse = async (text: string, convHistory: ConvMessage[]) => {
+  const callParse = async (text: string, convHistory: ConvMessage[], pdf?: string | null) => {
     const res = await fetch("/api/notes-parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, libraryNames: library.map((e) => e.name), history: convHistory }),
+      body: JSON.stringify({ text, pdfBase64: pdf ?? undefined, libraryNames: library.map((e) => e.name), history: convHistory }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Parse failed");
@@ -139,11 +160,14 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
   };
 
   const handleParse = async () => {
-    if (!notes.trim()) { setError("Please paste some notes or upload a file first"); return; }
+    if (!notes.trim() && !pdfBase64) { setError("Please paste some notes or upload a file first"); return; }
     setPhase("parsing");
     setError("");
     try {
-      const result = await callParse(`Parse these coaching notes into training sessions:\n\n${notes}`, []);
+      const promptText = pdfBase64
+        ? (notes.trim() || "Parse this session PDF into training session(s).")
+        : `Parse these coaching notes into training sessions:\n\n${notes}`;
+      const result = await callParse(promptText, [], pdfBase64);
       const reviewSessions = toReviewSessions(result.sessions);
       setSessions(reviewSessions);
       setSessionNames(result.sessions.map((s) => s.name));
@@ -241,7 +265,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
   };
 
   const handleReset = () => {
-    setPhase("input"); setNotes(""); setFileName(""); setSessions([]);
+    setPhase("input"); setNotes(""); setFileName(""); setPdfBase64(null); setSessions([]);
     setSessionNames([]); setAiMessage(""); setHistory([]);
     setCorrectionText(""); setError("");
   };
@@ -264,22 +288,23 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           {/* INPUT */}
           {phase === "input" && (
             <>
-              <p style={s.hint}>Paste coaching notes, a training plan, or upload an Excel spreadsheet. Claude will detect how many sessions are described and structure them ready to review.</p>
-              <input ref={fileRef} type="file" accept=".txt,.xlsx,.xls,.csv" style={{ display: "none" }}
+              <p style={s.hint}>Paste coaching notes, a training plan, or upload an Excel spreadsheet or a PDF (e.g. a printed or scanned session sheet). Claude will detect how many sessions are described and structure them ready to review.</p>
+              <input ref={fileRef} type="file" accept=".txt,.xlsx,.xls,.csv,.pdf" style={{ display: "none" }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
               <div style={s.uploadRow}>
-                <button style={s.uploadBtn} onClick={() => fileRef.current?.click()}>📎 Upload .txt or .xlsx</button>
+                <button style={s.uploadBtn} onClick={() => fileRef.current?.click()}>📎 Upload .txt, .xlsx, or .pdf</button>
                 {fileName && (
                   <span style={s.fileName}>{fileName}
-                    <button style={s.clearFile} onClick={() => { setNotes(""); setFileName(""); }}>×</button>
+                    <button style={s.clearFile} onClick={() => { setNotes(""); setFileName(""); setPdfBase64(null); }}>×</button>
                   </span>
                 )}
               </div>
-              <textarea value={notes} onChange={(e) => { setNotes(e.target.value); setFileName(""); }}
-                placeholder={"Paste your notes here…\n\ne.g.\nWeek 1 - Upper A\nBack Squat 4x6 @ 80kg, rest 3min\nBench Press 3x8 @ 60kg, rest 90s\n\nWeek 1 - Lower A\nDeadlift 4x4 @ 100kg, rest 3min"}
+              {pdfBase64 && <p style={s.hint}>PDF attached — add optional context below (e.g. "this is week 3"), or leave blank and generate.</p>}
+              <textarea value={notes} onChange={(e) => { setNotes(e.target.value); if (!pdfBase64) setFileName(""); }}
+                placeholder={pdfBase64 ? "Optional context for the PDF…" : "Paste your notes here…\n\ne.g.\nWeek 1 - Upper A\nBack Squat 4x6 @ 80kg, rest 3min\nBench Press 3x8 @ 60kg, rest 90s\n\nWeek 1 - Lower A\nDeadlift 4x4 @ 100kg, rest 3min"}
                 style={s.textarea} />
-              <button style={{ ...s.parseBtn, opacity: !notes.trim() || libraryLoading ? 0.5 : 1, cursor: !notes.trim() || libraryLoading ? "not-allowed" : "pointer" }}
-                disabled={!notes.trim() || libraryLoading} onClick={handleParse}>
+              <button style={{ ...s.parseBtn, opacity: (!notes.trim() && !pdfBase64) || libraryLoading ? 0.5 : 1, cursor: (!notes.trim() && !pdfBase64) || libraryLoading ? "not-allowed" : "pointer" }}
+                disabled={(!notes.trim() && !pdfBase64) || libraryLoading} onClick={handleParse}>
                 {libraryLoading ? "Loading library…" : "✨ Generate sessions"}
               </button>
             </>

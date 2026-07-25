@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ConvMessage = { role: "user" | "assistant"; content: string };
+type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
+
+type ConvMessage = { role: "user" | "assistant"; content: string | ContentBlock[] };
 
 export interface ParsedExerciseWithMatch {
   name: string;
@@ -28,7 +32,8 @@ export interface ParsedSession {
 }
 
 interface RouteBody {
-  text: string;
+  text?: string;
+  pdfBase64?: string;
   libraryNames: string[];
   history?: ConvMessage[];
 }
@@ -43,7 +48,7 @@ interface ParseResponse {
 // ── System prompt ─────────────────────────────────────────────────────────────
 
 const buildSystem = (libraryNames: string[]) => `
-You are a strength & conditioning programming assistant. You parse coaching notes, session plans, and spreadsheet data into structured training sessions.
+You are a strength & conditioning programming assistant. You parse coaching notes, session plans, spreadsheet data, and printed or scanned session PDFs into structured training sessions.
 
 Always respond with valid JSON only - no markdown, no backticks, no preamble.
 
@@ -145,15 +150,26 @@ export async function POST(
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { text, libraryNames = [], history = [] } = body;
+  const { text, pdfBase64, libraryNames = [], history = [] } = body;
 
-  if (!text?.trim()) {
-    return NextResponse.json({ error: "text is required" }, { status: 400 });
+  if (!text?.trim() && !pdfBase64) {
+    return NextResponse.json({ error: "text or pdfBase64 is required" }, { status: 400 });
   }
+
+  // A PDF page (e.g. a printed/scanned session sheet) is sent as a
+  // document block alongside any typed context, so Claude reads the
+  // page directly (tables, layout, handwriting) rather than relying on
+  // a client-side text extraction that would fail on scanned pages.
+  const userContent: string | ContentBlock[] = pdfBase64
+    ? [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+        { type: "text", text: text?.trim() || "Parse this session PDF into structured training session(s)." },
+      ]
+    : (text as string);
 
   const messages: ConvMessage[] = [
     ...history,
-    { role: "user", content: text },
+    { role: "user", content: userContent },
   ];
 
   let anthropicRes: Response;

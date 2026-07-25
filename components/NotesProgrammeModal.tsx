@@ -9,7 +9,7 @@ import { enrichWithLibrary, type ReviewSession } from "@/components/SessionRevie
 import SessionReviewEditor from "@/components/SessionReviewEditor";
 import type { LibraryEntry } from "@/types";
 
-type ConvMessage = { role: "user" | "assistant"; content: string };
+type ConvMessage = { role: "user" | "assistant"; content: unknown };
 type Phase = "input" | "parsing" | "review" | "saving";
 
 async function readFile(file: File): Promise<string> {
@@ -40,6 +40,18 @@ async function readFile(file: File): Promise<string> {
   });
 }
 
+async function readPdfFileAsBase64(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = (e) => {
+      const dataUrl = e.target?.result as string ?? "";
+      res(dataUrl.split(",")[1] ?? "");
+    };
+    r.onerror = () => rej(new Error("Could not read file"));
+    r.readAsDataURL(file);
+  });
+}
+
 export default function NotesProgrammeModal({ onCreated, onClose }: {
   onCreated: () => void;
   onClose: () => void;
@@ -48,6 +60,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
   const [phase, setPhase] = useState<Phase>("input");
   const [notes, setNotes] = useState("");
   const [fileName, setFileName] = useState("");
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
@@ -64,11 +77,28 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
     listLibrary().then(setLibrary).catch(() => {}).finally(() => setLibraryLoading(false));
   }, []);
 
-  const callParse = async (text: string, convHistory: ConvMessage[]) => {
+  const handleFile = async (file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    try {
+      if (ext === "pdf") {
+        const base64 = await readPdfFileAsBase64(file);
+        setPdfBase64(base64);
+        setNotes("");
+        setFileName(file.name);
+        return;
+      }
+      const text = await readFile(file);
+      setPdfBase64(null);
+      setNotes(text);
+      setFileName(file.name);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not read file"); }
+  };
+
+  const callParse = async (text: string, convHistory: ConvMessage[], pdf?: string | null) => {
     const res = await fetch("/api/notes-parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, libraryNames: library.map((l) => l.name), history: convHistory }),
+      body: JSON.stringify({ text, pdfBase64: pdf ?? undefined, libraryNames: library.map((l) => l.name), history: convHistory }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Parse failed");
@@ -76,11 +106,14 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
   };
 
   const handleParse = async () => {
-    if (!notes.trim()) { setError("Paste notes or upload a file first"); return; }
+    if (!notes.trim() && !pdfBase64) { setError("Paste notes or upload a file first"); return; }
     setPhase("parsing");
     setError("");
     try {
-      const result = await callParse(`Parse these programme sessions:\n\n${notes}`, []);
+      const promptText = pdfBase64
+        ? (notes.trim() || "Parse this session PDF into training session(s).")
+        : `Parse these programme sessions:\n\n${notes}`;
+      const result = await callParse(promptText, [], pdfBase64);
       setSessions(result.sessions.map((s: any) => ({
         name: s.name, type: s.type ?? "strength", dayOffset: s.dayOffset, weekNumber: s.weekNumber,
         exercises: enrichWithLibrary(s.exercises, library),
@@ -168,21 +201,22 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
 
           {phase === "input" && (
             <>
-              <p style={s.hint}>Paste a training programme or upload an Excel file. Claude will detect all sessions and structure them into a reusable programme.</p>
-              <input ref={fileRef} type="file" accept=".txt,.xlsx,.xls,.csv" style={{ display: "none" }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f).then(setNotes).then(() => setFileName(f.name)).catch((e) => setError(e.message)); e.target.value = ""; }} />
+              <p style={s.hint}>Paste a training programme or upload an Excel file or a PDF (e.g. a printed or scanned session sheet). Claude will detect all sessions and structure them into a reusable programme.</p>
+              <input ref={fileRef} type="file" accept=".txt,.xlsx,.xls,.csv,.pdf" style={{ display: "none" }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
               <div style={s.uploadRow}>
-                <button style={s.ghostBtn} onClick={() => fileRef.current?.click()}>📎 Upload .txt or .xlsx</button>
+                <button style={s.ghostBtn} onClick={() => fileRef.current?.click()}>📎 Upload .txt, .xlsx, or .pdf</button>
                 {fileName && <span style={{ fontSize: 12, color: "var(--accent)" }}>{fileName}
                   <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--mute)", fontSize: 14 }}
-                    onClick={() => { setNotes(""); setFileName(""); }}>×</button>
+                    onClick={() => { setNotes(""); setFileName(""); setPdfBase64(null); }}>×</button>
                 </span>}
               </div>
-              <textarea value={notes} onChange={(e) => { setNotes(e.target.value); setFileName(""); }}
-                placeholder={"Paste your programme here…\n\ne.g.\nWeek 1 Upper\nBench Press 4x6 @ 80kg\nBent Row 4x8\n\nWeek 1 Lower\nSquat 4x6 @ 100kg\nRDL 3x10\n\nWeek 2 Upper\n…"}
+              {pdfBase64 && <p style={s.hint}>PDF attached — add optional context below, or leave blank and generate.</p>}
+              <textarea value={notes} onChange={(e) => { setNotes(e.target.value); if (!pdfBase64) setFileName(""); }}
+                placeholder={pdfBase64 ? "Optional context for the PDF…" : "Paste your programme here…\n\ne.g.\nWeek 1 Upper\nBench Press 4x6 @ 80kg\nBent Row 4x8\n\nWeek 1 Lower\nSquat 4x6 @ 100kg\nRDL 3x10\n\nWeek 2 Upper\n…"}
                 style={s.textarea} />
-              <button style={{ ...s.primaryBtn, opacity: !notes.trim() || libraryLoading ? 0.5 : 1 }}
-                disabled={!notes.trim() || libraryLoading} onClick={handleParse}>
+              <button style={{ ...s.primaryBtn, opacity: (!notes.trim() && !pdfBase64) || libraryLoading ? 0.5 : 1 }}
+                disabled={(!notes.trim() && !pdfBase64) || libraryLoading} onClick={handleParse}>
                 {libraryLoading ? "Loading library…" : "✨ Generate programme"}
               </button>
             </>
@@ -218,7 +252,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
                 </button>
               </div>
               <div style={s.actions}>
-                <button style={s.ghostBtn} onClick={() => { setPhase("input"); setSessions([]); setHistory([]); }}>Start over</button>
+                <button style={s.ghostBtn} onClick={() => { setPhase("input"); setSessions([]); setHistory([]); setNotes(""); setFileName(""); setPdfBase64(null); }}>Start over</button>
                 <button style={{ ...s.primaryBtn, flex: 2, opacity: hasUnresolved ? 0.45 : 1, cursor: hasUnresolved ? "not-allowed" : "pointer" }}
                   disabled={hasUnresolved} onClick={handleSave}>
                   ✓ Save programme ({sessions.length} session{sessions.length !== 1 ? "s" : ""})
