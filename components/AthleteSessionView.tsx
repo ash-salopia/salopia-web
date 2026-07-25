@@ -464,20 +464,32 @@ export default function AthleteSessionView({
                   />
                 )}
 
-                <div style={styles.setGrid}>
+                {(() => {
+                  // Two independent toggles: weight shows unless the
+                  // exercise is bodyweight-only; reps vs time is
+                  // decided purely by the exercise's time prescription,
+                  // regardless of bodyweight — so a weighted time-based
+                  // exercise (e.g. a loaded carry) still logs a weight
+                  // alongside the time, not just a bodyweight one.
+                  // A bodyweight exercise can still reveal the weight
+                  // field on demand via "+ Add load", for an athlete
+                  // who's progressed past bodyweight before the coach
+                  // updates the prescription. Hoisted above the set map
+                  // so the column headers can share the same values.
+                  const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
+                  const timeMode = (ex.time ?? "").trim().length > 0;
+                  return (
+                <div style={styles.setSectionRow}>
+                  <div style={styles.setsVerticalLabel}>SETS</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={styles.setColHeaders}>
+                      <div style={styles.setColHeaderSpacer} />
+                      {showWeight && <div style={styles.setColLabel}>Load</div>}
+                      <div style={styles.setColLabel}>{timeMode ? "Time" : "Reps"}</div>
+                      <div style={styles.setColHeaderDoneSpacer} />
+                    </div>
+                    <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
-                    // Two independent toggles: weight shows unless the
-                    // exercise is bodyweight-only; reps vs time is
-                    // decided purely by the exercise's time prescription,
-                    // regardless of bodyweight — so a weighted time-based
-                    // exercise (e.g. a loaded carry) still logs a weight
-                    // alongside the time, not just a bodyweight one.
-                    // A bodyweight exercise can still reveal the weight
-                    // field on demand via "+ Add load", for an athlete
-                    // who's progressed past bodyweight before the coach
-                    // updates the prescription.
-                    const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
-                    const timeMode = (ex.time ?? "").trim().length > 0;
                     const hasWeight = showWeight && (set.weight ?? "").trim().length > 0;
                     const hasOther = timeMode ? (set.time ?? "").trim().length > 0 : (set.reps ?? "").trim().length > 0;
                     const hasPrimaryValue = hasWeight || hasOther;
@@ -560,7 +572,11 @@ export default function AthleteSessionView({
                       </div>
                     );
                   })}
+                    </div>
+                  </div>
                 </div>
+                  );
+                })()}
                 <div style={styles.addSetRow}>
                   <button style={styles.addSetBtn} onClick={() => handleAddSet(ex.id)}>
                     + Add set
@@ -752,7 +768,25 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, lineHeight: 1.5,
     resize: "vertical" as const, fontFamily: "inherit",
   },
-  setGrid: { display: "flex", flexDirection: "column", gap: 6, marginTop: 12 },
+  setSectionRow: { display: "flex", gap: 8, marginTop: 12, alignItems: "stretch" },
+  setsVerticalLabel: {
+    writingMode: "vertical-rl" as const,
+    transform: "rotate(180deg)",
+    textAlign: "center" as const,
+    fontSize: 10,
+    fontWeight: 800,
+    letterSpacing: 2,
+    color: "var(--mute)",
+    background: "var(--panel2)",
+    borderRadius: 6,
+    padding: "8px 3px",
+    flexShrink: 0,
+  },
+  setColHeaders: { display: "flex", alignItems: "center", gap: 6, padding: "0 6px", marginBottom: 4 },
+  setColHeaderSpacer: { width: 22, flexShrink: 0 },
+  setColHeaderDoneSpacer: { width: 32, flexShrink: 0 },
+  setColLabel: { flex: 1, fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: 0.5 },
+  setGrid: { display: "flex", flexDirection: "column", gap: 6 },
   addSetRow: { display: "flex", gap: 8, marginTop: 8 },
   addSetBtn: {
     flex: 1, background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)",
