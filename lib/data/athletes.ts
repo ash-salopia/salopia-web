@@ -117,6 +117,13 @@ export async function deleteAthlete(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function deleteAthletes(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const supabase = createClient();
+  const { error } = await supabase.from("athletes").delete().in("id", ids);
+  if (error) throw error;
+}
+
 export async function toggleLiveGroup(id: string, inLiveGroup: boolean): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("athletes").update({ in_live_group: inLiveGroup }).eq("id", id);

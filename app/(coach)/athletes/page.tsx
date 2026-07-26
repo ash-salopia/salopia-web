@@ -7,6 +7,7 @@ import {
   listArchivedAthletes,
   createAthlete,
   deleteAthlete,
+  deleteAthletes,
   archiveAthlete,
   unarchiveAthlete,
   toggleLiveGroup,
@@ -28,6 +29,9 @@ export default function AthletesPage() {
   const [newBodyweight, setNewBodyweight] = useState("");
   const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -114,6 +118,46 @@ export default function AthletesPage() {
     }
   };
 
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleShowArchivedToggle = () => {
+    exitSelectMode();
+    setShowArchived((v) => !v);
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    const names = archivedAthletes.filter((a) => selectedIds.has(a.id)).map((a) => a.name);
+    if (
+      !confirm(
+        `Permanently delete ${ids.length} athlete${ids.length !== 1 ? "s" : ""} and every session they've ever had?\n\n${names.join(", ")}\n\nThis cannot be undone.`
+      )
+    )
+      return;
+    setBulkDeleting(true);
+    try {
+      await deleteAthletes(ids);
+      setArchivedAthletes((prev) => prev.filter((a) => !selectedIds.has(a.id)));
+      exitSelectMode();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete athletes");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const activeList = athletes;
   const visibleList = showArchived ? archivedAthletes : activeList;
 
@@ -125,6 +169,11 @@ export default function AthletesPage() {
       )
     : visibleList;
 
+  const allFilteredSelected = filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id));
+  const handleSelectAllToggle = () => {
+    setSelectedIds(allFilteredSelected ? new Set() : new Set(filtered.map((a) => a.id)));
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.headerRow}>
@@ -133,9 +182,17 @@ export default function AthletesPage() {
           <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
             📥 Export all
           </button>
-          <button style={styles.ghostBtn} onClick={() => setShowArchived((v) => !v)}>
+          <button style={styles.ghostBtn} onClick={handleShowArchivedToggle}>
             {showArchived ? "← Back to active" : `Archived (${archivedAthletes.length})`}
           </button>
+          {showArchived && archivedAthletes.length > 0 && (
+            <button
+              style={styles.ghostBtn}
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            >
+              {selectMode ? "Cancel" : "Select"}
+            </button>
+          )}
           {!showArchived && (
             <button style={styles.primaryBtn} onClick={() => setAdding((v) => !v)}>
               {adding ? "Cancel" : "+ Add athlete"}
@@ -143,6 +200,22 @@ export default function AthletesPage() {
           )}
         </div>
       </div>
+
+      {selectMode && showArchived && (
+        <div style={styles.selectToolbar}>
+          <button style={styles.selectAllBtn} onClick={handleSelectAllToggle}>
+            {allFilteredSelected ? "Deselect all" : `Select all (${filtered.length})`}
+          </button>
+          <span style={styles.selectedCount}>{selectedIds.size} selected</span>
+          <button
+            style={{ ...styles.bulkDeleteBtn, opacity: !selectedIds.size || bulkDeleting ? 0.5 : 1, cursor: !selectedIds.size || bulkDeleting ? "not-allowed" : "pointer" }}
+            disabled={!selectedIds.size || bulkDeleting}
+            onClick={handleBulkDelete}
+          >
+            {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size || ""}`}
+          </button>
+        </div>
+      )}
 
       {error && <div style={styles.errorBox}>{error}</div>}
 
@@ -201,13 +274,22 @@ export default function AthletesPage() {
         <div style={styles.empty}>No athletes match &quot;{query}&quot;.</div>
       ) : (
         <div style={styles.grid}>
-          {filtered.map((athlete) => (
+          {filtered.map((athlete) => {
+            const isSelected = selectedIds.has(athlete.id);
+            const inSelect = selectMode && showArchived;
+            return (
             <div
               key={athlete.id}
-              style={styles.card}
-              onClick={() => router.push(`/athletes/${athlete.id}`)}
+              style={{ ...styles.card, ...(inSelect && isSelected ? styles.cardSelected : {}) }}
+              onClick={() => (inSelect ? handleToggleSelect(athlete.id) : router.push(`/athletes/${athlete.id}`))}
             >
-              <div style={styles.avatar}>{athlete.name.slice(0, 1).toUpperCase()}</div>
+              {inSelect ? (
+                <div style={{ ...styles.checkbox, ...(isSelected ? styles.checkboxOn : {}) }}>
+                  {isSelected ? "✓" : ""}
+                </div>
+              ) : (
+                <div style={styles.avatar}>{athlete.name.slice(0, 1).toUpperCase()}</div>
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={styles.cardName}>{athlete.name}</div>
                 {athlete.group && <div style={styles.cardGroup}>{athlete.group}</div>}
@@ -221,7 +303,7 @@ export default function AthletesPage() {
                   {athlete.in_live_group ? "★" : "☆"}
                 </button>
               )}
-              {showArchived ? (
+              {!inSelect && (showArchived ? (
                 <>
                   <button
                     style={styles.restoreBtn}
@@ -254,9 +336,10 @@ export default function AthletesPage() {
                 >
                   📦
                 </button>
-              )}
+              ))}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -320,6 +403,36 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     padding: 14,
   },
+  selectToolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+    background: "var(--panel)",
+    border: "1px solid var(--line)",
+    borderRadius: 10,
+    padding: "10px 14px",
+  },
+  selectAllBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--text)",
+    borderRadius: 8,
+    padding: "7px 12px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  selectedCount: { fontSize: 13, color: "var(--mute)", flex: 1 },
+  bulkDeleteBtn: {
+    background: "#FF6B6B22",
+    border: "1px solid #FF6B6B66",
+    color: "#FF6B6B",
+    borderRadius: 8,
+    padding: "8px 14px",
+    fontSize: 13,
+    fontWeight: 700,
+  },
   input: {
     background: "var(--ink)",
     border: "1px solid var(--line)",
@@ -342,6 +455,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 14,
     cursor: "pointer",
   },
+  cardSelected: { borderColor: "var(--accent)", background: "var(--accent-dim)" },
   avatar: {
     width: 38,
     height: 38,
@@ -355,6 +469,21 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     flexShrink: 0,
   },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    border: "1px solid var(--line)",
+    background: "var(--ink)",
+    color: "#0a1420",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 700,
+    fontSize: 13,
+    flexShrink: 0,
+  },
+  checkboxOn: { background: "var(--accent)", borderColor: "var(--accent)" },
   cardName: { fontWeight: 700, fontSize: 15, color: "var(--text)" },
   cardGroup: { fontSize: 12, color: "var(--mute)", marginTop: 2 },
   deleteBtn: {
