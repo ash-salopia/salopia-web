@@ -192,6 +192,22 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                       })}
                     </div>
 
+                    {/* Scale anchors — what the two ends mean, visible
+                        before picking, same as the session check-in's
+                        low/high labels. Matches the buttons' fixed
+                        5→1 left-to-right order, so this is "leftmost
+                        button's meaning ↔ rightmost button's meaning"
+                        rather than a "worst→best" claim — direction
+                        varies per metric (e.g. load/stress: 1 isn't
+                        always worse than 5), which the button colours
+                        already communicate separately. */}
+                    {scoreDefs && (
+                      <div style={s.scaleAnchors}>
+                        <span>{scoreDefs.find(o => o.score === 5)?.label}</span>
+                        <span>{scoreDefs.find(o => o.score === 1)?.label}</span>
+                      </div>
+                    )}
+
                     {/* Selected label + meaning */}
                     {val > 0 && selectedDef && (
                       <div style={{
@@ -292,6 +308,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", justifyContent: "center",
     transition: "all 0.15s",
   },
+  scaleAnchors: { display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--mute)" },
   selectedLabel: {
     fontSize: 12, lineHeight: 1.5,
     borderLeft: "3px solid", paddingLeft: 8, marginTop: 2,
