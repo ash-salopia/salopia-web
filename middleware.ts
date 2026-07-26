@@ -14,6 +14,26 @@ import { NextResponse, type NextRequest } from "next/server";
 //   returns HTML to a fetch() that expected JSON, which surfaces as
 //   confusing parse errors client-side. They get a 401 JSON response.
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // These never look at `user` at all (auth callback, the athlete
+  // share-link app, and its token-validated APIs) — skip the auth
+  // check entirely rather than paying a real network round-trip to
+  // Supabase's auth server for a value that's never used. `/login`
+  // is excluded here even though it's also unauthenticated-accessible,
+  // because it still needs `user` below to redirect an already-signed-in
+  // visitor away.
+  const skipsAuthCheck =
+    path.startsWith("/auth") ||
+    path.startsWith("/a/") ||               // athlete share-link pages
+    path.startsWith("/api/athlete-link/");  // athlete APIs — token-validated in each handler
+
+  if (skipsAuthCheck) {
+    return NextResponse.next({ request });
+  }
+
+  const isPublicPath = path.startsWith("/login");
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -35,18 +55,22 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // getSession() decodes the JWT from cookies locally — no network
+  // call — unlike getUser(), which re-validates against Supabase's
+  // auth server on every request (~40-160ms measured against this
+  // project, paid on every coach page load and API call since a
+  // logged-in coach always carries a session cookie). This is only
+  // deciding whether to show the dashboard shell or redirect to
+  // /login; actual data access is separately protected by RLS
+  // (my_organisation_id() / auth.uid()), which re-validates the JWT
+  // itself on every query regardless of what this check decides. Only
+  // consequence of the swap: a revoked session can pass this redirect
+  // gate until its JWT naturally expires (~1hr) instead of being
+  // caught immediately — it still can't read/write anything via RLS.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-
-  // Public paths — no auth required
-  const isPublicPath =
-    path.startsWith("/login") ||
-    path.startsWith("/auth") ||
-    path.startsWith("/a/") ||               // athlete share-link pages
-    path.startsWith("/api/athlete-link/");  // athlete APIs — token-validated in each handler
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (!user && !isPublicPath) {
     // API routes get a JSON 401, never an HTML redirect
@@ -58,7 +82,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && path.startsWith("/login") && !request.nextUrl.searchParams.has("error")) {
+  if (user && isPublicPath && !request.nextUrl.searchParams.has("error")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
