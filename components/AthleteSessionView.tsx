@@ -34,6 +34,28 @@ function setHasData(exercise: SessionExercise, set: SetLog): boolean {
   return hasWeight || hasOther;
 }
 
+// The coach's free-text rest prescription ("90s", "2min", "1:30", or
+// a bare "90") parsed into seconds for the rest timer. Returns null
+// for anything unparseable so the timer button just doesn't show
+// rather than starting at a nonsense duration.
+function parseRestSeconds(rest: string | null | undefined): number | null {
+  const s = (rest ?? "").trim().toLowerCase();
+  if (!s) return null;
+  const colonMatch = s.match(/^(\d+):(\d{1,2})$/);
+  if (colonMatch) return parseInt(colonMatch[1], 10) * 60 + parseInt(colonMatch[2], 10);
+  const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*(min|mins|minute|minutes|m)\b/);
+  if (minMatch) return Math.round(parseFloat(minMatch[1]) * 60);
+  const secMatch = s.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds)?\b/);
+  if (secMatch) return Math.round(parseFloat(secMatch[1]));
+  return null;
+}
+
+function formatMMSS(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 // Most recent PRIOR occurrence (by date) of each exercise name for this
 // athlete, keyed by lowercased/trimmed name, mapped to that occurrence's
 // own progress answer. Used to show "you said you could progress this
@@ -116,7 +138,29 @@ export default function AthleteSessionView({
   // purely client-side (doesn't change the exercise's is_bodyweight
   // flag or its PB shape).
   const [showLoadFor, setShowLoadFor] = useState<Set<string>>(new Set());
+  // Rest timer — one active at a time, keyed by end timestamp rather
+  // than a decrementing counter so it stays accurate even if the tab
+  // is backgrounded for a while.
+  const [restTimer, setRestTimer] = useState<{ exerciseId: string; endAt: number; total: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const pendingSaves = usePendingSaveCount();
+
+  useEffect(() => {
+    if (!restTimer) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [restTimer?.exerciseId, restTimer?.endAt]);
+
+  const restRemaining = restTimer ? Math.max(0, Math.ceil((restTimer.endAt - now) / 1000)) : 0;
+
+  useEffect(() => {
+    if (!restTimer || restRemaining > 0) return;
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    const t = setTimeout(() => setRestTimer(null), 3000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restRemaining === 0, restTimer?.exerciseId]);
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   // Opted-out exercises have no sets to log, so they're excluded from
@@ -612,6 +656,38 @@ export default function AthleteSessionView({
                     ) : null;
                   })()}
                 </div>
+                {(() => {
+                  const restSeconds = parseRestSeconds(ex.rest);
+                  if (restSeconds == null || restSeconds <= 0) return null;
+                  const isActive = restTimer?.exerciseId === ex.id;
+                  if (!isActive) {
+                    return (
+                      <button
+                        style={styles.restTimerStartBtn}
+                        onClick={() => setRestTimer({ exerciseId: ex.id, endAt: Date.now() + restSeconds * 1000, total: restSeconds })}
+                      >
+                        ⏱ Start rest ({ex.rest})
+                      </button>
+                    );
+                  }
+                  const done = restRemaining <= 0;
+                  const progressPct = Math.max(0, Math.min(100, (restRemaining / restTimer!.total) * 100));
+                  return (
+                    <div style={{ ...styles.restTimerActive, ...(done ? styles.restTimerActiveDone : {}) }}>
+                      <div style={styles.restTimerBarTrack}>
+                        <div style={{ ...styles.restTimerBarFill, width: `${progressPct}%`, ...(done ? { background: "var(--good)" } : {}) }} />
+                      </div>
+                      <div style={styles.restTimerRow}>
+                        <span style={{ ...styles.restTimerLabel, ...(done ? { color: "var(--good)" } : {}) }}>
+                          {done ? "✓ Rest complete" : `⏱ Resting… ${formatMMSS(restRemaining)}`}
+                        </span>
+                        <button style={styles.restTimerSkipBtn} onClick={() => setRestTimer(null)}>
+                          {done ? "Dismiss" : "Skip"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {saving === ex.id && <div style={styles.savingLabel}>Saving…</div>}
                 {allSetsDone && !ex.progress && (
                   <div style={styles.progressPrompt}>
@@ -851,6 +927,23 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6, padding: "0 4px", height: 32, fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const,
   },
   savingLabel: { fontSize: 11, color: "var(--mute)", marginTop: 6 },
+  restTimerStartBtn: {
+    width: "100%", marginTop: 8, background: "var(--accent-dim)", border: "1px solid var(--accent)44",
+    color: "var(--accent)", borderRadius: 8, padding: "9px 0", fontSize: 12, fontWeight: 700, cursor: "pointer",
+  },
+  restTimerActive: {
+    marginTop: 8, background: "var(--panel2)", border: "1px solid var(--accent)",
+    borderRadius: 8, padding: 8, overflow: "hidden" as const,
+  },
+  restTimerActiveDone: { borderColor: "var(--good)" },
+  restTimerBarTrack: { height: 4, background: "var(--ink)", borderRadius: 2, overflow: "hidden" as const, marginBottom: 6 },
+  restTimerBarFill: { height: "100%", background: "var(--accent)" },
+  restTimerRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  restTimerLabel: { fontSize: 13, fontWeight: 700, color: "var(--accent)" },
+  restTimerSkipBtn: {
+    background: "transparent", border: "1px solid var(--line)", color: "var(--mute)",
+    borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+  },
   empty: { color: "var(--mute)", fontSize: 14, padding: "20px 0", textAlign: "center" },
   progressReminder: {
     fontSize: 12,
