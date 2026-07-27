@@ -13,6 +13,7 @@ import {
   toggleLiveGroup,
 } from "@/lib/data/athletes";
 import ExportModal from "@/components/ExportModal";
+import Avatar from "@/components/Avatar";
 import type { Athlete } from "@/types";
 
 export default function AthletesPage() {
@@ -288,7 +289,7 @@ export default function AthletesPage() {
                   {isSelected ? "✓" : ""}
                 </div>
               ) : (
-                <div style={styles.avatar}>{athlete.name.slice(0, 1).toUpperCase()}</div>
+                <Avatar name={athlete.name} avatarUrl={athlete.avatar_url} size={38} />
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={styles.cardName}>{athlete.name}</div>
@@ -456,19 +457,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   cardSelected: { borderColor: "var(--accent)", background: "var(--accent-dim)" },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    background: "var(--accent-dim)",
-    color: "var(--accent)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-    fontSize: 16,
-    flexShrink: 0,
-  },
   checkbox: {
     width: 22,
     height: 22,

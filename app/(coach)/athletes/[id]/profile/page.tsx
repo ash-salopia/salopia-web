@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { updatePB, deletePB, createManualPB, formatPBValue } from "@/lib/data/personal-bests";
 import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete } from "@/lib/data/athletes";
+import { updateAthleteAvatar } from "@/lib/data/avatars";
 import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
 import { getOrgSettings } from "@/lib/data/settings";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
+import Avatar from "@/components/Avatar";
 import type { Athlete, AthleteOneRM } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -181,6 +183,21 @@ export default function AthleteProfilePage() {
   const [pbNameDropdownOpen, setPbNameDropdownOpen] = useState(false);
   const [oneRMs, setOneRMs] = useState<AthleteOneRM[]>([]);
   const [oneRmSource, setOneRmSource] = useState<"rolling" | "fixed">("rolling");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarUploading(true);
+    setError("");
+    try {
+      const url = await updateAthleteAvatar(athleteId, file);
+      setAthlete((prev) => (prev ? { ...prev, avatar_url: url } : prev));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not upload photo");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
   const [addingOneRM, setAddingOneRM] = useState(false);
   const [newOneRM, setNewOneRM] = useState({ exercise_name: "", weight: "" });
   const [oneRmNameDropdownOpen, setOneRmNameDropdownOpen] = useState(false);
@@ -371,7 +388,24 @@ export default function AthleteProfilePage() {
 
       {athlete && (
         <div style={p.header}>
-          <div style={p.avatar}>{athlete.name.charAt(0).toUpperCase()}</div>
+          <div style={{ position: "relative" }}>
+            <Avatar name={athlete.name} avatarUrl={athlete.avatar_url} size={64} />
+            <input
+              ref={avatarFileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }}
+            />
+            <button
+              style={p.avatarEditBtn}
+              onClick={() => avatarFileRef.current?.click()}
+              disabled={avatarUploading}
+              title={athlete.avatar_url ? "Change photo" : "Upload photo"}
+            >
+              {avatarUploading ? "…" : "✎"}
+            </button>
+          </div>
           <div>
             <h1 style={p.name}>{athlete.name}</h1>
             {athlete.group && <div style={p.group}>{athlete.group}</div>}
@@ -897,7 +931,11 @@ const p: Record<string, React.CSSProperties> = {
   dangerBtn: { background: "transparent", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
   header: { display: "flex", alignItems: "center", gap: 16, marginBottom: 24 },
-  avatar: { width: 56, height: 56, borderRadius: "50%", background: "var(--accent-dim)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flexShrink: 0 },
+  avatarEditBtn: {
+    position: "absolute", bottom: -4, right: -4, width: 24, height: 24, borderRadius: "50%",
+    background: "var(--accent)", color: "#0a1420", border: "2px solid var(--panel)",
+    fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+  },
   name: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--text)", margin: 0 },
   group: { fontSize: 13, color: "var(--mute)", marginTop: 2 },
   since: { fontSize: 12, color: "var(--mute)", marginTop: 2 },

@@ -35,6 +35,7 @@ export default async function CoachLayout({
   return (
     <CoachShell
       coachName={coach.name}
+      coachAvatarUrl={coach.avatar_url}
       orgName={org?.name ?? ""}
       branding={branding}
     >

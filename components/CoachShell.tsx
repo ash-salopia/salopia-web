@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
+import Avatar from "@/components/Avatar";
 
 const NAV_ITEMS = [
   { href: "/athletes",    label: "Athletes",    icon: "👤" },
@@ -22,11 +23,13 @@ const NAV_ITEMS = [
 
 export default function CoachShell({
   coachName,
+  coachAvatarUrl = null,
   orgName,
   branding = DEFAULT_BRANDING,
   children,
 }: {
   coachName: string;
+  coachAvatarUrl?: string | null;
   orgName: string;
   branding?: ResolvedBranding;
   children: React.ReactNode;
@@ -64,6 +67,7 @@ export default function CoachShell({
         </div>
 
         <div style={styles.headerRight}>
+          <Avatar name={coachName || "Coach"} avatarUrl={coachAvatarUrl} size={28} />
           <span style={styles.coachInfo}>{coachName || "Coach"}</span>
           <button style={styles.signOutBtn} onClick={handleSignOut}>Sign out</button>
         </div>

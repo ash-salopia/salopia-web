@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
 import type { Athlete, Session, SessionType } from "@/types";
 import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/components/WeeklyReflectionModal";
+import Avatar from "@/components/Avatar";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
@@ -56,6 +57,27 @@ export default function AthleteLinkShell({
   // Sessions start from the server-rendered prop (fast initial render) but
   // are immediately owned in state so client-side refetches can update them.
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(athlete.avatar_url ?? null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("token", token);
+      formData.append("file", file);
+      const res = await fetch("/api/athlete-link/avatar", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setAvatarUrl(data.avatar_url);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not upload photo");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -162,9 +184,29 @@ export default function AthleteLinkShell({
     <div style={st.page}>
       {/* Header */}
       <div style={st.header}>
-        <div>
-          <div style={st.brand}>{branding?.displayName ?? "AthletiQ"}</div>
-          <div style={st.athleteName}>{athlete.name}</div>
+        <div style={st.headerRow}>
+          <div style={{ position: "relative" }}>
+            <Avatar name={athlete.name} avatarUrl={avatarUrl} size={48} />
+            <input
+              ref={avatarFileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }}
+            />
+            <button
+              style={st.avatarEditBtn}
+              onClick={() => avatarFileRef.current?.click()}
+              disabled={avatarUploading}
+              title={avatarUrl ? "Change photo" : "Upload photo"}
+            >
+              {avatarUploading ? "…" : "✎"}
+            </button>
+          </div>
+          <div>
+            <div style={st.brand}>{branding?.displayName ?? "AthletiQ"}</div>
+            <div style={st.athleteName}>{athlete.name}</div>
+          </div>
         </div>
       </div>
 
@@ -383,6 +425,12 @@ export default function AthleteLinkShell({
 const st: Record<string, React.CSSProperties> = {
   page: { minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: "0 0 40px" },
   header: { padding: "20px 16px 12px", borderBottom: "1px solid var(--line)" },
+  headerRow: { display: "flex", alignItems: "center", gap: 12 },
+  avatarEditBtn: {
+    position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: "50%",
+    background: "var(--accent)", color: "#0a1420", border: "2px solid var(--panel)",
+    fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+  },
   brand: { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: 2, color: "var(--accent)" },
   athleteName: { fontSize: 22, fontWeight: 700, color: "var(--text)", marginTop: 2 },
   tabs: { display: "flex", gap: 6, padding: "10px 16px", borderBottom: "1px solid var(--line)" },

@@ -23,6 +23,7 @@ export interface Coach {
   organisation_id: string;
   name: string;
   role: "owner" | "coach";
+  avatar_url: string | null; // 0042
   created_at: string;
 }
 
@@ -40,6 +41,7 @@ export interface Athlete {
   sex: "male" | "female" | null;
   date_of_birth: string | null; // YYYY-MM-DD
   bodyweight_kg: number | null; // 0028 — default for test sessions / IMTP relative strength
+  avatar_url: string | null; // 0042
   created_at: string;
 }
 
