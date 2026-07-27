@@ -431,6 +431,13 @@ export default function ExerciseCard({
       <div style={styles.setGrid}>
         {log.map((set, i) => {
           const hasWeight = set.weight.trim().length > 0;
+          // Reps vs time is decided purely by whether the exercise is
+          // prescribed in time mode (exercise.time set) — same rule
+          // as the athlete app's own session view, so a time-based
+          // exercise's actually-completed hold (e.g. 40s against a
+          // 30s prescription) is visible and editable here instead of
+          // being stuck showing a "reps" box.
+          const timeMode = (exercise.time ?? "").trim().length > 0;
           return (
             <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
               <div style={styles.setIdx}>{i + 1}</div>
@@ -452,13 +459,23 @@ export default function ExerciseCard({
                 inputMode="decimal"
                 style={styles.setInput}
               />
-              <input
-                value={set.reps}
-                onChange={(e) => updateSet(i, { reps: e.target.value })}
-                placeholder={exercise.reps || "reps"}
-                inputMode="numeric"
-                style={styles.setInput}
-              />
+              {timeMode ? (
+                <input
+                  value={set.time ?? ""}
+                  onChange={(e) => updateSet(i, { time: e.target.value })}
+                  placeholder={exercise.time || "sec"}
+                  inputMode="numeric"
+                  style={styles.setInput}
+                />
+              ) : (
+                <input
+                  value={set.reps}
+                  onChange={(e) => updateSet(i, { reps: e.target.value })}
+                  placeholder={exercise.reps || "reps"}
+                  inputMode="numeric"
+                  style={styles.setInput}
+                />
+              )}
               <button
                 style={{
                   ...styles.doneBtn,
