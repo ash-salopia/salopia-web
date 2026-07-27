@@ -98,12 +98,21 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
     // A PB already recorded from THIS session for this exercise, if any.
     const { data: sessionPbRows } = await supabase
       .from("personal_bests")
-      .select("id")
+      .select("id, weight_kg, reps, time_seconds")
       .eq("athlete_id", athleteId)
       .ilike("exercise_name", exData.name)
       .eq("session_id", sessionId)
       .limit(1);
     const sessionPb = sessionPbRows?.[0] ?? null;
+    // What this session already has on record, in whichever shape
+    // applies — used below to tell "genuinely improved since last
+    // save" apart from "recalculated to the same value again" (e.g.
+    // set 2 tying set 1's already-recorded time), which should keep
+    // the row in sync but not re-fire the celebration popup for a PB
+    // the athlete has already been told about.
+    const sessionPbValue = sessionPb
+      ? (isBodyweight ? (isTimeMode ? sessionPb.time_seconds : sessionPb.reps) : sessionPb.weight_kg)
+      : null;
 
     // The bar this session's best set must clear — every OTHER
     // session's best for this exercise IN THE SAME LANE, excluding
@@ -158,6 +167,15 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
       .from("personal_bests")
       .upsert(row, { onConflict: "athlete_id,exercise_name,session_id" });
     if (upsertErr) { console.error("[detectPB] upsert failed", upsertErr); return null; }
+
+    // The row is always kept in sync above, but only celebrate when
+    // this save genuinely raised the bar over what this session
+    // already had on record — otherwise re-saving/tying an
+    // already-celebrated value (e.g. set 2 matching set 1's time)
+    // would pop the "New PB!" modal again for something the athlete
+    // has already seen.
+    const isNewOrImproved = sessionPbValue == null || candidateValue > sessionPbValue;
+    if (!isNewOrImproved) return null;
 
     return { exerciseName: exData.name, weightKg: row.weight_kg, reps: row.reps, timeSeconds: row.time_seconds };
   } catch (e) {
