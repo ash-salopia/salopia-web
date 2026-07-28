@@ -241,6 +241,8 @@ export async function loadTemplateForAthlete(
       video_url: e.video_url ?? "",
       rpe: e.rpe ?? null,
       percent_1rm: e.percent_1rm ?? null,
+      use_percent_1rm: e.use_percent_1rm ?? false,
+      set_percents: e.set_percents ?? [],
       sort_order: sortIdx,
       log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
     }))

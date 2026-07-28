@@ -104,6 +104,17 @@ export default function ExerciseCard({
     onLogChange(newLog);
   };
 
+  // Per-set %1RM prescriptions live in exercise.set_percents (a
+  // prescription, alongside reps/rest/tempo), not in the log — that
+  // stays purely the athlete's actual results. Padded out to match
+  // the current set count so an index is always safe to write.
+  const updateSetPercent = (index: number, value: string) => {
+    const next = [...(exercise.set_percents ?? [])];
+    while (next.length < log.length) next.push("");
+    next[index] = value;
+    onEditPresc({ set_percents: next });
+  };
+
   return (
     <div style={styles.card}>
       <div style={styles.cardHead}>
@@ -366,6 +377,17 @@ export default function ExerciseCard({
           />
           <span style={{ color: exercise.is_bodyweight ? "var(--accent)" : "var(--mute)" }}>Bodyweight only</span>
         </label>
+        {!exercise.is_bodyweight && (
+          <label style={styles.checkboxRow} title="Prescribe each set's own %1RM (e.g. a 70/80/90% ramp) instead of a fixed load">
+            <input
+              type="checkbox"
+              checked={!!exercise.use_percent_1rm}
+              onChange={(e) => onEditPresc({ use_percent_1rm: e.target.checked })}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: exercise.use_percent_1rm ? "var(--accent)" : "var(--mute)" }}>Use %1RM</span>
+          </label>
+        )}
       </div>
 
       <div style={styles.prescRow}>
@@ -394,23 +416,12 @@ export default function ExerciseCard({
             style={styles.miniInput}
           />
         </Field>
-        {!exercise.is_bodyweight && (
+        {!exercise.is_bodyweight && !exercise.use_percent_1rm && (
           <Field label="Load" grow>
             <input
               value={exercise.target_load}
               onChange={(e) => onEditPresc({ target_load: e.target.value })}
               placeholder="e.g. 60kg"
-              style={styles.miniInput}
-            />
-          </Field>
-        )}
-        {!exercise.is_bodyweight && (
-          <Field label="%1RM">
-            <input
-              value={exercise.percent_1rm ?? ""}
-              onChange={(e) => onEditPresc({ percent_1rm: e.target.value === "" ? null : parseFloat(e.target.value) || null })}
-              placeholder="e.g. 90"
-              inputMode="decimal"
               style={styles.miniInput}
             />
           </Field>
@@ -441,7 +452,11 @@ export default function ExerciseCard({
 
       <div style={styles.setGrid}>
         {log.map((set, i) => {
-          const hasWeight = set.weight.trim().length > 0;
+          // A %1RM-prescribed set's weight box is pre-filled with the
+          // calculated target before the athlete does anything, so
+          // its presence alone can't read as "done" the way a typed
+          // weight normally does.
+          const hasWeight = !exercise.use_percent_1rm && set.weight.trim().length > 0;
           // Reps vs time is decided purely by whether the exercise is
           // prescribed in time mode (exercise.time set) — same rule
           // as the athlete app's own session view, so a time-based
@@ -470,6 +485,15 @@ export default function ExerciseCard({
                 inputMode="decimal"
                 style={styles.setInput}
               />
+              {exercise.use_percent_1rm && (
+                <input
+                  value={exercise.set_percents?.[i] ?? ""}
+                  onChange={(e) => updateSetPercent(i, e.target.value)}
+                  placeholder="%1RM"
+                  inputMode="decimal"
+                  style={styles.setInput}
+                />
+              )}
               {timeMode ? (
                 <input
                   value={set.time ?? ""}

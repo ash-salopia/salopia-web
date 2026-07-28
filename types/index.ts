@@ -90,7 +90,9 @@ export interface ExerciseBase {
   notes: string;
   video_url: string;
   rpe?: number | null; // 0032 — prescribed RPE (1-10)
-  percent_1rm?: number | null; // 0032 — prescribed load as a % of 1RM
+  percent_1rm?: number | null; // 0032 — DEPRECATED, one value for the whole exercise. Superseded by use_percent_1rm + set_percents (0045); kept only so old data still reads back.
+  use_percent_1rm?: boolean; // 0045 — when true, set_percents[i] prescribes each set's own %1RM (a ramping scheme, e.g. 70/80/90%), rather than one uniform load for the exercise
+  set_percents?: string[]; // 0045 — per-set %1RM prescriptions, index-aligned with `sets` (and, for a real session, with `log`)
   is_bodyweight?: boolean; // 0041 — coach-set: this exercise has no load, athlete logs reps or time only
 }
 
@@ -107,11 +109,6 @@ export interface SessionExercise extends ExerciseBase {
   swapped_from: string | null; // 0035 — original prescribed name, set when the athlete swaps
   opted_out: boolean;          // 0035 — athlete skipped this exercise, no replacement
   athlete_exercise_notes: string; // 0040 — athlete's own note on this exercise, separate from the coach's `notes` and session-level athlete_notes
-  // 0038 — not a DB column: computed server-side from percent_1rm + the
-  // athlete's current 1RM (fixed or rolling, per org settings), attached
-  // when sessions are fetched for the athlete app. null = %1RM prescribed
-  // but no 1RM data exists yet for this exercise.
-  computed_target_kg?: number | null;
 }
 
 // A lighter-weight exercise shape used inside templates/programmes,

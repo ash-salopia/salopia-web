@@ -489,7 +489,11 @@ export default function SessionDetailPage() {
   // individual set chips are showing.
   const totalSets = exercises.reduce((n, e) => n + (e.log ?? []).length, 0);
   const doneSets = exercises.reduce(
-    (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
+    // A %1RM-prescribed set's weight box is pre-filled with the
+    // calculated target before the athlete does anything, so its
+    // presence alone can't count as "completed" the way a typed-in
+    // weight normally does — only an explicit done-tap does.
+    (n, e) => n + (e.log ?? []).filter((s) => s.done || (!e.use_percent_1rm && (s.weight ?? "").trim().length > 0)).length,
     0
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;

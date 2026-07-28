@@ -303,13 +303,23 @@ function TemplateDefEditor({
                   inputMode="decimal"
                   style={styles.exMiniInput}
                 />
-                <input
-                  value={ex.percent_1rm ?? ""}
-                  onChange={(e) => updateExercise(ex.id, { percent_1rm: e.target.value === "" ? null : parseFloat(e.target.value) || null })}
-                  placeholder="%1RM"
-                  inputMode="decimal"
-                  style={styles.exMiniInput}
-                />
+                <label style={styles.exBodyweightLabel} title="Prescribe each set's own %1RM instead of a fixed load — e.g. a 70/80/90% ramp">
+                  <input
+                    type="checkbox"
+                    checked={!!ex.use_percent_1rm}
+                    onChange={(e) => updateExercise(ex.id, { use_percent_1rm: e.target.checked })}
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  %RM
+                </label>
+                {ex.use_percent_1rm && (
+                  <input
+                    value={(ex.set_percents ?? []).join(",")}
+                    onChange={(e) => updateExercise(ex.id, { set_percents: e.target.value.split(",").map((s) => s.trim()) })}
+                    placeholder="e.g. 70,80,90"
+                    style={styles.exMiniInput}
+                  />
+                )}
                 <label style={styles.exBodyweightLabel} title="Bodyweight only — no load field, athlete logs reps/time only">
                   <input
                     type="checkbox"

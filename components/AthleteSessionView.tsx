@@ -169,7 +169,11 @@ export default function AthleteSessionView({
   const loggableExercises = exercises.filter((e) => !e.opted_out);
   const totalSets = loggableExercises.reduce((n, e) => n + (e.log ?? []).length, 0);
   const doneSets = loggableExercises.reduce(
-    (n, e) => n + (e.log ?? []).filter((s) => s.done || (s.weight ?? "").trim().length > 0).length,
+    // A %1RM-prescribed set's weight box is pre-filled with the
+    // calculated target before the athlete does anything, so its
+    // presence alone can't count as "completed" the way a typed-in
+    // weight normally does — only an explicit done-tap does.
+    (n, e) => n + (e.log ?? []).filter((s) => s.done || (!e.use_percent_1rm && (s.weight ?? "").trim().length > 0)).length,
     0
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
@@ -490,8 +494,8 @@ export default function AthleteSessionView({
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
                   {ex.is_bodyweight ? " · 🏋️ bodyweight" : ""}
                   {ex.target_load ? ` · ${ex.target_load}` : ""}
-                  {ex.percent_1rm != null
-                    ? ` · ${ex.percent_1rm}%1RM${ex.computed_target_kg != null ? ` ≈ ${ex.computed_target_kg}kg` : ""}`
+                  {ex.use_percent_1rm && (ex.set_percents ?? []).some((p) => p)
+                    ? ` · ${(ex.set_percents ?? []).filter((p) => p).join("/")}%1RM`
                     : ""}
                 </div>
                 {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
@@ -543,7 +547,13 @@ export default function AthleteSessionView({
                     </div>
                     <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
-                    const hasWeight = showWeight && (set.weight ?? "").trim().length > 0;
+                    // For a %1RM-prescribed exercise the weight box
+                    // arrives pre-filled with the calculated target
+                    // before the athlete has done anything — so its
+                    // mere presence can't be treated as "confirmed"
+                    // the way a typed-in weight normally is. Only an
+                    // explicit ✓ tap (or reps/time entry) counts.
+                    const hasWeight = showWeight && !ex.use_percent_1rm && (set.weight ?? "").trim().length > 0;
                     const hasOther = timeMode ? (set.time ?? "").trim().length > 0 : (set.reps ?? "").trim().length > 0;
                     const hasPrimaryValue = hasWeight || hasOther;
                     const prevSet = i > 0 ? (ex.log ?? [])[i - 1] : null;
@@ -570,7 +580,7 @@ export default function AthleteSessionView({
                               }
                               handleSetUpdate(ex.id, i, patch);
                             }}
-                            placeholder={ex.computed_target_kg != null ? String(ex.computed_target_kg) : "kg"}
+                            placeholder="kg"
                             inputMode="decimal"
                             style={styles.setInput}
                           />

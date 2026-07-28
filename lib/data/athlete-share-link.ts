@@ -125,24 +125,35 @@ export async function getCurrentOneRM(
   return bestRollingOneRM(rows ?? [], orgSettings.one_rm_formula);
 }
 
-// Attaches computed_target_kg to every exercise prescribed as a %1RM.
+// Materialises each %1RM-prescribed set's calculated load directly
+// into log[i].weight — a real, editable, already-saved value (not a
+// placeholder) — the moment a 1RM is available to compute it from.
+// The athlete sees exactly what they should lift and can just confirm
+// it (tap done) or overwrite it with what they actually lifted.
+// set_percents is the prescription (coach-controlled, parallel to
+// reps/rest/tempo); log stays purely the athlete's actual results —
+// this only ever fills a set that's still genuinely blank, never
+// overwrites something the athlete already logged.
+//
 // The sessions array already contains the athlete's complete logged
 // history, so the rolling estimate is computed in-memory from data
 // that's fetched anyway — no per-exercise queries. Only the org
 // settings (and, in fixed mode, one batch of athlete_one_rms rows)
 // cost an extra round-trip, and only when at least one %1RM exercise
-// exists.
+// exists. Any set that actually gets filled in is persisted back to
+// session_exercises.log, so it's a genuinely saved value from the
+// athlete's very first view of the session onward.
 async function attachComputedTargets(athleteId: string, sessions: Session[]): Promise<void> {
   const withPercent = sessions.flatMap((s) =>
-    (s.exercises ?? []).filter((e) => e.percent_1rm != null)
+    (s.exercises ?? []).filter((e) => e.use_percent_1rm && (e.set_percents ?? []).some((p) => p))
   );
   if (!withPercent.length) return;
 
   const settings = await getOrgSettingsForAthlete(athleteId);
+  const supabase = createServiceRoleClient();
 
   const fixedByName = new Map<string, number>();
   if (settings.one_rm_source === "fixed") {
-    const supabase = createServiceRoleClient();
     const { data } = await supabase
       .from("athlete_one_rms")
       .select("exercise_name, one_rm_kg")
@@ -163,13 +174,32 @@ async function attachComputedTargets(athleteId: string, sessions: Session[]): Pr
     return rollingByName.get(key) ?? null;
   };
 
+  const updates: PromiseLike<unknown>[] = [];
+
   for (const ex of withPercent) {
     const key = ex.name.trim().toLowerCase();
     const oneRM = fixedByName.get(key) ?? rollingFor(key);
-    ex.computed_target_kg =
+    if (oneRM == null) continue;
+
+    const percents = ex.set_percents ?? [];
+    let changed = false;
+    const newLog = (ex.log ?? []).map((set, i) => {
+      const pct = parseFloat(String(percents[i] ?? ""));
+      if (isNaN(pct) || pct <= 0) return set;
+      if ((set.weight ?? "").trim() !== "") return set; // already logged — never overwrite a real result
       // Nearest 0.5kg — same rounding convention as estimateOneRM.
-      oneRM != null ? Math.round(((oneRM * (ex.percent_1rm as number)) / 100) * 2) / 2 : null;
+      const target = Math.round(((oneRM * pct) / 100) * 2) / 2;
+      changed = true;
+      return { ...set, weight: String(target) };
+    });
+
+    if (changed) {
+      ex.log = newLog;
+      updates.push(supabase.from("session_exercises").update({ log: newLog }).eq("id", ex.id));
+    }
   }
+
+  if (updates.length) await Promise.all(updates);
 }
 
 // Athlete-permitted update: logging a set's weight/reps/done, or
@@ -477,6 +507,8 @@ export async function startLibrarySession(athleteId: string, templateDefId: stri
       video_url: e.video_url ?? "",
       rpe: e.rpe ?? null,
       percent_1rm: e.percent_1rm ?? null,
+      use_percent_1rm: e.use_percent_1rm ?? false,
+      set_percents: e.set_percents ?? [],
       sort_order: i,
       log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
     }));
