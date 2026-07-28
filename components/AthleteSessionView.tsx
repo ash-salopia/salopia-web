@@ -570,7 +570,7 @@ export default function AthleteSessionView({
                               }
                               handleSetUpdate(ex.id, i, patch);
                             }}
-                            placeholder="kg"
+                            placeholder={ex.computed_target_kg != null ? String(ex.computed_target_kg) : "kg"}
                             inputMode="decimal"
                             style={styles.setInput}
                           />

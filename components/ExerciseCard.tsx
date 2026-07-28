@@ -404,6 +404,17 @@ export default function ExerciseCard({
             />
           </Field>
         )}
+        {!exercise.is_bodyweight && (
+          <Field label="%1RM">
+            <input
+              value={exercise.percent_1rm ?? ""}
+              onChange={(e) => onEditPresc({ percent_1rm: e.target.value === "" ? null : parseFloat(e.target.value) || null })}
+              placeholder="e.g. 90"
+              inputMode="decimal"
+              style={styles.miniInput}
+            />
+          </Field>
+        )}
         <Field label="Tempo">
           <input
             value={exercise.tempo ?? "2-0-2"}
