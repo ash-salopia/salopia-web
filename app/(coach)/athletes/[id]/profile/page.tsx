@@ -8,7 +8,6 @@ import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete } from "@/lib/data/athletes";
 import { updateAthleteAvatar } from "@/lib/data/avatars";
 import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
-import { getOrgSettings } from "@/lib/data/settings";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
@@ -182,7 +181,6 @@ export default function AthleteProfilePage() {
   const [library, setLibrary] = useState<{ name: string }[]>([]);
   const [pbNameDropdownOpen, setPbNameDropdownOpen] = useState(false);
   const [oneRMs, setOneRMs] = useState<AthleteOneRM[]>([]);
-  const [oneRmSource, setOneRmSource] = useState<"rolling" | "fixed">("rolling");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
 
@@ -212,7 +210,6 @@ export default function AthleteProfilePage() {
     load();
     listLibrary().then((entries) => setLibrary(entries)).catch(() => {});
     listAthleteOneRMs(athleteId).then(setOneRMs).catch(() => {});
-    getOrgSettings().then((s) => setOneRmSource(s.one_rm_source)).catch(() => {});
   }, [athleteId]);
 
   const load = async () => {
@@ -544,9 +541,7 @@ export default function AthleteProfilePage() {
       <div style={p.section}>
         <div style={p.sectionTitle}>🏋️ 1RM Tracker</div>
         <p style={p.sectionHint}>
-          {oneRmSource === "fixed"
-            ? "These fixed values are used to turn %1RM prescriptions into kg targets in the athlete app. Exercises without a value here fall back to an estimate from training logs."
-            : "Only used when your org's 1RM source is set to \"Fixed\" in Settings — currently %1RM targets are estimated from training logs."}
+          These values are used to turn %1RM prescriptions into kg targets in the athlete app. Exercises without a value here fall back to an estimate from training logs.
         </p>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>

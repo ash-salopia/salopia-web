@@ -109,6 +109,12 @@ export interface SessionExercise extends ExerciseBase {
   swapped_from: string | null; // 0035 — original prescribed name, set when the athlete swaps
   opted_out: boolean;          // 0035 — athlete skipped this exercise, no replacement
   athlete_exercise_notes: string; // 0040 — athlete's own note on this exercise, separate from the coach's `notes` and session-level athlete_notes
+  // 0045 — not a DB column: per-set calculated %1RM targets (kg),
+  // attached when sessions are fetched for the athlete app. Shown as
+  // a greyed suggestion in the load box, never written to log[i].weight
+  // until the athlete actually confirms it (types over it, or taps
+  // done with the box still empty, which captures this value).
+  computed_targets?: (number | null)[];
 }
 
 // A lighter-weight exercise shape used inside templates/programmes,

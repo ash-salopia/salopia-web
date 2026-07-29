@@ -116,6 +116,36 @@ export function bestEstimatedOneRM(
   return best;
 }
 
+// Best estimated 1RM for one exercise across a set of session_exercises
+// rows (their completed logged sets) — the highest estimate across
+// every occurrence. Shared between the athlete-link server path and
+// the coach-facing pages (session builder, Live Group), which fetch
+// sessions via the browser client and pass the already-loaded rows in
+// rather than each running their own query.
+export function bestRollingOneRM(
+  rows: Array<{ log?: Array<{ weight: string; reps: string; done: boolean }> | null; reps?: string | null }>,
+  formula: OneRMFormula
+): number | null {
+  let best: number | null = null;
+  for (const row of rows) {
+    const est = bestEstimatedOneRM(row.log ?? [], parseRepsStr(row.reps), formula);
+    if (est !== null && (best === null || est > best)) best = est;
+  }
+  return best;
+}
+
+// Calculated per-set kg targets for a %1RM-prescribed exercise, given
+// its resolved 1RM and set_percents. null entries are sets with no
+// (or invalid) %RM prescribed.
+export function calculateSetTargets(oneRM: number, setPercents: (string | undefined)[]): (number | null)[] {
+  return setPercents.map((p) => {
+    const pct = parseFloat(String(p ?? ""));
+    if (isNaN(pct) || pct <= 0) return null;
+    // Nearest 0.5kg — same rounding convention as estimateOneRM.
+    return Math.round(((oneRM * pct) / 100) * 2) / 2;
+  });
+}
+
 // ── Unit conversion ───────────────────────────────────────────────────────────
 
 const LBS_PER_KG = 2.20462;

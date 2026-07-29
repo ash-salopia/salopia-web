@@ -580,7 +580,7 @@ export default function AthleteSessionView({
                               }
                               handleSetUpdate(ex.id, i, patch);
                             }}
-                            placeholder="kg"
+                            placeholder={ex.computed_targets?.[i] != null ? String(ex.computed_targets[i]) : "kg"}
                             inputMode="decimal"
                             style={styles.setInput}
                           />
@@ -630,7 +630,21 @@ export default function AthleteSessionView({
                         </div>
                         <button
                           style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
-                          onClick={() => handleSetUpdate(ex.id, i, { done: !set.done })}
+                          onClick={() => {
+                            // Tapping done on a still-empty %1RM box
+                            // captures the greyed suggestion as the
+                            // real logged weight — the box only ever
+                            // shows it as a placeholder (so it never
+                            // reads as "already entered"), but
+                            // confirming without typing over it should
+                            // still record what was actually suggested.
+                            const target = ex.computed_targets?.[i];
+                            if (!set.done && showWeight && !set.weight.trim() && target != null) {
+                              handleSetUpdate(ex.id, i, { weight: String(target), done: true });
+                            } else {
+                              handleSetUpdate(ex.id, i, { done: !set.done });
+                            }
+                          }}
                         >
                           ✓
                         </button>

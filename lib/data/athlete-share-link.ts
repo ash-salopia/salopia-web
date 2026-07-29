@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { todayISO } from "@/lib/date-utils";
-import { bestEstimatedOneRM, type OneRMFormula } from "@/lib/one-rm";
+import { bestRollingOneRM, calculateSetTargets, type OneRMFormula } from "@/lib/one-rm";
 import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
 import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise } from "@/types";
 
@@ -71,33 +71,12 @@ export async function getAthleteSessions(athleteId: string): Promise<Session[]> 
 
 // ── %1RM targets (0038) ───────────────────────────────────────────────────────
 
-function parseRepsStr(s: string | null | undefined): number {
-  if (!s) return 0;
-  const m = s.match(/(\d+)/);
-  return m ? parseInt(m[1], 10) : 0;
-}
-
-// Best estimated 1RM across a set of session_exercises rows (their
-// completed logged sets), using the org's chosen formula — the same
-// rolling estimate the Goals feature computes.
-function bestRollingOneRM(
-  rows: Array<{ log?: SetLog[] | null; reps?: string | null }>,
-  formula: OneRMFormula
-): number | null {
-  let best: number | null = null;
-  for (const row of rows) {
-    const est = bestEstimatedOneRM(row.log ?? [], parseRepsStr(row.reps), formula);
-    if (est !== null && (best === null || est > best)) best = est;
-  }
-  return best;
-}
-
-// The athlete's current 1RM for one exercise, honouring the org's
-// one_rm_source setting: a coach-set fixed value when in "fixed" mode
-// (falling back to the rolling estimate if none is set yet — a coach
-// who hasn't entered a value shouldn't produce a blank target),
-// otherwise the rolling estimate from logged history. Returns null
-// only when there's no fixed value AND no logged history at all.
+// The athlete's current 1RM for one exercise: a coach-set fixed value
+// on the athlete's profile if one exists, always checked first
+// regardless of the org's one_rm_source setting (an explicit number a
+// coach entered shouldn't be silently ignored), otherwise the rolling
+// estimate from logged history. Returns null only when there's no
+// fixed value AND no logged history at all.
 export async function getCurrentOneRM(
   athleteId: string,
   exerciseName: string,
@@ -105,16 +84,14 @@ export async function getCurrentOneRM(
 ): Promise<number | null> {
   const supabase = createServiceRoleClient();
 
-  if (orgSettings.one_rm_source === "fixed") {
-    const { data } = await supabase
-      .from("athlete_one_rms")
-      .select("one_rm_kg")
-      .eq("athlete_id", athleteId)
-      .ilike("exercise_name", exerciseName)
-      .limit(1);
-    const fixed = data?.[0]?.one_rm_kg;
-    if (fixed != null) return Number(fixed);
-  }
+  const { data } = await supabase
+    .from("athlete_one_rms")
+    .select("one_rm_kg")
+    .eq("athlete_id", athleteId)
+    .ilike("exercise_name", exerciseName)
+    .limit(1);
+  const fixed = data?.[0]?.one_rm_kg;
+  if (fixed != null) return Number(fixed);
 
   const { data: rows } = await supabase
     .from("session_exercises")
@@ -125,24 +102,21 @@ export async function getCurrentOneRM(
   return bestRollingOneRM(rows ?? [], orgSettings.one_rm_formula);
 }
 
-// Materialises each %1RM-prescribed set's calculated load directly
-// into log[i].weight — a real, editable, already-saved value (not a
-// placeholder) — the moment a 1RM is available to compute it from.
-// The athlete sees exactly what they should lift and can just confirm
-// it (tap done) or overwrite it with what they actually lifted.
-// set_percents is the prescription (coach-controlled, parallel to
-// reps/rest/tempo); log stays purely the athlete's actual results —
-// this only ever fills a set that's still genuinely blank, never
-// overwrites something the athlete already logged.
+// Attaches computed_targets (per-set calculated kg) to every
+// %1RM-prescribed exercise, the moment a 1RM is available to compute
+// it from. Purely a display value — shown as a greyed suggestion in
+// the load box — never written to log[i].weight itself; the athlete
+// app decides what to do with it (show as a placeholder, and capture
+// it into the real log only if the athlete taps done without typing
+// over it). set_percents is the prescription (coach-controlled,
+// parallel to reps/rest/tempo); log stays purely the athlete's actual
+// results.
 //
 // The sessions array already contains the athlete's complete logged
 // history, so the rolling estimate is computed in-memory from data
 // that's fetched anyway — no per-exercise queries. Only the org
-// settings (and, in fixed mode, one batch of athlete_one_rms rows)
-// cost an extra round-trip, and only when at least one %1RM exercise
-// exists. Any set that actually gets filled in is persisted back to
-// session_exercises.log, so it's a genuinely saved value from the
-// athlete's very first view of the session onward.
+// settings (and one batch of athlete_one_rms rows) cost an extra
+// round-trip, and only when at least one %1RM exercise exists.
 async function attachComputedTargets(athleteId: string, sessions: Session[]): Promise<void> {
   const withPercent = sessions.flatMap((s) =>
     (s.exercises ?? []).filter((e) => e.use_percent_1rm && (e.set_percents ?? []).some((p) => p))
@@ -152,15 +126,20 @@ async function attachComputedTargets(athleteId: string, sessions: Session[]): Pr
   const settings = await getOrgSettingsForAthlete(athleteId);
   const supabase = createServiceRoleClient();
 
+  // A fixed 1RM the coach has explicitly set on the athlete's profile
+  // is always checked first, regardless of the org's one_rm_source
+  // toggle — an explicit number a coach entered shouldn't be silently
+  // ignored just because the org defaults to rolling estimates.
+  // one_rm_source only decides the fallback when no fixed value
+  // exists: "rolling" estimates from logged history, "fixed" leaves
+  // it uncalculated until the coach sets one.
   const fixedByName = new Map<string, number>();
-  if (settings.one_rm_source === "fixed") {
-    const { data } = await supabase
-      .from("athlete_one_rms")
-      .select("exercise_name, one_rm_kg")
-      .eq("athlete_id", athleteId);
-    for (const row of data ?? []) {
-      if (row.one_rm_kg != null) fixedByName.set(row.exercise_name.trim().toLowerCase(), Number(row.one_rm_kg));
-    }
+  const { data: fixedRows } = await supabase
+    .from("athlete_one_rms")
+    .select("exercise_name, one_rm_kg")
+    .eq("athlete_id", athleteId);
+  for (const row of fixedRows ?? []) {
+    if (row.one_rm_kg != null) fixedByName.set(row.exercise_name.trim().toLowerCase(), Number(row.one_rm_kg));
   }
 
   const rollingByName = new Map<string, number | null>();
@@ -174,32 +153,12 @@ async function attachComputedTargets(athleteId: string, sessions: Session[]): Pr
     return rollingByName.get(key) ?? null;
   };
 
-  const updates: PromiseLike<unknown>[] = [];
-
   for (const ex of withPercent) {
     const key = ex.name.trim().toLowerCase();
     const oneRM = fixedByName.get(key) ?? rollingFor(key);
     if (oneRM == null) continue;
-
-    const percents = ex.set_percents ?? [];
-    let changed = false;
-    const newLog = (ex.log ?? []).map((set, i) => {
-      const pct = parseFloat(String(percents[i] ?? ""));
-      if (isNaN(pct) || pct <= 0) return set;
-      if ((set.weight ?? "").trim() !== "") return set; // already logged — never overwrite a real result
-      // Nearest 0.5kg — same rounding convention as estimateOneRM.
-      const target = Math.round(((oneRM * pct) / 100) * 2) / 2;
-      changed = true;
-      return { ...set, weight: String(target) };
-    });
-
-    if (changed) {
-      ex.log = newLog;
-      updates.push(supabase.from("session_exercises").update({ log: newLog }).eq("id", ex.id));
-    }
+    ex.computed_targets = calculateSetTargets(oneRM, ex.set_percents ?? []);
   }
-
-  if (updates.length) await Promise.all(updates);
 }
 
 // Athlete-permitted update: logging a set's weight/reps/done, or

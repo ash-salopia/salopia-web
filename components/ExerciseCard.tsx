@@ -13,6 +13,12 @@ interface Props {
   library?: LibraryEntry[];
   athleteId?: string;
   currentSessionId?: string;
+  // Calculated %1RM target per set (kg), when the exercise prescribes
+  // one — shown as a preview in the load box, purely for the coach to
+  // see what the athlete should lift. Never written to the log; only
+  // an explicit ✓ tap (or the coach typing a real override) saves
+  // anything here.
+  percentTargets?: (number | null)[];
   onEdit: (patch: Partial<SessionExercise>) => void;
   onRemove: () => void;
   onLogChange: (log: SetLog[]) => void;
@@ -26,6 +32,7 @@ export default function ExerciseCard({
   library = [],
   athleteId,
   currentSessionId,
+  percentTargets,
   onEdit,
   onRemove,
   onLogChange,
@@ -452,11 +459,6 @@ export default function ExerciseCard({
 
       <div style={styles.setGrid}>
         {log.map((set, i) => {
-          // A %1RM-prescribed set's weight box is pre-filled with the
-          // calculated target before the athlete does anything, so
-          // its presence alone can't read as "done" the way a typed
-          // weight normally does.
-          const hasWeight = !exercise.use_percent_1rm && set.weight.trim().length > 0;
           // Reps vs time is decided purely by whether the exercise is
           // prescribed in time mode (exercise.time set) — same rule
           // as the athlete app's own session view, so a time-based
@@ -464,24 +466,20 @@ export default function ExerciseCard({
           // 30s prescription) is visible and editable here instead of
           // being stuck showing a "reps" box.
           const timeMode = (exercise.time ?? "").trim().length > 0;
+          const target = percentTargets?.[i] ?? null;
           return (
-            <div key={i} style={{ ...styles.setChip, ...(hasWeight || set.done ? styles.setChipDone : {}) }}>
+            <div key={i} style={{ ...styles.setChip, ...(set.done ? styles.setChipDone : {}) }}>
               <div style={styles.setIdx}>{i + 1}</div>
               <input
                 value={set.weight}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  // Logging a weight automatically marks the set done,
-                  // and clearing it back to empty un-marks it — same
-                  // behaviour as the original build, so the coach/
-                  // athlete doesn't need a separate tap to confirm a
-                  // set once a weight's been entered. Still toggleable
-                  // by hand via the ✓ button for sets with no weight
-                  // (e.g. bodyweight work).
-                  const shouldBeDone = v.trim().length > 0;
-                  updateSet(i, shouldBeDone !== set.done ? { weight: v, done: shouldBeDone } : { weight: v });
-                }}
-                placeholder="kg"
+                onChange={(e) => updateSet(i, { weight: e.target.value })}
+                // The session builder is for prescribing, not logging
+                // live — typing here (or seeing a calculated %1RM
+                // target) never marks a set done on its own. Only an
+                // explicit ✓ tap does, so a coach can freely draft or
+                // adjust numbers without it reading as "the athlete
+                // did this."
+                placeholder={target != null ? String(target) : "kg"}
                 inputMode="decimal"
                 style={styles.setInput}
               />
@@ -516,7 +514,18 @@ export default function ExerciseCard({
                   ...styles.doneBtn,
                   ...(set.done ? styles.doneBtnOn : {}),
                 }}
-                onClick={() => updateSet(i, { done: !set.done })}
+                onClick={() => {
+                  // Tapping done on a still-empty box captures the
+                  // greyed %1RM suggestion as the real value — the box
+                  // only ever shows it as a placeholder (so it never
+                  // reads as "already entered"), but confirming
+                  // without typing over it should still record it.
+                  if (!set.done && !set.weight.trim() && target != null) {
+                    updateSet(i, { weight: String(target), done: true });
+                  } else {
+                    updateSet(i, { done: !set.done });
+                  }
+                }}
               >
                 ✓
               </button>

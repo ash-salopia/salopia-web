@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getOrgSettings } from "@/lib/data/settings";
+import { resolveCurrentOneRM } from "@/lib/data/one-rm";
+import { calculateSetTargets } from "@/lib/one-rm";
 import {
   getSession,
   updateSession,
@@ -44,6 +46,10 @@ export default function SessionDetailPage() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [otherSessions, setOtherSessions] = useState<SessionStub[]>([]);
+  // Per-set calculated %1RM targets (kg), keyed by exercise id — shown
+  // as a preview in the load box while prescribing, never saved to
+  // the log until the coach explicitly ticks a set done.
+  const [oneRmTargets, setOneRmTargets] = useState<Record<string, (number | null)[]>>({});
   const [showOtherSessions, setShowOtherSessions] = useState(false);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +144,39 @@ export default function SessionDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // Recompute %1RM previews whenever the set of prescribed percentages
+  // actually changes (not on every keystroke elsewhere on the page).
+  const percentSignature = (session?.exercises ?? [])
+    .map((e) => `${e.id}:${e.use_percent_1rm ? (e.set_percents ?? []).join(",") : ""}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!athleteId) return;
+    const withPercent = (session?.exercises ?? []).filter(
+      (e) => e.use_percent_1rm && (e.set_percents ?? []).some((p) => p)
+    );
+    if (!withPercent.length) { setOneRmTargets({}); return; }
+
+    let cancelled = false;
+    (async () => {
+      const settings = await getOrgSettings().catch(() => null);
+      const formula = settings?.one_rm_formula ?? "lander";
+      const entries = await Promise.all(
+        withPercent.map(async (ex) => {
+          const oneRM = await resolveCurrentOneRM(athleteId, ex.name, formula).catch(() => null);
+          return [ex.id, oneRM != null ? calculateSetTargets(oneRM, ex.set_percents ?? []) : null] as const;
+        })
+      );
+      if (cancelled) return;
+      const next: Record<string, (number | null)[]> = {};
+      for (const [id, targets] of entries) if (targets) next[id] = targets;
+      setOneRmTargets(next);
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteId, percentSignature]);
 
   const showFlash = (msg: string) => {
     setFlash(msg);
@@ -760,6 +799,7 @@ export default function SessionDetailPage() {
                 library={library}
                 athleteId={athleteId}
                 currentSessionId={sessionId}
+                percentTargets={oneRmTargets[ex.id]}
                 onEdit={(patch) => handleEditExercise(ex.id, patch)}
                 onRemove={() => handleRemoveExercise(ex.id)}
                 onLogChange={(log) => handleLogChange(ex.id, log)}

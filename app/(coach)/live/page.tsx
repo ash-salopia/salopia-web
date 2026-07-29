@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { listLiveGroupAthletes } from "@/lib/data/athletes";
 import { listSessionsForAthletes, toggleSetDone, updateExerciseLog } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
+import { getOrgSettings } from "@/lib/data/settings";
+import { resolveCurrentOneRM } from "@/lib/data/one-rm";
+import { calculateSetTargets } from "@/lib/one-rm";
 import type { Athlete, Session, SessionType, SetLog } from "@/types";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
@@ -52,6 +55,13 @@ export default function LiveGroupPage() {
   const [activeTab, setActiveTab] = useState("");
   const [sessionMap, setSessionMap] = useState<Record<string, string>>({});
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
+  // Calculated %1RM target per set (kg) for whichever exercise is
+  // currently expanded — computed lazily (only the exercise actually
+  // being viewed) rather than for every athlete's every exercise up
+  // front. Purely a preview: typing in the box still auto-completes
+  // the set here, same as any other Live Group entry, matching real-
+  // time logging alongside the athlete.
+  const [oneRmTargets, setOneRmTargets] = useState<Record<string, (number | null)[]>>({});
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -184,9 +194,20 @@ export default function LiveGroupPage() {
     sessionId: string,
     exerciseId: string,
     setIndex: number,
-    currentLog: SetLog[]
+    currentLog: SetLog[],
+    target: number | null = null
   ) => {
-    const newLog = currentLog.map((l, i) => i === setIndex ? { ...l, done: !l.done } : l);
+    const newLog = currentLog.map((l, i) => {
+      if (i !== setIndex) return l;
+      const nowDone = !l.done;
+      // Marking done on a still-empty set with a calculated %1RM
+      // target captures that value as the real weight — same as
+      // completing it live would, without needing to type it in.
+      if (nowDone && !l.weight.trim() && target != null) {
+        return { ...l, weight: String(target), done: true };
+      }
+      return { ...l, done: nowDone };
+    });
     setSessions((prev) =>
       prev.map((s) => s.id !== sessionId ? s : {
         ...s,
@@ -198,6 +219,39 @@ export default function LiveGroupPage() {
     try { await updateExerciseLog(exerciseId, newLog); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
+
+  useEffect(() => {
+    const athlete = shownAthletes.find((a) => a.id === activeTab) ?? shownAthletes[0];
+    const sess = athlete ? getActiveSession(athlete.id) : null;
+    // Computed for every %1RM exercise in the active session (not just
+    // whichever one happens to be expanded), so the compact per-set
+    // dots can capture a target on tap too, not only the expanded
+    // set editor.
+    const withPercent = (sess?.exercises ?? []).filter(
+      (e) => e.use_percent_1rm && (e.set_percents ?? []).some((p) => p)
+    );
+    if (!athlete || !withPercent.length) return;
+
+    let cancelled = false;
+    (async () => {
+      const settings = await getOrgSettings().catch(() => null);
+      const formula = settings?.one_rm_formula ?? "lander";
+      const entries = await Promise.all(
+        withPercent.map(async (ex) => {
+          const oneRM = await resolveCurrentOneRM(athlete.id, ex.name, formula).catch(() => null);
+          return [ex.id, oneRM != null ? calculateSetTargets(oneRM, ex.set_percents ?? []) : null] as const;
+        })
+      );
+      if (cancelled) return;
+      setOneRmTargets((prev) => {
+        const next = { ...prev };
+        for (const [id, targets] of entries) if (targets) next[id] = targets;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, sessionMap[activeTab]]);
 
   if (loading) return <div style={s.empty}>Loading…</div>;
 
@@ -327,7 +381,7 @@ export default function LiveGroupPage() {
                               {(ex.log ?? []).map((set, si) => (
                                 <button key={si}
                                   title={set.weight ? `${set.weight}kg` : `Set ${si + 1}`}
-                                  onClick={(e) => { e.stopPropagation(); handleToggleDot(activeSess.id, ex.id, si, ex.log ?? []); }}
+                                  onClick={(e) => { e.stopPropagation(); handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null); }}
                                   style={{ ...s.dot, ...(set.done ? s.dotOn : {}) }} />
                               ))}
                             </div>
@@ -353,7 +407,7 @@ export default function LiveGroupPage() {
                                   defaultValue={set.weight}
                                   type="number"
                                   step="0.5"
-                                  placeholder={ex.target_load || "kg"}
+                                  placeholder={oneRmTargets[ex.id]?.[si] != null ? String(oneRmTargets[ex.id][si]) : (ex.target_load || "kg")}
                                   inputMode="decimal"
                                   style={s.setInput}
                                   onBlur={(e) => {
@@ -376,7 +430,7 @@ export default function LiveGroupPage() {
                                   }}
                                 />
                                 <button
-                                  onClick={() => handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [])}
+                                  onClick={() => handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null)}
                                   style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }}>
                                   {set.done ? "✓" : "○"}
                                 </button>
