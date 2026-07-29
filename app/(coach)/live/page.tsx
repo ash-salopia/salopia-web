@@ -220,6 +220,16 @@ export default function LiveGroupPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 
+  // Recompute %1RM targets whenever the active session's prescribed
+  // percentages actually change — including the very first time real
+  // session data replaces the initial empty state, which a signature
+  // tied only to activeTab/sessionMap would miss entirely.
+  const targetsAthlete = shownAthletes.find((a) => a.id === activeTab) ?? shownAthletes[0];
+  const targetsSess = targetsAthlete ? getActiveSession(targetsAthlete.id) : null;
+  const percentSignature = (targetsSess?.exercises ?? [])
+    .map((e) => `${e.id}:${e.use_percent_1rm ? (e.set_percents ?? []).join(",") : ""}`)
+    .join("|");
+
   useEffect(() => {
     const athlete = shownAthletes.find((a) => a.id === activeTab) ?? shownAthletes[0];
     const sess = athlete ? getActiveSession(athlete.id) : null;
@@ -250,8 +260,13 @@ export default function LiveGroupPage() {
       });
     })();
     return () => { cancelled = true; };
+    // Deliberately keyed off a content signature (not `sessions` or
+    // `loading` directly) — this ran once on mount before sessions had
+    // actually loaded yet, saw nothing to compute, and with only
+    // activeTab/sessionMap as deps it never re-fired once real session
+    // data arrived, leaving Live Group's kg boxes permanently empty.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, sessionMap[activeTab]]);
+  }, [activeTab, sessionMap[activeTab], percentSignature]);
 
   if (loading) return <div style={s.empty}>Loading…</div>;
 
