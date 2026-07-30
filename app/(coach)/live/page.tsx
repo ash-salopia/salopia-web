@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { listLiveGroupAthletes } from "@/lib/data/athletes";
-import { listSessionsForAthletes, toggleSetDone, updateExerciseLog } from "@/lib/data/sessions";
+import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
-import type { Athlete, Session, SessionType, SetLog } from "@/types";
+import type { Athlete, Session, SessionType, SetLog, SessionExercise } from "@/types";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -31,6 +31,50 @@ function fmtDate(iso: string): string {
   if (iso === today) return "Today";
   if (iso === tomorrow) return "Tomorrow";
   return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+// Finds this exercise's most recent PRIOR session for the same
+// athlete (by name, case-insensitive) with at least one completed
+// set — so the coach can see what was actually lifted last time
+// without leaving Live Group to dig through session history.
+function findPreviousExercise(
+  sessions: Session[],
+  athleteId: string,
+  exerciseName: string,
+  beforeDate: string
+): SessionExercise | null {
+  const name = exerciseName.trim().toLowerCase();
+  if (!name) return null;
+  const past = sessions
+    .filter((s) => s.athlete_id === athleteId && s.date < beforeDate)
+    .sort((a, b) => (a.date < b.date ? 1 : -1)); // most recent first
+  for (const sess of past) {
+    const match = (sess.exercises ?? []).find(
+      (e) => (e.name ?? "").trim().toLowerCase() === name && (e.log ?? []).some((l) => l.done)
+    );
+    if (match) return match;
+  }
+  return null;
+}
+
+// "50kg×8, 55kg×8" / "45s, 45s" / "×8, ×8" depending on how the
+// exercise was actually logged (weighted, bodyweight+time, or
+// bodyweight+reps) — only completed sets are included.
+function formatPrevSets(ex: SessionExercise | null): string | null {
+  if (!ex) return null;
+  const timeMode = (ex.time ?? "").trim().length > 0;
+  const showWeight = !ex.is_bodyweight;
+  const parts = (ex.log ?? [])
+    .filter((l) => l.done)
+    .map((l) => {
+      if (timeMode) return l.time?.trim() ? `${l.time}s` : null;
+      if (!showWeight) return l.reps?.trim() ? `×${l.reps}` : null;
+      if (l.weight?.trim() && l.reps?.trim()) return `${l.weight}kg×${l.reps}`;
+      if (l.weight?.trim()) return `${l.weight}kg`;
+      return null;
+    })
+    .filter((v): v is string => !!v);
+  return parts.length ? parts.join(", ") : null;
 }
 
 function lsGet(k: string): string { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } }
@@ -220,6 +264,31 @@ export default function LiveGroupPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 
+  // Coach's own thumbs up/down on whether the athlete could progress
+  // this exercise next time — no explanation prompt, just a direct
+  // tap, writing to the same session_exercises.progress field the
+  // athlete app's own progress prompt uses. Tapping the already-set
+  // value clears it back to unanswered.
+  const handleSetProgress = async (
+    sessionId: string,
+    exerciseId: string,
+    value: "yes" | "no"
+  ) => {
+    const sess = sessions.find((s) => s.id === sessionId);
+    const ex = sess?.exercises?.find((e) => e.id === exerciseId);
+    const next: "" | "yes" | "no" = ex?.progress === value ? "" : value;
+    setSessions((prev) =>
+      prev.map((s) => s.id !== sessionId ? s : {
+        ...s,
+        exercises: s.exercises?.map((e) =>
+          e.id !== exerciseId ? e : { ...e, progress: next }
+        ),
+      })
+    );
+    try { await updateExercise(exerciseId, { progress: next }); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
   // Recompute %1RM targets whenever the active session's prescribed
   // percentages actually change — including the very first time real
   // session data replaces the initial empty state, which a signature
@@ -385,6 +454,13 @@ export default function LiveGroupPage() {
                     const showWeight = !ex.is_bodyweight;
                     const timeMode = (ex.time ?? "").trim().length > 0;
                     const setGridCols = showWeight ? "32px 1fr 1fr 44px" : "32px 1fr 44px";
+                    // What the athlete actually did last time on this
+                    // exercise, so the coach doesn't have to leave
+                    // Live Group and dig through past sessions to see
+                    // what to load the bar with.
+                    const prevLabel = formatPrevSets(
+                      findPreviousExercise(sessions, activeAthlete.id, ex.name, activeSess.date)
+                    );
                     return (
                       <div key={ex.id} style={s.exBlock}>
                         {/* Clickable exercise header row */}
@@ -398,8 +474,27 @@ export default function LiveGroupPage() {
                                   .filter(Boolean).join(" ")}
                               </span>
                             )}
+                            {prevLabel && (
+                              <span style={s.exPrevLine}>Last: {prevLabel}</span>
+                            )}
                           </div>
                           <div style={s.exRight}>
+                            {/* Coach's own progress call — no prompt,
+                                just tap. Toggles off on a repeat tap. */}
+                            <div style={s.thumbRow} onClick={(e) => e.stopPropagation()}>
+                              <button
+                                title="Athlete could progress this next time"
+                                onClick={() => handleSetProgress(activeSess.id, ex.id, "yes")}
+                                style={{ ...s.thumbBtn, ...(ex.progress === "yes" ? s.thumbBtnYes : {}) }}>
+                                👍
+                              </button>
+                              <button
+                                title="Not ready to progress this yet"
+                                onClick={() => handleSetProgress(activeSess.id, ex.id, "no")}
+                                style={{ ...s.thumbBtn, ...(ex.progress === "no" ? s.thumbBtnNo : {}) }}>
+                                👎
+                              </button>
+                            </div>
                             {/* Compact dots */}
                             <div style={s.dots}>
                               {(ex.log ?? []).map((set, si) => (
@@ -547,7 +642,12 @@ const s: Record<string, React.CSSProperties> = {
   exMeta:       { display: "flex", flexDirection: "column" as const, flex: 1, minWidth: 0 },
   exName:       { fontSize: 14, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
   exPrescription:{ fontSize: 11, color: "var(--mute)", marginTop: 1 },
+  exPrevLine:   { fontSize: 11, color: "var(--accent)", marginTop: 1 },
   exRight:      { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
+  thumbRow:     { display: "flex", gap: 2 },
+  thumbBtn:     { background: "transparent", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 5px", fontSize: 12, cursor: "pointer", opacity: 0.5, lineHeight: 1 },
+  thumbBtnYes:  { opacity: 1, background: "var(--good-dim)", borderColor: "var(--good)" },
+  thumbBtnNo:   { opacity: 1, background: "var(--panel2)", borderColor: "var(--mute)" },
   dots:         { display: "flex", gap: 4 },
   dot:          { width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--line)", background: "transparent", cursor: "pointer", padding: 0, flexShrink: 0 },
   dotOn:        { background: "var(--good)", borderColor: "var(--good)" },
