@@ -5,18 +5,43 @@ import { todayISO, addDaysISO } from "@/lib/date-utils";
 
 type RangeMode = "4w" | "8w" | "12w" | "all" | "custom";
 
+export interface ReportOptions {
+  loadProgression: boolean; // compact % change summary table
+  ttl: boolean; // detailed per-exercise tonnage table
+  highlights: boolean; // top 3 progressed / 3 to review
+  aiSummary: boolean; // AI overview + recurring-notes-themes paragraphs
+  athleteNotes: boolean; // raw athlete notes list
+}
+
+export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
+  loadProgression: true,
+  ttl: true,
+  highlights: true,
+  aiSummary: true,
+  athleteNotes: false,
+};
+
+const OPTION_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
+  { key: "aiSummary", label: "AI summary", hint: "Short AI overview + recurring themes from notes, at the top" },
+  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review" },
+  { key: "loadProgression", label: "Load progression %", hint: "Compact table of overall % change per exercise" },
+  { key: "ttl", label: "Total Training Load detail", hint: "Full per-session tonnage breakdown per exercise" },
+  { key: "athleteNotes", label: "Athlete notes", hint: "Raw list of the athlete's own session/exercise notes" },
+];
+
 export default function ReportRangeModal({
   athleteName,
   onGenerate,
   onClose,
 }: {
   athleteName: string;
-  onGenerate: (start: string | null, end: string | null) => void;
+  onGenerate: (start: string | null, end: string | null, options: ReportOptions) => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<RangeMode>("4w");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState(todayISO());
+  const [options, setOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
 
   const presets: { key: RangeMode; label: string }[] = [
     { key: "4w", label: "Last 4 weeks" },
@@ -30,18 +55,18 @@ export default function ReportRangeModal({
 
   const handleGenerate = () => {
     if (mode === "all") {
-      onGenerate(null, null);
+      onGenerate(null, null, options);
       return;
     }
     if (mode === "custom") {
       if (!canGenerate) return;
-      onGenerate(customStart, customEnd);
+      onGenerate(customStart, customEnd, options);
       return;
     }
     const weeks = mode === "4w" ? 4 : mode === "8w" ? 8 : 12;
     const end = todayISO();
     const start = addDaysISO(end, -weeks * 7);
-    onGenerate(start, end);
+    onGenerate(start, end, options);
   };
 
   return (
@@ -101,6 +126,24 @@ export default function ReportRangeModal({
           </div>
         )}
 
+        <div style={styles.sectionLabel}>Include in report</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+          {OPTION_FIELDS.map((f) => (
+            <label key={f.key} style={styles.checkOption}>
+              <input
+                type="checkbox"
+                checked={options[f.key]}
+                onChange={(e) => setOptions((prev) => ({ ...prev, [f.key]: e.target.checked }))}
+                style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>{f.label}</span>
+                <span style={{ fontSize: 11, color: "var(--mute)" }}>{f.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
         <button
           disabled={!canGenerate}
           style={{ ...styles.primaryBtn, opacity: canGenerate ? 1 : 0.5 }}
@@ -146,6 +189,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4 },
+  sectionLabel: { fontSize: 12, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 },
+  checkOption: { display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 2px", cursor: "pointer" },
   input: {
     width: "100%",
     background: "var(--ink)",

@@ -17,7 +17,7 @@ import { todayISO } from "@/lib/date-utils";
 import { listTemplates, loadTemplateForAthlete } from "@/lib/data/templates";
 import { generateReport, type ReportData } from "@/lib/data/reports";
 import { archiveAthlete, toggleLiveGroup } from "@/lib/data/athletes";
-import ReportRangeModal from "@/components/ReportRangeModal";
+import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
 import ReportModal from "@/components/ReportModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
@@ -119,7 +119,10 @@ export default function AthleteDetailPage() {
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [reportRangeOpen, setReportRangeOpen] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [reportOptions, setReportOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string } | null>(null);
+  const [aiReportLoading, setAiReportLoading] = useState(false);
   const [rangeToolOpen, setRangeToolOpen] = useState<"copy" | "delete" | null>(null);
   const [rangeStart, setRangeStart] = useState(todayISO());
   const [rangeEnd, setRangeEnd] = useState(todayISO());
@@ -277,13 +280,27 @@ export default function AthleteDetailPage() {
     }
   };
 
-  const handleGenerateReport = async (start: string | null, end: string | null) => {
+  const handleGenerateReport = async (start: string | null, end: string | null, options: ReportOptions) => {
     setGeneratingReport(true);
     setError("");
+    setAiReportSummary(null);
     try {
       const data = await generateReport(athleteId, start, end);
       setReportData(data);
+      setReportOptions(options);
       setReportRangeOpen(false);
+      if (options.aiSummary) {
+        setAiReportLoading(true);
+        fetch("/api/training-report-ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ athleteId, rangeStart: start, rangeEnd: end }),
+        })
+          .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
+          .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes }))
+          .catch(() => setAiReportSummary({ summary: "Couldn't generate an AI summary right now.", themes: "" }))
+          .finally(() => setAiReportLoading(false));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not generate report");
     } finally {
@@ -801,7 +818,10 @@ export default function AthleteDetailPage() {
           data={reportData}
           athleteName={athlete.name}
           athleteGroup={athlete.group}
-          onClose={() => setReportData(null)}
+          options={reportOptions}
+          aiSummary={aiReportSummary}
+          aiLoading={aiReportLoading}
+          onClose={() => { setReportData(null); setAiReportSummary(null); }}
         />
       )}
 
