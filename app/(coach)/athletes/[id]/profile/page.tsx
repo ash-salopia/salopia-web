@@ -533,6 +533,27 @@ export default function AthleteProfilePage() {
                 <option value="female">Female</option>
               </select>
             </div>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, flex: 1, minWidth: 120 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>Bodyweight (kg)</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                defaultValue={athlete?.bodyweight_kg ?? ""}
+                key={athlete?.bodyweight_kg ?? "bw"}
+                placeholder="e.g. 68.5"
+                style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 13 }}
+                onBlur={async (e) => {
+                  const raw = e.target.value.trim();
+                  const val = raw ? parseFloat(raw) : null;
+                  if (val != null && (isNaN(val) || val <= 0)) return;
+                  if (val === athlete?.bodyweight_kg) return;
+                  const supabase = createClient();
+                  await supabase.from("athletes").update({ bodyweight_kg: val }).eq("id", athleteId);
+                  setAthlete((prev) => prev ? { ...prev, bodyweight_kg: val } : prev);
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
