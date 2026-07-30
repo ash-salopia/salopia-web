@@ -376,6 +376,15 @@ export default function LiveGroupPage() {
                     const isExpanded = expandedEx === ex.id;
                     const doneSets  = (ex.log ?? []).filter((l) => l.done).length;
                     const totalSets = ex.log?.length ?? 0;
+                    // Same rule as the athlete app and coach session
+                    // builder — a bodyweight exercise has no weight to
+                    // enter, and a time-based one (e.g. a plank hold)
+                    // needs a Time column, not Reps. Without this,
+                    // every exercise showed kg + reps regardless of
+                    // how it was actually prescribed.
+                    const showWeight = !ex.is_bodyweight;
+                    const timeMode = (ex.time ?? "").trim().length > 0;
+                    const setGridCols = showWeight ? "32px 1fr 1fr 44px" : "32px 1fr 44px";
                     return (
                       <div key={ex.id} style={s.exBlock}>
                         {/* Clickable exercise header row */}
@@ -395,7 +404,11 @@ export default function LiveGroupPage() {
                             <div style={s.dots}>
                               {(ex.log ?? []).map((set, si) => (
                                 <button key={si}
-                                  title={set.weight ? `${set.weight}kg` : `Set ${si + 1}`}
+                                  title={
+                                    showWeight && set.weight ? `${set.weight}kg`
+                                    : timeMode && set.time ? `${set.time}s`
+                                    : `Set ${si + 1}`
+                                  }
                                   onClick={(e) => { e.stopPropagation(); handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null); }}
                                   style={{ ...s.dot, ...(set.done ? s.dotOn : {}) }} />
                               ))}
@@ -408,42 +421,60 @@ export default function LiveGroupPage() {
                         {/* Expanded set editor */}
                         {isExpanded && (
                           <div style={s.setEditor}>
-                            <div style={s.setHeaderRow}>
+                            <div style={{ ...s.setHeaderRow, gridTemplateColumns: setGridCols }}>
                               <span style={s.setColLabel}>Set</span>
-                              <span style={s.setColLabel}>Weight (kg)</span>
-                              <span style={s.setColLabel}>Reps</span>
+                              {showWeight && <span style={s.setColLabel}>Weight (kg)</span>}
+                              <span style={s.setColLabel}>{timeMode ? "Time (s)" : "Reps"}</span>
                               <span style={s.setColLabel}>Done</span>
                             </div>
                             {(ex.log ?? []).map((set, si) => (
-                              <div key={si} style={s.setRow}>
+                              <div key={si} style={{ ...s.setRow, gridTemplateColumns: setGridCols }}>
                                 <span style={s.setNum}>{si + 1}</span>
-                                <input
-                                  key={`w-${ex.id}-${si}-${set.weight}`}
-                                  defaultValue={set.weight}
-                                  type="number"
-                                  step="0.5"
-                                  placeholder={oneRmTargets[ex.id]?.[si] != null ? String(oneRmTargets[ex.id][si]) : (ex.target_load || "kg")}
-                                  inputMode="decimal"
-                                  style={s.setInput}
-                                  onBlur={(e) => {
-                                    const v = e.target.value;
-                                    if (v === set.weight) return;
-                                    handleLogChange(activeSess.id, ex.id, si, { weight: v, done: v.trim().length > 0 ? true : set.done });
-                                  }}
-                                />
-                                <input
-                                  key={`r-${ex.id}-${si}-${set.reps}`}
-                                  defaultValue={set.reps}
-                                  type="number"
-                                  placeholder={ex.reps || "—"}
-                                  inputMode="numeric"
-                                  style={s.setInput}
-                                  onBlur={(e) => {
-                                    const v = e.target.value;
-                                    if (v === set.reps) return;
-                                    handleLogChange(activeSess.id, ex.id, si, { reps: v });
-                                  }}
-                                />
+                                {showWeight && (
+                                  <input
+                                    key={`w-${ex.id}-${si}-${set.weight}`}
+                                    defaultValue={set.weight}
+                                    type="number"
+                                    step="0.5"
+                                    placeholder={oneRmTargets[ex.id]?.[si] != null ? String(oneRmTargets[ex.id][si]) : (ex.target_load || "kg")}
+                                    inputMode="decimal"
+                                    style={s.setInput}
+                                    onBlur={(e) => {
+                                      const v = e.target.value;
+                                      if (v === set.weight) return;
+                                      handleLogChange(activeSess.id, ex.id, si, { weight: v, done: v.trim().length > 0 ? true : set.done });
+                                    }}
+                                  />
+                                )}
+                                {timeMode ? (
+                                  <input
+                                    key={`t-${ex.id}-${si}-${set.time}`}
+                                    defaultValue={set.time ?? ""}
+                                    type="number"
+                                    placeholder={ex.time || "sec"}
+                                    inputMode="numeric"
+                                    style={s.setInput}
+                                    onBlur={(e) => {
+                                      const v = e.target.value;
+                                      if (v === (set.time ?? "")) return;
+                                      handleLogChange(activeSess.id, ex.id, si, { time: v, done: v.trim().length > 0 ? true : set.done });
+                                    }}
+                                  />
+                                ) : (
+                                  <input
+                                    key={`r-${ex.id}-${si}-${set.reps}`}
+                                    defaultValue={set.reps}
+                                    type="number"
+                                    placeholder={ex.reps || "—"}
+                                    inputMode="numeric"
+                                    style={s.setInput}
+                                    onBlur={(e) => {
+                                      const v = e.target.value;
+                                      if (v === set.reps) return;
+                                      handleLogChange(activeSess.id, ex.id, si, { reps: v });
+                                    }}
+                                  />
+                                )}
                                 <button
                                   onClick={() => handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null)}
                                   style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }}>
