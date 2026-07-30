@@ -17,16 +17,17 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // These never look at `user` at all (auth callback, the athlete
-  // share-link app, and its token-validated APIs) — skip the auth
-  // check entirely rather than paying a real network round-trip to
-  // Supabase's auth server for a value that's never used. `/login`
-  // is excluded here even though it's also unauthenticated-accessible,
-  // because it still needs `user` below to redirect an already-signed-in
-  // visitor away.
+  // share-link app, its token-validated APIs, and the public demo
+  // login link) — skip the auth check entirely rather than paying a
+  // real network round-trip to Supabase's auth server for a value
+  // that's never used. `/login` is excluded here even though it's
+  // also unauthenticated-accessible, because it still needs `user`
+  // below to redirect an already-signed-in visitor away.
   const skipsAuthCheck =
     path.startsWith("/auth") ||
     path.startsWith("/a/") ||               // athlete share-link pages
-    path.startsWith("/api/athlete-link/");  // athlete APIs — token-validated in each handler
+    path.startsWith("/api/athlete-link/") || // athlete APIs — token-validated in each handler
+    path.startsWith("/demo");               // public demo login link — always signs in as the fixed demo coach, regardless of any existing session
 
   if (skipsAuthCheck) {
     return NextResponse.next({ request });
