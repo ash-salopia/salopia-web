@@ -76,6 +76,66 @@ export default function ReportModal({
       });
   };
 
+  // window.print() on the modal itself printed incompletely — the
+  // modal is position:fixed with maxHeight:100vh + overflowY:auto so
+  // browsers clipped output to one screen's worth of content instead
+  // of paginating the rest, and there was no print stylesheet to
+  // reset that. Printing a separate, plain-flow document sidesteps
+  // that entirely (natural pagination) and swaps the dark in-app
+  // theme for a light one, since every section below is styled with
+  // literal inline styles (which DO carry over via innerHTML) built
+  // from CSS custom properties that wouldn't resolve in a blank
+  // window without redefining them here.
+  const handlePrint = () => {
+    const el = document.getElementById("report-content");
+    if (!el) return;
+    const printWindow = window.open("", "_blank", "width=900,height=1200");
+    if (!printWindow) return;
+
+    // Strip live UI controls (the All sessions / Weekly avg toggle)
+    // that don't mean anything on paper — the section title already
+    // states which mode was active in plain text.
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('[data-no-print="true"]').forEach((n) => n.remove());
+
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(athleteName)} — Training Load Report</title>
+<style>
+  :root {
+    --ink: #ffffff; --panel: #f7f8fa; --panel2: #eef0f3; --line: #d8dde3;
+    --text: #16202a; --mute: #6b7684; --accent: #1f6fd6; --accent-dim: #e7f0fb;
+    --good: #1a8f57; --good-dim: #e6f7ee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #fff; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  tr { page-break-inside: avoid; }
+  @page { margin: 16mm; }
+</style>
+</head>
+<body>
+  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--accent);letter-spacing:2px;">AthletiQ</div>
+  <div style="font-size:13px;font-weight:600;margin-top:2px;">${esc(athleteName)}${athleteGroup ? ` · ${esc(athleteGroup)}` : ""}, Training Load Report</div>
+  <div style="font-size:11px;color:var(--mute);margin-bottom:20px;">Generated ${esc(generated)}${rangeStart && rangeEnd ? ` · ${esc(rangeStart)} to ${esc(rangeEnd)}` : " · All time"}</div>
+  ${clone.innerHTML}
+</body>
+</html>`);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+  };
+
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -92,7 +152,7 @@ export default function ReportModal({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button style={styles.ghostBtn} onClick={() => window.print()}>
+            <button style={styles.ghostBtn} onClick={handlePrint}>
               🖨 Print
             </button>
             <button style={styles.primaryBtnSmall} onClick={handleCopy}>
@@ -198,8 +258,13 @@ export default function ReportModal({
           {options.ttl && hasStrength && (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Strength — Total Training Load</div>
-                <div style={styles.modeToggle}>
+                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                  Strength — Total Training Load
+                  <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
+                    ({ttlMode === "all" ? "all sessions" : "weekly avg"})
+                  </span>
+                </div>
+                <div style={styles.modeToggle} data-no-print="true">
                   <button
                     style={{ ...styles.modeBtn, ...(ttlMode === "all" ? styles.modeBtnActive : {}) }}
                     onClick={() => setTtlMode("all")}
