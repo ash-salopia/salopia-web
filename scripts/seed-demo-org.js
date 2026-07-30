@@ -317,7 +317,7 @@ function defaultExerciseRow(sessionId, sortOrder, over) {
     rest: over.rest ?? "90s",
     target_load: over.target_load ?? "",
     tempo: "2-0-2",
-    each_side: false,
+    each_side: over.each_side ?? false,
     notes: over.notes ?? "",
     video_url: "",
     session_notes: "",
@@ -333,113 +333,215 @@ function defaultExerciseRow(sessionId, sortOrder, over) {
   };
 }
 
-// A simple progressive-overload log generator: starting weight, small
-// increments week over week, occasional realistic gaps (a set left
-// undone) so the data doesn't look robotically perfect.
-function buildLog(sets, startWeight, increment, reps, allDone = true) {
-  return Array.from({ length: sets }, (_, i) => {
-    const done = allDone || i < sets - 1; // last set sometimes left open
-    return {
-      weight: done ? String(startWeight + increment) : "",
-      reps: done ? String(reps) : "",
-      time: "",
-      done,
-    };
-  });
+// Four growth patterns applied per athlete-per-exercise (rotated
+// deterministically below, not randomly, so re-seeding produces the
+// same shape of data) — this is what gives the Training Load
+// Report's Highlights section something real to differentiate:
+// "strong"/"steady" exercises land in Top Progressed, "plateau"/
+// "declining" ones land in Worth a Review, rather than every
+// exercise trending identically upward.
+const ARCHETYPES = [
+  { key: "strong", factor: 1.025 },
+  { key: "steady", factor: 1.012 },
+  { key: "plateau", factor: 1.002 },
+  { key: "declining", factor: 0.996 },
+];
+
+// Weighted exercises split across two alternating session types, each
+// with a realistic starting-weight range and rep scheme. eachSide
+// exercises (dumbbell/unilateral) exercise the report's per-hand
+// tonnage-doubling logic and its "(logged per hand...)" tag.
+const SESSION_A_EXERCISES = [
+  { name: "Barbell Back Squat", baseRange: [55, 90], sets: 4, reps: 5, rest: "2min" },
+  { name: "Romanian Deadlift", baseRange: [45, 75], sets: 3, reps: 8, rest: "90s" },
+  { name: "Barbell Bench Press", baseRange: [40, 65], sets: 3, reps: 6, rest: "90s" },
+  { name: "Bent Over Row", baseRange: [35, 55], sets: 3, reps: 8, rest: "90s" },
+];
+const SESSION_B_EXERCISES = [
+  { name: "Bulgarian Split Squat", baseRange: [14, 26], sets: 3, reps: 8, rest: "90s", eachSide: true },
+  { name: "Hip Thrust", baseRange: [50, 85], sets: 4, reps: 8, rest: "2min" },
+  { name: "Barbell Overhead Press", baseRange: [25, 45], sets: 3, reps: 6, rest: "90s" },
+  { name: "Incline Dumbbell Press", baseRange: [16, 28], sets: 3, reps: 8, rest: "90s", eachSide: true },
+];
+const BODYWEIGHT_A = { name: "Chin Up", sets: 3, reps: 8 };
+const BODYWEIGHT_B = { name: "Hanging Leg Raise", sets: 3, reps: 10 };
+const TIME_EXERCISE = { name: "Side Plank", sets: 2, time: 45 };
+
+function roundToPlate(w) {
+  return Math.round(w / 1.25) * 1.25;
 }
+
+// Recurring note themes seeded onto a couple of athletes so the
+// report's Athlete Notes section and the AI's recurring-themes read
+// have real (and, for other athletes, deliberately absent) signal to
+// work with — not every athlete has notes, so the "no clear theme"
+// fallback path gets exercised too.
+const NOTE_PLANS = {
+  "Jake Morrison": {
+    sessionNotes: ["Felt flat again this session, sleep's been poor this week.", "Better session, slept properly for once."],
+    exerciseNotes: [
+      { exercise: "Barbell Bench Press", note: "Left shoulder felt tight during bench again today, same as last few weeks." },
+      { exercise: "Barbell Bench Press", note: "Shoulder still a bit tight on bench but not getting worse." },
+    ],
+  },
+  "Sophie Bennett": {
+    sessionNotes: ["Really good energy this week, everything felt light.", "Great session again, feeling strong."],
+    exerciseNotes: [{ exercise: "Romanian Deadlift", note: "Lower back felt a little tight setting up on RDLs." }],
+  },
+};
 
 async function seedSessionsAndPBs(athletes) {
   const today = todayISO();
   const pbRows = [];
-  const sessionExerciseRows = [];
-  const sessionRows = [];
-
-  // Map: session placeholder key -> index, so we can attach exercises after insert
   const plan = [];
 
-  for (const athlete of athletes) {
-    const base1RM = 60 + Math.round(Math.random() * 40); // per-athlete squat baseline
-    let squatWeight = base1RM * 0.7;
-    let benchWeight = base1RM * 0.5;
+  athletes.forEach((athlete, athleteIdx) => {
+    const archetypeFor = (exIdx) => ARCHETYPES[(athleteIdx + exIdx) % ARCHETYPES.length];
 
-    // 3 weeks back through 1 week ahead, 2 sessions/week — so every
+    // Per-athlete, per-exercise starting weight + growth factor, fixed
+    // for the whole history so week-to-week progression compounds
+    // consistently rather than jumping around randomly.
+    // `raw` is the true compounding float, never itself rounded —
+    // rounding it and feeding the rounded value back in each session
+    // creates a fixed point for slow growth factors (plateau's
+    // ~0.2%/session gain is smaller than half a 1.25kg increment, so
+    // round-then-reassign never accumulates and every session prints
+    // the same weight). Only `roundToPlate(raw)` at display time is
+    // rounded; the underlying compounding stays precise.
+    const exerciseState = new Map();
+    [...SESSION_A_EXERCISES, ...SESSION_B_EXERCISES].forEach((ex, i) => {
+      const [lo, hi] = ex.baseRange;
+      const start = lo + Math.random() * (hi - lo);
+      exerciseState.set(ex.name, { raw: start, factor: archetypeFor(i).factor });
+    });
+
+    // 8 weeks back through 1 week ahead, 2 sessions/week — so every
     // athlete has upcoming sessions on the calendar (not just logged
-    // history), which keeps the dashboard's programme-expiry widget
-    // from reading as a wall of "expired" for a demoing coach.
-    for (let week = 3; week >= -1; week--) {
+    // history) and enough depth for the report's 8/12-week presets
+    // and weekly-average view to actually show a trend.
+    for (let week = 8; week >= -1; week--) {
       for (const dayOffset of [1, 4]) {
         const date = addDaysISO(today, -(week * 7) - (7 - dayOffset));
         const isPast = date < today;
-        squatWeight += isPast ? 2.5 : 0;
-        benchWeight += isPast ? 1.25 : 0;
+        const isSessionA = dayOffset === 1;
+        const weightedDefs = isSessionA ? SESSION_A_EXERCISES : SESSION_B_EXERCISES;
+        const bodyweightDef = isSessionA ? BODYWEIGHT_A : BODYWEIGHT_B;
 
-        const exercises = [
-          {
-            name: "Barbell Back Squat", sets: 4, reps: "5", rest: "2min",
-            log: isPast ? buildLog(4, Math.round(squatWeight), 0, 5) : buildLog(4, 0, 0, 5, false).map(() => ({ weight: "", reps: "", time: "", done: false })),
-          },
-          {
-            name: "Barbell Bench Press", sets: 3, reps: "6", rest: "90s",
-            log: isPast ? buildLog(3, Math.round(benchWeight), 0, 6) : Array.from({ length: 3 }, () => ({ weight: "", reps: "", time: "", done: false })),
-          },
-          {
-            name: "Chin Up", sets: 3, reps: "8", rest: "90s", is_bodyweight: true,
+        const exercises = weightedDefs.map((def) => {
+          const state = exerciseState.get(def.name);
+          if (isPast) state.raw *= state.factor;
+          // Floor is a sanity minimum (never an unloaded bar), not
+          // tied to the exercise's own starting range — clamping to
+          // baseRange[0] would flatten "declining" exercises to 0%
+          // the moment they dipped below their own starting point.
+          const displayWeight = Math.max(roundToPlate(state.raw), 5);
+          return {
+            name: def.name, sets: def.sets, reps: String(def.reps), rest: def.rest,
+            each_side: !!def.eachSide,
             log: isPast
-              ? Array.from({ length: 3 }, (_, i) => ({ weight: "", reps: String(8 + i), time: "", done: true }))
-              : Array.from({ length: 3 }, () => ({ weight: "", reps: "", time: "", done: false })),
-          },
-          {
-            name: "Side Plank", sets: 2, reps: "", time: "45", rest: "60s", is_bodyweight: true,
+              ? Array.from({ length: def.sets }, () => ({ weight: String(displayWeight), reps: String(def.reps), time: "", done: true }))
+              : Array.from({ length: def.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+          };
+        });
+
+        exercises.push({
+          name: bodyweightDef.name, sets: bodyweightDef.sets, reps: String(bodyweightDef.reps), rest: "90s", is_bodyweight: true,
+          log: isPast
+            ? Array.from({ length: bodyweightDef.sets }, (_, i) => ({ weight: "", reps: String(bodyweightDef.reps + (i % 2)), time: "", done: true }))
+            : Array.from({ length: bodyweightDef.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+        });
+
+        if (isSessionA) {
+          exercises.push({
+            name: TIME_EXERCISE.name, sets: TIME_EXERCISE.sets, reps: "", time: String(TIME_EXERCISE.time), rest: "60s", is_bodyweight: true,
             log: isPast
-              ? Array.from({ length: 2 }, () => ({ weight: "", reps: "", time: "45", done: true }))
-              : Array.from({ length: 2 }, () => ({ weight: "", reps: "", time: "", done: false })),
-          },
-        ];
+              ? Array.from({ length: TIME_EXERCISE.sets }, () => ({ weight: "", reps: "", time: String(TIME_EXERCISE.time), done: true }))
+              : Array.from({ length: TIME_EXERCISE.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+          });
+        }
 
         plan.push({
           athlete_id: athlete.id,
+          athlete_name: athlete.name,
           type: "strength",
           date,
-          name: dayOffset === 1 ? "Lower + Upper A" : "Lower + Upper B",
+          name: isSessionA ? "Lower + Upper A" : "Lower + Upper B",
           exercises,
           isPast,
+          isSessionA,
         });
       }
     }
-  }
+  });
 
-  // Insert sessions, then exercises (need session ids first)
+  // Insert sessions, then exercises (need session ids first). Applies
+  // the note plans onto each athlete's most recent PAST sessions —
+  // done inline so exercise ids (needed for athlete_exercise_notes)
+  // are available right after insert.
+  const pastCountByAthlete = new Map();
+  for (const s of plan) if (s.isPast) pastCountByAthlete.set(s.athlete_id, (pastCountByAthlete.get(s.athlete_id) ?? 0) + 1);
+  const seenSoFarByAthlete = new Map();
+
   for (const s of plan) {
+    let athleteNotes = null;
+    if (s.isPast) {
+      seenSoFarByAthlete.set(s.athlete_id, (seenSoFarByAthlete.get(s.athlete_id) ?? 0) + 1);
+      const seen = seenSoFarByAthlete.get(s.athlete_id);
+      const totalPast = pastCountByAthlete.get(s.athlete_id);
+      const fromEnd = totalPast - seen; // 0 = most recent past session
+      const notePlan = NOTE_PLANS[s.athlete_name];
+      if (notePlan && fromEnd < notePlan.sessionNotes.length) {
+        athleteNotes = notePlan.sessionNotes[fromEnd];
+      }
+    }
+
     const { data: session, error } = await sb
       .from("sessions")
-      .insert({ athlete_id: s.athlete_id, type: s.type, date: s.date, name: s.name })
+      .insert({ athlete_id: s.athlete_id, type: s.type, date: s.date, name: s.name, athlete_notes: athleteNotes })
       .select()
       .single();
     if (error) throw error;
 
     const exRows = s.exercises.map((e, i) => defaultExerciseRow(session.id, i, e));
-    const { error: exErr } = await sb.from("session_exercises").insert(exRows);
+    const { data: insertedEx, error: exErr } = await sb.from("session_exercises").insert(exRows).select();
     if (exErr) throw exErr;
 
+    // Attach a couple of per-exercise notes to this athlete's most
+    // recent matching-exercise sessions, same recency logic as above.
     if (s.isPast) {
-      const squat = s.exercises.find((e) => e.name === "Barbell Back Squat");
-      const bench = s.exercises.find((e) => e.name === "Barbell Bench Press");
-      const chin = s.exercises.find((e) => e.name === "Chin Up");
-      const plank = s.exercises.find((e) => e.name === "Side Plank");
-      const maxOf = (log) => Math.max(...log.filter((l) => l.done && l.weight).map((l) => Number(l.weight)), 0);
-      const maxReps = (log) => Math.max(...log.filter((l) => l.done && l.reps).map((l) => Number(l.reps)), 0);
+      const notePlan = NOTE_PLANS[s.athlete_name];
+      if (notePlan) {
+        for (const en of notePlan.exerciseNotes) {
+          const match = insertedEx.find((e) => e.name === en.exercise);
+          if (match) {
+            const seen = seenSoFarByAthlete.get(s.athlete_id);
+            const totalPast = pastCountByAthlete.get(s.athlete_id);
+            const fromEnd = totalPast - seen;
+            if (fromEnd < 3) {
+              await sb.from("session_exercises").update({ athlete_exercise_notes: en.note }).eq("id", match.id);
+            }
+          }
+        }
+      }
 
-      if (squat && maxOf(squat.log) > 0) {
-        pbRows.push({ athlete_id: s.athlete_id, exercise_name: "Barbell Back Squat", date: s.date, session_id: session.id, weight_kg: maxOf(squat.log), reps: 5, time_seconds: null });
-      }
-      if (bench && maxOf(bench.log) > 0) {
-        pbRows.push({ athlete_id: s.athlete_id, exercise_name: "Barbell Bench Press", date: s.date, session_id: session.id, weight_kg: maxOf(bench.log), reps: 6, time_seconds: null });
-      }
-      if (chin) {
-        pbRows.push({ athlete_id: s.athlete_id, exercise_name: "Chin Up", date: s.date, session_id: session.id, weight_kg: null, reps: maxReps(chin.log), time_seconds: null });
-      }
-      if (plank) {
-        pbRows.push({ athlete_id: s.athlete_id, exercise_name: "Side Plank", date: s.date, session_id: session.id, weight_kg: null, reps: null, time_seconds: 45 });
+      // Generic PB detection across whatever exercises this session
+      // has — weighted, bodyweight+reps, or bodyweight+time — rather
+      // than hardcoding exercise names, so adding more exercises
+      // above doesn't require touching this logic.
+      for (const ex of s.exercises) {
+        const done = ex.log.filter((l) => l.done);
+        if (!done.length) continue;
+        const isTimeMode = ex.name === TIME_EXERCISE.name;
+        if (isTimeMode) {
+          const maxTime = Math.max(...done.map((l) => Number(l.time) || 0), 0);
+          if (maxTime > 0) pbRows.push({ athlete_id: s.athlete_id, exercise_name: ex.name, date: s.date, session_id: session.id, weight_kg: null, reps: null, time_seconds: maxTime });
+        } else if (ex.is_bodyweight) {
+          const maxReps = Math.max(...done.map((l) => Number(l.reps) || 0), 0);
+          if (maxReps > 0) pbRows.push({ athlete_id: s.athlete_id, exercise_name: ex.name, date: s.date, session_id: session.id, weight_kg: null, reps: maxReps, time_seconds: null });
+        } else {
+          const maxWeight = Math.max(...done.map((l) => Number(l.weight) || 0), 0);
+          if (maxWeight > 0) pbRows.push({ athlete_id: s.athlete_id, exercise_name: ex.name, date: s.date, session_id: session.id, weight_kg: maxWeight, reps: Number(done[0].reps) || null, time_seconds: null });
+        }
       }
     }
   }
