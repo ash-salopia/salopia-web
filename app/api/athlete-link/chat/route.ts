@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { feedDisplayName } from "@/lib/feed-name";
 
 // GET — returns athlete's groups + messages for a given group
 export async function GET(req: NextRequest) {
@@ -27,8 +28,10 @@ export async function GET(req: NextRequest) {
   // Get messages for the requested group (or first group if none specified)
   const targetGroupId = groupId ?? groups[0]?.id;
 
+  const displayName = feedDisplayName((athlete as any).name, (athlete as any).feed_first_name_only);
+
   if (!targetGroupId) {
-    return NextResponse.json({ groups, messages: [], athleteId: athlete.id, athleteName: (athlete as any).name });
+    return NextResponse.json({ groups, messages: [], athleteId: athlete.id, athleteName: displayName });
   }
 
   // Verify athlete is a member of this group
@@ -50,7 +53,7 @@ export async function GET(req: NextRequest) {
     groups,
     messages: messages ?? [],
     athleteId: athlete.id,
-    athleteName: (athlete as any).name,
+    athleteName: displayName,
   });
 }
 
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
       group_id,
       sender_type: "athlete",
       sender_id: athlete.id,
-      sender_name: (athlete as any).name ?? "Athlete",
+      sender_name: feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only),
       body: message.trim(),
     })
     .select()

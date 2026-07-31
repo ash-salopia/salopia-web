@@ -543,3 +543,18 @@ export async function startLibrarySession(athleteId: string, templateDefId: stri
 
   return session.id;
 }
+
+// ------------------------------------------------------------
+// Feed visibility settings (0047) — athlete-controlled, coach never
+// sets or overrides these. athleteId here MUST come from a token
+// lookup via getAthleteByShareToken, same rule as every other write
+// in this file.
+// ------------------------------------------------------------
+export async function updateAthleteVisibilitySettings(
+  athleteId: string,
+  patch: { hide_pbs_from_feed?: boolean; feed_first_name_only?: boolean }
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("athletes").update(patch).eq("id", athleteId);
+  if (error) throw error;
+}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { feedDisplayName } from "@/lib/feed-name";
 
 // POST /api/athlete-link/pb-reactions
 // Body: { token, pb_id, emoji }
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
         pb_id,
         reactor_type: "athlete",
         reactor_id: athlete.id,
-        reactor_name: athlete.name,
+        reactor_name: feedDisplayName(athlete.name, (athlete as any).feed_first_name_only),
         emoji,
       },
       { onConflict: "pb_id,reactor_type,reactor_id" }

@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
+import { feedDisplayName } from "@/lib/feed-name";
 
 // Normalise a raw competition row from Supabase so CompetitionFeed never
 // receives null for reactions or comments (supabase-js v2 returns null for
 // embedded selects with no matching rows, but the component calls .find()
 // and .forEach() on them which crash on null).
 function normalise(c: any) {
+  const a = Array.isArray(c.athlete) ? c.athlete[0] : c.athlete;
   return {
     ...c,
-    athlete: c.athlete ?? { id: "", name: "Unknown" },
+    athlete: a ? { id: a.id, name: feedDisplayName(a.name, a.feed_first_name_only) } : { id: "", name: "Unknown" },
     reactions: c.reactions ?? [],
     comments: c.comments ?? [],
   };
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("competitions")
-    .select(`*, athlete:athletes(id, name), reactions:competition_reactions(*), comments:competition_comments(*)`)
+    .select(`*, athlete:athletes(id, name, feed_first_name_only), reactions:competition_reactions(*), comments:competition_comments(*)`)
     .eq("organisation_id", athlete.organisation_id)
     .order("competition_date", { ascending: true });
 
@@ -73,7 +75,7 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase
       .from("competition_reactions")
       .upsert(
-        { competition_id, reactor_id: athlete.id, reactor_type: "athlete", reactor_name: (athlete as any).name ?? "Athlete", emoji },
+        { competition_id, reactor_id: athlete.id, reactor_type: "athlete", reactor_name: feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only), emoji },
         { onConflict: "competition_id,reactor_id,reactor_type" }
       );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
         competition_id,
         author_id: athlete.id,
         author_type: "athlete",
-        author_name: (athlete as any).name ?? "Athlete",
+        author_name: feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only),
         body: commentBody.trim(),
       })
       .select()

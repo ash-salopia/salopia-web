@@ -42,6 +42,8 @@ export interface Athlete {
   date_of_birth: string | null; // YYYY-MM-DD
   bodyweight_kg: number | null; // 0028 — default for test sessions / IMTP relative strength
   avatar_url: string | null; // 0042
+  hide_pbs_from_feed: boolean; // 0047 — athlete privacy pref, feed-only
+  feed_first_name_only: boolean; // 0047 — athlete privacy pref, feed-only
   created_at: string;
 }
 

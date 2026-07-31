@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { feedDisplayName } from "@/lib/feed-name";
 
 export async function POST(req: NextRequest) {
   const reqBody = await req.json();
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       pb_id,
       author_id: athlete.id,
       author_type: "athlete",
-      author_name: athlete.name,
+      author_name: feedDisplayName(athlete.name, (athlete as any).feed_first_name_only),
       body: commentBody.trim(),
     })
     .select()

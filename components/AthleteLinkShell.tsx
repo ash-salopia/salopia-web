@@ -205,10 +205,17 @@ export default function AthleteLinkShell({
               {avatarUploading ? "…" : "✎"}
             </button>
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={st.brand}>{branding?.displayName ?? "AthletiQ"}</div>
             <div style={st.athleteName}>{athlete.name}</div>
           </div>
+          <button
+            style={st.settingsBtn}
+            onClick={() => router.push(`/a/${token}/settings`)}
+            title="Privacy settings"
+          >
+            ⚙️
+          </button>
         </div>
       </div>
 
@@ -436,6 +443,7 @@ const st: Record<string, React.CSSProperties> = {
     fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
   },
   brand: { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: 2, color: "var(--accent)" },
+  settingsBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },
   athleteName: { fontSize: 22, fontWeight: 700, color: "var(--text)", marginTop: 2 },
   tabs: { display: "flex", gap: 6, padding: "10px 16px", borderBottom: "1px solid var(--line)" },
   tab: { flex: 1, background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", padding: "9px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
