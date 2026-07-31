@@ -5,18 +5,19 @@ import { createRecoverySession } from "@/lib/data/recovery";
 import { todayISO } from "@/lib/date-utils";
 import RecoveryQuickForm from "@/components/recovery/RecoveryQuickForm";
 import RecoveryBlockBuilder from "@/components/recovery/RecoveryBlockBuilder";
+import RecoveryChecklistItemsEditor from "@/components/recovery/RecoveryChecklistItemsEditor";
 import { RECOVERY_CATEGORIES } from "@/lib/recovery-constants";
-import type { RecoveryBlock, RecoveryCategory, RecoveryConfig, RecoveryFormat, Session } from "@/types";
+import type { RecoveryBlock, RecoveryCategory, RecoveryChecklistItem, RecoveryConfig, RecoveryFormat, Session } from "@/types";
 
 type Step = "format" | "quick" | "guided" | "checklist" | "preset";
 
-// Checklist/Preset land in later phases of this feature — shown
-// disabled with a "Coming soon" tag rather than hidden, so the full
-// shape of the feature is visible even mid-build.
+// Preset lands in a later phase of this feature — shown disabled
+// with a "Coming soon" tag rather than hidden, so the full shape of
+// the feature is visible even mid-build.
 const FORMAT_CARDS: { key: Step; title: string; desc: string; enabled: boolean }[] = [
   { key: "quick", title: "Quick Prescription", desc: "A few fields — instructions, duration, intensity. Built for speed.", enabled: true },
   { key: "guided", title: "Guided Recovery Routine", desc: "A block-based routine — instructions, mobility drills, timed activities, checklists, media.", enabled: true },
-  { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours — hydration, walking, mobility, nutrition, sleep targets.", enabled: false },
+  { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours — hydration, walking, mobility, nutrition, sleep targets.", enabled: true },
   { key: "preset", title: "Saved Preset", desc: "Start from a preset your org has saved before.", enabled: false },
 ];
 
@@ -38,6 +39,7 @@ export default function RecoverySessionModal({
   const [category, setCategory] = useState<RecoveryCategory | null>(null);
   const [config, setConfig] = useState<RecoveryConfig>({});
   const [blocks, setBlocks] = useState<RecoveryBlock[]>([]);
+  const [checklistItems, setChecklistItems] = useState<RecoveryChecklistItem[]>([]);
   const [date, setDate] = useState(defaultDate ?? todayISO());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -52,7 +54,10 @@ export default function RecoverySessionModal({
     setSaving(true);
     setError("");
     try {
-      const finalConfig = format === "guided" ? { ...config, blocks } : config;
+      const finalConfig =
+        format === "guided" ? { ...config, blocks }
+        : format === "checklist" ? { ...config, checklist_items: checklistItems }
+        : config;
       const sessions = await createRecoverySession({
         athleteIds: [athleteId],
         date,
@@ -133,6 +138,36 @@ export default function RecoverySessionModal({
               </select>
             </div>
             <RecoveryBlockBuilder blocks={blocks} onChange={setBlocks} />
+            <div>
+              <label style={s.label}>Date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={s.input} />
+            </div>
+            {error && <div style={s.error}>{error}</div>}
+            <div style={s.btnRow}>
+              <button style={s.ghostBtn} onClick={() => setStep("format")}>← Back</button>
+              <button disabled={saving} style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={handleSave}>
+                {saving ? "Creating…" : "Create session"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "checklist" && (
+          <>
+            <div>
+              <label style={s.label}>Session title</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Daily recovery checklist" style={s.input} />
+            </div>
+            <div>
+              <label style={s.label}>Recovery category</label>
+              <select value={category ?? ""} onChange={(e) => setCategory((e.target.value || null) as RecoveryCategory | null)} style={s.input}>
+                <option value="">— Select —</option>
+                {RECOVERY_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <RecoveryChecklistItemsEditor items={checklistItems} onChange={setChecklistItems} />
             <div>
               <label style={s.label}>Date</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={s.input} />

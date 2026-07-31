@@ -3,6 +3,7 @@
 import { useState } from "react";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import RecoveryBlockAthleteCard from "@/components/recovery/RecoveryBlockAthleteCard";
+import RecoveryChecklistAthleteList from "@/components/recovery/RecoveryChecklistAthleteList";
 import { saveWithRetry } from "@/lib/save-queue";
 import { recoveryCategoryLabel, RECOVERY_INTENSITIES, RECOVERY_COLOR } from "@/lib/recovery-constants";
 import type { RecoveryBlock, RecoveryConfig, Session } from "@/types";
@@ -54,6 +55,10 @@ export default function RecoverySessionAthleteView({
       return { ...b, items: b.items.map((i) => (i.id === itemId ? { ...i, done: !i.done } : i)) };
     });
     patchConfig({ blocks: nextBlocks });
+  };
+  const toggleStandaloneChecklistItem = (itemId: string) => {
+    const nextItems = (config.checklist_items ?? []).map((i) => (i.id === itemId ? { ...i, done: !i.done } : i));
+    patchConfig({ checklist_items: nextItems });
   };
 
   const handleAthleteNotesChange = (athlete_notes: string) => setSession((prev) => ({ ...prev, athlete_notes }));
@@ -117,8 +122,8 @@ export default function RecoverySessionAthleteView({
         </div>
       )}
 
-      {session.recovery_format && session.recovery_format !== "quick" && session.recovery_format !== "guided" && (
-        <div style={s.notBuilt}>This routine type isn&apos;t supported in the athlete app yet.</div>
+      {session.recovery_format === "checklist" && (
+        <RecoveryChecklistAthleteList items={config.checklist_items ?? []} onToggle={toggleStandaloneChecklistItem} />
       )}
 
       {error && <div style={s.error}>{error}</div>}
