@@ -254,6 +254,7 @@ function TemplateDefEditor({
           <option value="hyrox">Hyrox</option>
           <option value="cardio">Cardio</option>
           <option value="power_speed">Power / Speed</option>
+          <option value="recovery">Recovery</option>
         </select>
       </div>
 
