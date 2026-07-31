@@ -404,6 +404,39 @@ export async function updateRecoveryConfig(
   if (error) throw error;
 }
 
+// End-of-session feedback, only ever shown when the coach opted in
+// via recovery_config.request_feedback. One row per session (upsert
+// on session_id, same "natural key" upsert pattern as
+// weekly_reflections' (athlete_id, week_start)).
+export async function submitSessionFeedback(
+  sessionId: string,
+  athleteId: string,
+  feedback: {
+    completion: boolean | null;
+    recovery_score: number | null;
+    soreness: number | null;
+    fatigue: number | null;
+    pain_notes: string;
+    notes: string;
+  }
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) {
+    throw new Error("This session does not belong to you");
+  }
+
+  const { error } = await supabase
+    .from("session_feedback")
+    .upsert({ session_id: sessionId, athlete_id: athleteId, ...feedback }, { onConflict: "session_id" });
+  if (error) throw error;
+}
+
 // Session Library (0034) — templates a coach has granted this athlete
 // access to, for browsing/logging informally outside their assigned
 // programme. Read-side: no ownership check needed beyond scoping the

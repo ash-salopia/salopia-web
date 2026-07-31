@@ -4,6 +4,7 @@ import { useState } from "react";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import RecoveryBlockAthleteCard from "@/components/recovery/RecoveryBlockAthleteCard";
 import RecoveryChecklistAthleteList from "@/components/recovery/RecoveryChecklistAthleteList";
+import RecoverySessionFeedbackModal from "@/components/recovery/RecoverySessionFeedbackModal";
 import { saveWithRetry } from "@/lib/save-queue";
 import { recoveryCategoryLabel, RECOVERY_INTENSITIES, RECOVERY_COLOR } from "@/lib/recovery-constants";
 import type { RecoveryBlock, RecoveryConfig, Session } from "@/types";
@@ -24,6 +25,8 @@ export default function RecoverySessionAthleteView({
   const [session, setSession] = useState(initialSession);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const config: RecoveryConfig = session.recovery_config ?? {};
   const intensityLabel = RECOVERY_INTENSITIES.find((i) => i.value === config.intensity)?.label;
@@ -128,6 +131,23 @@ export default function RecoverySessionAthleteView({
 
       {error && <div style={s.error}>{error}</div>}
 
+      {config.request_feedback && (
+        feedbackSubmitted ? (
+          <div style={s.feedbackDone}>✓ Feedback submitted — thanks!</div>
+        ) : (
+          <button style={s.finishBtn} onClick={() => setFeedbackOpen(true)}>Finish session</button>
+        )
+      )}
+
+      {feedbackOpen && (
+        <RecoverySessionFeedbackModal
+          token={token}
+          sessionId={session.id}
+          onSubmitted={() => { setFeedbackOpen(false); setFeedbackSubmitted(true); }}
+          onSkip={() => setFeedbackOpen(false)}
+        />
+      )}
+
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}
         onChange={handleAthleteNotesChange}
@@ -162,4 +182,6 @@ const s: Record<string, React.CSSProperties> = {
   completeBtnDone: { background: "#123832" },
   notBuilt: { fontSize: 13, color: "var(--mute)", fontStyle: "italic" },
   error: { fontSize: 13, color: "#FF6B6B" },
+  finishBtn: { background: RECOVERY_COLOR, color: "#062a26", border: "none", borderRadius: 10, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", width: "100%" },
+  feedbackDone: { fontSize: 13, color: RECOVERY_COLOR, background: "#123832", border: `1px solid ${RECOVERY_COLOR}`, borderRadius: 10, padding: "12px 0", textAlign: "center" as const, fontWeight: 600 },
 };
