@@ -27,8 +27,10 @@ export default function ProgrammeDetailPage() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [assignPickerOpen, setAssignPickerOpen] = useState(false);
+  const [assignSearch, setAssignSearch] = useState("");
   const [loadPickerSession, setLoadPickerSession] = useState<ProgrammeSession | null>(null);
   const [loadAthleteId, setLoadAthleteId] = useState("");
+  const [loadAthleteSearch, setLoadAthleteSearch] = useState("");
   const [loadDate, setLoadDate] = useState(todayISO());
 
   const load = async () => {
@@ -195,6 +197,7 @@ export default function ProgrammeDetailPage() {
                 onClick={() => {
                   setLoadPickerSession(s);
                   setLoadAthleteId("");
+                  setLoadAthleteSearch("");
                   setLoadDate(todayISO());
                 }}
               >
@@ -218,17 +221,41 @@ export default function ProgrammeDetailPage() {
         <div style={styles.sectionHeadRow}>
           <div style={styles.sectionTitle}>Assigned athletes</div>
           <div style={{ position: "relative" }}>
-            <button style={styles.smallBtn} onClick={() => setAssignPickerOpen((v) => !v)}>
+            <button
+              style={styles.smallBtn}
+              onClick={() => {
+                setAssignPickerOpen((v) => !v);
+                setAssignSearch("");
+              }}
+            >
               + Assign
             </button>
             {assignPickerOpen && (
               <div style={styles.assignPopover}>
+                {unassignedAthletes.length > 0 && (
+                  <input
+                    autoFocus
+                    value={assignSearch}
+                    onChange={(e) => setAssignSearch(e.target.value)}
+                    placeholder="Search athletes…"
+                    style={styles.pickerSearchInput}
+                  />
+                )}
                 {unassignedAthletes.length ? (
-                  unassignedAthletes.map((a) => (
-                    <button key={a.id} style={styles.assignOption} onClick={() => handleAssign(a.id)}>
-                      {a.name}
-                    </button>
-                  ))
+                  (() => {
+                    const filtered = unassignedAthletes.filter((a) =>
+                      a.name.toLowerCase().includes(assignSearch.trim().toLowerCase())
+                    );
+                    return filtered.length ? (
+                      filtered.map((a) => (
+                        <button key={a.id} style={styles.assignOption} onClick={() => handleAssign(a.id)}>
+                          {a.name}
+                        </button>
+                      ))
+                    ) : (
+                      <div style={styles.emptySmall}>No athletes match &quot;{assignSearch}&quot;.</div>
+                    );
+                  })()
                 ) : (
                   <div style={styles.emptySmall}>All athletes already assigned.</div>
                 )}
@@ -256,18 +283,39 @@ export default function ProgrammeDetailPage() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalTitle}>Load &quot;{loadPickerSession.name}&quot;</div>
             <div style={styles.fieldLabel}>Athlete</div>
-            <select
-              value={loadAthleteId}
-              onChange={(e) => setLoadAthleteId(e.target.value)}
+            <input
+              value={loadAthleteSearch}
+              onChange={(e) => {
+                setLoadAthleteSearch(e.target.value);
+                setLoadAthleteId("");
+              }}
+              placeholder="Search athletes…"
               style={styles.modalInput}
-            >
-              <option value="">Choose an athlete…</option>
-              {athletes.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            />
+            {!loadAthleteId && (
+              <div style={styles.athletePickList}>
+                {(() => {
+                  const filtered = athletes.filter((a) =>
+                    a.name.toLowerCase().includes(loadAthleteSearch.trim().toLowerCase())
+                  );
+                  if (!filtered.length) {
+                    return <div style={styles.emptySmall}>No athletes match &quot;{loadAthleteSearch}&quot;.</div>;
+                  }
+                  return filtered.map((a) => (
+                    <button
+                      key={a.id}
+                      style={styles.athletePickOption}
+                      onClick={() => {
+                        setLoadAthleteId(a.id);
+                        setLoadAthleteSearch(a.name);
+                      }}
+                    >
+                      {a.name}
+                    </button>
+                  ));
+                })()}
+              </div>
+            )}
             <div style={styles.fieldLabel}>Date</div>
             <input
               type="date"
@@ -310,8 +358,11 @@ const styles: Record<string, React.CSSProperties> = {
   smallBtn: { background: "var(--accent-dim)", border: "none", color: "var(--accent)", borderRadius: 7, padding: "7px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   smallDeleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 16, cursor: "pointer" },
   addBtn: { width: "100%", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 0", fontSize: 13, cursor: "pointer" },
-  assignPopover: { position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, minWidth: 180, maxHeight: 220, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
+  assignPopover: { position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, minWidth: 200, maxHeight: 260, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
   assignOption: { display: "block", width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  pickerSearchInput: { width: "100%", boxSizing: "border-box", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 7, padding: "7px 9px", fontSize: 13, marginBottom: 6 },
+  athletePickList: { display: "flex", flexDirection: "column", gap: 2, maxHeight: 180, overflowY: "auto", background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: 4, marginBottom: 4 },
+  athletePickOption: { display: "block", width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 6, border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   assignedList: { display: "flex", flexDirection: "column", gap: 6 },
   assignedRow: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--ink)", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "var(--text)" },
   overlay: { position: "fixed", inset: 0, background: "rgba(6,9,12,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 16 },
