@@ -3,7 +3,7 @@
 // If you change a column there, update the matching type here.
 // ============================================================
 
-export type SessionType = "strength" | "hyrox" | "cardio" | "power_speed";
+export type SessionType = "strength" | "hyrox" | "cardio" | "power_speed" | "recovery";
 
 export type HyroxType = "fixed" | "cycling" | "emom" | "interval" | "circuit";
 
@@ -174,6 +174,104 @@ export interface CardioConfig {
 }
 
 // ------------------------------------------------------------
+// Recovery config shape (stored as JSONB in recovery_config).
+// Deliberately one column for prescription AND athlete-side
+// completion state, same reasoning as hyrox_config/HyroxCircuitConfig
+// (which already mixes roundsDone/amrapResult in with the rest).
+// ------------------------------------------------------------
+export type RecoveryFormat = "quick" | "guided" | "checklist";
+
+export type RecoveryCategory =
+  | "mobility"
+  | "soft_tissue" // foam rolling / soft-tissue work
+  | "active_recovery"
+  | "breathing_relaxation"
+  | "sleep"
+  | "nutrition_hydration"
+  | "sauna_cold_exposure"
+  | "post_event"
+  | "travel"
+  | "rest_day"
+  | "rehab_prehab"
+  | "custom";
+
+export type RecoveryIntensity = "very_low" | "low" | "moderate" | "high";
+
+export type RecoveryBlockType = "instruction" | "exercise" | "timed" | "checklist" | "media" | "feedback";
+
+export interface RecoveryChecklistItem {
+  id: string;
+  label: string;
+  category: string; // free text, e.g. "Hydration", "Sleep" — not the same enum as RecoveryCategory (a checklist can mix several)
+  target?: string; // e.g. "2L", "8hrs", "10 min walk"
+  done?: boolean; // athlete-side completion state
+}
+
+export interface RecoveryBlockBase {
+  id: string;
+  type: RecoveryBlockType;
+  title?: string;
+  done?: boolean; // athlete-side completion state, all block types except checklist (which tracks per-item)
+}
+export interface RecoveryInstructionBlock extends RecoveryBlockBase {
+  type: "instruction";
+  body: string;
+}
+export interface RecoveryExerciseBlock extends RecoveryBlockBase {
+  type: "exercise";
+  name: string;
+  video_url: string;
+  duration_or_reps: string; // free text, e.g. "10 reps" or "30s" — deliberately not split into separate sets/reps/time fields the way strength is, since a recovery drill's prescription doesn't need that structure
+  sets: number;
+  side: "both" | "left" | "right" | "n/a";
+  rest: string;
+  notes: string; // coach notes
+  equipment: string;
+  required: boolean; // vs optional
+}
+export interface RecoveryTimedBlock extends RecoveryBlockBase {
+  type: "timed";
+  duration_seconds: number;
+  instructions: string;
+}
+export interface RecoveryChecklistBlock extends RecoveryBlockBase {
+  type: "checklist";
+  items: RecoveryChecklistItem[];
+}
+export interface RecoveryMediaBlock extends RecoveryBlockBase {
+  type: "media";
+  media_url: string;
+  caption: string;
+}
+export interface RecoveryFeedbackBlock extends RecoveryBlockBase {
+  type: "feedback";
+  prompt: string;
+}
+export type RecoveryBlock =
+  | RecoveryInstructionBlock
+  | RecoveryExerciseBlock
+  | RecoveryTimedBlock
+  | RecoveryChecklistBlock
+  | RecoveryMediaBlock
+  | RecoveryFeedbackBlock;
+
+export interface RecoveryConfig {
+  // "Quick Prescription" fields — also shown as header info for the
+  // guided/checklist formats regardless, so a coach can add a short
+  // instruction/duration/intensity even on top of a detailed routine.
+  instructions?: string;
+  duration_minutes?: number | null;
+  intensity?: RecoveryIntensity | null;
+  media_url?: string;
+  request_feedback?: boolean; // whether to prompt the athlete for end-of-session feedback
+  custom_category_label?: string; // shown when recovery_category === "custom"
+  // Guided Recovery Routine
+  blocks?: RecoveryBlock[];
+  // Recovery Checklist
+  checklist_items?: RecoveryChecklistItem[];
+}
+
+// ------------------------------------------------------------
 // Sessions (real, dated sessions on an athlete's calendar)
 // ------------------------------------------------------------
 export interface Session {
@@ -195,6 +293,9 @@ export interface Session {
   rpe: number | null;              // 0031 — post-session RPE (1-10) logged by athlete
   rpe_logged_at: string | null;
   session_source: "programme" | "library"; // 0034 — 'library' = athlete-started informal session, excluded from calendar + Training Load Report
+  recovery_category: RecoveryCategory | null; // 0046
+  recovery_format: RecoveryFormat | null; // 0046
+  recovery_config: RecoveryConfig; // 0046
   exercises?: SessionExercise[];
 }
 
@@ -220,6 +321,9 @@ export interface TemplateDef {
   hyrox_config: HyroxConfig | null;
   cardio_type: string | null;
   cardio_config: CardioConfig | null;
+  recovery_category: RecoveryCategory | null; // 0046
+  recovery_format: RecoveryFormat | null; // 0046
+  recovery_config: RecoveryConfig; // 0046
   sort_order: number;
   created_at: string;
 }
@@ -269,6 +373,9 @@ export interface ProgrammeSession {
   hyrox_config: HyroxConfig | null;
   cardio_type: string | null;
   cardio_config: CardioConfig | null;
+  recovery_category: RecoveryCategory | null; // 0046
+  recovery_format: RecoveryFormat | null; // 0046
+  recovery_config: RecoveryConfig; // 0046
   sort_order: number;
 }
 
@@ -367,3 +474,37 @@ export interface Report {
 // 4-tier (not 3) — matches the original tool's "Exceptional collapses into
 // Excellent" decision: there is no 5th tier, both scales share these 4.
 export type RagStatus = "excellent" | "good" | "average" | "needs_work";
+
+// ------------------------------------------------------------
+// Recovery presets & end-of-session feedback (0046)
+// ------------------------------------------------------------
+
+// A reusable, org-scoped Recovery session snippet — deliberately not
+// built on templates/template_defs (see 0046 migration comment).
+// Applying a preset just copies category/format/config onto a new or
+// existing session; editing that session afterward never touches the
+// preset, since each session's recovery_config is its own row.
+export interface RecoveryPreset {
+  id: string;
+  organisation_id: string;
+  name: string;
+  category: RecoveryCategory | null;
+  format: RecoveryFormat;
+  config: RecoveryConfig;
+  created_at: string;
+}
+
+// End-of-session athlete feedback, one row per session, only ever
+// created when the coach opted in via recovery_config.request_feedback.
+export interface SessionFeedback {
+  id: string;
+  session_id: string;
+  athlete_id: string;
+  completion: boolean | null;
+  recovery_score: number | null; // 1-5
+  soreness: number | null; // 1-5
+  fatigue: number | null; // 1-5
+  pain_notes: string;
+  notes: string;
+  created_at: string;
+}

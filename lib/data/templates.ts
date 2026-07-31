@@ -141,6 +141,9 @@ export async function saveSessionAsTemplate(session: Session, templateName: stri
       hyrox_config: session.hyrox_config,
       cardio_type: session.cardio_type,
       cardio_config: session.cardio_config,
+      recovery_category: session.recovery_category,
+      recovery_format: session.recovery_format,
+      recovery_config: session.recovery_config,
     })
     .select()
     .single();
@@ -180,6 +183,9 @@ export async function loadTemplateForAthlete(
     hyrox_config: unknown;
     cardio_type: string | null;
     cardio_config: unknown;
+    recovery_category: string | null;
+    recovery_format: string | null;
+    recovery_config: unknown;
   }
   const pending: PendingSession[] = [];
 
@@ -199,6 +205,9 @@ export async function loadTemplateForAthlete(
         hyrox_config: def.hyrox_config,
         cardio_type: def.cardio_type,
         cardio_config: def.cardio_config,
+        recovery_category: def.recovery_category,
+        recovery_format: def.recovery_format,
+        recovery_config: def.recovery_config,
       });
     }
   }
@@ -218,6 +227,9 @@ export async function loadTemplateForAthlete(
     hyrox_config: p.hyrox_config,
     cardio_type: p.cardio_type,
     cardio_config: p.cardio_config,
+    recovery_category: p.recovery_category,
+    recovery_format: p.recovery_format,
+    recovery_config: p.recovery_config,
   }));
   const { data: createdSessions, error: sessErr } = await supabase
     .from("sessions")

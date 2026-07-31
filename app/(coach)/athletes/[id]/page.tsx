@@ -35,6 +35,7 @@ const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   hyrox: { label: "Hyrox", color: "#B388FF" },
   cardio: { label: "Cardio", color: "#4DC3FF" },
   power_speed: { label: "Power/Speed", color: "#A855F7" },
+  recovery: { label: "Recovery", color: "#2DD4BF" },
 };
 
 function EditableName({ name, onSave }: { name: string; onSave: (n: string) => Promise<void> }) {

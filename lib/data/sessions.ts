@@ -234,7 +234,7 @@ export async function addExercisesToSession(
 
 export async function updateSession(
   sessionId: string,
-  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config">>
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);
@@ -297,6 +297,9 @@ export async function copySessionsRange(
       hyrox_config: s.hyrox_config,
       cardio_type: s.cardio_type,
       cardio_config: s.cardio_config,
+      recovery_category: s.recovery_category,
+      recovery_format: s.recovery_format,
+      recovery_config: s.recovery_config,
       // Track the original session so the coach can propagate exercise
       // changes to all future copies. Carry forward existing source if
       // these source sessions were themselves copies.
@@ -613,6 +616,9 @@ export async function copySessionToDates(
         hyrox_config: source.hyrox_config ?? null,
         cardio_type: source.cardio_type ?? null,
         cardio_config: source.cardio_config ?? null,
+        recovery_category: source.recovery_category ?? null,
+        recovery_format: source.recovery_format ?? null,
+        recovery_config: source.recovery_config ?? {},
         session_notes: source.session_notes ?? null,
         // Track which session this was copied from so the coach can
         // propagate exercise changes to all future occurrences later.

@@ -92,6 +92,9 @@ export async function createProgrammeFromTemplate(template: Template): Promise<P
     hyrox_config: def.hyrox_config,
     cardio_type: def.cardio_type,
     cardio_config: def.cardio_config,
+    recovery_category: def.recovery_category,
+    recovery_format: def.recovery_format,
+    recovery_config: def.recovery_config,
     sort_order: i,
   }));
 
@@ -179,6 +182,9 @@ export async function loadProgrammeSessionForAthlete(
       hyrox_config: programmeSession.hyrox_config,
       cardio_type: programmeSession.cardio_type,
       cardio_config: programmeSession.cardio_config,
+      recovery_category: programmeSession.recovery_category,
+      recovery_format: programmeSession.recovery_format,
+      recovery_config: programmeSession.recovery_config,
       // Store the programme session ID so the coach can propagate
       // exercise changes to all future occurrences of this session.
       source_session_id: programmeSession.id,

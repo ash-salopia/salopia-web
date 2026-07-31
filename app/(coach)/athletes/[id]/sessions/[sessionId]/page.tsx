@@ -35,7 +35,7 @@ import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
 type SessionStub = { id: string; name: string; date: string; type: string };
 
 const STUB_TYPE_COLOR: Record<string, string> = {
-  strength: "#3B8BEB", hyrox: "#B388FF", cardio: "#4DC3FF", power_speed: "#A855F7",
+  strength: "#3B8BEB", hyrox: "#B388FF", cardio: "#4DC3FF", power_speed: "#A855F7", recovery: "#2DD4BF",
 };
 
 export default function SessionDetailPage() {

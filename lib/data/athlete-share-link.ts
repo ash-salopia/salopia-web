@@ -443,6 +443,9 @@ export async function startLibrarySession(athleteId: string, templateDefId: stri
       hyrox_config: def.hyrox_config,
       cardio_type: def.cardio_type,
       cardio_config: def.cardio_config,
+      recovery_category: def.recovery_category,
+      recovery_format: def.recovery_format,
+      recovery_config: def.recovery_config,
       session_source: "library",
     })
     .select()

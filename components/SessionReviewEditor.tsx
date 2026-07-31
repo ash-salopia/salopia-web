@@ -50,6 +50,7 @@ export const SESSION_TYPE_META: Record<string, { label: string; color: string }>
   hyrox:        { label: "Hyrox",         color: "#B388FF" },
   cardio:       { label: "Cardio",        color: "#4DC3FF" },
   power_speed:  { label: "Power / Speed", color: "#A855F7" },
+  recovery:     { label: "Recovery",      color: "#2DD4BF" },
 };
 
 // ── Exported helpers — call these when converting Claude output ───────────────
