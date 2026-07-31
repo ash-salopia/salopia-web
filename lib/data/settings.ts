@@ -95,6 +95,8 @@ export interface OrgSettings {
   reflection_good_prompt: string;
   reflection_better_prompt: string;
   reflection_how_prompt: string;
+  recovery_alert_enabled: boolean;
+  recovery_alert_threshold: 1 | 2 | 3; // low recovery-score feedback entries in the last 7 days needed to flag an athlete
 }
 
 export const DEFAULT_SETTINGS: OrgSettings = {
@@ -110,6 +112,8 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   reflection_good_prompt: "What went well this week?",
   reflection_better_prompt: "What could have been better?",
   reflection_how_prompt: "How will you improve next week?",
+  recovery_alert_enabled: true,
+  recovery_alert_threshold: 2,
 };
 
 // ── Coach-side (uses authenticated client) ────────────────────────────────────

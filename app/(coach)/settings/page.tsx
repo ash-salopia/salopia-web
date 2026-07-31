@@ -386,6 +386,58 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* ── Recovery alerts ── */}
+      <div style={s.section}>
+        <div style={s.sectionTitle}>Recovery alerts</div>
+
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Flag poor recovery on the dashboard</div>
+              <div style={s.cardDesc}>
+                When an athlete submits end-of-session feedback with a low recovery score,
+                they&apos;ll appear on your dashboard once they&apos;ve logged enough of them in the last 7 days.
+              </div>
+            </div>
+            <button
+              style={{ ...s.toggleSwitch, background: settings.recovery_alert_enabled ? "var(--accent)" : "var(--panel2)" }}
+              onClick={() => setSettings((prev) => ({ ...prev, recovery_alert_enabled: !prev.recovery_alert_enabled }))}
+            >
+              <div style={{ ...s.toggleThumb, transform: settings.recovery_alert_enabled ? "translateX(20px)" : "translateX(0)" }} />
+            </button>
+          </div>
+
+          {settings.recovery_alert_enabled && (
+            <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 4 }}>
+              <div style={s.cardLabel}>Flag after</div>
+              <div style={s.cardDesc}>
+                How many low recovery scores in the last 7 days it takes to flag an athlete.
+                Set this to 1 to catch a single bad day and adjust tomorrow&apos;s training —
+                or 2–3 if you&apos;d rather wait and look for a pattern before acting.
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                {([
+                  { value: 1, label: "1 low score" },
+                  { value: 2, label: "2 low scores" },
+                  { value: 3, label: "3 low scores" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    style={{
+                      ...s.chipBtn,
+                      ...(settings.recovery_alert_threshold === opt.value ? s.chipBtnActive : {}),
+                    }}
+                    onClick={() => setSettings((prev) => ({ ...prev, recovery_alert_threshold: opt.value }))}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── Weekly Reflection ── */}
       <div style={s.section}>
         <div style={s.sectionTitle}>Weekly Reflection</div>

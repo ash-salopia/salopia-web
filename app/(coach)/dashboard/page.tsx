@@ -13,6 +13,7 @@ import {
 import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-utils";
 import { getOrgSettings } from "@/lib/data/settings";
 import { listRecentOrgPBs, formatPBValue, type PersonalBest } from "@/lib/data/personal-bests";
+import { listLowRecoveryAlerts, type RecoveryAlert } from "@/lib/data/recovery";
 import type { Athlete } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export default function DashboardPage() {
   const [reportsDue, setReportsDue] = useState<ReportDue[]>([]);
   const [recentPBs, setRecentPBs] = useState<PersonalBest[]>([]);
   const [sessionNotes, setSessionNotes] = useState<SessionNoteAlert[]>([]);
+  const [recoveryAlerts, setRecoveryAlerts] = useState<RecoveryAlert[]>([]);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [weekLabel, setWeekLabel] = useState("");
 
@@ -183,6 +185,14 @@ export default function DashboardPage() {
             }
           }
           setReportsDue(reportAlerts.sort((a, b) => b.daysOverdue - a.daysOverdue));
+        }
+
+        // ── Low recovery (last 7 days) ────────────────────────────────────────
+        if (orgSettings?.recovery_alert_enabled) {
+          const alerts = await listLowRecoveryAlerts(orgSettings.recovery_alert_threshold).catch(() => [] as RecoveryAlert[]);
+          setRecoveryAlerts(alerts);
+        } else {
+          setRecoveryAlerts([]);
         }
 
         // ── Recent PBs (last 7 days) ──────────────────────────────────────────
@@ -310,6 +320,28 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+
+          {/* Poor recovery */}
+          {recoveryAlerts.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={st.panelDot({ color: "#FF6B6B" })} />
+                <span style={st.panelTitle}>Poor recovery (last 7 days)</span>
+                <span style={st.panelCount(recoveryAlerts.length)}>{recoveryAlerts.length}</span>
+              </div>
+              <div style={st.athleteList}>
+                {recoveryAlerts.map((r) => (
+                  <button key={r.athleteId} style={st.athleteChip}
+                    onClick={() => router.push(`/athletes/${r.athleteId}`)}>
+                    {r.athleteName}
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#FF6B6B", background: "#3a1a1a", borderRadius: 4, padding: "1px 5px" }}>
+                      {r.lowCount}x low
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Test week due */}
           <div style={st.panel}>

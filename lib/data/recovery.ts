@@ -131,3 +131,54 @@ export async function getSessionFeedback(sessionId: string): Promise<SessionFeed
   if (error) throw error;
   return data;
 }
+
+// ------------------------------------------------------------
+// Low recovery alerts (dashboard) — coach settings decide how many
+// low recovery_score entries (<= LOW_RECOVERY_CUTOFF, out of 5) in the
+// last 7 days it takes to flag an athlete: 1 for coaches who want to
+// react the next day, 2-3 for coaches who'd rather wait for a pattern.
+// ------------------------------------------------------------
+
+const LOW_RECOVERY_CUTOFF = 2;
+const LOW_RECOVERY_WINDOW_DAYS = 7;
+
+export interface RecoveryAlert {
+  athleteId: string;
+  athleteName: string;
+  lowCount: number;
+  latestDate: string;
+}
+
+export async function listLowRecoveryAlerts(minCount: number): Promise<RecoveryAlert[]> {
+  const supabase = createClient();
+  const since = new Date(Date.now() - LOW_RECOVERY_WINDOW_DAYS * 86_400_000).toISOString();
+
+  const { data, error } = await supabase
+    .from("session_feedback")
+    .select("athlete_id, created_at, athlete:athletes(id, name)")
+    .lte("recovery_score", LOW_RECOVERY_CUTOFF)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const byAthlete = new Map<string, RecoveryAlert>();
+  for (const row of (data ?? []) as any[]) {
+    const athlete = Array.isArray(row.athlete) ? row.athlete[0] : row.athlete;
+    if (!athlete) continue;
+    const existing = byAthlete.get(row.athlete_id);
+    if (existing) {
+      existing.lowCount += 1;
+    } else {
+      byAthlete.set(row.athlete_id, {
+        athleteId: row.athlete_id,
+        athleteName: athlete.name,
+        lowCount: 1,
+        latestDate: row.created_at,
+      });
+    }
+  }
+
+  return Array.from(byAthlete.values())
+    .filter((a) => a.lowCount >= minCount)
+    .sort((a, b) => b.lowCount - a.lowCount);
+}
