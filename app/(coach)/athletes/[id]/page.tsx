@@ -27,6 +27,8 @@ import AssignProgrammeModal from "@/components/AssignProgrammeModal";
 import SessionLibraryAccessModal from "@/components/SessionLibraryAccessModal";
 import GoalsManager from "@/components/GoalsManager";
 import ExportModal from "@/components/ExportModal";
+import RecoverySessionModal from "@/components/RecoverySessionModal";
+import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
 
@@ -145,6 +147,7 @@ export default function AthleteDetailPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [calendarAddDate, setCalendarAddDate] = useState<string | null>(null);
+  const [recoveryModalDate, setRecoveryModalDate] = useState<string | null>(null);
 
   const handleCopyShareLink = async () => {
     if (!athlete) return;
@@ -195,6 +198,13 @@ export default function AthleteDetailPage() {
     setTypePicker(false);
     const date = calendarAddDate ?? todayISO();
     setCalendarAddDate(null);
+    // Recovery has its own creation flow (format picker + Quick
+    // Prescription fields) rather than landing on an empty session
+    // builder page the way every other type does.
+    if (type === "recovery") {
+      setRecoveryModalDate(date);
+      return;
+    }
     try {
       const session = await createSession(
         athleteId,
@@ -674,7 +684,9 @@ export default function AthleteDetailPage() {
                           <button style={styles.weekSessionName} onClick={e => { e.stopPropagation(); router.push(`/athletes/${athleteId}/sessions/${session.id}`); }}>
                             {session.name}
                           </button>
-                          {session.exercises && session.exercises.length > 0 && (
+                          {session.type === "recovery" ? (
+                            <div style={{ fontSize: 10, color: "var(--mute)" }}>{recoverySessionCardLine(session)}</div>
+                          ) : session.exercises && session.exercises.length > 0 && (
                             <div style={{ fontSize: 10, color: "var(--mute)" }}>{session.exercises.length} exercises</div>
                           )}
                           <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
@@ -726,7 +738,7 @@ export default function AthleteDetailPage() {
                           <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "up", session.id); }}>▴</button>
                           <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
                         </div>
-                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={session.name}>
+                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={session.type === "recovery" ? `${session.name} — ${recoverySessionCardLine(session)}` : session.name}>
                           {session.name.length > 12 ? session.name.slice(0, 11) + "…" : session.name}
                         </button>
                         <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
@@ -809,6 +821,19 @@ export default function AthleteDetailPage() {
           athleteName={athlete.name}
           onGenerate={handleGenerateReport}
           onClose={() => setReportRangeOpen(false)}
+        />
+      )}
+
+      {recoveryModalDate && (
+        <RecoverySessionModal
+          athleteId={athleteId}
+          athleteName={athlete.name}
+          defaultDate={recoveryModalDate}
+          onCreated={(sessions) => {
+            setRecoveryModalDate(null);
+            if (sessions[0]) router.push(`/athletes/${athleteId}/sessions/${sessions[0].id}`);
+          }}
+          onClose={() => setRecoveryModalDate(null)}
         />
       )}
 

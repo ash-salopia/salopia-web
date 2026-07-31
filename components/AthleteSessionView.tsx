@@ -8,6 +8,7 @@ import SessionNotesBlock from "@/components/SessionNotesBlock";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import PBCelebrationModal from "@/components/PBCelebrationModal";
+import RecoverySessionAthleteView from "@/components/recovery/RecoverySessionAthleteView";
 import { saveWithRetry, usePendingSaveCount } from "@/lib/save-queue";
 import type { Session, SessionExercise, SetLog } from "@/types";
 
@@ -368,6 +369,22 @@ export default function AthleteSessionView({
 
   if (!session) {
     return <div style={{ padding: 32, textAlign: "center", color: "var(--mute)", fontSize: 14 }}>Loading…</div>;
+  }
+
+  // Recovery sessions render nothing like the exercise-log layout
+  // below (no session_exercises rows to speak of for most formats) —
+  // delegate to a dedicated component rather than threading `type ===
+  // "recovery"` conditionals through this already-large file.
+  if (session.type === "recovery") {
+    return (
+      <RecoverySessionAthleteView
+        session={session}
+        athleteName={athleteName}
+        token={token}
+        onUpdated={refetchSession}
+        onBack={() => router.push(`/a/${token}`)}
+      />
+    );
   }
 
   return (

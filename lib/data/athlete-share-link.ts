@@ -4,7 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 import { todayISO } from "@/lib/date-utils";
 import { bestRollingOneRM, calculateSetTargets, type OneRMFormula } from "@/lib/one-rm";
 import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
-import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise } from "@/types";
+import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise, RecoveryConfig } from "@/types";
 
 // Service-role version of getOrgSettings, resolved via the athlete's
 // organisation rather than a coach login. Lives here (not in
@@ -370,6 +370,36 @@ export async function updateAthleteSessionNotes(
   const { error } = await supabase
     .from("sessions")
     .update({ athlete_notes: athleteNotes, athlete_notes_acknowledged: !athleteNotes.trim() })
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
+// Athlete-side completion taps on a Recovery session — checklist
+// ticks, block done-flags, the whole-session "mark done" toggle for
+// Quick Prescription. Same ownership-check shape as
+// updateAthleteSessionNotes above. Deliberately takes the FULL
+// recovery_config object (not a partial patch) — the caller merges
+// client-side first, same as every other jsonb-blob round-trip in
+// this codebase (hyrox_config, cardio_config).
+export async function updateRecoveryConfig(
+  sessionId: string,
+  athleteId: string,
+  recoveryConfig: RecoveryConfig
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) {
+    throw new Error("This session does not belong to you");
+  }
+
+  const { error } = await supabase
+    .from("sessions")
+    .update({ recovery_config: recoveryConfig })
     .eq("id", sessionId);
   if (error) throw error;
 }

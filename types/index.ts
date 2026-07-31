@@ -265,6 +265,7 @@ export interface RecoveryConfig {
   media_url?: string;
   request_feedback?: boolean; // whether to prompt the athlete for end-of-session feedback
   custom_category_label?: string; // shown when recovery_category === "custom"
+  completed?: boolean; // whole-session completion flag — the only completion signal a Quick Prescription has (guided/checklist track completion per block/item instead, via each item's own `done`)
   // Guided Recovery Routine
   blocks?: RecoveryBlock[];
   // Recovery Checklist

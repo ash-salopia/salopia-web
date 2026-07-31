@@ -28,6 +28,7 @@ import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
 import PowerSpeedExerciseCard from "@/components/PowerSpeedExerciseCard";
 import PowerSpeedSummaryBar from "@/components/PowerSpeedSummaryBar";
+import RecoverySessionEditor from "@/components/recovery/RecoverySessionEditor";
 import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
@@ -512,6 +513,13 @@ export default function SessionDetailPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save config"); }
   };
 
+  const handleRecoveryPatch = async (patch: Partial<Pick<Session, "name" | "recovery_category" | "recovery_config">>) => {
+    if (!session) return;
+    setSession((prev) => (prev ? { ...prev, ...patch } : prev));
+    try { await updateSession(sessionId, patch); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
   const handleStartTimer = (workSec: number, restSec: number, rounds: number) => {
     setTimerWork(workSec); setTimerRest(restSec); setTimerRounds(rounds); setTimerOpen(true);
   };
@@ -831,6 +839,13 @@ export default function SessionDetailPage() {
             + Add exercise
           </button>
         </>
+      ) : session.type === "recovery" ? (
+        <RecoverySessionEditor
+          session={session}
+          onNameChange={(name) => handleRecoveryPatch({ name })}
+          onCategoryChange={(recovery_category) => handleRecoveryPatch({ recovery_category })}
+          onConfigChange={(patch) => handleRecoveryPatch({ recovery_config: { ...session.recovery_config, ...patch } })}
+        />
       ) : (
         <HyroxCardioBuilder
           session={session}

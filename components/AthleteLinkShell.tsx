@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import type { Athlete, Session, SessionType } from "@/types";
 import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/components/WeeklyReflectionModal";
 import Avatar from "@/components/Avatar";
+import { recoverySessionCardLine } from "@/lib/recovery-constants";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
@@ -273,7 +274,9 @@ export default function AthleteLinkShell({
                           onClick={() => router.push("/a/" + token + "/sessions/" + session.id)}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const, marginBottom: 2 }}>{meta.label}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{session.name}</div>
-                          {session.exercises && session.exercises.length > 0 && (
+                          {session.type === "recovery" ? (
+                            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{recoverySessionCardLine(session)}</div>
+                          ) : session.exercises && session.exercises.length > 0 && (
                             <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</div>
                           )}
                         </button>
