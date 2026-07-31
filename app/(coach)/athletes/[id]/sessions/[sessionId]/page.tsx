@@ -29,6 +29,7 @@ import NotesSessionModal from "@/components/NotesSessionModal";
 import PowerSpeedExerciseCard from "@/components/PowerSpeedExerciseCard";
 import PowerSpeedSummaryBar from "@/components/PowerSpeedSummaryBar";
 import RecoverySessionEditor from "@/components/recovery/RecoverySessionEditor";
+import { saveRecoveryPreset } from "@/lib/data/recovery";
 import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
@@ -65,6 +66,9 @@ export default function SessionDetailPage() {
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkinEnabled, setCheckinEnabled] = useState(true);
   const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [savePresetOpen, setSavePresetOpen] = useState(false);
+  const [savePresetName, setSavePresetName] = useState("");
+  const [savingPreset, setSavingPreset] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -484,6 +488,25 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleSaveAsRecoveryPreset = async (presetName: string) => {
+    if (!session || session.type !== "recovery" || !session.recovery_format) return;
+    setSavingPreset(true);
+    try {
+      await saveRecoveryPreset({
+        name: presetName,
+        category: session.recovery_category,
+        format: session.recovery_format,
+        config: session.recovery_config,
+      });
+      showFlash(`Saved as preset: "${presetName}"`);
+      setSavePresetOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save as preset");
+    } finally {
+      setSavingPreset(false);
+    }
+  };
+
   const handleCsvImport = async (file: File) => {
     try {
       const result = await importCsv(file, athleteId);
@@ -686,6 +709,17 @@ export default function SessionDetailPage() {
         >
           Save as template
         </button>
+        {session.type === "recovery" && (
+          <button
+            style={styles.ghostBtn}
+            onClick={() => {
+              setSavePresetName(session.name);
+              setSavePresetOpen(true);
+            }}
+          >
+            Save as preset
+          </button>
+        )}
         {confirmDelete ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 13, color: "var(--mute)" }}>Delete this session?</span>
@@ -735,6 +769,27 @@ export default function SessionDetailPage() {
               onClick={() => handleSaveAsTemplate(saveTemplateName.trim())}
             >
               Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {savePresetOpen && (
+        <div style={styles.overlay} onClick={() => setSavePresetOpen(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Save as preset</div>
+            <input
+              autoFocus
+              value={savePresetName}
+              onChange={(e) => setSavePresetName(e.target.value)}
+              style={styles.modalInput}
+            />
+            <button
+              disabled={!savePresetName.trim() || savingPreset}
+              style={{ ...styles.primaryBtn, opacity: savePresetName.trim() && !savingPreset ? 1 : 0.5 }}
+              onClick={() => handleSaveAsRecoveryPreset(savePresetName.trim())}
+            >
+              {savingPreset ? "Saving…" : "Save"}
             </button>
           </div>
         </div>

@@ -6,21 +6,25 @@ import { todayISO } from "@/lib/date-utils";
 import RecoveryQuickForm from "@/components/recovery/RecoveryQuickForm";
 import RecoveryBlockBuilder from "@/components/recovery/RecoveryBlockBuilder";
 import RecoveryChecklistItemsEditor from "@/components/recovery/RecoveryChecklistItemsEditor";
+import RecoveryPresetPicker from "@/components/recovery/RecoveryPresetPicker";
+import RecoveryTargetPicker from "@/components/recovery/RecoveryTargetPicker";
 import { RECOVERY_CATEGORIES } from "@/lib/recovery-constants";
-import type { RecoveryBlock, RecoveryCategory, RecoveryChecklistItem, RecoveryConfig, RecoveryFormat, Session } from "@/types";
+import type { RecoveryBlock, RecoveryCategory, RecoveryChecklistItem, RecoveryConfig, RecoveryFormat, RecoveryPreset, Session } from "@/types";
 
-type Step = "format" | "quick" | "guided" | "checklist" | "preset";
+type EditorFormat = "quick" | "guided" | "checklist";
+type Step = "format" | "target" | "preset" | EditorFormat;
 
-// Preset lands in a later phase of this feature — shown disabled
-// with a "Coming soon" tag rather than hidden, so the full shape of
-// the feature is visible even mid-build.
-const FORMAT_CARDS: { key: Step; title: string; desc: string; enabled: boolean }[] = [
-  { key: "quick", title: "Quick Prescription", desc: "A few fields — instructions, duration, intensity. Built for speed.", enabled: true },
-  { key: "guided", title: "Guided Recovery Routine", desc: "A block-based routine — instructions, mobility drills, timed activities, checklists, media.", enabled: true },
-  { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours — hydration, walking, mobility, nutrition, sleep targets.", enabled: true },
-  { key: "preset", title: "Saved Preset", desc: "Start from a preset your org has saved before.", enabled: false },
+const FORMAT_CARDS: { key: "quick" | "guided" | "checklist" | "preset"; title: string; desc: string }[] = [
+  { key: "quick", title: "Quick Prescription", desc: "A few fields — instructions, duration, intensity. Built for speed." },
+  { key: "guided", title: "Guided Recovery Routine", desc: "A block-based routine — instructions, mobility drills, timed activities, checklists, media." },
+  { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours — hydration, walking, mobility, nutrition, sleep targets." },
+  { key: "preset", title: "Saved Preset", desc: "Start from a preset your org has saved before." },
 ];
 
+// athleteId pinned (opened from an athlete's own page) skips the
+// target picker entirely — single athlete, zero extra taps, matching
+// the "under 30 seconds" goal. Left undefined (opened from a
+// standalone entry point) shows the full single/multiple/group picker.
 export default function RecoverySessionModal({
   athleteId,
   athleteName,
@@ -28,13 +32,15 @@ export default function RecoverySessionModal({
   onCreated,
   onClose,
 }: {
-  athleteId: string;
-  athleteName: string;
+  athleteId?: string;
+  athleteName?: string;
   defaultDate?: string;
   onCreated: (sessions: Session[]) => void;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<Step>("format");
+  const [pendingFormat, setPendingFormat] = useState<EditorFormat>("quick");
+  const [targetIds, setTargetIds] = useState<string[]>(athleteId ? [athleteId] : []);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<RecoveryCategory | null>(null);
   const [config, setConfig] = useState<RecoveryConfig>({});
@@ -46,24 +52,45 @@ export default function RecoverySessionModal({
 
   const patchConfig = (patch: Partial<RecoveryConfig>) => setConfig((prev) => ({ ...prev, ...patch }));
 
-  const format: RecoveryFormat | null = step === "quick" ? "quick" : step === "guided" ? "guided" : step === "checklist" ? "checklist" : null;
+  // Routes to the target picker first when the modal isn't pinned to
+  // one athlete — same landing step regardless of whether the coach
+  // picked a format directly or applied a preset.
+  const goToEditor = (format: EditorFormat) => {
+    setPendingFormat(format);
+    setStep(athleteId ? format : "target");
+  };
+
+  const handleFormatCard = (key: "quick" | "guided" | "checklist" | "preset") => {
+    if (key === "preset") { setStep("preset"); return; }
+    goToEditor(key);
+  };
+
+  const applyPreset = (preset: RecoveryPreset) => {
+    setName(preset.name);
+    setCategory(preset.category);
+    setConfig(preset.config);
+    setBlocks(preset.config.blocks ?? []);
+    setChecklistItems(preset.config.checklist_items ?? []);
+    goToEditor(preset.format as EditorFormat);
+  };
 
   const handleSave = async () => {
+    const ids = athleteId ? [athleteId] : targetIds;
+    if (!ids.length) { setError("Pick at least one athlete"); return; }
     if (!name.trim()) { setError("Give the session a title"); return; }
-    if (!format) return;
     setSaving(true);
     setError("");
     try {
       const finalConfig =
-        format === "guided" ? { ...config, blocks }
-        : format === "checklist" ? { ...config, checklist_items: checklistItems }
+        pendingFormat === "guided" ? { ...config, blocks }
+        : pendingFormat === "checklist" ? { ...config, checklist_items: checklistItems }
         : config;
       const sessions = await createRecoverySession({
-        athleteIds: [athleteId],
+        athleteIds: ids,
         date,
         name: name.trim(),
         category,
-        format,
+        format: pendingFormat,
         config: finalConfig,
       });
       onCreated(sessions);
@@ -73,6 +100,36 @@ export default function RecoverySessionModal({
       setSaving(false);
     }
   };
+
+  const editorTitleField = (placeholder: string) => (
+    <>
+      <div>
+        <label style={s.label}>Session title</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholder} style={s.input} />
+      </div>
+      <div>
+        <label style={s.label}>Recovery category</label>
+        <select value={category ?? ""} onChange={(e) => setCategory((e.target.value || null) as RecoveryCategory | null)} style={s.input}>
+          <option value="">— Select —</option>
+          {RECOVERY_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+
+  const footer = (backStep: Step) => (
+    <>
+      {error && <div style={s.error}>{error}</div>}
+      <div style={s.btnRow}>
+        <button style={s.ghostBtn} onClick={() => setStep(backStep)}>← Back</button>
+        <button disabled={saving} style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={handleSave}>
+          {saving ? "Creating…" : "Create session"}
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <div style={s.overlay} onClick={onClose}>
@@ -85,20 +142,32 @@ export default function RecoverySessionModal({
         {step === "format" && (
           <div style={s.cardGrid}>
             {FORMAT_CARDS.map((c) => (
-              <button
-                key={c.key}
-                disabled={!c.enabled}
-                style={{ ...s.formatCard, ...(c.enabled ? {} : s.formatCardDisabled) }}
-                onClick={() => c.enabled && setStep(c.key)}
-              >
-                <div style={s.formatTitleRow}>
-                  <span style={s.formatTitle}>{c.title}</span>
-                  {!c.enabled && <span style={s.comingSoon}>Coming soon</span>}
-                </div>
+              <button key={c.key} style={s.formatCard} onClick={() => handleFormatCard(c.key)}>
+                <div style={s.formatTitle}>{c.title}</div>
                 <div style={s.formatDesc}>{c.desc}</div>
               </button>
             ))}
           </div>
+        )}
+
+        {step === "preset" && (
+          <>
+            <RecoveryPresetPicker onSelect={applyPreset} />
+            <div style={s.btnRow}>
+              <button style={s.ghostBtn} onClick={() => setStep("format")}>← Back</button>
+            </div>
+          </>
+        )}
+
+        {step === "target" && (
+          <>
+            <RecoveryTargetPicker selectedIds={targetIds} onChange={setTargetIds} />
+            {error && <div style={s.error}>{error}</div>}
+            <div style={s.btnRow}>
+              <button style={s.ghostBtn} onClick={() => setStep("format")}>← Back</button>
+              <button style={s.primaryBtn} onClick={() => { setError(""); setStep(pendingFormat); }}>Next →</button>
+            </div>
+          </>
         )}
 
         {step === "quick" && (
@@ -112,73 +181,31 @@ export default function RecoverySessionModal({
               <label style={s.label}>Date</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={s.input} />
             </div>
-            {error && <div style={s.error}>{error}</div>}
-            <div style={s.btnRow}>
-              <button style={s.ghostBtn} onClick={() => setStep("format")}>← Back</button>
-              <button disabled={saving} style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={handleSave}>
-                {saving ? "Creating…" : "Create session"}
-              </button>
-            </div>
+            {footer(athleteId ? "format" : "target")}
           </>
         )}
 
         {step === "guided" && (
           <>
-            <div>
-              <label style={s.label}>Session title</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Post-match recovery routine" style={s.input} />
-            </div>
-            <div>
-              <label style={s.label}>Recovery category</label>
-              <select value={category ?? ""} onChange={(e) => setCategory((e.target.value || null) as RecoveryCategory | null)} style={s.input}>
-                <option value="">— Select —</option>
-                {RECOVERY_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
+            {editorTitleField("e.g. Post-match recovery routine")}
             <RecoveryBlockBuilder blocks={blocks} onChange={setBlocks} />
             <div>
               <label style={s.label}>Date</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={s.input} />
             </div>
-            {error && <div style={s.error}>{error}</div>}
-            <div style={s.btnRow}>
-              <button style={s.ghostBtn} onClick={() => setStep("format")}>← Back</button>
-              <button disabled={saving} style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={handleSave}>
-                {saving ? "Creating…" : "Create session"}
-              </button>
-            </div>
+            {footer(athleteId ? "format" : "target")}
           </>
         )}
 
         {step === "checklist" && (
           <>
-            <div>
-              <label style={s.label}>Session title</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Daily recovery checklist" style={s.input} />
-            </div>
-            <div>
-              <label style={s.label}>Recovery category</label>
-              <select value={category ?? ""} onChange={(e) => setCategory((e.target.value || null) as RecoveryCategory | null)} style={s.input}>
-                <option value="">— Select —</option>
-                {RECOVERY_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
+            {editorTitleField("e.g. Daily recovery checklist")}
             <RecoveryChecklistItemsEditor items={checklistItems} onChange={setChecklistItems} />
             <div>
               <label style={s.label}>Date</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={s.input} />
             </div>
-            {error && <div style={s.error}>{error}</div>}
-            <div style={s.btnRow}>
-              <button style={s.ghostBtn} onClick={() => setStep("format")}>← Back</button>
-              <button disabled={saving} style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={handleSave}>
-                {saving ? "Creating…" : "Create session"}
-              </button>
-            </div>
+            {footer(athleteId ? "format" : "target")}
           </>
         )}
       </div>
@@ -197,10 +224,7 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "left" as const, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12,
     padding: "14px 16px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
   },
-  formatCardDisabled: { opacity: 0.5, cursor: "not-allowed" },
-  formatTitleRow: { display: "flex", alignItems: "center", gap: 8 },
   formatTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
-  comingSoon: { fontSize: 10, fontWeight: 700, color: "var(--mute)", background: "var(--panel2)", borderRadius: 5, padding: "2px 6px", textTransform: "uppercase" as const, letterSpacing: "0.03em" },
   formatDesc: { fontSize: 12, color: "var(--mute)", lineHeight: 1.4 },
   label: { display: "block", fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em", marginBottom: 5 },
   input: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 12px", fontSize: 14, boxSizing: "border-box" as const },
