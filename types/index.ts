@@ -246,6 +246,7 @@ export interface RecoveryMediaBlock extends RecoveryBlockBase {
 export interface RecoveryFeedbackBlock extends RecoveryBlockBase {
   type: "feedback";
   prompt: string;
+  response?: string; // athlete-side completion state — their free-text answer to the prompt
 }
 export type RecoveryBlock =
   | RecoveryInstructionBlock

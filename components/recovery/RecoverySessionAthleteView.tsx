@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import RecoveryBlockAthleteCard from "@/components/recovery/RecoveryBlockAthleteCard";
 import { saveWithRetry } from "@/lib/save-queue";
 import { recoveryCategoryLabel, RECOVERY_INTENSITIES, RECOVERY_COLOR } from "@/lib/recovery-constants";
-import type { RecoveryConfig, Session } from "@/types";
+import type { RecoveryBlock, RecoveryConfig, Session } from "@/types";
 
 export default function RecoverySessionAthleteView({
   session: initialSession,
@@ -41,6 +42,18 @@ export default function RecoverySessionAthleteView({
     setSaving(false);
     if (!result.ok && !result.queued) setError(result.error);
     onUpdated();
+  };
+
+  const updateBlock = (blockId: string, patch: Partial<RecoveryBlock>) => {
+    const nextBlocks = (config.blocks ?? []).map((b) => (b.id === blockId ? ({ ...b, ...patch } as RecoveryBlock) : b));
+    patchConfig({ blocks: nextBlocks });
+  };
+  const toggleChecklistItem = (blockId: string, itemId: string) => {
+    const nextBlocks = (config.blocks ?? []).map((b) => {
+      if (b.id !== blockId || b.type !== "checklist") return b;
+      return { ...b, items: b.items.map((i) => (i.id === itemId ? { ...i, done: !i.done } : i)) };
+    });
+    patchConfig({ blocks: nextBlocks });
   };
 
   const handleAthleteNotesChange = (athlete_notes: string) => setSession((prev) => ({ ...prev, athlete_notes }));
@@ -81,7 +94,7 @@ export default function RecoverySessionAthleteView({
         </a>
       )}
 
-      {isQuick ? (
+      {isQuick && (
         <button
           disabled={saving}
           style={{ ...s.completeBtn, ...(config.completed ? s.completeBtnDone : {}) }}
@@ -89,7 +102,22 @@ export default function RecoverySessionAthleteView({
         >
           {config.completed ? "✓ Marked done" : "Mark as done"}
         </button>
-      ) : (
+      )}
+
+      {session.recovery_format === "guided" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(config.blocks ?? []).map((block) => (
+            <RecoveryBlockAthleteCard
+              key={block.id}
+              block={block}
+              onUpdate={(patch) => updateBlock(block.id, patch)}
+              onToggleItem={(itemId) => toggleChecklistItem(block.id, itemId)}
+            />
+          ))}
+        </div>
+      )}
+
+      {session.recovery_format && session.recovery_format !== "quick" && session.recovery_format !== "guided" && (
         <div style={s.notBuilt}>This routine type isn&apos;t supported in the athlete app yet.</div>
       )}
 

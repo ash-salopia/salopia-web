@@ -66,6 +66,7 @@ export function stripCompletionState(config: RecoveryConfig): RecoveryConfig {
           return itemRest;
         });
       }
+      if (rest.type === "feedback") delete rest.response;
       return rest;
     }),
     checklist_items: config.checklist_items?.map((i) => {
