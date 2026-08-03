@@ -14,7 +14,6 @@ import {
 } from "@/lib/data/athletes";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
-import RecoverySessionModal from "@/components/RecoverySessionModal";
 import type { Athlete } from "@/types";
 
 export default function AthletesPage() {
@@ -26,8 +25,6 @@ export default function AthletesPage() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
-  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false);
-  const [flash, setFlash] = useState("");
   const [newName, setNewName] = useState("");
   const [newGroup, setNewGroup] = useState("");
   const [newBodyweight, setNewBodyweight] = useState("");
@@ -180,8 +177,6 @@ export default function AthletesPage() {
 
   return (
     <div style={styles.page}>
-      {flash && <div style={styles.flashBox}>{flash}</div>}
-
       <div style={styles.headerRow}>
         <h1 style={styles.title}>Athletes</h1>
         <div style={{ display: "flex", gap: 8 }}>
@@ -200,24 +195,12 @@ export default function AthletesPage() {
             </button>
           )}
           {!showArchived && (
-            <button style={{ ...styles.ghostBtn, color: "#2DD4BF", borderColor: "#2DD4BF66" }} onClick={() => setRecoveryModalOpen(true)}>
-              🧘 Recovery session
-            </button>
-          )}
-          {!showArchived && (
             <button style={styles.primaryBtn} onClick={() => setAdding((v) => !v)}>
               {adding ? "Cancel" : "+ Add athlete"}
             </button>
           )}
         </div>
       </div>
-
-      {recoveryModalOpen && (
-        <RecoverySessionModal
-          onCreated={() => { setRecoveryModalOpen(false); setFlash("Recovery session created"); setTimeout(() => setFlash(""), 3000); }}
-          onClose={() => setRecoveryModalOpen(false)}
-        />
-      )}
 
       {selectMode && showArchived && (
         <div style={styles.selectToolbar}>
