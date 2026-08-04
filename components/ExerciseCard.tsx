@@ -25,6 +25,11 @@ interface Props {
   onApplyFuture?: (patch: Partial<SessionExercise>) => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  // Other strength sessions for this athlete this exercise could be
+  // relocated to (e.g. Tuesday's session onto Monday's) — an in-place
+  // move, not a copy, so any logged sets/weights on it carry over.
+  otherStrengthSessions?: { id: string; name: string; date: string }[];
+  onMoveToSession?: (targetSessionId: string) => void;
 }
 
 export default function ExerciseCard({
@@ -39,6 +44,8 @@ export default function ExerciseCard({
   onApplyFuture,
   onMoveUp,
   onMoveDown,
+  otherStrengthSessions = [],
+  onMoveToSession,
 }: Props) {
   const [applyFutureOn, setApplyFutureOn] = useState(false);
   const [eachSideInfoOpen, setEachSideInfoOpen] = useState(false);
@@ -49,6 +56,8 @@ export default function ExerciseCard({
   const [addToLibraryError, setAddToLibraryError] = useState("");
   const [altPickerOpen, setAltPickerOpen] = useState(false);
   const [altSearch, setAltSearch] = useState("");
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
+  const [moveSearch, setMoveSearch] = useState("");
 
   // Wraps onEdit: always updates this exercise, and if the "apply to
   // future" toggle is on, also pushes the same patch to every future
@@ -234,6 +243,15 @@ export default function ExerciseCard({
             ⏭ skipped
           </span>
         )}
+        {onMoveToSession && otherStrengthSessions.length > 0 && (
+          <button
+            style={styles.historyBtn}
+            onClick={() => setMovePickerOpen(true)}
+            title="Move this exercise to another session"
+          >
+            ↪
+          </button>
+        )}
         <button style={styles.removeBtn} onClick={onRemove}>
           ×
         </button>
@@ -311,6 +329,50 @@ export default function ExerciseCard({
 
             <button style={styles.altDoneBtn} onClick={() => { setAltPickerOpen(false); setAltSearch(""); }}>
               Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {movePickerOpen && (
+        <div style={styles.addToLibraryOverlay} onClick={() => { setMovePickerOpen(false); setMoveSearch(""); }}>
+          <div style={styles.altPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.altTitle}>Move &quot;{exercise.name}&quot; to…</div>
+            <div style={styles.altHint}>
+              Relocates this exercise to another session — any logged sets on it move too.
+            </div>
+
+            <input
+              value={moveSearch}
+              onChange={(e) => setMoveSearch(e.target.value)}
+              placeholder="Search sessions…"
+              style={styles.altSearchInput}
+              autoFocus
+            />
+            <div style={styles.altResults}>
+              {otherStrengthSessions
+                .filter((s) =>
+                  !moveSearch.trim() ||
+                  s.name.toLowerCase().includes(moveSearch.trim().toLowerCase()) ||
+                  s.date.includes(moveSearch.trim())
+                )
+                .map((s) => (
+                  <button
+                    key={s.id}
+                    style={styles.altResultItem}
+                    onClick={() => {
+                      onMoveToSession?.(s.id);
+                      setMovePickerOpen(false);
+                      setMoveSearch("");
+                    }}
+                  >
+                    {s.name} · {s.date}
+                  </button>
+                ))}
+            </div>
+
+            <button style={styles.altDoneBtn} onClick={() => { setMovePickerOpen(false); setMoveSearch(""); }}>
+              Cancel
             </button>
           </div>
         </div>

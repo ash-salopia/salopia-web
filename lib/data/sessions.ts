@@ -256,6 +256,34 @@ export async function deleteExercise(exerciseId: string): Promise<void> {
   if (error) throw error;
 }
 
+// Relocates an exercise to a different session (e.g. Tuesday's session
+// to Monday's) instead of the delete-and-recreate a coach previously
+// had to do — a true move, in place, so the athlete's logged sets/
+// weights on it carry over untouched. Appended to the end of the
+// target session (one extra read for its current max sort_order)
+// rather than any specific position, since the coach can reorder it
+// there afterwards same as any other exercise.
+export async function moveExerciseToSession(
+  exerciseId: string,
+  targetSessionId: string
+): Promise<void> {
+  const supabase = createClient();
+  const { data: existing, error: sortErr } = await supabase
+    .from("session_exercises")
+    .select("sort_order")
+    .eq("session_id", targetSessionId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  if (sortErr) throw sortErr;
+  const nextSortOrder = existing?.length ? existing[0].sort_order + 1 : 0;
+
+  const { error } = await supabase
+    .from("session_exercises")
+    .update({ session_id: targetSessionId, sort_order: nextSortOrder })
+    .eq("id", exerciseId);
+  if (error) throw error;
+}
+
 export async function deleteSession(sessionId: string): Promise<void> {
   const supabase = createClient();
   // session_exercises cascade-delete with the session.

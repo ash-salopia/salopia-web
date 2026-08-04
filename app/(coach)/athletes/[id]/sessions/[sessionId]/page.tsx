@@ -10,6 +10,7 @@ import {
   updateSession,
   updateExercise,
   deleteExercise,
+  moveExerciseToSession,
   deleteSession,
   applyToFutureSessions,
   propagateFutureOccurrences,
@@ -432,6 +433,26 @@ export default function SessionDetailPage() {
       await deleteExercise(exerciseId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not remove exercise");
+    }
+  };
+
+  const handleMoveExercise = async (exerciseId: string, targetSessionId: string) => {
+    const target = otherSessions.find((s) => s.id === targetSessionId);
+    const removed = session?.exercises?.find((e) => e.id === exerciseId);
+    // Optimistic: the exercise leaves this session's list immediately —
+    // it now belongs to targetSessionId, so it has no place in this view.
+    setSession((prev) =>
+      prev ? { ...prev, exercises: prev.exercises?.filter((e) => e.id !== exerciseId) } : prev
+    );
+    try {
+      await moveExerciseToSession(exerciseId, targetSessionId);
+      showFlash(`Moved${removed?.name ? ` "${removed.name}"` : ""} to ${target?.name ?? "the other session"}${target?.date ? ` (${target.date})` : ""}`);
+    } catch (e) {
+      // Roll back — put the exercise back where it was
+      setSession((prev) =>
+        prev && removed ? { ...prev, exercises: [...(prev.exercises ?? []), removed] } : prev
+      );
+      setError(e instanceof Error ? e.message : "Could not move exercise");
     }
   };
 
@@ -869,6 +890,8 @@ export default function SessionDetailPage() {
                 onApplyFuture={(patch) => handleApplyFuture(ex.name, patch)}
                 onMoveUp={i > 0 ? () => handleReorderExercise(ex.id, i) : undefined}
                 onMoveDown={i < exercises.length - 1 ? () => handleReorderExercise(ex.id, i + 2) : undefined}
+                otherStrengthSessions={otherSessions.filter((s) => s.type === "strength" && s.id !== sessionId)}
+                onMoveToSession={(targetSessionId) => handleMoveExercise(ex.id, targetSessionId)}
               />
             ))}
           </div>
