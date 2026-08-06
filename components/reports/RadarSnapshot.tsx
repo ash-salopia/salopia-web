@@ -62,8 +62,8 @@ export default function RadarSnapshot({
           <Radar
             name="Week 1 baseline"
             dataKey="baseline"
-            stroke="var(--mute)"
-            fill="var(--mute)"
+            stroke="#eb6834"
+            fill="#eb6834"
             fillOpacity={0.08}
             isAnimationActive={false}
           />
