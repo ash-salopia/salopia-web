@@ -98,6 +98,13 @@ export default function ExerciseCard({
     if (entry.target_load) patch.target_load = entry.target_load;
     if (entry.tempo) patch.tempo = entry.tempo;
     if (entry.notes) patch.notes = entry.notes;
+    // Unlike the text fields above, these three are unconditional —
+    // picking a name is establishing what the exercise IS (e.g. Chin
+    // Up is always bodyweight), so `false` on the library entry is a
+    // meaningful configured default, not "not set".
+    patch.is_bodyweight = entry.is_bodyweight;
+    patch.each_side = entry.each_side;
+    patch.use_percent_1rm = entry.use_percent_1rm;
     onEdit(patch);
     setNameDropdownOpen(false);
   };

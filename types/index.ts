@@ -64,6 +64,9 @@ export interface LibraryEntry {
   tempo: string;
   notes: string;
   created_at: string;
+  is_bodyweight: boolean; // 0048 — default applied when this entry is loaded into a session
+  each_side: boolean; // 0048 — default applied when this entry is loaded into a session
+  use_percent_1rm: boolean; // 0048 — default applied when this entry is loaded into a session
 }
 
 // ------------------------------------------------------------

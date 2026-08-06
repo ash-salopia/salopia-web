@@ -170,6 +170,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
           name: e.name, order: String(j + 1), sets: e.sets, reps: e.reps,
           time: e.time, rest: e.rest, target_load: e.target_load,
           tempo: e.tempo, each_side: e.each_side, notes: e.notes, video_url: e.video_url,
+          is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,
         })),
         sort_order: i,
       }));

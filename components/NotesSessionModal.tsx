@@ -226,6 +226,8 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           notes: e.notes,        // clean notes — no [order] suffix
           time: e.time,
           each_side: e.each_side,
+          is_bodyweight: e.is_bodyweight,
+          use_percent_1rm: e.use_percent_1rm,
           video_url: e.video_url,
         }))
     );
@@ -252,6 +254,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             target_load: e.target_load, tempo: e.tempo || "2-0-2",
             notes: e.notes,
             time: e.time, each_side: e.each_side, video_url: e.video_url,
+            is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,
           }));
         const sessionType = (s.type ?? "strength") as any;
         const session = await createSession(athleteId, sessionType, date, name, exInputs);

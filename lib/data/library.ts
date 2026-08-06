@@ -45,6 +45,9 @@ export async function saveLibraryEntry(
         tempo: entry.tempo ?? existing.tempo,
         notes: entry.notes ?? existing.notes,
         types: entry.types ?? existing.types ?? [],   // FIX: was missing from update
+        is_bodyweight: entry.is_bodyweight ?? existing.is_bodyweight,
+        each_side: entry.each_side ?? existing.each_side,
+        use_percent_1rm: entry.use_percent_1rm ?? existing.use_percent_1rm,
       })
       .eq("id", existing.id)
       .select()
@@ -69,6 +72,9 @@ export async function saveLibraryEntry(
       target_load: entry.target_load ?? "",
       tempo: entry.tempo ?? "2-0-2",
       notes: entry.notes ?? "",
+      is_bodyweight: entry.is_bodyweight ?? false,
+      each_side: entry.each_side ?? false,
+      use_percent_1rm: entry.use_percent_1rm ?? false,
     })
     .select()
     .single();

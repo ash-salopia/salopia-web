@@ -33,6 +33,8 @@ export interface ReviewExercise {
   notes: string;
   time: string;
   each_side: boolean;
+  is_bodyweight?: boolean;
+  use_percent_1rm?: boolean;
   rpe?: number | null;
   percent_1rm?: number | null;
 }
@@ -96,6 +98,11 @@ export function enrichWithLibrary(
       notes: e.notes,
       time: e.time,
       each_side: e.each_side,
+      // No parsed signal for these two exists at this layer (unlike
+      // each_side, which comes from the AI/voice parse itself) — pure
+      // library-default addition, so a match applies it directly.
+      is_bodyweight: lib?.is_bodyweight ?? false,
+      use_percent_1rm: lib?.use_percent_1rm ?? false,
       rpe: e.rpe ?? null,
       percent_1rm: e.percent_1rm ?? null,
     };

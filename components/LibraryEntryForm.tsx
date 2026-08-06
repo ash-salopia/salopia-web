@@ -31,6 +31,9 @@ export default function LibraryEntryForm({
   const [tempo, setTempo] = useState(entry?.tempo ?? "2-0-2");
   const [notes, setNotes] = useState(entry?.notes ?? "");
   const [types, setTypes] = useState<string[]>(entry?.types ?? []);
+  const [isBodyweight, setIsBodyweight] = useState(entry?.is_bodyweight ?? false);
+  const [eachSide, setEachSide] = useState(entry?.each_side ?? false);
+  const [usePercent1rm, setUsePercent1rm] = useState(entry?.use_percent_1rm ?? false);
 
   const toggleType = (t: string) =>
     setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -49,6 +52,9 @@ export default function LibraryEntryForm({
       tempo,
       notes,
       types,
+      is_bodyweight: isBodyweight,
+      each_side: eachSide,
+      use_percent_1rm: isBodyweight ? false : usePercent1rm,
     } as Partial<LibraryEntry> & { name: string });
   };
 
@@ -85,6 +91,42 @@ export default function LibraryEntryForm({
       </FieldRow>
       <FieldRow label="Notes">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...s.input, minHeight: 70 }} />
+      </FieldRow>
+      <FieldRow label="Defaults when added to a session">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={s.checkRow}>
+            <input
+              type="checkbox"
+              checked={isBodyweight}
+              onChange={(e) => setIsBodyweight(e.target.checked)}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: isBodyweight ? "var(--accent)" : "var(--text)" }}>Bodyweight only</span>
+          </label>
+          <label style={s.checkRow}>
+            <input
+              type="checkbox"
+              checked={eachSide}
+              onChange={(e) => setEachSide(e.target.checked)}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: eachSide ? "var(--accent)" : "var(--text)" }}>Each side</span>
+          </label>
+          {!isBodyweight && (
+            <label style={s.checkRow}>
+              <input
+                type="checkbox"
+                checked={usePercent1rm}
+                onChange={(e) => setUsePercent1rm(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+              <span style={{ color: usePercent1rm ? "var(--accent)" : "var(--text)" }}>Use %1RM</span>
+            </label>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+          Pre-ticked whenever this exercise is added from the library
+        </div>
       </FieldRow>
       <FieldRow label="Session types">
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -151,6 +193,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
   fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4, fontWeight: 600 },
+  checkRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" },
   primaryBtn: {
     background: "var(--accent)",
     color: "#0a1420",

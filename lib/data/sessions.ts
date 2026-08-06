@@ -133,6 +133,8 @@ export interface NewExerciseInput {
   target_load?: string;
   tempo?: string;
   each_side?: boolean;
+  is_bodyweight?: boolean;
+  use_percent_1rm?: boolean;
   notes?: string;
   video_url?: string;
 }
@@ -150,6 +152,8 @@ function exerciseDefaults(over: NewExerciseInput) {
     target_load: over.target_load ?? "",
     tempo: over.tempo ?? "2-0-2",
     each_side: over.each_side ?? false,
+    is_bodyweight: over.is_bodyweight ?? false,
+    use_percent_1rm: over.use_percent_1rm ?? false,
     notes: over.notes ?? "",
     video_url: over.video_url ?? "",
     session_notes: "",
