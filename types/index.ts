@@ -303,6 +303,7 @@ export interface Session {
   recovery_category: RecoveryCategory | null; // 0046
   recovery_format: RecoveryFormat | null; // 0046
   recovery_config: RecoveryConfig; // 0046
+  sort_order: number; // 0049 — position among same-day sessions, set by the coach's drag-to-reorder
   exercises?: SessionExercise[];
 }
 

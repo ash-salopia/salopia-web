@@ -135,6 +135,12 @@ export default function AthleteLinkShell({
       const list = map.get(s.date) ?? [];
       map.set(s.date, [...list, s]);
     }
+    // Match the coach app's ordering for multiple sessions on the same
+    // day (set by the coach dragging to reorder) — previously this
+    // fell back to whatever order the DB happened to return.
+    for (const [date, list] of map) {
+      map.set(date, [...list].sort((a, b) => a.sort_order - b.sort_order));
+    }
     return map;
   }, [scheduledSessions]);
 

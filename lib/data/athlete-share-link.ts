@@ -57,7 +57,8 @@ export async function getAthleteSessions(athleteId: string): Promise<Session[]> 
     .from("sessions")
     .select("*, session_exercises(*)")
     .eq("athlete_id", athleteId)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .order("sort_order", { ascending: true });
   if (error) throw error;
   const sessions: Session[] = (data ?? []).map((s) => ({
     ...s,
