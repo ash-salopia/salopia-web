@@ -35,13 +35,28 @@ export default function RadarSnapshot({
     latest: Math.round((e.latest / e.baseline) * 100),
   }));
 
+  // A radius axis starting at 0 flattens the shape when every value
+  // clusters near 100% (typical, since these are % of each exercise's
+  // own baseline) — pad around the actual data range instead, floored
+  // at 0, so real differences between exercises are still visible.
+  const values = data.flatMap((d) => [d.baseline, d.latest]);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const pad = Math.max(10, (maxV - minV) * 0.3);
+  const domainMin = Math.max(0, Math.floor((minV - pad) / 10) * 10);
+  const domainMax = Math.ceil((maxV + pad) / 10) * 10;
+
   return (
     <div style={{ width: "100%", height: 280 }}>
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data}>
           <PolarGrid stroke="var(--line)" />
           <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--mute)" }} />
-          <PolarRadiusAxis angle={90} tick={{ fontSize: 9, fill: "var(--mute)" }} />
+          <PolarRadiusAxis
+            angle={90}
+            domain={[domainMin, domainMax]}
+            tick={{ fontSize: 9, fill: "var(--mute)" }}
+          />
           <Radar
             name="Week 1 baseline"
             dataKey="baseline"

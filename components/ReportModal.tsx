@@ -327,7 +327,15 @@ export default function ReportModal({
                 <table style={styles.table}>
                   <thead>
                     <tr style={styles.theadRow}>
-                      {["Exercise", "Sessions", "First TTL", "Latest TTL", "% Change"].map((h) => (
+                      {[
+                        "Exercise",
+                        "Sessions",
+                        "First TTL",
+                        "Latest TTL",
+                        "Δ kg",
+                        "% Change",
+                        ...(options.sparkline ? ["Trend"] : []),
+                      ].map((h) => (
                         <th key={h} style={styles.th}>{h}</th>
                       ))}
                     </tr>
@@ -336,15 +344,30 @@ export default function ReportModal({
                     {exerciseSummaries.map((e) => {
                       const first = e.entries[0];
                       const last = e.entries[e.entries.length - 1];
+                      const delta = last.ttl - first.ttl;
                       return (
                         <tr key={e.name} style={styles.tr}>
                           <td style={styles.td}>{e.name}</td>
                           <td style={styles.td}>{e.entries.length}</td>
                           <td style={styles.td}>{first.ttl.toFixed(0)} kg</td>
                           <td style={styles.td}>{last.ttl.toFixed(0)} kg</td>
+                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 600 }}>
+                            {delta >= 0 ? "+" : ""}
+                            {delta.toFixed(0)}
+                          </td>
                           <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
                             {fmtPct(e.overallPct)}
                           </td>
+                          {options.sparkline && (
+                            <td style={styles.td}>
+                              {e.entries.length >= 2 && (
+                                <Sparkline
+                                  points={e.entries.map((r) => ({ x: r.date, y: r.ttl }))}
+                                  color={pctColor(e.overallPct)}
+                                />
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -361,7 +384,15 @@ export default function ReportModal({
                 <table style={styles.table}>
                   <thead>
                     <tr style={styles.theadRow}>
-                      {["Exercise", "Sessions", `First (${bwUnit})`, `Latest (${bwUnit})`, "% Change"].map((h) => (
+                      {[
+                        "Exercise",
+                        "Sessions",
+                        `First (${bwUnit})`,
+                        `Latest (${bwUnit})`,
+                        `Δ (${bwUnit})`,
+                        "% Change",
+                        ...(options.sparkline ? ["Trend"] : []),
+                      ].map((h) => (
                         <th key={h} style={styles.th}>{h}</th>
                       ))}
                     </tr>
@@ -371,6 +402,7 @@ export default function ReportModal({
                       const first = e.entries[0];
                       const last = e.entries[e.entries.length - 1];
                       const ref = oneRmReference[e.name];
+                      const delta = last.e1rm - first.e1rm;
                       return (
                         <tr key={e.name} style={styles.tr}>
                           <td style={styles.td}>
@@ -380,9 +412,23 @@ export default function ReportModal({
                           <td style={styles.td}>{e.entries.length}</td>
                           <td style={styles.td}>{e1rmDisplay(first.e1rm)}</td>
                           <td style={styles.td}>{e1rmDisplay(last.e1rm)}</td>
+                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 600 }}>
+                            {delta >= 0 ? "+" : ""}
+                            {e1rmDisplay(delta)}
+                          </td>
                           <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
                             {fmtPct(e.overallPct)}
                           </td>
+                          {options.sparkline && (
+                            <td style={styles.td}>
+                              {e.entries.length >= 2 && (
+                                <Sparkline
+                                  points={e.entries.map((r) => ({ x: r.date, y: r.e1rm }))}
+                                  color={pctColor(e.overallPct)}
+                                />
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -427,11 +473,6 @@ export default function ReportModal({
                         <div style={styles.exTitle}>
                           {exName}
                           {last.eachSide && <span style={styles.eachSideTag}>(logged per hand, tonnage ×2)</span>}
-                          {options.sparkline && entries.length >= 2 && (
-                            <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
-                              <Sparkline points={entries.map((r) => ({ x: r.date, y: r.ttl }))} />
-                            </span>
-                          )}
                         </div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={styles.table}>
@@ -483,14 +524,7 @@ export default function ReportModal({
                   })
                 : Object.entries(weeklyExMap).map(([exName, weeks]) => (
                     <div key={exName} style={{ marginBottom: 22 }}>
-                      <div style={styles.exTitle}>
-                        {exName}
-                        {options.sparkline && weeks.length >= 2 && (
-                          <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
-                            <Sparkline points={weeks.map((w) => ({ x: w.weekStart, y: w.ttl }))} />
-                          </span>
-                        )}
-                      </div>
+                      <div style={styles.exTitle}>{exName}</div>
                       <div style={{ overflowX: "auto" }}>
                         <table style={styles.table}>
                           <thead>
@@ -566,11 +600,6 @@ export default function ReportModal({
                           {exName}
                           {last.eachSide && <span style={styles.eachSideTag}>(logged per hand)</span>}
                           {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
-                          {options.sparkline && entries.length >= 2 && (
-                            <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
-                              <Sparkline points={entries.map((r) => ({ x: r.date, y: r.e1rm }))} />
-                            </span>
-                          )}
                         </div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={styles.table}>
@@ -625,14 +654,7 @@ export default function ReportModal({
                   })
                 : Object.entries(strength.weeklyExMap).map(([exName, weeks]) => (
                     <div key={exName} style={{ marginBottom: 22 }}>
-                      <div style={styles.exTitle}>
-                        {exName}
-                        {options.sparkline && weeks.length >= 2 && (
-                          <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
-                            <Sparkline points={weeks.map((w) => ({ x: w.weekStart, y: w.e1rm }))} />
-                          </span>
-                        )}
-                      </div>
+                      <div style={styles.exTitle}>{exName}</div>
                       <div style={{ overflowX: "auto" }}>
                         <table style={styles.table}>
                           <thead>
@@ -845,12 +867,15 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.04em",
     marginBottom: 8,
   },
+  // Amber for "manual" (a coach-entered value worth noting) and red
+  // for "low-confidence" (a data-quality caution) — matches the
+  // prototype's tag semantics (athletiq-strength-report-prototype.html).
   manualTag: {
     fontSize: 10,
     fontWeight: 700,
-    color: "var(--accent)",
-    background: "var(--accent-dim)",
-    border: "1px solid var(--accent)",
+    color: "#c98a1f",
+    background: "rgba(201,138,31,0.12)",
+    border: "1px solid #c98a1f",
     borderRadius: 4,
     padding: "1px 6px",
     marginLeft: 8,
@@ -860,9 +885,9 @@ const styles: Record<string, React.CSSProperties> = {
   lowConfidenceTag: {
     fontSize: 10,
     fontWeight: 700,
-    color: "#c98a1f",
-    background: "rgba(201,138,31,0.12)",
-    border: "1px solid #c98a1f",
+    color: "#ff7d7d",
+    background: "rgba(255,125,125,0.12)",
+    border: "1px solid #ff7d7d",
     borderRadius: 4,
     padding: "1px 6px",
     marginLeft: 8,
