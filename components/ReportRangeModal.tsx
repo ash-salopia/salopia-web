@@ -106,6 +106,7 @@ export default function ReportRangeModal({
             ×
           </button>
         </div>
+        <div style={styles.scrollBody}>
         <div style={styles.helpText}>Choose how far back this report should cover.</div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: mode === "custom" ? 12 : 16 }}>
@@ -260,14 +261,17 @@ export default function ReportRangeModal({
             </label>
           ))}
         </div>
+        </div>
 
-        <button
-          disabled={!canGenerate}
-          style={{ ...styles.primaryBtn, opacity: canGenerate ? 1 : 0.5 }}
-          onClick={handleGenerate}
-        >
-          Generate report
-        </button>
+        <div style={styles.footer}>
+          <button
+            disabled={!canGenerate}
+            style={{ ...styles.primaryBtn, opacity: canGenerate ? 1 : 0.5 }}
+            onClick={handleGenerate}
+          >
+            Generate report
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -288,11 +292,26 @@ const styles: Record<string, React.CSSProperties> = {
     background: "var(--panel)",
     border: "1px solid var(--line)",
     borderRadius: 16,
-    padding: 20,
     width: "100%",
     maxWidth: 380,
+    maxHeight: "90vh",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
   },
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "20px 20px 10px",
+    flexShrink: 0,
+  },
+  scrollBody: { overflowY: "auto", padding: "0 20px 4px" },
+  footer: {
+    flexShrink: 0,
+    padding: 16,
+    borderTop: "1px solid var(--line)",
+  },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700 },
   closeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 20, cursor: "pointer" },
   helpText: { fontSize: 12, color: "var(--mute)", marginBottom: 12 },
