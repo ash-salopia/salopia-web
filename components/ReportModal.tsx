@@ -3,6 +3,10 @@
 import { useState } from "react";
 import type { ReportData } from "@/lib/data/reports";
 import type { ReportOptions } from "@/components/ReportRangeModal";
+import { FORMULAS } from "@/lib/one-rm";
+import Sparkline from "@/components/reports/Sparkline";
+import TrendLineChart from "@/components/reports/TrendLineChart";
+import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
 
 function fmtDate(iso: string): string {
   try {
@@ -56,13 +60,26 @@ export default function ReportModal({
     generated,
     rangeStart,
     rangeEnd,
+    strength,
+    oneRmFormula,
+    oneRmSource,
+    bodyweightKg,
+    oneRmReference,
   } = data;
-  const [ttlMode, setTtlMode] = useState<"all" | "weekly">("all");
+  // Shared "all sessions / weekly avg" toggle for the per-exercise
+  // detail tables — governs both TTL and e1RM sections when both are
+  // present, rather than each metric having its own.
+  const [detailMode, setDetailMode] = useState<"all" | "weekly">("all");
 
   const hasStrength = Object.keys(exMap).length > 0;
+  const hasE1rm = Object.keys(strength.exMap).length > 0;
   const hasHyrox = hyroxSessions.length > 0;
   const hasCardio = cardioSessions.length > 0;
   const hasPowerSpeed = powerSpeedSessions.length > 0;
+  const formulaName = FORMULAS.find((f) => f.id === oneRmFormula)?.name ?? oneRmFormula;
+  const bwUnit = options.bodyweightRelative && bodyweightKg ? "×BW" : "kg";
+  const e1rmDisplay = (kg: number) =>
+    options.bodyweightRelative && bodyweightKg ? (kg / bodyweightKg).toFixed(2) : kg.toFixed(1);
 
   const handleCopy = () => {
     const el = document.getElementById("report-content");
@@ -125,7 +142,8 @@ export default function ReportModal({
 <body>
   <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--accent);letter-spacing:2px;">AthletiQ</div>
   <div style="font-size:13px;font-weight:600;margin-top:2px;">${esc(athleteName)}${athleteGroup ? ` · ${esc(athleteGroup)}` : ""}, Training Load Report</div>
-  <div style="font-size:11px;color:var(--mute);margin-bottom:20px;">Generated ${esc(generated)}${rangeStart && rangeEnd ? ` · ${esc(rangeStart)} to ${esc(rangeEnd)}` : " · All time"}</div>
+  <div style="font-size:11px;color:var(--mute);${options.e1rm ? "margin-bottom:2px;" : "margin-bottom:20px;"}">Generated ${esc(generated)}${rangeStart && rangeEnd ? ` · ${esc(rangeStart)} to ${esc(rangeEnd)}` : " · All time"}</div>
+  ${options.e1rm ? `<div style="font-size:11px;color:var(--mute);margin-bottom:20px;">e1RM formula: ${esc(formulaName)} · Mode: ${esc(oneRmSource === "fixed" ? "Fixed (vs reference max)" : "Rolling")}</div>` : ""}
   ${clone.innerHTML}
 </body>
 </html>`);
@@ -150,6 +168,11 @@ export default function ReportModal({
               Generated {generated}
               {rangeStart && rangeEnd ? ` · ${rangeStart} to ${rangeEnd}` : " · All time"}
             </div>
+            {options.e1rm && (
+              <div style={styles.generatedLine}>
+                e1RM formula: {formulaName} · Mode: {oneRmSource === "fixed" ? "Fixed (vs reference max)" : "Rolling"}
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button style={styles.ghostBtn} onClick={handlePrint}>
@@ -165,7 +188,7 @@ export default function ReportModal({
         </div>
 
         <div id="report-content" style={{ padding: 20 }}>
-          {!hasStrength && !hasHyrox && !hasCardio && !hasPowerSpeed && !notes.length && (
+          {!hasStrength && !hasE1rm && !hasHyrox && !hasCardio && !hasPowerSpeed && !notes.length && (
             <div style={styles.emptyNote}>
               No logged data found in this range. Log weights in strength sessions to generate a
               load report.
@@ -193,37 +216,113 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.highlights && (topProgressed.length > 0 || toReview.length > 0) && (
-            <div style={{ marginBottom: 24 }}>
-              <div style={styles.sectionTitle}>Highlights</div>
-              <div style={styles.highlightsGrid}>
-                <div>
-                  <div style={styles.highlightHeading}>🚀 Top progressed</div>
-                  {topProgressed.length === 0 && <div style={styles.highlightEmpty}>Not enough data yet.</div>}
-                  {topProgressed.map((e) => (
-                    <div key={e.name} style={styles.highlightRow}>
-                      <span>{e.name}</span>
-                      <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
+          {options.highlights &&
+            ((options.ttl && (topProgressed.length > 0 || toReview.length > 0)) ||
+              (options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0))) && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={styles.sectionTitle}>Highlights</div>
+                {options.ttl && (topProgressed.length > 0 || toReview.length > 0) && (
+                  <div style={{ marginBottom: options.e1rm ? 14 : 0 }}>
+                    {options.e1rm && <div style={styles.metricSubheading}>Total Training Load</div>}
+                    <div style={styles.highlightsGrid}>
+                      <div>
+                        <div style={styles.highlightHeading}>🚀 Top progressed</div>
+                        {topProgressed.length === 0 && <div style={styles.highlightEmpty}>Not enough data yet.</div>}
+                        {topProgressed.map((e) => (
+                          <div key={e.name} style={styles.highlightRow}>
+                            <span>{e.name}</span>
+                            <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={styles.highlightHeading}>🔍 Worth a review</div>
+                        {toReview.length === 0 && <div style={styles.highlightEmpty}>Not enough data yet.</div>}
+                        {toReview.map((e) => (
+                          <div key={e.name} style={styles.highlightRow}>
+                            <span>{e.name}</span>
+                            <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div>
-                  <div style={styles.highlightHeading}>🔍 Worth a review</div>
-                  {toReview.length === 0 && <div style={styles.highlightEmpty}>Not enough data yet.</div>}
-                  {toReview.map((e) => (
-                    <div key={e.name} style={styles.highlightRow}>
-                      <span>{e.name}</span>
-                      <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
+                  </div>
+                )}
+                {options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0) && (
+                  <div>
+                    {options.ttl && <div style={styles.metricSubheading}>Estimated 1RM</div>}
+                    <div style={styles.highlightsGrid}>
+                      <div>
+                        <div style={styles.highlightHeading}>🚀 Top progressed</div>
+                        {strength.topProgressed.length === 0 && (
+                          <div style={styles.highlightEmpty}>Not enough data yet.</div>
+                        )}
+                        {strength.topProgressed.map((e) => (
+                          <div key={e.name} style={styles.highlightRow}>
+                            <span>{e.name}</span>
+                            <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={styles.highlightHeading}>🔍 Worth a review</div>
+                        {strength.toReview.length === 0 && (
+                          <div style={styles.highlightEmpty}>Not enough data yet.</div>
+                        )}
+                        {strength.toReview.map((e) => (
+                          <div key={e.name} style={styles.highlightRow}>
+                            <span>{e.name}</span>
+                            <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
+            )}
+
+          {options.radar && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={styles.sectionTitle}>Radar Snapshot</div>
+              {options.ttl && hasStrength && (
+                <div style={{ marginBottom: options.e1rm ? 16 : 0 }}>
+                  {options.e1rm && <div style={styles.metricSubheading}>Total Training Load</div>}
+                  <RadarSnapshot
+                    exercises={exerciseSummaries.map(
+                      (e): RadarExercise => ({
+                        name: e.name,
+                        baseline: e.entries[0].ttl,
+                        latest: e.entries[e.entries.length - 1].ttl,
+                        entryCount: e.entries.length,
+                      })
+                    )}
+                    limit={options.exerciseLimit}
+                  />
+                </div>
+              )}
+              {options.e1rm && hasE1rm && (
+                <div>
+                  {options.ttl && <div style={styles.metricSubheading}>Estimated 1RM</div>}
+                  <RadarSnapshot
+                    exercises={strength.exerciseSummaries.map(
+                      (e): RadarExercise => ({
+                        name: e.name,
+                        baseline: e.entries[0].e1rm,
+                        latest: e.entries[e.entries.length - 1].e1rm,
+                        entryCount: e.entries.length,
+                      })
+                    )}
+                    limit={options.exerciseLimit}
+                  />
+                </div>
+              )}
             </div>
           )}
 
-          {options.loadProgression && hasStrength && (
+          {options.loadProgression && options.ttl && hasStrength && (
             <div style={{ marginBottom: 24 }}>
-              <div style={styles.sectionTitle}>Load Progression</div>
+              <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " — TTL" : ""}</div>
               <div style={{ overflowX: "auto" }}>
                 <table style={styles.table}>
                   <thead>
@@ -255,31 +354,69 @@ export default function ReportModal({
             </div>
           )}
 
+          {options.loadProgression && options.e1rm && hasE1rm && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={styles.sectionTitle}>Load Progression — e1RM</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.theadRow}>
+                      {["Exercise", "Sessions", `First (${bwUnit})`, `Latest (${bwUnit})`, "% Change"].map((h) => (
+                        <th key={h} style={styles.th}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {strength.exerciseSummaries.map((e) => {
+                      const first = e.entries[0];
+                      const last = e.entries[e.entries.length - 1];
+                      const ref = oneRmReference[e.name];
+                      return (
+                        <tr key={e.name} style={styles.tr}>
+                          <td style={styles.td}>
+                            {e.name}
+                            {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
+                          </td>
+                          <td style={styles.td}>{e.entries.length}</td>
+                          <td style={styles.td}>{e1rmDisplay(first.e1rm)}</td>
+                          <td style={styles.td}>{e1rmDisplay(last.e1rm)}</td>
+                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
+                            {fmtPct(e.overallPct)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {options.ttl && hasStrength && (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
                   Strength — Total Training Load
                   <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
-                    ({ttlMode === "all" ? "all sessions" : "weekly avg"})
+                    ({detailMode === "all" ? "all sessions" : "weekly avg"})
                   </span>
                 </div>
                 <div style={styles.modeToggle} data-no-print="true">
                   <button
-                    style={{ ...styles.modeBtn, ...(ttlMode === "all" ? styles.modeBtnActive : {}) }}
-                    onClick={() => setTtlMode("all")}
+                    style={{ ...styles.modeBtn, ...(detailMode === "all" ? styles.modeBtnActive : {}) }}
+                    onClick={() => setDetailMode("all")}
                   >
                     All sessions
                   </button>
                   <button
-                    style={{ ...styles.modeBtn, ...(ttlMode === "weekly" ? styles.modeBtnActive : {}) }}
-                    onClick={() => setTtlMode("weekly")}
+                    style={{ ...styles.modeBtn, ...(detailMode === "weekly" ? styles.modeBtnActive : {}) }}
+                    onClick={() => setDetailMode("weekly")}
                   >
                     Weekly avg
                   </button>
                 </div>
               </div>
-              {ttlMode === "all"
+              {detailMode === "all"
                 ? Object.entries(exMap).map(([exName, entries]) => {
                     const first = entries[0];
                     const last = entries[entries.length - 1];
@@ -290,6 +427,11 @@ export default function ReportModal({
                         <div style={styles.exTitle}>
                           {exName}
                           {last.eachSide && <span style={styles.eachSideTag}>(logged per hand, tonnage ×2)</span>}
+                          {options.sparkline && entries.length >= 2 && (
+                            <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
+                              <Sparkline points={entries.map((r) => ({ x: r.date, y: r.ttl }))} />
+                            </span>
+                          )}
                         </div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={styles.table}>
@@ -329,12 +471,26 @@ export default function ReportModal({
                             {last.reps}@{last.maxWeight}kg · TTL {last.ttl.toFixed(0)} kg
                           </div>
                         )}
+                        {options.lineChart && entries.length >= 2 && (
+                          <TrendLineChart
+                            series={entries.map((r) => ({ date: fmtDate(r.date), value: r.ttl }))}
+                            label={exName}
+                            unit="kg"
+                          />
+                        )}
                       </div>
                     );
                   })
                 : Object.entries(weeklyExMap).map(([exName, weeks]) => (
                     <div key={exName} style={{ marginBottom: 22 }}>
-                      <div style={styles.exTitle}>{exName}</div>
+                      <div style={styles.exTitle}>
+                        {exName}
+                        {options.sparkline && weeks.length >= 2 && (
+                          <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
+                            <Sparkline points={weeks.map((w) => ({ x: w.weekStart, y: w.ttl }))} />
+                          </span>
+                        )}
+                      </div>
                       <div style={{ overflowX: "auto" }}>
                         <table style={styles.table}>
                           <thead>
@@ -361,6 +517,155 @@ export default function ReportModal({
                           </tbody>
                         </table>
                       </div>
+                      {options.lineChart && weeks.length >= 2 && (
+                        <TrendLineChart
+                          series={weeks.map((w) => ({ date: fmtDate(w.weekStart), value: w.ttl }))}
+                          label={exName}
+                          unit="kg"
+                        />
+                      )}
+                    </div>
+                  ))}
+            </>
+          )}
+
+          {options.e1rm && hasE1rm && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, marginTop: options.ttl ? 24 : 0 }}>
+                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                  Strength — Estimated 1RM
+                  <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
+                    ({detailMode === "all" ? "all sessions" : "weekly peak"})
+                  </span>
+                </div>
+                <div style={styles.modeToggle} data-no-print="true">
+                  <button
+                    style={{ ...styles.modeBtn, ...(detailMode === "all" ? styles.modeBtnActive : {}) }}
+                    onClick={() => setDetailMode("all")}
+                  >
+                    All sessions
+                  </button>
+                  <button
+                    style={{ ...styles.modeBtn, ...(detailMode === "weekly" ? styles.modeBtnActive : {}) }}
+                    onClick={() => setDetailMode("weekly")}
+                  >
+                    Weekly peak
+                  </button>
+                </div>
+              </div>
+              {detailMode === "all"
+                ? Object.entries(strength.exMap).map(([exName, entries]) => {
+                    const first = entries[0];
+                    const last = entries[entries.length - 1];
+                    const overallPct =
+                      entries.length >= 2 && first.e1rm > 0 ? ((last.e1rm - first.e1rm) / first.e1rm) * 100 : null;
+                    const ref = oneRmReference[exName];
+                    return (
+                      <div key={exName} style={{ marginBottom: 22 }}>
+                        <div style={styles.exTitle}>
+                          {exName}
+                          {last.eachSide && <span style={styles.eachSideTag}>(logged per hand)</span>}
+                          {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
+                          {options.sparkline && entries.length >= 2 && (
+                            <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
+                              <Sparkline points={entries.map((r) => ({ x: r.date, y: r.e1rm }))} />
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={styles.table}>
+                            <thead>
+                              <tr style={styles.theadRow}>
+                                {["Date", "Sets", "Best set", `e1RM (${bwUnit})`, "vs Prev"].map((h) => (
+                                  <th key={h} style={styles.th}>
+                                    {h}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {entries.map((row, idx) => {
+                                const prev = idx > 0 ? entries[idx - 1] : null;
+                                const chg = prev && prev.e1rm > 0 ? ((row.e1rm - prev.e1rm) / prev.e1rm) * 100 : null;
+                                return (
+                                  <tr key={idx} style={styles.tr}>
+                                    <td style={styles.td}>{fmtDate(row.date)}</td>
+                                    <td style={styles.td}>{row.sets}</td>
+                                    <td style={styles.td}>
+                                      {row.weight}kg × {row.reps}
+                                    </td>
+                                    <td style={{ ...styles.td, fontWeight: 700 }}>
+                                      {e1rmDisplay(row.e1rm)}
+                                      {row.lowConfidence && <span style={styles.lowConfidenceTag}>low-confidence</span>}
+                                    </td>
+                                    <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>
+                                      {fmtPct(chg)}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        {overallPct != null && (
+                          <div style={{ ...styles.overallLine, color: pctColor(overallPct) }}>
+                            Overall: {fmtPct(overallPct)} across {entries.length} sessions · Best: {last.weight}kg ×
+                            {last.reps} · e1RM {e1rmDisplay(last.e1rm)}{bwUnit === "kg" ? "kg" : ""}
+                          </div>
+                        )}
+                        {options.lineChart && entries.length >= 2 && (
+                          <TrendLineChart
+                            series={entries.map((r) => ({ date: fmtDate(r.date), value: r.e1rm }))}
+                            label={exName}
+                            unit="kg"
+                          />
+                        )}
+                      </div>
+                    );
+                  })
+                : Object.entries(strength.weeklyExMap).map(([exName, weeks]) => (
+                    <div key={exName} style={{ marginBottom: 22 }}>
+                      <div style={styles.exTitle}>
+                        {exName}
+                        {options.sparkline && weeks.length >= 2 && (
+                          <span style={{ marginLeft: 10, verticalAlign: "middle", display: "inline-block" }}>
+                            <Sparkline points={weeks.map((w) => ({ x: w.weekStart, y: w.e1rm }))} />
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={styles.table}>
+                          <thead>
+                            <tr style={styles.theadRow}>
+                              {["Week of", "Sessions", "Avg sets", `Peak e1RM (${bwUnit})`, "vs Prev week"].map((h) => (
+                                <th key={h} style={styles.th}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {weeks.map((wk, idx) => {
+                              const prev = idx > 0 ? weeks[idx - 1] : null;
+                              const chg = prev && prev.e1rm > 0 ? ((wk.e1rm - prev.e1rm) / prev.e1rm) * 100 : null;
+                              return (
+                                <tr key={idx} style={styles.tr}>
+                                  <td style={styles.td}>{fmtDate(wk.weekStart)}</td>
+                                  <td style={styles.td}>{wk.sessionCount}</td>
+                                  <td style={styles.td}>{wk.sets}</td>
+                                  <td style={{ ...styles.td, fontWeight: 700 }}>{e1rmDisplay(wk.e1rm)}</td>
+                                  <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>{fmtPct(chg)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {options.lineChart && weeks.length >= 2 && (
+                        <TrendLineChart
+                          series={weeks.map((w) => ({ date: fmtDate(w.weekStart), value: w.e1rm }))}
+                          label={exName}
+                          unit="kg"
+                        />
+                      )}
                     </div>
                   ))}
             </>
@@ -532,6 +837,38 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: 4,
   },
   eachSideTag: { fontSize: 11, fontWeight: 600, color: "var(--mute)", marginLeft: 8 },
+  metricSubheading: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--mute)",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginBottom: 8,
+  },
+  manualTag: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "var(--accent)",
+    background: "var(--accent-dim)",
+    border: "1px solid var(--accent)",
+    borderRadius: 4,
+    padding: "1px 6px",
+    marginLeft: 8,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  lowConfidenceTag: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#c98a1f",
+    background: "rgba(201,138,31,0.12)",
+    border: "1px solid #c98a1f",
+    borderRadius: 4,
+    padding: "1px 6px",
+    marginLeft: 8,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   theadRow: { color: "var(--mute)", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.8 },
   th: { textAlign: "left", padding: "4px 8px 4px 0", fontWeight: 600, whiteSpace: "nowrap" },
