@@ -77,3 +77,34 @@ export async function resolveCurrentOneRM(
 
   return bestRollingOneRM(rows ?? [], formula);
 }
+
+// Same resolution order as resolveCurrentOneRM(), but also reports
+// which source won — used by the Strength report to tag values that
+// come from a coach-set manual override rather than the rolling
+// estimate (spec: "Show manual overrides with a manual tag"). A
+// separate function rather than changing resolveCurrentOneRM()'s
+// return shape, since three existing call sites depend on it
+// returning a plain number.
+export async function resolveCurrentOneRMWithSource(
+  athleteId: string,
+  exerciseName: string,
+  formula: OneRMFormula
+): Promise<{ value: number | null; source: "manual" | "rolling" }> {
+  const supabase = createClient();
+  const { data: fixedData } = await supabase
+    .from("athlete_one_rms")
+    .select("one_rm_kg")
+    .eq("athlete_id", athleteId)
+    .ilike("exercise_name", exerciseName)
+    .limit(1);
+  const fixed = fixedData?.[0]?.one_rm_kg;
+  if (fixed != null) return { value: Number(fixed), source: "manual" };
+
+  const { data: rows } = await supabase
+    .from("session_exercises")
+    .select("log, reps, sessions!inner(athlete_id)")
+    .ilike("name", exerciseName)
+    .eq("sessions.athlete_id", athleteId);
+
+  return { value: bestRollingOneRM(rows ?? [], formula), source: "rolling" };
+}
