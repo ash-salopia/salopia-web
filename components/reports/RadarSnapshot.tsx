@@ -37,14 +37,16 @@ export default function RadarSnapshot({
 
   // A radius axis starting at 0 flattens the shape when every value
   // clusters near 100% (typical, since these are % of each exercise's
-  // own baseline) — pad around the actual data range instead, floored
-  // at 0, so real differences between exercises are still visible.
+  // own baseline) — zoom the domain tightly around the actual data
+  // range instead (floored at 0), so real differences between
+  // exercises stay legible instead of being squeezed into a sliver
+  // near the outer ring.
   const values = data.flatMap((d) => [d.baseline, d.latest]);
   const minV = Math.min(...values);
   const maxV = Math.max(...values);
-  const pad = Math.max(10, (maxV - minV) * 0.3);
-  const domainMin = Math.max(0, Math.floor((minV - pad) / 10) * 10);
-  const domainMax = Math.ceil((maxV + pad) / 10) * 10;
+  const pad = Math.max(4, (maxV - minV) * 0.15);
+  const domainMin = Math.max(0, Math.floor((minV - pad) / 5) * 5);
+  const domainMax = Math.ceil((maxV + pad) / 5) * 5;
 
   return (
     <div style={{ width: "100%", height: 280 }}>

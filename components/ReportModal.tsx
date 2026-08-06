@@ -5,7 +5,7 @@ import type { ReportData } from "@/lib/data/reports";
 import type { ReportOptions } from "@/components/ReportRangeModal";
 import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
-import TrendLineChart from "@/components/reports/TrendLineChart";
+import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
 import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
 
 function fmtDate(iso: string): string {
@@ -80,6 +80,27 @@ export default function ReportModal({
   const bwUnit = options.bodyweightRelative && bodyweightKg ? "×BW" : "kg";
   const e1rmDisplay = (kg: number) =>
     options.bodyweightRelative && bodyweightKg ? (kg / bodyweightKg).toFixed(2) : kg.toFixed(1);
+
+  // Combined line-chart series (one line per exercise, all on one
+  // chart) — weekly granularity, since per-session dates don't align
+  // across exercises onto a shared x-axis. Capped to the same
+  // exerciseLimit and same most-logged-first selection as the radar,
+  // so both visuals show the same exercise subset.
+  const ttlLineSeries = [...exerciseSummaries]
+    .sort((a, b) => b.entries.length - a.entries.length)
+    .slice(0, options.exerciseLimit)
+    .map((e) => ({
+      name: e.name,
+      points: (weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: w.ttl })),
+    }));
+  const e1rmValue = (kg: number) => (options.bodyweightRelative && bodyweightKg ? kg / bodyweightKg : kg);
+  const e1rmLineSeries = [...strength.exerciseSummaries]
+    .sort((a, b) => b.entries.length - a.entries.length)
+    .slice(0, options.exerciseLimit)
+    .map((e) => ({
+      name: e.name,
+      points: (strength.weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: e1rmValue(w.e1rm) })),
+    }));
 
   const handleCopy = () => {
     const el = document.getElementById("report-content");
@@ -320,6 +341,24 @@ export default function ReportModal({
             </div>
           )}
 
+          {options.lineChart && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={styles.sectionTitle}>Trend Over Time</div>
+              {options.ttl && hasStrength && ttlLineSeries.length > 0 && (
+                <div style={{ marginBottom: options.e1rm ? 16 : 0 }}>
+                  {options.e1rm && <div style={styles.metricSubheading}>Total Training Load</div>}
+                  <MultiTrendLineChart series={ttlLineSeries} unit="kg" fmtDate={fmtDate} />
+                </div>
+              )}
+              {options.e1rm && hasE1rm && e1rmLineSeries.length > 0 && (
+                <div>
+                  {options.ttl && <div style={styles.metricSubheading}>Estimated 1RM</div>}
+                  <MultiTrendLineChart series={e1rmLineSeries} unit={bwUnit} fmtDate={fmtDate} />
+                </div>
+              )}
+            </div>
+          )}
+
           {options.loadProgression && options.ttl && hasStrength && (
             <div style={{ marginBottom: 24 }}>
               <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " — TTL" : ""}</div>
@@ -512,13 +551,6 @@ export default function ReportModal({
                             {last.reps}@{last.maxWeight}kg · TTL {last.ttl.toFixed(0)} kg
                           </div>
                         )}
-                        {options.lineChart && entries.length >= 2 && (
-                          <TrendLineChart
-                            series={entries.map((r) => ({ date: fmtDate(r.date), value: r.ttl }))}
-                            label={exName}
-                            unit="kg"
-                          />
-                        )}
                       </div>
                     );
                   })
@@ -551,13 +583,6 @@ export default function ReportModal({
                           </tbody>
                         </table>
                       </div>
-                      {options.lineChart && weeks.length >= 2 && (
-                        <TrendLineChart
-                          series={weeks.map((w) => ({ date: fmtDate(w.weekStart), value: w.ttl }))}
-                          label={exName}
-                          unit="kg"
-                        />
-                      )}
                     </div>
                   ))}
             </>
@@ -642,13 +667,6 @@ export default function ReportModal({
                             {last.reps} · e1RM {e1rmDisplay(last.e1rm)}{bwUnit === "kg" ? "kg" : ""}
                           </div>
                         )}
-                        {options.lineChart && entries.length >= 2 && (
-                          <TrendLineChart
-                            series={entries.map((r) => ({ date: fmtDate(r.date), value: r.e1rm }))}
-                            label={exName}
-                            unit="kg"
-                          />
-                        )}
                       </div>
                     );
                   })
@@ -681,13 +699,6 @@ export default function ReportModal({
                           </tbody>
                         </table>
                       </div>
-                      {options.lineChart && weeks.length >= 2 && (
-                        <TrendLineChart
-                          series={weeks.map((w) => ({ date: fmtDate(w.weekStart), value: w.e1rm }))}
-                          label={exName}
-                          unit="kg"
-                        />
-                      )}
                     </div>
                   ))}
             </>
