@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { listNoteTemplates, type NoteTemplate } from "@/lib/data/note-templates";
+import { linkify } from "@/lib/linkify";
 
 interface Props {
   value: string;
@@ -97,7 +98,7 @@ export default function SessionNotesBlock({
           )}
 
           {readOnly ? (
-            <pre style={s.readOnlyText}>{value}</pre>
+            <pre style={s.readOnlyText}>{linkify(value)}</pre>
           ) : (
             <textarea
               ref={textareaRef}
