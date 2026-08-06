@@ -648,6 +648,11 @@ export default function AthleteSessionView({
                         <button
                           style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
                           onClick={() => {
+                            if (set.done) {
+                              handleSetUpdate(ex.id, i, { done: false });
+                              return;
+                            }
+                            const patch: Partial<SetLog> = { done: true };
                             // Tapping done on a still-empty %1RM box
                             // captures the greyed suggestion as the
                             // real logged weight — the box only ever
@@ -656,11 +661,23 @@ export default function AthleteSessionView({
                             // confirming without typing over it should
                             // still record what was actually suggested.
                             const target = ex.computed_targets?.[i];
-                            if (!set.done && showWeight && !set.weight.trim() && target != null) {
-                              handleSetUpdate(ex.id, i, { weight: String(target), done: true });
-                            } else {
-                              handleSetUpdate(ex.id, i, { done: !set.done });
+                            if (showWeight && !set.weight.trim() && target != null) {
+                              patch.weight = String(target);
                             }
+                            // Same idea for reps: the greyed box shows
+                            // the prescribed rep count as a placeholder,
+                            // never written into set.reps unless typed.
+                            // Without this, a set finished by tapping ✓
+                            // alone silently logs zero reps, and a
+                            // bodyweight/rep-based PB can never trigger
+                            // (detectPB in the log route needs a real
+                            // reps number).
+                            const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
+                            if (!timeMode && !set.reps.trim() && ex.reps && !isAmrap) {
+                              const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
+                              if (lower) patch.reps = lower;
+                            }
+                            handleSetUpdate(ex.id, i, patch);
                           }}
                         >
                           ✓
