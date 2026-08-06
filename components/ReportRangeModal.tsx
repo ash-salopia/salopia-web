@@ -6,26 +6,53 @@ import { todayISO, addDaysISO } from "@/lib/date-utils";
 type RangeMode = "4w" | "8w" | "12w" | "all" | "custom";
 
 export interface ReportOptions {
-  loadProgression: boolean; // compact % change summary table
-  ttl: boolean; // detailed per-exercise tonnage table
-  highlights: boolean; // top 3 progressed / 3 to review
+  // Metrics — at least one required to generate.
+  ttl: boolean; // Total Training Load (tonnage)
+  e1rm: boolean; // Estimated 1RM (strength)
+  // Per-metric display components — apply to whichever metric(s) above are ticked.
+  loadProgression: boolean; // progression table: first/latest/delta/% change per exercise
+  highlights: boolean; // top 3 progressed / 3 to review, ranked independently per metric
+  sparkline: boolean; // mini-trend per row
+  radar: boolean; // Week 1 vs latest snapshot, normalised to % of baseline
+  lineChart: boolean; // per-exercise value-over-time chart
   aiSummary: boolean; // AI overview + recurring-notes-themes paragraphs
   athleteNotes: boolean; // raw athlete notes list
+  // e1RM-only options — only meaningful (and only enabled in the UI) when e1rm is ticked.
+  bodyweightRelative: boolean; // show e1RM ÷ bodyweight instead of raw kg
+  exerciseLimit: number; // cap on exercises shown in radar/line chart
+  lowConfidenceCap: number; // rep count above which an e1RM estimate is flagged low-confidence
 }
 
 export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
-  loadProgression: true,
   ttl: true,
+  e1rm: false,
+  loadProgression: true,
   highlights: true,
+  sparkline: false,
+  radar: false,
+  lineChart: false,
   aiSummary: true,
   athleteNotes: false,
+  bodyweightRelative: false,
+  exerciseLimit: 8,
+  lowConfidenceCap: 12,
 };
 
-const OPTION_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
+const METRIC_FIELDS: { key: "ttl" | "e1rm"; label: string; hint: string }[] = [
+  { key: "ttl", label: "Total Training Load (TTL)", hint: "Total tonnage — sets × reps × weight" },
+  { key: "e1rm", label: "Estimated 1RM (e1RM)", hint: "Strength progression, independent of volume" },
+];
+
+const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "aiSummary", label: "AI summary", hint: "Short AI overview + recurring themes from notes, at the top" },
-  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review" },
-  { key: "loadProgression", label: "Load progression %", hint: "Compact table of overall % change per exercise" },
-  { key: "ttl", label: "Total Training Load detail", hint: "Full per-session tonnage breakdown per exercise" },
+  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review — per metric selected" },
+  { key: "loadProgression", label: "Progression table", hint: "First / latest / Δ / % change per exercise" },
+  { key: "sparkline", label: "Sparklines", hint: "Small mini-trend chart per exercise row" },
+  { key: "radar", label: "Radar snapshot", hint: "Week 1 vs latest, normalised across exercises" },
+  { key: "lineChart", label: "Line chart over time", hint: "Per-exercise trend, plotted by week" },
+];
+
+const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "athleteNotes", label: "Athlete notes", hint: "Raw list of the athlete's own session/exercise notes" },
 ];
 
@@ -51,7 +78,8 @@ export default function ReportRangeModal({
     { key: "custom", label: "Custom range" },
   ];
 
-  const canGenerate = mode !== "custom" || (customStart && customEnd && customEnd >= customStart);
+  const hasMetric = options.ttl || options.e1rm;
+  const canGenerate = hasMetric && (mode !== "custom" || (customStart && customEnd && customEnd >= customStart));
 
   const handleGenerate = () => {
     if (mode === "all") {
@@ -126,13 +154,102 @@ export default function ReportRangeModal({
           </div>
         )}
 
-        <div style={styles.sectionLabel}>Include in report</div>
+        <div style={styles.sectionLabel}>Metrics to include</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
-          {OPTION_FIELDS.map((f) => (
+          {METRIC_FIELDS.map((f) => (
             <label key={f.key} style={styles.checkOption}>
               <input
                 type="checkbox"
                 checked={options[f.key]}
+                onChange={(e) => setOptions((prev) => ({ ...prev, [f.key]: e.target.checked }))}
+                style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>{f.label}</span>
+                <span style={{ fontSize: 11, color: "var(--mute)" }}>{f.hint}</span>
+              </span>
+            </label>
+          ))}
+          {!hasMetric && <div style={styles.warnText}>Select at least one metric to generate a report.</div>}
+        </div>
+
+        <div style={styles.sectionLabel}>Display components</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+          {COMPONENT_FIELDS.map((f) => (
+            <label key={f.key} style={styles.checkOption}>
+              <input
+                type="checkbox"
+                checked={options[f.key] as boolean}
+                onChange={(e) => setOptions((prev) => ({ ...prev, [f.key]: e.target.checked }))}
+                style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>{f.label}</span>
+                <span style={{ fontSize: 11, color: "var(--mute)" }}>{f.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ ...styles.sectionLabel, opacity: options.e1rm ? 1 : 0.5 }}>e1RM options</div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            marginBottom: 16,
+            opacity: options.e1rm ? 1 : 0.5,
+            pointerEvents: options.e1rm ? "auto" : "none",
+          }}
+        >
+          <label style={styles.checkOption}>
+            <input
+              type="checkbox"
+              checked={options.bodyweightRelative}
+              disabled={!options.e1rm}
+              onChange={(e) => setOptions((prev) => ({ ...prev, bodyweightRelative: e.target.checked }))}
+              style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+            />
+            <span>
+              <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>Bodyweight-relative</span>
+              <span style={{ fontSize: 11, color: "var(--mute)" }}>Show e1RM ÷ bodyweight instead of raw kg</span>
+            </span>
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={styles.fieldLabel}>Exercise limit (radar/chart)</div>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={options.exerciseLimit}
+                disabled={!options.e1rm}
+                onChange={(e) => setOptions((prev) => ({ ...prev, exerciseLimit: parseInt(e.target.value) || 1 }))}
+                style={styles.input}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={styles.fieldLabel}>Low-confidence rep cap</div>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={options.lowConfidenceCap}
+                disabled={!options.e1rm}
+                onChange={(e) => setOptions((prev) => ({ ...prev, lowConfidenceCap: parseInt(e.target.value) || 1 }))}
+                style={styles.input}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.sectionLabel}>Scope</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+          {SCOPE_FIELDS.map((f) => (
+            <label key={f.key} style={styles.checkOption}>
+              <input
+                type="checkbox"
+                checked={options[f.key] as boolean}
                 onChange={(e) => setOptions((prev) => ({ ...prev, [f.key]: e.target.checked }))}
                 style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
               />
@@ -189,6 +306,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4 },
+  warnText: { fontSize: 11, color: "#ff7d7d", padding: "4px 2px" },
   sectionLabel: { fontSize: 12, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 },
   checkOption: { display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 2px", cursor: "pointer" },
   input: {
