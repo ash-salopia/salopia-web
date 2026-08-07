@@ -186,7 +186,7 @@ export default function NotesTemplateModal({ onCreated, onClose }: {
   return (
     <>
       <style>{`@keyframes nt-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
-      <div style={s.overlay} onClick={onClose}>
+      <div style={s.overlay}>
         <div style={s.modal} onClick={(e) => e.stopPropagation()}>
           <div style={s.header}>
             <span style={s.title}>📝 New template from notes</span>

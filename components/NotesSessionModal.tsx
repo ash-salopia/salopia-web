@@ -278,7 +278,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
   return (
     <>
       <style>{`@keyframes athletiq-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
-      <div style={s.overlay} onClick={onClose}>
+      <div style={s.overlay}>
         <div style={s.modal} onClick={(e) => e.stopPropagation()}>
 
           <div style={s.header}>

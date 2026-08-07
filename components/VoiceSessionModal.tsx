@@ -311,7 +311,7 @@ export default function VoiceSessionModal({
         @keyframes athletiq-pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
         @keyframes athletiq-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
-      <div style={s.overlay} onClick={onClose}>
+      <div style={s.overlay}>
         <div style={s.modal} onClick={(e) => e.stopPropagation()}>
           <div style={s.header}>
             <span style={s.title}>{TITLE[mode]}</span>
