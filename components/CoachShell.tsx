@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import type { ResolvedBranding } from "@/types/branding";
@@ -43,6 +43,34 @@ export default function CoachShell({
     root.style.setProperty("--accent-dim", branding.primaryColorDim);
   }, [branding.primaryColor, branding.primaryColorDim]);
 
+  // Nothing in this app previously detected viewport width at all — the
+  // sidebar just squeezed the content column down to whatever was left
+  // on a phone, which is why it read as "long and thin" and layouts
+  // broke. Below MOBILE_BREAKPOINT the sidebar becomes an off-canvas
+  // drawer (hidden by default, toggled via the header hamburger) rather
+  // than an always-visible 220px column eating a third of a phone
+  // screen. Desktop behaviour is untouched — isMobile is false until
+  // proven otherwise, matching the pre-existing always-visible sidebar.
+  const MOBILE_BREAKPOINT = 768;
+  const [isMobile, setIsMobile] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Closing on navigation means the drawer never lingers open over the
+  // next page — matches how a mobile nav drawer is expected to behave
+  // (unlike the notes/voice review modals, there's no edit-in-progress
+  // to protect here, so closing on an outside interaction is fine).
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -54,27 +82,51 @@ export default function CoachShell({
   return (
     <div style={styles.app}>
       <header style={styles.header}>
-        {/* Logo / brand name */}
-        <div style={styles.brand}>
-          {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.displayName} style={styles.logo} />
-          ) : (
-            <span style={{ color: "var(--accent)" }}>{branding.displayName}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {isMobile && (
+            <button
+              style={styles.hamburgerBtn}
+              onClick={() => setSidebarOpen((v) => !v)}
+              aria-label="Toggle navigation"
+            >
+              ☰
+            </button>
           )}
-          {branding.showOrgName && orgName && (
-            <span style={styles.orgSeparator}>· {orgName}</span>
-          )}
+          {/* Logo / brand name */}
+          <div style={styles.brand}>
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.displayName} style={styles.logo} />
+            ) : (
+              <span style={{ color: "var(--accent)" }}>{branding.displayName}</span>
+            )}
+            {branding.showOrgName && orgName && !isMobile && (
+              <span style={styles.orgSeparator}>· {orgName}</span>
+            )}
+          </div>
         </div>
 
         <div style={styles.headerRight}>
           <Avatar name={coachName || "Coach"} avatarUrl={coachAvatarUrl} size={28} />
-          <span style={styles.coachInfo}>{coachName || "Coach"}</span>
+          {!isMobile && <span style={styles.coachInfo}>{coachName || "Coach"}</span>}
           <button style={styles.signOutBtn} onClick={handleSignOut}>Sign out</button>
         </div>
       </header>
 
       <div style={styles.body}>
-        <aside style={styles.sidebar}>
+        {isMobile && sidebarOpen && (
+          <div style={styles.backdrop} onClick={() => setSidebarOpen(false)} />
+        )}
+        <aside
+          style={{
+            ...styles.sidebar,
+            ...(isMobile
+              ? {
+                  ...styles.sidebarMobile,
+                  transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+                }
+              : {}),
+          }}
+        >
           {NAV_ITEMS.map((item) => {
             const active = pathname?.startsWith(item.href);
             return (
@@ -89,7 +141,7 @@ export default function CoachShell({
             );
           })}
         </aside>
-        <main style={styles.main}>{children}</main>
+        <main style={{ ...styles.main, ...(isMobile ? styles.mainMobile : {}) }}>{children}</main>
       </div>
 
       {branding.showPoweredBy && (
@@ -124,6 +176,17 @@ const styles: Record<string, React.CSSProperties> = {
   orgSeparator: { fontSize: 14, fontWeight: 400, color: "var(--mute)", letterSpacing: 0 },
   headerRight: { display: "flex", alignItems: "center", gap: 12 },
   coachInfo: { fontSize: 13, color: "var(--mute)" },
+  hamburgerBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--text)",
+    borderRadius: 8,
+    width: 34,
+    height: 34,
+    fontSize: 16,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
   signOutBtn: {
     background: "transparent",
     border: "1px solid var(--line)",
@@ -159,6 +222,35 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--text)",
     boxShadow: "inset 0 0 0 1px var(--line)",
   },
+  // Off-canvas drawer on mobile — fixed over the content rather than an
+  // in-flow flex sibling, so it doesn't eat width from `main` at all
+  // while hidden. Slides via transform (set inline, alongside these
+  // base styles) rather than being unmounted, so the slide animates.
+  sidebarMobile: {
+    position: "fixed",
+    top: 56, // below the header
+    left: 0,
+    bottom: 0,
+    zIndex: 50,
+    boxShadow: "2px 0 16px rgba(0,0,0,.4)",
+    transition: "transform 0.2s ease-out",
+    overflowY: "auto",
+  },
+  backdrop: {
+    position: "fixed",
+    top: 56,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(6,9,12,.6)",
+    zIndex: 40,
+  },
   main: { flex: 1, minWidth: 0, overflowY: "auto", padding: 24 },
+  // No minWidth:0 here — that's what let flexbox squeeze this column
+  // down to whatever was left after the sidebar on a phone, wrapping
+  // and overlapping content instead of just needing a sideways scroll.
+  // Dropping it lets `main` keep its content's natural width and
+  // overflow horizontally instead, which overflowX below then scrolls.
+  mainMobile: { minWidth: undefined, overflowX: "auto", padding: 14 },
   poweredBy: { textAlign: "center", fontSize: 11, color: "var(--mute)", padding: "8px 0", borderTop: "1px solid var(--line)" },
 };
