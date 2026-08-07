@@ -31,6 +31,7 @@ import RecoverySessionModal from "@/components/RecoverySessionModal";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
+import { useIsMobile } from "@/lib/use-is-mobile";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
@@ -86,6 +87,7 @@ function EditableName({ name, onSave }: { name: string; onSave: (n: string) => P
 export default function AthleteDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const isMobile = useIsMobile();
   const athleteId = params.id;
 
   const [athlete, setAthlete] = useState<Athlete | null>(null);
@@ -95,6 +97,7 @@ export default function AthleteDetailPage() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [typePicker, setTypePicker] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [hyroxEnabled, setHyroxEnabled] = useState(true);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   // Last-used copy-to-range dates, shared across CopySessionModal opens
@@ -507,65 +510,84 @@ export default function AthleteDetailPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, position: "relative" }}>
-          <button style={styles.ghostBtn} onClick={handleCopyShareLink}>
-            {linkCopied ? "Copied!" : "Copy share link"}
-          </button>
-          <button
-            style={styles.ghostBtn}
-            onClick={() => {
-              setLoadTemplateId(templates[0]?.id ?? "");
-              setLoadStart(todayISO());
-              setLoadEnd(todayISO());
-              setLoadTemplateOpen(true);
-            }}
-          >
-            Load template
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setLibraryAccessOpen(true)}>
-            📚 Session Library
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setReportRangeOpen(true)}>
-            📊 Reports
-          </button>
-          <button
-            style={styles.ghostBtn}
-            onClick={() => {
-              setRangeStart(todayISO());
-              setRangeEnd(todayISO());
-              setCopyWeeks(1);
-              setRangeToolOpen("copy");
-            }}
-          >
-            Copy range
-          </button>
-          <button
-            style={styles.ghostBtn}
-            onClick={() => {
-              setRangeStart(todayISO());
-              setRangeEnd(todayISO());
-              setRangeToolOpen("delete");
-            }}
-          >
-            Delete range
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setVoiceOpen(true)}>
-            🎤 Voice
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setNotesOpen(true)}>
-            📝 Notes
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setModifyOpen(true)}>
-            ✏️ Modify
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setAssignOpen(true)}>
-            📅 Assign programme
-          </button>
-          <button style={styles.ghostBtn} onClick={() => router.push(`/athletes/${athleteId}/profile`)}>
-            👤 Profile
-          </button>
-          <button style={styles.ghostBtn} onClick={() => setGoalsOpen(true)}>
-            🎯 Goals
-          </button>
+          {(() => {
+            const toolbarActions: { key: string; label: string; onClick: () => void }[] = [
+              { key: "share", label: linkCopied ? "Copied!" : "Copy share link", onClick: handleCopyShareLink },
+              {
+                key: "template",
+                label: "Load template",
+                onClick: () => {
+                  setLoadTemplateId(templates[0]?.id ?? "");
+                  setLoadStart(todayISO());
+                  setLoadEnd(todayISO());
+                  setLoadTemplateOpen(true);
+                },
+              },
+              { key: "library", label: "📚 Session Library", onClick: () => setLibraryAccessOpen(true) },
+              { key: "reports", label: "📊 Reports", onClick: () => setReportRangeOpen(true) },
+              {
+                key: "copyrange",
+                label: "Copy range",
+                onClick: () => {
+                  setRangeStart(todayISO());
+                  setRangeEnd(todayISO());
+                  setCopyWeeks(1);
+                  setRangeToolOpen("copy");
+                },
+              },
+              {
+                key: "deleterange",
+                label: "Delete range",
+                onClick: () => {
+                  setRangeStart(todayISO());
+                  setRangeEnd(todayISO());
+                  setRangeToolOpen("delete");
+                },
+              },
+              { key: "voice", label: "🎤 Voice", onClick: () => setVoiceOpen(true) },
+              { key: "notes", label: "📝 Notes", onClick: () => setNotesOpen(true) },
+              { key: "modify", label: "✏️ Modify", onClick: () => setModifyOpen(true) },
+              { key: "assign", label: "📅 Assign programme", onClick: () => setAssignOpen(true) },
+              { key: "profile", label: "👤 Profile", onClick: () => router.push(`/athletes/${athleteId}/profile`) },
+              { key: "goals", label: "🎯 Goals", onClick: () => setGoalsOpen(true) },
+            ];
+
+            // On mobile these 12 buttons used to force the whole header
+            // into a horizontal-scroll situation just to reach "Modify"
+            // or "Voice" — collapsed into one dropdown instead, with
+            // Add session kept separate since it's the primary action.
+            if (isMobile) {
+              return (
+                <div style={{ position: "relative" }}>
+                  <button style={styles.ghostBtn} onClick={() => setMoreMenuOpen((v) => !v)}>
+                    ⋯ More
+                  </button>
+                  {moreMenuOpen && (
+                    <div style={styles.moreMenu}>
+                      {toolbarActions.map((a) => (
+                        <button
+                          key={a.key}
+                          style={styles.typeOption}
+                          onClick={() => {
+                            setMoreMenuOpen(false);
+                            a.onClick();
+                          }}
+                        >
+                          {a.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return toolbarActions.map((a) => (
+              <button key={a.key} style={styles.ghostBtn} onClick={a.onClick}>
+                {a.label}
+              </button>
+            ));
+          })()}
           <button style={styles.primaryBtn} onClick={() => setTypePicker((v) => !v)}>
             + {calendarAddDate && calendarAddDate !== todayStr
               ? `Add session — ${new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
@@ -1167,6 +1189,23 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 140,
     boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
     zIndex: 10,
+  },
+  moreMenu: {
+    position: "absolute",
+    top: "calc(100% + 6px)",
+    left: 0,
+    background: "var(--panel2)",
+    border: "1px solid var(--line)",
+    borderRadius: 10,
+    padding: 6,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    minWidth: 200,
+    maxHeight: "70vh",
+    overflowY: "auto",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+    zIndex: 20,
   },
   typeOption: {
     display: "flex",

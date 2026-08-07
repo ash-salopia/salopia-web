@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase-browser";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import Avatar from "@/components/Avatar";
+import { useIsMobile } from "@/lib/use-is-mobile";
 
 const NAV_ITEMS = [
   { href: "/athletes",    label: "Athletes",    icon: "👤" },
@@ -43,25 +44,13 @@ export default function CoachShell({
     root.style.setProperty("--accent-dim", branding.primaryColorDim);
   }, [branding.primaryColor, branding.primaryColorDim]);
 
-  // Nothing in this app previously detected viewport width at all — the
-  // sidebar just squeezed the content column down to whatever was left
-  // on a phone, which is why it read as "long and thin" and layouts
-  // broke. Below MOBILE_BREAKPOINT the sidebar becomes an off-canvas
-  // drawer (hidden by default, toggled via the header hamburger) rather
-  // than an always-visible 220px column eating a third of a phone
-  // screen. Desktop behaviour is untouched — isMobile is false until
-  // proven otherwise, matching the pre-existing always-visible sidebar.
-  const MOBILE_BREAKPOINT = 768;
-  const [isMobile, setIsMobile] = useState(false);
+  // Below this breakpoint the sidebar becomes an off-canvas drawer
+  // (hidden by default, toggled via the header hamburger) rather than
+  // an always-visible 220px column eating a third of a phone screen.
+  // Desktop behaviour is untouched — isMobile is false until proven
+  // otherwise, matching the pre-existing always-visible sidebar.
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    const apply = () => setIsMobile(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
 
   // Closing on navigation means the drawer never lingers open over the
   // next page — matches how a mobile nav drawer is expected to behave

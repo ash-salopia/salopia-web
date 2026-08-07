@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
+import { useIsMobile } from "@/lib/use-is-mobile";
 import type { Athlete, Session, SessionType, SetLog, SessionExercise } from "@/types";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
@@ -90,6 +91,7 @@ const LS_SES   = "liveGroup_session";
 
 export default function LiveGroupPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [mode, setMode]           = useState<"starred" | "group">("starred");
   const [allAthletes, setAll]     = useState<Athlete[]>([]);
   const [groups, setGroups]       = useState<string[]>([]);
@@ -479,9 +481,28 @@ export default function LiveGroupPage() {
                               <span style={s.exPrevLine}>Last: {prevLabel}</span>
                             )}
                           </div>
-                          <div style={s.exRight}>
+                          <div style={{ ...s.exRight, ...(isMobile ? s.exRightMobile : {}) }}>
+                            {/* Compact dots */}
+                            <div style={s.dotsRow}>
+                              <div style={s.dots}>
+                                {(ex.log ?? []).map((set, si) => (
+                                  <button key={si}
+                                    title={
+                                      showWeight && set.weight ? `${set.weight}kg`
+                                      : timeMode && set.time ? `${set.time}s`
+                                      : `Set ${si + 1}`
+                                    }
+                                    onClick={(e) => { e.stopPropagation(); handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null); }}
+                                    style={{ ...s.dot, ...(set.done ? s.dotOn : {}) }} />
+                                ))}
+                              </div>
+                              <span style={s.setCount}>{doneSets}/{totalSets}</span>
+                              {!isMobile && <span style={s.chevron}>{isExpanded ? "▴" : "▾"}</span>}
+                            </div>
                             {/* Coach's own progress call — no prompt,
-                                just tap. Toggles off on a repeat tap. */}
+                                just tap. Toggles off on a repeat tap.
+                                Stacked below the dots on mobile so the
+                                exercise name isn't squeezed for space. */}
                             <div style={s.thumbRow} onClick={(e) => e.stopPropagation()}>
                               <button
                                 title="Athlete could progress this next time"
@@ -495,22 +516,8 @@ export default function LiveGroupPage() {
                                 style={{ ...s.thumbBtn, ...(ex.progress === "no" ? s.thumbBtnNo : {}) }}>
                                 👎
                               </button>
+                              {isMobile && <span style={s.chevron}>{isExpanded ? "▴" : "▾"}</span>}
                             </div>
-                            {/* Compact dots */}
-                            <div style={s.dots}>
-                              {(ex.log ?? []).map((set, si) => (
-                                <button key={si}
-                                  title={
-                                    showWeight && set.weight ? `${set.weight}kg`
-                                    : timeMode && set.time ? `${set.time}s`
-                                    : `Set ${si + 1}`
-                                  }
-                                  onClick={(e) => { e.stopPropagation(); handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null); }}
-                                  style={{ ...s.dot, ...(set.done ? s.dotOn : {}) }} />
-                              ))}
-                            </div>
-                            <span style={s.setCount}>{doneSets}/{totalSets}</span>
-                            <span style={s.chevron}>{isExpanded ? "▴" : "▾"}</span>
                           </div>
                         </div>
 
@@ -645,7 +652,13 @@ const s: Record<string, React.CSSProperties> = {
   exPrescription:{ fontSize: 11, color: "var(--mute)", marginTop: 1 },
   exPrevLine:   { fontSize: 11, color: "var(--accent)", marginTop: 1 },
   exRight:      { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
-  thumbRow:     { display: "flex", gap: 2 },
+  // Stacks dots+count above thumbs instead of one long row, so exMeta
+  // (the exercise name, flex:1 minWidth:0) gets more of the row's
+  // width back on a narrow phone screen instead of being the only
+  // thing that shrinks.
+  exRightMobile:{ flexDirection: "column" as const, alignItems: "flex-end", gap: 3 },
+  dotsRow:      { display: "flex", alignItems: "center", gap: 8 },
+  thumbRow:     { display: "flex", alignItems: "center", gap: 2 },
   thumbBtn:     { background: "transparent", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 5px", fontSize: 12, cursor: "pointer", opacity: 0.5, lineHeight: 1 },
   thumbBtnYes:  { opacity: 1, background: "var(--good-dim)", borderColor: "var(--good)" },
   thumbBtnNo:   { opacity: 1, background: "var(--panel2)", borderColor: "var(--mute)" },
