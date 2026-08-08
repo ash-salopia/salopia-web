@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { createServiceRoleClient } from "@/lib/supabase-service";
+import { ensureCoachProvisioned } from "@/lib/auth/ensure-coach-provisioned";
 
 // Supabase redirects here after the coach clicks the magic-link in their
 // email. We exchange the one-time code for a real session, then — if
@@ -9,6 +9,12 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 // can't insert into `coaches` directly (see migration 0001's note:
 // allowing that would let anyone assign themselves to any
 // organisation). This is the one legitimate server-side exception.
+//
+// This is the browser-initiated PKCE flow (?code=) used by regular
+// magic-link login/signup. Invite links use a different mechanism —
+// see app/auth/confirm/route.ts — because inviteUserByEmail is
+// triggered by the org owner, not the invited coach's own browser, so
+// there's no PKCE code-verifier cookie waiting on their device.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -20,7 +26,7 @@ export async function GET(request: Request) {
 
     if (!error && data.user) {
       try {
-        await ensureCoachProvisioned(data.user.id, data.user.user_metadata);
+        await ensureCoachProvisioned(data.user.id, data.user.email ?? "", data.user.user_metadata);
       } catch (provisionError) {
         // If provisioning fails, send the coach to a dedicated error
         // page rather than silently dropping them into an app where
@@ -35,41 +41,4 @@ export async function GET(request: Request) {
   // Something went wrong (expired/invalid link) — send back to login
   // with a flag the login page can use to show a friendly message.
   return NextResponse.redirect(`${origin}/login?error=auth`);
-}
-
-async function ensureCoachProvisioned(
-  userId: string,
-  metadata: { name?: string; org_name?: string }
-): Promise<void> {
-  const supabase = createServiceRoleClient();
-
-  const { data: existing, error: lookupError } = await supabase
-    .from("coaches")
-    .select("id")
-    .eq("id", userId)
-    .maybeSingle();
-  if (lookupError) throw lookupError;
-  if (existing) return; // already provisioned — nothing to do
-
-  // First-ever sign-in for this user: create a new organisation and
-  // make them its owner. The org/coach name fields are optional (a
-  // returning user clicking an old magic link won't have them set),
-  // so fall back to sensible defaults rather than failing the signup.
-  const orgName = metadata.org_name?.trim() || "My Organisation";
-  const coachName = metadata.name?.trim() || "";
-
-  const { data: org, error: orgError } = await supabase
-    .from("organisations")
-    .insert({ name: orgName })
-    .select()
-    .single();
-  if (orgError) throw orgError;
-
-  const { error: coachError } = await supabase.from("coaches").insert({
-    id: userId,
-    organisation_id: org.id,
-    name: coachName,
-    role: "owner",
-  });
-  if (coachError) throw coachError;
 }

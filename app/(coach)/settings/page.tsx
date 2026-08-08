@@ -1,6 +1,7 @@
 "use client";
 import BrandingSettings from "@/components/BrandingSettings";
 import CoachProfileSettings from "@/components/CoachProfileSettings";
+import TeamSettings from "@/components/TeamSettings";
 
 import { useState, useEffect } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
@@ -20,6 +21,8 @@ export default function SettingsPage() {
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
   const [coachAvatarUrl, setCoachAvatarUrl] = useState<string | null>(null);
+  const [coachRole, setCoachRole] = useState<"owner" | "coach">("owner");
+  const [coachSeatLimit, setCoachSeatLimit] = useState<number | null>(null);
 
   useEffect(() => {
     getOrgSettings()
@@ -29,16 +32,18 @@ export default function SettingsPage() {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data: coach } = await supabase.from("coaches").select("organisation_id, name, avatar_url").eq("id", user.id).single();
+          const { data: coach } = await supabase.from("coaches").select("organisation_id, name, avatar_url, role").eq("id", user.id).single();
           if (coach) {
             setCoachId(user.id);
             setCoachName(coach.name ?? "");
             setCoachAvatarUrl(coach.avatar_url ?? null);
-            const { data: org } = await supabase.from("organisations").select("id, tier, branding").eq("id", coach.organisation_id).single();
+            setCoachRole(coach.role === "owner" ? "owner" : "coach");
+            const { data: org } = await supabase.from("organisations").select("id, tier, branding, coach_seat_limit").eq("id", coach.organisation_id).single();
             if (org) {
               setOrgId(org.id);
               setOrgTier(org.tier ?? "standard");
               setOrgBranding(org.branding ?? {});
+              setCoachSeatLimit(org.coach_seat_limit ?? null);
             }
           }
         }
@@ -560,6 +565,13 @@ export default function SettingsPage() {
           {saving ? "Saving…" : "Save settings"}
         </button>
       </div>
+      {orgId && (
+        <TeamSettings
+          orgId={orgId}
+          role={coachRole}
+          coachSeatLimit={coachSeatLimit}
+        />
+      )}
       <BrandingSettings
         orgId={orgId}
         orgName=""
