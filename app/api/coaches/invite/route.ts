@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   // error inviteUserByEmail would throw.
   const { data: existingCoach } = await service
     .from("coaches")
-    .select("organisation_id, accepted_at")
+    .select("organisation_id, accepted_at, archived")
     .eq("email", email)
     .maybeSingle();
 
@@ -53,6 +53,12 @@ export async function POST(req: NextRequest) {
     }
     if (!existingCoach.accepted_at) {
       return NextResponse.json({ error: "This coach already has a pending invite" }, { status: 409 });
+    }
+    if (existingCoach.archived) {
+      return NextResponse.json(
+        { error: "This coach was previously removed. Reactivate them from the Team list instead of sending a new invite." },
+        { status: 409 }
+      );
     }
     return NextResponse.json({ error: "This person is already a coach in your organisation" }, { status: 409 });
   }
@@ -69,7 +75,8 @@ export async function POST(req: NextRequest) {
     const { count } = await service
       .from("coaches")
       .select("id", { count: "exact", head: true })
-      .eq("organisation_id", owner.organisation_id);
+      .eq("organisation_id", owner.organisation_id)
+      .eq("archived", false);
     if ((count ?? 0) >= org.coach_seat_limit) {
       return NextResponse.json(
         { error: "You've reached the coach limit for your current plan. Contact support to add seats." },

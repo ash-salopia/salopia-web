@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-service";
 import { redirect } from "next/navigation";
 import CoachShell from "@/components/CoachShell";
 import { resolveBranding, DEFAULT_BRANDING } from "@/types/branding";
@@ -24,7 +25,21 @@ export default async function CoachLayout({
   }
 
   if (!coach) {
-    redirect("/login?error=no_coach_profile");
+    // The RLS-scoped query above can return no row for two different
+    // reasons that need different messaging: genuinely no coach
+    // profile, or an archived coach (my_organisation_id() returns
+    // NULL for them — see 0051_coach_archive.sql — which makes even
+    // their OWN coaches row RLS-invisible, not just other org data).
+    // This is the one legitimate service-role exception to
+    // distinguish the two, mirroring the pattern already used in
+    // lib/auth/ensure-coach-provisioned.ts.
+    const service = createServiceRoleClient();
+    const { data: archivedCheck } = await service
+      .from("coaches")
+      .select("archived")
+      .eq("id", user.id)
+      .maybeSingle();
+    redirect(archivedCheck?.archived ? "/login?error=archived" : "/login?error=no_coach_profile");
   }
 
   const org = coach.organisations;

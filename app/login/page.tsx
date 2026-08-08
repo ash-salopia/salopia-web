@@ -10,6 +10,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Signed in, but couldn't set up your account. Please try again, or contact support if this keeps happening.",
   no_coach_profile:
     "Signed in, but your account isn't fully set up yet. Try signing in again — if this keeps happening, contact support.",
+  archived:
+    "Your access to this organisation has been paused. Contact your organisation owner if you think this is a mistake.",
   demo_unavailable:
     "The demo isn't available right now — please contact us and we'll sort you out.",
 };

@@ -15,6 +15,7 @@ interface Coach {
   email: string | null;
   role: "owner" | "coach";
   accepted_at: string | null;
+  archived: boolean;
 }
 
 interface Props {
@@ -34,7 +35,7 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
     const supabase = createClient();
     const { data } = await supabase
       .from("coaches")
-      .select("id, name, email, role, accepted_at")
+      .select("id, name, email, role, accepted_at, archived")
       .eq("organisation_id", orgId)
       .order("created_at", { ascending: true });
     setCoaches(data ?? []);
@@ -61,7 +62,29 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
     setCoaches((prev) => prev.filter((c) => c.id !== coachId));
   }
 
+  async function handleArchiveToggle(coach: Coach) {
+    if (!coach.archived) {
+      const confirmed = confirm(
+        `Archive ${coach.name || coach.email}? They'll lose access to your organisation immediately, but nothing is deleted — you can restore them any time.`
+      );
+      if (!confirmed) return;
+    }
+    const res = await fetch("/api/coaches/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coachId: coach.id, archived: !coach.archived }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Could not update this coach");
+      return;
+    }
+    setCoaches((prev) => prev.map((c) => (c.id === coach.id ? { ...c, archived: data.coach.archived } : c)));
+  }
+
   if (loading) return null;
+
+  const activeCount = coaches.filter((c) => !c.archived).length;
 
   return (
     <div style={s.wrap}>
@@ -70,7 +93,7 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
           <div style={s.title}>👥 Team</div>
           <div style={s.subtitle}>
             {coachSeatLimit != null
-              ? `${coaches.length} of ${coachSeatLimit} coach seats used`
+              ? `${activeCount} of ${coachSeatLimit} coach seats used`
               : "Coaches in your organisation"}
           </div>
         </div>
@@ -84,6 +107,9 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
       <div style={s.list}>
         {coaches.map((c) => {
           const pending = !c.accepted_at;
+          const status = pending ? "pending" : c.archived ? "archived" : "active";
+          const statusLabel = { pending: "Pending", archived: "Archived", active: "Active" }[status];
+          const statusStyle = { pending: s.badgePending, archived: s.badgeArchived, active: s.badgeActive }[status];
           return (
             <div key={c.id} style={s.row}>
               <div style={s.rowMain}>
@@ -94,12 +120,15 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
                 <span style={{ ...s.badge, ...(c.role === "owner" ? s.badgeOwner : s.badgeCoach) }}>
                   {c.role === "owner" ? "Owner" : "Coach"}
                 </span>
-                <span style={{ ...s.badge, ...(pending ? s.badgePending : s.badgeActive) }}>
-                  {pending ? "Pending" : "Active"}
-                </span>
+                <span style={{ ...s.badge, ...statusStyle }}>{statusLabel}</span>
                 {isOwner && pending && (
                   <button style={s.revokeBtn} onClick={() => handleRevoke(c.id)}>
                     Revoke
+                  </button>
+                )}
+                {isOwner && !pending && c.role !== "owner" && (
+                  <button style={c.archived ? s.reactivateBtn : s.revokeBtn} onClick={() => handleArchiveToggle(c)}>
+                    {c.archived ? "Reactivate" : "Archive"}
                   </button>
                 )}
               </div>
@@ -207,7 +236,9 @@ const s: Record<string, React.CSSProperties> = {
   badgeCoach: { background: "var(--ink)", color: "var(--mute)", border: "1px solid var(--line)" },
   badgePending: { background: "#2a1e00", color: "#F59E0B" },
   badgeActive: { background: "#0a2218", color: "#10B981" },
+  badgeArchived: { background: "var(--ink)", color: "var(--mute)", border: "1px solid var(--line)" },
   revokeBtn: { background: "transparent", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" },
+  reactivateBtn: { background: "transparent", border: "1px solid var(--accent)", color: "var(--accent)", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" },
   // Modal
   modalOverlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
   modal: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: 24, width: 380, maxWidth: "90vw", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
