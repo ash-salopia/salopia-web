@@ -20,7 +20,12 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? searchParams.get("redirect_to") ?? "/";
+  // NOT a fallback source for `next`: Supabase's redirect_to param here
+  // is the full absolute URL we originally passed as `redirectTo` to
+  // inviteUserByEmail (this same route) — prefixing it with `origin`
+  // below would double the domain. app/auth/callback/route.ts's `next`
+  // param is a relative path; this route only ever needs the default.
+  const next = searchParams.get("next") ?? "/";
 
   if (token_hash && type) {
     const supabase = await createClient();
