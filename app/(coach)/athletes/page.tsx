@@ -71,7 +71,7 @@ export default function AthletesPage() {
   };
 
   const handleArchive = async (athlete: Athlete) => {
-    if (!confirm(`Archive ${athlete.name}? They'll be hidden from your active roster, but nothing is deleted — you can restore them any time.`)) return;
+    if (!confirm(`Archive ${athlete.name}? They'll be hidden from your active roster, but nothing is deleted - you can restore them any time.`)) return;
     try {
       await archiveAthlete(athlete.id);
       setAthletes((prev) => prev.filter((a) => a.id !== athlete.id));
@@ -106,7 +106,7 @@ export default function AthletesPage() {
   const handleDelete = async (athlete: Athlete) => {
     if (
       !confirm(
-        `Permanently delete ${athlete.name} and every session they've ever had? This cannot be undone — if you just want to hide them, use Archive instead.`
+        `Permanently delete ${athlete.name} and every session they've ever had? This cannot be undone - if you just want to hide them, use Archive instead.`
       )
     )
       return;
@@ -222,7 +222,7 @@ export default function AthletesPage() {
 
       {showArchived && (
         <p style={styles.archivedNote}>
-          Archived athletes are hidden from your active roster, the dashboard, and assignment pickers — but
+          Archived athletes are hidden from your active roster, the dashboard, and assignment pickers - but
           nothing about them has been deleted. Restore one to bring it back into normal use.
         </p>
       )}
@@ -237,7 +237,7 @@ export default function AthletesPage() {
             style={styles.input}
           />
           <input
-            placeholder="Group (e.g. U15 Squad) — optional"
+            placeholder="Group (e.g. U15 Squad) - optional"
             value={newGroup}
             onChange={(e) => setNewGroup(e.target.value)}
             style={styles.input}
@@ -245,7 +245,7 @@ export default function AthletesPage() {
           <input
             type="number"
             step="0.1"
-            placeholder="Bodyweight kg — optional"
+            placeholder="Bodyweight kg - optional"
             value={newBodyweight}
             onChange={(e) => setNewBodyweight(e.target.value)}
             style={styles.input}

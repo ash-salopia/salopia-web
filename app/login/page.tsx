@@ -9,11 +9,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   provisioning:
     "Signed in, but couldn't set up your account. Please try again, or contact support if this keeps happening.",
   no_coach_profile:
-    "Signed in, but your account isn't fully set up yet. Try signing in again — if this keeps happening, contact support.",
+    "Signed in, but your account isn't fully set up yet. Try signing in again - if this keeps happening, contact support.",
   archived:
     "Your access to this organisation has been paused. Contact your organisation owner if you think this is a mistake.",
   demo_unavailable:
-    "The demo isn't available right now — please contact us and we'll sort you out.",
+    "The demo isn't available right now - please contact us and we'll sort you out.",
 };
 
 function LoginForm() {
@@ -21,7 +21,10 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [orgName, setOrgName] = useState("");
-  const [showSignupFields, setShowSignupFields] = useState(false);
+  // Lets /start's "Start free trial" button deep-link straight into
+  // signup mode instead of landing on sign-in and making them find
+  // the "First time?" toggle themselves.
+  const [showSignupFields, setShowSignupFields] = useState(() => searchParams.get("signup") === "1");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -44,7 +47,7 @@ function LoginForm() {
       email: email.trim(),
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
-        // Only relevant the first time someone signs in — the callback
+        // Only relevant the first time someone signs in - the callback
         // route uses this to provision an organisation + coach row if
         // one doesn't already exist for this email. Returning users
         // signing in again just get ignored since their coach row is
@@ -73,7 +76,7 @@ function LoginForm() {
         {status === "sent" ? (
           <div style={styles.sentBox}>
             <p style={styles.sentText}>
-              Check your email — we&apos;ve sent a sign-in link to <b>{email}</b>.
+              Check your email - we&apos;ve sent a sign-in link to <b>{email}</b>.
               Tap it on this device to sign in.
             </p>
             <button style={styles.ghostBtn} onClick={() => setStatus("idle")}>
@@ -221,7 +224,7 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 // useSearchParams requires a Suspense boundary in Next.js's app router
-// — without this wrapper, the production build fails.
+// - without this wrapper, the production build fails.
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>

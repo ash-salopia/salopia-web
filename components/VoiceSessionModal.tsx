@@ -1,13 +1,13 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VoiceSessionModal — Whisper edition
+// VoiceSessionModal - Whisper edition
 //
 // Modes:
-//   "new"       — creates a new Session on the athlete's calendar
-//   "add"       — appends exercises to an existing session
-//   "template"  — creates a new Template in the template library
-//   "programme" — creates a new Programme in the programme library
+//   "new" - creates a new Session on the athlete's calendar
+//   "add" - appends exercises to an existing session
+//   "template" - creates a new Template in the template library
+//   "programme" - creates a new Programme in the programme library
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect } from "react";
@@ -138,7 +138,7 @@ export default function VoiceSessionModal({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      onErr("Could not access microphone — please allow microphone permission and try again.");
+      onErr("Could not access microphone - please allow microphone permission and try again.");
       return null;
     }
     streamRef.current = stream;
@@ -151,7 +151,7 @@ export default function VoiceSessionModal({
       stream.getTracks().forEach((t) => t.stop());
       await onStop(new Blob(chunksRef.current, { type: mimeType || "audio/webm" }));
     };
-    recorder.onerror = () => onErr("Recording error — please try again.");
+    recorder.onerror = () => onErr("Recording error - please try again.");
     recorder.start();
     return recorder;
   };
@@ -164,7 +164,7 @@ export default function VoiceSessionModal({
         let transcript: string;
         try { transcript = await transcribeBlob(blob); }
         catch (e) { setError(e instanceof Error ? e.message : "Transcription failed"); setPhase("idle"); return; }
-        if (!transcript.trim()) { setError("No speech detected — please try again."); setPhase("idle"); return; }
+        if (!transcript.trim()) { setError("No speech detected - please try again."); setPhase("idle"); return; }
         setPhase("parsing");
         try {
           const result = await callParse(`Parse this ${mode === "template" ? "template" : mode === "programme" ? "programme" : "strength & conditioning session"}: ${transcript}`, []);
@@ -205,7 +205,7 @@ export default function VoiceSessionModal({
         setPhase("parsing");
         try {
           const result = await callParse(`Correction: ${transcript}\n\nCurrent exercises: ${JSON.stringify(capturedExercises)}`, capturedHistory);
-          // Preserve the coach's existing/corrected session type — a spoken
+          // Preserve the coach's existing/corrected session type - a spoken
           // correction about exercises shouldn't silently reset the type
           // back to the AI's original (possibly wrong) detection.
           setSessions(toReviewSessions(result.exercises, capturedType));
@@ -324,10 +324,10 @@ export default function VoiceSessionModal({
             <div style={s.centre}>
               <p style={s.hint}>
                 {mode === "template"
-                  ? "Speak your template — exercises, sets, reps, load, rest. I'll structure it ready to review."
+                  ? "Speak your template - exercises, sets, reps, load, rest. I'll structure it ready to review."
                   : mode === "programme"
-                  ? "Speak your programme sessions — I'll structure them ready to review."
-                  : "Speak your session naturally — exercises, sets, reps, load, rest periods."}
+                  ? "Speak your programme sessions - I'll structure them ready to review."
+                  : "Speak your session naturally - exercises, sets, reps, load, rest periods."}
               </p>
               <button style={s.micBtn} onClick={startRecording}>🎤 Tap to record</button>
             </div>

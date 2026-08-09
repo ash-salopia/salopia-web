@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createClient();
   // Re-fetches and re-computes rather than trusting client-supplied
-  // numbers — same pattern as /api/session-report, and it means RLS
+  // numbers - same pattern as /api/session-report, and it means RLS
   // (via this cookie-authenticated client) is what actually gates
   // access to this athlete's data, not anything passed in the body.
   let query = supabase
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   let e1rmBlock = "";
   if (includeE1rm) {
     // Re-derives org settings server-side rather than trusting a
-    // client-supplied formula/mode — same RLS-gated trust boundary as
+    // client-supplied formula/mode - same RLS-gated trust boundary as
     // the rest of this route. Mirrors getOrgSettings() (lib/data/settings.ts),
     // which is browser-client-only and can't be called from here.
     let oneRmFormula = DEFAULT_SETTINGS.one_rm_formula;

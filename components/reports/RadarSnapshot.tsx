@@ -10,8 +10,8 @@ export interface RadarExercise {
 }
 
 // Metric-agnostic Week-1-vs-latest snapshot, shared by TTL and e1RM.
-// Never plots raw values across exercises — a 1000kg squat total and
-// a 70kg hold would flatten the shape entirely — so every exercise is
+// Never plots raw values across exercises - a 1000kg squat total and
+// a 70kg hold would flatten the shape entirely - so every exercise is
 // normalised to % of its own baseline before plotting. This also
 // means bodyweight-relative values produce an identical radar shape
 // to raw kg (both are ratios of the same athlete's own numbers), so
@@ -37,7 +37,7 @@ export default function RadarSnapshot({
 
   // A radius axis starting at 0 flattens the shape when every value
   // clusters near 100% (typical, since these are % of each exercise's
-  // own baseline) — zoom the domain tightly around the actual data
+  // own baseline) - zoom the domain tightly around the actual data
   // range instead (floored at 0), so real differences between
   // exercises stay legible instead of being squeezed into a sliver
   // near the outer ring.

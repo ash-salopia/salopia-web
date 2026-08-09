@@ -74,7 +74,7 @@ export default function YouTubeImportDialog({
       try {
         // Imported one at a time (not Promise.all) so importProgress
         // updates smoothly and a single failed row doesn't abort the
-        // whole batch — a coach with 180 videos would rather see "178
+        // whole batch - a coach with 180 videos would rather see "178
         // imported, 2 failed" than lose all 180 because one had a
         // weird character in its title.
         await saveLibraryEntry({
@@ -85,7 +85,7 @@ export default function YouTubeImportDialog({
         });
         count++;
       } catch {
-        // Skip and continue — see comment above.
+        // Skip and continue - see comment above.
       }
       setImportProgress(count);
     }
@@ -109,7 +109,7 @@ export default function YouTubeImportDialog({
           <form onSubmit={handleFetch}>
             <p style={styles.helpText}>
               Paste the link to a public or unlisted YouTube playlist. Every video&apos;s title
-              and link will be pulled in — you can review and pick which ones to add before
+              and link will be pulled in - you can review and pick which ones to add before
               anything is saved. You&apos;ll set sets/reps/load for each afterward in the library.
             </p>
             <input

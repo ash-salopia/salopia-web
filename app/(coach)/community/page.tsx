@@ -290,7 +290,7 @@ function GroupsTab({ groups, onGroupsChange }: {
 
       {/* Group list */}
       {groups.length === 0 && !creating && (
-        <div style={s.empty}>No groups yet — create one to get started.</div>
+        <div style={s.empty}>No groups yet - create one to get started.</div>
       )}
 
       {groups.map((group) => (
@@ -323,7 +323,7 @@ function GroupsTab({ groups, onGroupsChange }: {
                   <div style={s.memberSection}>
                     <div style={s.fieldLabel}>Current members</div>
                     {members.length === 0 && (
-                      <div style={s.empty}>No members yet — add athletes below.</div>
+                      <div style={s.empty}>No members yet - add athletes below.</div>
                     )}
                     {members.map((m) => (
                       <div key={m.id} style={s.memberRow}>
@@ -880,7 +880,7 @@ function CoachCompsTab({ competitions, onCompetitionsChange, coachId, coachName,
             value={selectedAthleteId}
             onChange={(e) => setSelectedAthleteId(e.target.value)}
           >
-            <option value="">— Select athlete —</option>
+            <option value=""> - Select athlete - </option>
             {athletes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <input placeholder="Event name / title" style={s.input} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
@@ -931,7 +931,7 @@ function ChatTab({ groups, coachId, coachName }: {
     return (
       <div style={s.tabContent}>
         <div style={s.empty}>
-          Create a group first — chat is scoped to groups.
+          Create a group first - chat is scoped to groups.
         </div>
       </div>
     );

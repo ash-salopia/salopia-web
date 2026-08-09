@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================
-// PowerSpeedExerciseCard — v2
+// PowerSpeedExerciseCard - v2
 // Per-rep logging with measurement type selector.
 // Each set has an array of rep results. A "same for all reps"
 // toggle collapses to one value per set (useful for RSI scores
@@ -71,7 +71,7 @@ const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; p
   distance_m:{ label: "Distance", unit: "m",   placeholder: "" },
   rsi:       { label: "RSI",      unit: "",    placeholder: "" },
   power_w:   { label: "Power",    unit: "W",   placeholder: "" },
-  none:      { label: "None",     unit: "",    placeholder: "—" },
+  none:      { label: "None",     unit: "",    placeholder: "-" },
 };
 
 const SURFACES = ["Grass", "Artificial Turf", "Track", "Gym Floor", "Sand", "Road", "Court"];
@@ -150,7 +150,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const isPlyo = exercise.quality === "plyometric";
   const doneSets = localLog.filter(s => s.done).length;
 
-  // Library autocomplete — Power/Speed exercises first
+  // Library autocomplete - Power/Speed exercises first
   const libraryMatches = nameQuery.trim().length > 0
     ? library
         .filter(e => e.name.toLowerCase().includes(nameQuery.toLowerCase()))
@@ -292,7 +292,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           </span>
         )}
 
-        {/* Measurement type — prominent in header so it's always visible */}
+        {/* Measurement type - prominent in header so it's always visible */}
         <select
           value={localMeasure}
           onChange={e => { setLocalMeasure(e.target.value as MeasurementType); update({ measurement_type: e.target.value as MeasurementType }); }}
@@ -346,7 +346,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         <Field label="Surface">
           <select value={exercise.surface} onChange={e => update({ surface: e.target.value })}
             style={card.miniInput}>
-            <option value="">—</option>
+            <option value=""> - </option>
             {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
@@ -393,10 +393,10 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <span style={card.metaLabel}>RPE</span>
                   <input value={set.rpe} onChange={e => updateSet(si, { rpe: e.target.value })}
-                    placeholder="—" inputMode="numeric" style={card.metaInput} />
+                    placeholder="-" inputMode="numeric" style={card.metaInput} />
                   <span style={card.metaLabel}>Pain</span>
                   <input value={set.pain} onChange={e => updateSet(si, { pain: e.target.value })}
-                    placeholder="—" inputMode="numeric" style={card.metaInput} />
+                    placeholder="-" inputMode="numeric" style={card.metaInput} />
                   <button
                     style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
                     onClick={() => updateSet(si, { done: !set.done })}

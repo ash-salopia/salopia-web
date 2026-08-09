@@ -23,7 +23,7 @@ interface DetectedPB {
 // fields. Two independent toggles decide which fields are visible:
 // weight shows unless the exercise is bodyweight-only, and reps vs
 // time is decided purely by whether the exercise is prescribed in
-// time mode (ex.time set) — independent of the bodyweight flag, so a
+// time mode (ex.time set) - independent of the bodyweight flag, so a
 // weighted time-based exercise (e.g. a loaded carry) still logs a
 // weight alongside the time. Used to guard set removal so it can only
 // ever discard a genuinely empty trailing set, never real data,
@@ -60,7 +60,7 @@ function formatMMSS(totalSeconds: number): string {
 // Most recent PRIOR occurrence (by date) of each exercise name for this
 // athlete, keyed by lowercased/trimmed name, mapped to that occurrence's
 // own progress answer. Used to show "you said you could progress this
-// last time" — deliberately only looks at the single most recent prior
+// last time" - deliberately only looks at the single most recent prior
 // occurrence, not any earlier one, so a "no" always clears the reminder
 // for next time regardless of an older "yes" further back.
 function computePriorProgress(
@@ -135,11 +135,11 @@ export default function AthleteSessionView({
   // Bodyweight exercises hide the weight field by default, but an
   // athlete who's progressed past bodyweight (e.g. added a vest to
   // chin-ups) needs a way to log that load before the coach updates
-  // the prescription — this per-exercise toggle reveals it on demand,
+  // the prescription - this per-exercise toggle reveals it on demand,
   // purely client-side (doesn't change the exercise's is_bodyweight
   // flag or its PB shape).
   const [showLoadFor, setShowLoadFor] = useState<Set<string>>(new Set());
-  // Rest timer — one active at a time, keyed by end timestamp rather
+  // Rest timer - one active at a time, keyed by end timestamp rather
   // than a decrementing counter so it stays accurate even if the tab
   // is backgrounded for a while.
   const [restTimer, setRestTimer] = useState<{ exerciseId: string; endAt: number; total: number } | null>(null);
@@ -165,7 +165,7 @@ export default function AthleteSessionView({
 
   const exercises = (session?.exercises ?? []).sort((a, b) => a.sort_order - b.sort_order);
   // Opted-out exercises have no sets to log, so they're excluded from
-  // progress totals — otherwise a skipped exercise would permanently
+  // progress totals - otherwise a skipped exercise would permanently
   // depress the session's completion percentage.
   const loggableExercises = exercises.filter((e) => !e.opted_out);
   const totalSets = loggableExercises.reduce((n, e) => n + (e.log ?? []).length, 0);
@@ -173,7 +173,7 @@ export default function AthleteSessionView({
     // A %1RM-prescribed set's weight box is pre-filled with the
     // calculated target before the athlete does anything, so its
     // presence alone can't count as "completed" the way a typed-in
-    // weight normally does — only an explicit done-tap does.
+    // weight normally does - only an explicit done-tap does.
     (n, e) => n + (e.log ?? []).filter((s) => s.done || (!e.use_percent_1rm && (s.weight ?? "").trim().length > 0)).length,
     0
   );
@@ -221,7 +221,7 @@ export default function AthleteSessionView({
   };
 
   // Fires once, when the athlete leaves the notes field, rather than on
-  // every keystroke — a save fired per keystroke can race on a patchy
+  // every keystroke - a save fired per keystroke can race on a patchy
   // gym connection (an earlier, shorter in-flight request landing after
   // a later, fuller one) and leave a truncated note.
   const saveAthleteNotes = async (sessionId: string, notes: string) => {
@@ -271,7 +271,7 @@ export default function AthleteSessionView({
     if (!exercise) return;
     const newLog = (exercise.log ?? []).map((s, i) => (i === setIndex ? { ...s, ...patch } : s));
 
-    // Optimistic update — reflect the change immediately, then confirm
+    // Optimistic update - reflect the change immediately, then confirm
     // with the server. If the save fails, the error banner shows but
     // the local change stays visible rather than snapping back, since
     // a flickering UI is worse for someone mid-set than a brief
@@ -298,8 +298,7 @@ export default function AthleteSessionView({
   };
 
   // Lets an athlete log more sets than the coach prescribed (e.g. they
-  // felt good and did an extra set) without touching ex.sets itself —
-  // that field is the coach's prescription and stays coach-only (see
+  // felt good and did an extra set) without touching ex.sets itself -   // that field is the coach's prescription and stays coach-only (see
   // updateAthleteSetLog's docstring). Reuses the same log save path as
   // handleSetUpdate, just with one more blank entry appended.
   const handleAddSet = async (exerciseId: string) => {
@@ -325,7 +324,7 @@ export default function AthleteSessionView({
     setSaving(null);
   };
 
-  // Undo for an accidental tap — only ever removes a trailing set
+  // Undo for an accidental tap - only ever removes a trailing set
   // that's still empty, so there's no path to silently discarding a
   // set the athlete actually logged.
   const handleRemoveLastSet = async (exerciseId: string) => {
@@ -372,8 +371,7 @@ export default function AthleteSessionView({
   }
 
   // Recovery sessions render nothing like the exercise-log layout
-  // below (no session_exercises rows to speak of for most formats) —
-  // delegate to a dedicated component rather than threading `type ===
+  // below (no session_exercises rows to speak of for most formats) -   // delegate to a dedicated component rather than threading `type ===
   // "recovery"` conditionals through this already-large file.
   if (session.type === "recovery") {
     return (
@@ -424,7 +422,7 @@ export default function AthleteSessionView({
 
       {pendingSaves > 0 && (
         <div style={styles.pendingBox}>
-          ☁️ {pendingSaves} change{pendingSaves !== 1 ? "s" : ""} waiting for a connection — will save automatically
+          ☁️ {pendingSaves} change{pendingSaves !== 1 ? "s" : ""} waiting for a connection - will save automatically
         </div>
       )}
 
@@ -506,7 +504,7 @@ export default function AthleteSessionView({
             ) : (
               <>
                 <div style={styles.prescLine}>
-                  {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "—"}
+                  {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "-"}
                   {ex.each_side ? " each side" : ""}
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
                   {ex.is_bodyweight ? " · 🏋️ bodyweight" : ""}
@@ -517,7 +515,7 @@ export default function AthleteSessionView({
                 </div>
                 {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
                 {priorAnswer === "yes" && (
-                  <div style={styles.progressReminder}>💪 Last time you said you could progress this — try more weight or reps!</div>
+                  <div style={styles.progressReminder}>💪 Last time you said you could progress this - try more weight or reps!</div>
                 )}
 
                 {openNotesFor.has(ex.id) && (
@@ -525,7 +523,7 @@ export default function AthleteSessionView({
                     value={ex.athlete_exercise_notes ?? ""}
                     onChange={(e) => handleExerciseNotesChange(ex.id, e.target.value)}
                     onBlur={() => saveExerciseNotes(session.id, ex.id, ex.athlete_exercise_notes ?? "")}
-                    placeholder="Anything to note about this exercise — how it felt, form cues, niggles…"
+                    placeholder="Anything to note about this exercise - how it felt, form cues, niggles…"
                     style={styles.exNotesTextarea}
                   />
                 )}
@@ -534,7 +532,7 @@ export default function AthleteSessionView({
                   // Two independent toggles: weight shows unless the
                   // exercise is bodyweight-only; reps vs time is
                   // decided purely by the exercise's time prescription,
-                  // regardless of bodyweight — so a weighted time-based
+                  // regardless of bodyweight - so a weighted time-based
                   // exercise (e.g. a loaded carry) still logs a weight
                   // alongside the time, not just a bodyweight one.
                   // A bodyweight exercise can still reveal the weight
@@ -545,8 +543,7 @@ export default function AthleteSessionView({
                   const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
                   const timeMode = (ex.time ?? "").trim().length > 0;
                   // Header and every row share this exact template string
-                  // so the Load/Reps/Time columns line up pixel-for-pixel —
-                  // the "copy last set" slot is always reserved as its own
+                  // so the Load/Reps/Time columns line up pixel-for-pixel -                   // the "copy last set" slot is always reserved as its own
                   // fixed-width track (populated or not) so a row that
                   // happens to show that button doesn't squeeze its input
                   // columns narrower than the header or its sibling rows.
@@ -566,7 +563,7 @@ export default function AthleteSessionView({
                   {(ex.log ?? []).map((set, i) => {
                     // For a %1RM-prescribed exercise the weight box
                     // arrives pre-filled with the calculated target
-                    // before the athlete has done anything — so its
+                    // before the athlete has done anything - so its
                     // mere presence can't be treated as "confirmed"
                     // the way a typed-in weight normally is. Only an
                     // explicit ✓ tap (or reps/time entry) counts.
@@ -655,7 +652,7 @@ export default function AthleteSessionView({
                             const patch: Partial<SetLog> = { done: true };
                             // Tapping done on a still-empty %1RM box
                             // captures the greyed suggestion as the
-                            // real logged weight — the box only ever
+                            // real logged weight - the box only ever
                             // shows it as a placeholder (so it never
                             // reads as "already entered"), but
                             // confirming without typing over it should
@@ -963,7 +960,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     padding: "8px 8px",
     // iOS Safari auto-zooms on focus for any input under 16px, then
-    // doesn't reliably zoom back out on blur — 16px is the minimum
+    // doesn't reliably zoom back out on blur - 16px is the minimum
     // that avoids triggering it.
     fontSize: 16,
   },

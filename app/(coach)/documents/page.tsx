@@ -141,7 +141,7 @@ export default function DocumentsPage() {
     setFileError("");
     if (!f) { setSelectedFile(null); return; }
     if (!ALLOWED_MIME.has(f.type)) { setFileError("Only PDF, Word, and Excel files are allowed."); setSelectedFile(null); return; }
-    if (f.size > 10 * 1024 * 1024) { setFileError("File is too large — maximum 10 MB."); setSelectedFile(null); return; }
+    if (f.size > 10 * 1024 * 1024) { setFileError("File is too large - maximum 10 MB."); setSelectedFile(null); return; }
     setSelectedFile(f);
     if (!fileTitle) setFileTitle(f.name.replace(/\.[^.]+$/, ""));
   };
@@ -267,7 +267,7 @@ export default function DocumentsPage() {
       if (d.error) throw new Error(d.error);
       window.open(d.url, "_blank", "noopener");
     } catch {
-      setError("Could not open file — try again.");
+      setError("Could not open file - try again.");
     } finally {
       setOpeningId(null);
     }
@@ -391,7 +391,7 @@ export default function DocumentsPage() {
                 ) : (
                   <><div style={{ fontSize: 24 }}>📄</div>
                   <div style={{ fontSize: 13, color: "var(--mute)" }}>Click to choose file or drag here</div>
-                  <div style={{ fontSize: 11, color: "var(--mute)" }}>PDF, Word, Excel — max 10 MB</div></>
+                  <div style={{ fontSize: 11, color: "var(--mute)" }}>PDF, Word, Excel - max 10 MB</div></>
                 )}
                 <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }} onChange={handleFileChange} />
               </div>

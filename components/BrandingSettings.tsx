@@ -4,7 +4,7 @@
 // BrandingSettings
 // Embedded in the Settings page.
 // Standard tier: accent colour picker only.
-// Premium tier: full white-label — name, logo, colours.
+// Premium tier: full white-label - name, logo, colours.
 // ============================================================
 
 import { useState, useRef } from "react";
@@ -94,8 +94,8 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
           <div style={s.title}>🎨 Branding</div>
           <div style={s.subtitle}>
             {isPremium
-              ? "Premium — full white-label branding"
-              : "Standard — AthletiQ branding with your accent colour"}
+              ? "Premium - full white-label branding"
+              : "Standard - AthletiQ branding with your accent colour"}
           </div>
         </div>
         <div style={{ ...s.tierBadge, background: isPremium ? "#A855F722" : "var(--ink)", color: isPremium ? "#A855F7" : "var(--mute)", border: `1px solid ${isPremium ? "#A855F744" : "var(--line)"}` }}>
@@ -105,7 +105,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
 
       {error && <div style={s.error}>{error}</div>}
 
-      {/* Accent colour — both tiers */}
+      {/* Accent colour - both tiers */}
       <div style={s.section}>
         <div style={s.sectionLabel}>Accent colour</div>
         <div style={s.sectionDesc}>Used for buttons, highlights, and active states throughout the app.</div>
@@ -190,8 +190,8 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
         <div style={s.upgradeBox}>
           <div style={s.upgradeTitle}>🚀 Upgrade to Premium for full white-labelling</div>
           <div style={s.upgradeList}>
-            <div>✓ Custom brand name — replace "AthletiQ" with your brand</div>
-            <div>✓ Logo upload — your logo in the header and athlete app</div>
+            <div>✓ Custom brand name - replace "AthletiQ" with your brand</div>
+            <div>✓ Logo upload - your logo in the header and athlete app</div>
             <div>✓ Athletes see your brand, not AthletiQ</div>
             <div>✓ Optional "Powered by AthletiQ" footer</div>
           </div>

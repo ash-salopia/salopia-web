@@ -112,7 +112,7 @@ function GoalCard({
                   ? isAchieved
                     ? "✓ Hit!"
                     : `${goal.gap_kg}kg (${goal.gap_pct}%)`
-                  : "—"}
+                  : "-"}
               </div>
             </div>
           </div>

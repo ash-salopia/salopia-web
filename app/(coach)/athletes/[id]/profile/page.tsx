@@ -25,7 +25,7 @@ interface PBRecord {
 }
 
 // A single comparable "how good is this PB" number, used to pick the
-// best record and sort the list — safe across weighted/reps/time
+// best record and sort the list - safe across weighted/reps/time
 // shapes because a given exercise name only ever produces one shape
 // in practice (is_bodyweight is set per exercise, not per PB row).
 function pbSortValue(pb: { weight_kg: number | null; reps: number | null; time_seconds: number | null }): number {
@@ -50,7 +50,7 @@ function ProgressChart({ points, exerciseName }: { points: ProgressPoint[]; exer
   if (points.length < 2) {
     return (
       <div style={c.noChart}>
-        Not enough data to chart — needs 2+ logged sessions.
+        Not enough data to chart - needs 2+ logged sessions.
       </div>
     );
   }
@@ -88,7 +88,7 @@ function ProgressChart({ points, exerciseName }: { points: ProgressPoint[]; exer
 
   return (
     <div style={c.chartWrap}>
-      <div style={c.chartTitle}>{exerciseName} — weight over time</div>
+      <div style={c.chartTitle}>{exerciseName} - weight over time</div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: W }}>
         {/* Y axis ticks */}
         {yTicks.map((v, i) => {
@@ -155,7 +155,7 @@ function ProgressChart({ points, exerciseName }: { points: ProgressPoint[]; exer
 function formatDate(iso: string): string {
   if (!iso) return "unknown";
   // Supabase returns full timestamps like "2024-01-15T10:30:00.000000+00:00"
-  // and plain dates like "2024-01-15" — handle both
+  // and plain dates like "2024-01-15" - handle both
   const d = new Date(iso.length === 10 ? iso + "T12:00:00Z" : iso);
   if (isNaN(d.getTime())) return "unknown";
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -243,8 +243,7 @@ export default function AthleteProfilePage() {
         }
       }
 
-      // Also scan session_exercises logs to catch coach-logged sessions —
-      // weighted only (bodyweight PBs are reliably captured by detectPB
+      // Also scan session_exercises logs to catch coach-logged sessions -       // weighted only (bodyweight PBs are reliably captured by detectPB
       // itself now, via the personal_bests table above).
       for (const ex of exerciseData ?? []) {
         const log: any[] = ex.log ?? [];
@@ -259,7 +258,7 @@ export default function AthleteProfilePage() {
           const r = parseInt(String(set.reps)) || prescribedReps;
           const key = ex.name.toLowerCase();
           const existing = bestPerExercise.get(key);
-          // Only ever overwrites an existing WEIGHTED record — a
+          // Only ever overwrites an existing WEIGHTED record - a
           // bodyweight PB (null weight_kg) is left alone here; it
           // came from the real detectPB flow via personal_bests
           // above and isn't comparable to a stray logged weight.
@@ -298,7 +297,7 @@ export default function AthleteProfilePage() {
 
   const loadProgressForExercise = async (exerciseName: string) => {
     if (progressData[exerciseName]) {
-      // Toggle — if already loaded, just expand/collapse
+      // Toggle - if already loaded, just expand/collapse
       setExpandedExercise(expandedExercise === exerciseName ? null : exerciseName);
       return;
     }
@@ -327,7 +326,7 @@ export default function AthleteProfilePage() {
         }
       }
 
-      // Deduplicate by date — take max weight per date
+      // Deduplicate by date - take max weight per date
       const byDate = new Map<string, number>();
       for (const p of points) {
         byDate.set(p.date, Math.max(byDate.get(p.date) ?? 0, p.weight));
@@ -468,7 +467,7 @@ export default function AthleteProfilePage() {
             <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
               {(athlete as any).hyrox_enabled !== false
                 ? "Hyrox sessions are enabled for this athlete."
-                : "Hyrox sessions are hidden for this athlete — they won’t see the Hyrox type when sessions are created."}
+                : "Hyrox sessions are hidden for this athlete - they won’t see the Hyrox type when sessions are created."}
             </div>
           </div>
           <button
@@ -497,7 +496,7 @@ export default function AthleteProfilePage() {
           </button>
         </div>
 
-        {/* Date of birth + sex — used for testing age calculation */}
+        {/* Date of birth + sex - used for testing age calculation */}
         <div style={{ ...p.checkinCard, marginTop: 8, flexDirection: "column" as const, alignItems: "flex-start", gap: 10 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Athlete details</div>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" as const, width: "100%" }}>
@@ -528,7 +527,7 @@ export default function AthleteProfilePage() {
                   setAthlete((prev) => prev ? { ...prev, sex: val } : prev);
                 }}
               >
-                <option value="">— Not set —</option>
+                <option value=""> - Not set - </option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>

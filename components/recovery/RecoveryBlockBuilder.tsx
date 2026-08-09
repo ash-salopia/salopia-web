@@ -113,7 +113,7 @@ export default function RecoveryBlockBuilder({
   return (
     <div style={s.wrap}>
       {blocks.length === 0 && (
-        <div style={s.empty}>No blocks yet — add instructions, drills, timers, checklists, media, or a feedback prompt below.</div>
+        <div style={s.empty}>No blocks yet - add instructions, drills, timers, checklists, media, or a feedback prompt below.</div>
       )}
       {blocks.map((block, i) => (
         <div key={block.id} style={s.blockCard}>

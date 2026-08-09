@@ -6,10 +6,10 @@ import { todayISO, addDaysISO } from "@/lib/date-utils";
 type RangeMode = "4w" | "8w" | "12w" | "all" | "custom";
 
 export interface ReportOptions {
-  // Metrics — at least one required to generate.
+  // Metrics - at least one required to generate.
   ttl: boolean; // Total Training Load (tonnage)
   e1rm: boolean; // Estimated 1RM (strength)
-  // Per-metric display components — apply to whichever metric(s) above are ticked.
+  // Per-metric display components - apply to whichever metric(s) above are ticked.
   loadProgression: boolean; // progression table: first/latest/delta/% change per exercise
   highlights: boolean; // top 3 progressed / 3 to review, ranked independently per metric
   sparkline: boolean; // mini-trend per row
@@ -17,7 +17,7 @@ export interface ReportOptions {
   lineChart: boolean; // per-exercise value-over-time chart
   aiSummary: boolean; // AI overview + recurring-notes-themes paragraphs
   athleteNotes: boolean; // raw athlete notes list
-  // e1RM-only options — only meaningful (and only enabled in the UI) when e1rm is ticked.
+  // e1RM-only options - only meaningful (and only enabled in the UI) when e1rm is ticked.
   bodyweightRelative: boolean; // show e1RM ÷ bodyweight instead of raw kg
   exerciseLimit: number; // cap on exercises shown in radar/line chart
   lowConfidenceCap: number; // rep count above which an e1RM estimate is flagged low-confidence
@@ -39,13 +39,13 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
 };
 
 const METRIC_FIELDS: { key: "ttl" | "e1rm"; label: string; hint: string }[] = [
-  { key: "ttl", label: "Total Training Load (TTL)", hint: "Total tonnage — sets × reps × weight" },
+  { key: "ttl", label: "Total Training Load (TTL)", hint: "Total tonnage - sets × reps × weight" },
   { key: "e1rm", label: "Estimated 1RM (e1RM)", hint: "Strength progression, independent of volume" },
 ];
 
 const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "aiSummary", label: "AI summary", hint: "Short AI overview + recurring themes from notes, at the top" },
-  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review — per metric selected" },
+  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review - per metric selected" },
   { key: "loadProgression", label: "Progression table", hint: "First / latest / Δ / % change per exercise" },
   { key: "sparkline", label: "Sparklines", hint: "Small mini-trend chart per exercise row" },
   { key: "radar", label: "Radar snapshot", hint: "Week 1 vs latest, normalised across exercises" },
@@ -101,7 +101,7 @@ export default function ReportRangeModal({
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.headerRow}>
-          <div style={styles.title}>Reports{athleteName ? ` — ${athleteName}` : ""}</div>
+          <div style={styles.title}>Reports{athleteName ? ` - ${athleteName}` : ""}</div>
           <button style={styles.closeBtn} onClick={onClose}>
             ×
           </button>

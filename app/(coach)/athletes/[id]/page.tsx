@@ -101,7 +101,7 @@ export default function AthleteDetailPage() {
   const [hyroxEnabled, setHyroxEnabled] = useState(true);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   // Last-used copy-to-range dates, shared across CopySessionModal opens
-  // for different sessions within this programme-editing visit — a
+  // for different sessions within this programme-editing visit - a
   // fresh CopySessionModal mount is created every open/close cycle
   // (see the `copyModal &&` render below), so without this it resets
   // to blank each time even when copying several session types to the
@@ -160,7 +160,7 @@ export default function AthleteDetailPage() {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     } catch {
-      setError("Could not copy link — your browser may be blocking clipboard access.");
+      setError("Could not copy link - your browser may be blocking clipboard access.");
     }
   };
 
@@ -278,7 +278,7 @@ export default function AthleteDetailPage() {
     setError("");
     try {
       const result = await loadTemplateForAthlete(loadTemplateId, athleteId, loadStart, loadEnd);
-      // Refetch rather than reconstruct locally — a template load can
+      // Refetch rather than reconstruct locally - a template load can
       // create anywhere from 1 to 90 sessions across multiple defs,
       // and a clean reload is simpler and less error-prone than
       // building all of that up client-side.
@@ -326,7 +326,7 @@ export default function AthleteDetailPage() {
     if (!athlete) return;
     if (
       !confirm(
-        `Archive ${athlete.name}? They'll be hidden from your active roster, but nothing is deleted — you can restore them from Athletes → Archived any time.`
+        `Archive ${athlete.name}? They'll be hidden from your active roster, but nothing is deleted - you can restore them from Athletes → Archived any time.`
       )
     )
       return;
@@ -395,7 +395,7 @@ export default function AthleteDetailPage() {
     }
   };
 
-  // Calendar helpers — must be before any early returns (Rules of Hooks)
+  // Calendar helpers - must be before any early returns (Rules of Hooks)
   // Library sessions (athlete-started, informal) are excluded from the
   // calendar so they don't read as an extra, unscheduled session on
   // whatever day the athlete happened to log one.
@@ -554,7 +554,7 @@ export default function AthleteDetailPage() {
 
             // On mobile these 12 buttons used to force the whole header
             // into a horizontal-scroll situation just to reach "Modify"
-            // or "Voice" — collapsed into one dropdown instead, with
+            // or "Voice" - collapsed into one dropdown instead, with
             // Add session kept separate since it's the primary action.
             if (isMobile) {
               return (
@@ -590,7 +590,7 @@ export default function AthleteDetailPage() {
           })()}
           <button style={styles.primaryBtn} onClick={() => setTypePicker((v) => !v)}>
             + {calendarAddDate && calendarAddDate !== todayStr
-              ? `Add session — ${new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+              ? `Add session - ${new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
               : "Add session"}
           </button>
           {copyModal && (
@@ -760,7 +760,7 @@ export default function AthleteDetailPage() {
                           <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "up", session.id); }}>▴</button>
                           <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
                         </div>
-                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={session.type === "recovery" ? `${session.name} — ${recoverySessionCardLine(session)}` : session.name}>
+                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={session.type === "recovery" ? `${session.name} - ${recoverySessionCardLine(session)}` : session.name}>
                           {session.name.length > 12 ? session.name.slice(0, 11) + "…" : session.name}
                         </button>
                         <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
@@ -785,7 +785,7 @@ export default function AthleteDetailPage() {
             <div style={styles.modalTitle}>Load template</div>
             {!templates.length ? (
               <p style={styles.modalNote}>
-                No templates yet — build one in the Template Library first.
+                No templates yet - build one in the Template Library first.
               </p>
             ) : (
               <>
@@ -988,7 +988,7 @@ export default function AthleteDetailPage() {
                     d.setDate(d.getDate() + Number(retestWeeks) * 7);
                     return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
                   })()
-                : "—"}
+                : "-"}
             </div>
           </div>
           <button

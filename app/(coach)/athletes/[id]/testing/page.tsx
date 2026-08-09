@@ -256,7 +256,7 @@ export default function AthleteTestingPage() {
                 value={logBatteryId ?? ""}
                 onChange={(e) => setLogBatteryId(e.target.value || null)}
               >
-                <option value="">— No battery —</option>
+                <option value=""> - No battery - </option>
                 {batteries.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -269,7 +269,7 @@ export default function AthleteTestingPage() {
             </div>
 
             <div style={s.field}>
-              <label style={s.label}>Bodyweight (kg) — required for IMTP relative strength</label>
+              <label style={s.label}>Bodyweight (kg) - required for IMTP relative strength</label>
               <input
                 type="number"
                 step="0.1"
@@ -281,7 +281,7 @@ export default function AthleteTestingPage() {
             </div>
 
             <div style={s.field}>
-              <label style={s.label}>Age at test date — auto from DOB, or enter manually</label>
+              <label style={s.label}>Age at test date - auto from DOB, or enter manually</label>
               <input
                 type="number"
                 step="1"

@@ -87,7 +87,7 @@ export default function AthleteLinkShell({
       if (!res.ok) return;
       const data = await res.json();
       if (data.sessions) setSessions(data.sessions);
-    } catch { /* silent — stale data is better than a crash */ }
+    } catch { /* silent - stale data is better than a crash */ }
   }, [token]);
 
   // Refresh on mount (catches changes made while the app was closed/backgrounded)
@@ -123,7 +123,7 @@ export default function AthleteLinkShell({
   // Library sessions (started informally from the Session Library tab)
   // are excluded from the calendar so they don't read as an extra,
   // unscheduled session on whatever day the athlete happened to log
-  // one — they're browsable via their own tab instead.
+  // one - they're browsable via their own tab instead.
   const scheduledSessions = useMemo(
     () => sessions.filter((s) => s.session_source !== "library"),
     [sessions]
@@ -136,7 +136,7 @@ export default function AthleteLinkShell({
       map.set(s.date, [...list, s]);
     }
     // Match the coach app's ordering for multiple sessions on the same
-    // day (set by the coach dragging to reorder) — previously this
+    // day (set by the coach dragging to reorder) - previously this
     // fell back to whatever order the DB happened to return.
     for (const [date, list] of map) {
       map.set(date, [...list].sort((a, b) => a.sort_order - b.sort_order));
@@ -358,7 +358,7 @@ export default function AthleteLinkShell({
         </div>
         )} {/* end week/month */}
 
-        {/* Weekly reflection prompt — visible on Sundays */}
+        {/* Weekly reflection prompt - visible on Sundays */}
         {reflectionEnabled && (() => {
           const today = new Date();
           const isSunday = today.getDay() === 0;
@@ -422,7 +422,7 @@ export default function AthleteLinkShell({
         )}
         {scheduledSessions.filter((s) => s.date >= todayStr).length > 5 && (
           <div style={st.moreNote}>
-            +{scheduledSessions.filter((s) => s.date >= todayStr).length - 5} more — navigate the calendar above to see all sessions
+            +{scheduledSessions.filter((s) => s.date >= todayStr).length - 5} more - navigate the calendar above to see all sessions
           </div>
         )}
       </div>

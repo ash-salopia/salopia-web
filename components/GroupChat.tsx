@@ -149,7 +149,7 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
       // Remove optimistic on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setInput(body); // restore input
-      setError("Could not send message — please try again");
+      setError("Could not send message - please try again");
     } finally {
       setSending(false);
     }
@@ -169,7 +169,7 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
       <div style={s.messageList}>
         {messages.length === 0 && (
           <div style={s.empty}>
-            No messages yet — start the conversation with your {groupName} group.
+            No messages yet - start the conversation with your {groupName} group.
           </div>
         )}
         {messages.map((msg) => {

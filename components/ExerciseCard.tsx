@@ -14,7 +14,7 @@ interface Props {
   athleteId?: string;
   currentSessionId?: string;
   // Calculated %1RM target per set (kg), when the exercise prescribes
-  // one — shown as a preview in the load box, purely for the coach to
+  // one - shown as a preview in the load box, purely for the coach to
   // see what the athlete should lift. Never written to the log; only
   // an explicit ✓ tap (or the coach typing a real override) saves
   // anything here.
@@ -26,7 +26,7 @@ interface Props {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   // Other strength sessions for this athlete this exercise could be
-  // relocated to (e.g. Tuesday's session onto Monday's) — an in-place
+  // relocated to (e.g. Tuesday's session onto Monday's) - an in-place
   // move, not a copy, so any logged sets/weights on it carry over.
   otherStrengthSessions?: { id: string; name: string; date: string }[];
   onMoveToSession?: (targetSessionId: string) => void;
@@ -63,7 +63,7 @@ export default function ExerciseCard({
   // future" toggle is on, also pushes the same patch to every future
   // session with a matching exercise name (handled by the parent via
   // onApplyFuture, which calls lib/data/sessions.ts's
-  // applyToFutureSessions — see that file for why this is simpler
+  // applyToFutureSessions - see that file for why this is simpler
   // here than it was in the original prototype).
   const onEditPresc = (patch: Partial<SessionExercise>) => {
     onEdit(patch);
@@ -73,7 +73,7 @@ export default function ExerciseCard({
   // Letters-in-order match anywhere in the name (not just a prefix),
   // matching the same autocomplete behaviour used elsewhere in the
   // app (see the athlete search dropdown built in the original
-  // prototype) — "back sq" matches "Barbell Back Squat".
+  // prototype) - "back sq" matches "Barbell Back Squat".
   const nameQuery = exercise.name.trim().toLowerCase();
   const nameMatches = nameQuery
     ? library.filter((l) => l.name.toLowerCase().includes(nameQuery)).slice(0, 8)
@@ -81,13 +81,12 @@ export default function ExerciseCard({
   const hasExactMatch = nameQuery && library.some((l) => l.name.toLowerCase() === nameQuery);
 
   // Picking a library entry copies its preset fields onto this
-  // exercise — video, sets, reps, time, rest, load, tempo, notes —
-  // but ONLY fields that are genuinely non-empty on the library
+  // exercise - video, sets, reps, time, rest, load, tempo, notes -   // but ONLY fields that are genuinely non-empty on the library
   // entry, so picking a sparse preset never blanks out something the
   // coach already filled in. Matches the prototype's presetPatch
   // exactly. Always goes through onEdit (not onEditPresc) since
   // picking a name isn't really "changing a prescribed field" in the
-  // apply-to-future sense — it's establishing what the exercise IS.
+  // apply-to-future sense - it's establishing what the exercise IS.
   const applyLibraryPreset = (entry: LibraryEntry) => {
     const patch: Partial<SessionExercise> = { name: entry.name };
     if (entry.video_url) patch.video_url = entry.video_url;
@@ -98,8 +97,7 @@ export default function ExerciseCard({
     if (entry.target_load) patch.target_load = entry.target_load;
     if (entry.tempo) patch.tempo = entry.tempo;
     if (entry.notes) patch.notes = entry.notes;
-    // Unlike the text fields above, these three are unconditional —
-    // picking a name is establishing what the exercise IS (e.g. Chin
+    // Unlike the text fields above, these three are unconditional -     // picking a name is establishing what the exercise IS (e.g. Chin
     // Up is always bodyweight), so `false` on the library entry is a
     // meaningful configured default, not "not set".
     patch.is_bodyweight = entry.is_bodyweight;
@@ -128,7 +126,7 @@ export default function ExerciseCard({
   };
 
   // Per-set %1RM prescriptions live in exercise.set_percents (a
-  // prescription, alongside reps/rest/tempo), not in the log — that
+  // prescription, alongside reps/rest/tempo), not in the log - that
   // stays purely the athlete's actual results. Padded out to match
   // the current set count so an index is always safe to write.
   const updateSetPercent = (index: number, value: string) => {
@@ -163,7 +161,7 @@ export default function ExerciseCard({
           value={exercise.order}
           onChange={(e) => onEdit({ order: e.target.value })}
           placeholder="#"
-          title="e.g. 1, or 1A/1B for a superset — a plain number moves this exercise to that position"
+          title="e.g. 1, or 1A/1B for a superset - a plain number moves this exercise to that position"
           style={styles.orderInput}
         />
         <div style={styles.nameFieldWrap}>
@@ -346,7 +344,7 @@ export default function ExerciseCard({
           <div style={styles.altPanel} onClick={(e) => e.stopPropagation()}>
             <div style={styles.altTitle}>Move &quot;{exercise.name}&quot; to…</div>
             <div style={styles.altHint}>
-              Relocates this exercise to another session — any logged sets on it move too.
+              Relocates this exercise to another session - any logged sets on it move too.
             </div>
 
             <input
@@ -516,7 +514,7 @@ export default function ExerciseCard({
         </Field>
       </div>
 
-      {/* Exercise notes — coaching cues, technique reminders */}
+      {/* Exercise notes - coaching cues, technique reminders */}
       <div style={styles.notesWrap}>
         <input
           value={exercise.notes ?? ""}
@@ -529,7 +527,7 @@ export default function ExerciseCard({
       <div style={styles.setGrid}>
         {log.map((set, i) => {
           // Reps vs time is decided purely by whether the exercise is
-          // prescribed in time mode (exercise.time set) — same rule
+          // prescribed in time mode (exercise.time set) - same rule
           // as the athlete app's own session view, so a time-based
           // exercise's actually-completed hold (e.g. 40s against a
           // 30s prescription) is visible and editable here instead of
@@ -543,7 +541,7 @@ export default function ExerciseCard({
                 value={set.weight}
                 onChange={(e) => updateSet(i, { weight: e.target.value })}
                 // The session builder is for prescribing, not logging
-                // live — typing here (or seeing a calculated %1RM
+                // live - typing here (or seeing a calculated %1RM
                 // target) never marks a set done on its own. Only an
                 // explicit ✓ tap does, so a coach can freely draft or
                 // adjust numbers without it reading as "the athlete
@@ -585,7 +583,7 @@ export default function ExerciseCard({
                 }}
                 onClick={() => {
                   // Tapping done on a still-empty box captures the
-                  // greyed %1RM suggestion as the real value — the box
+                  // greyed %1RM suggestion as the real value - the box
                   // only ever shows it as a placeholder (so it never
                   // reads as "already entered"), but confirming
                   // without typing over it should still record it.

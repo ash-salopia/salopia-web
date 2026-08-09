@@ -4,7 +4,7 @@
 // SessionLibraryAccessModal
 // Grant/revoke an athlete's access to templates from the Template
 // Library, which they can then browse and log informally via their
-// own "Library" tab — separate from their assigned programme.
+// own "Library" tab - separate from their assigned programme.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -62,7 +62,7 @@ export default function SessionLibraryAccessModal({ athleteId, athleteName, onCl
     <div style={s.overlay} onClick={onClose}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.header}>
-          <span style={s.title}>📚 Session Library — {athleteName}</span>
+          <span style={s.title}>📚 Session Library - {athleteName}</span>
           <button style={s.closeBtn} onClick={onClose}>×</button>
         </div>
 
@@ -75,7 +75,7 @@ export default function SessionLibraryAccessModal({ athleteId, athleteName, onCl
         {loading ? (
           <div style={s.loadingMsg}>Loading templates…</div>
         ) : templates.length === 0 ? (
-          <div style={s.empty}>No templates yet — create one in the Template Library first.</div>
+          <div style={s.empty}>No templates yet - create one in the Template Library first.</div>
         ) : (
           <div style={s.list}>
             {templates.map((t) => {

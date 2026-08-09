@@ -21,7 +21,7 @@ function fmtDate(iso: string): string {
 }
 
 function fmtPct(pct: number | null): string {
-  if (pct == null) return "—";
+  if (pct == null) return "-";
   return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
 }
 
@@ -67,7 +67,7 @@ export default function ReportModal({
     oneRmReference,
   } = data;
   // Shared "all sessions / weekly avg" toggle for the per-exercise
-  // detail tables — governs both TTL and e1RM sections when both are
+  // detail tables - governs both TTL and e1RM sections when both are
   // present, rather than each metric having its own.
   const [detailMode, setDetailMode] = useState<"all" | "weekly">("all");
 
@@ -82,7 +82,7 @@ export default function ReportModal({
     options.bodyweightRelative && bodyweightKg ? (kg / bodyweightKg).toFixed(2) : kg.toFixed(1);
 
   // Combined line-chart series (one line per exercise, all on one
-  // chart) — weekly granularity, since per-session dates don't align
+  // chart) - weekly granularity, since per-session dates don't align
   // across exercises onto a shared x-axis. Capped to the same
   // exerciseLimit and same most-logged-first selection as the radar,
   // so both visuals show the same exercise subset.
@@ -109,12 +109,12 @@ export default function ReportModal({
     navigator.clipboard
       ?.writeText("AthletiQ TRAINING REPORT\n\n" + text)
       .catch(() => {
-        // Clipboard can fail (permissions, insecure context) — the
+        // Clipboard can fail (permissions, insecure context) - the
         // content is still visible on screen and printable either way.
       });
   };
 
-  // window.print() on the modal itself printed incompletely — the
+  // window.print() on the modal itself printed incompletely - the
   // modal is position:fixed with maxHeight:100vh + overflowY:auto so
   // browsers clipped output to one screen's worth of content instead
   // of paginating the rest, and there was no print stylesheet to
@@ -131,7 +131,7 @@ export default function ReportModal({
     if (!printWindow) return;
 
     // Strip live UI controls (the All sessions / Weekly avg toggle)
-    // that don't mean anything on paper — the section title already
+    // that don't mean anything on paper - the section title already
     // states which mode was active in plain text.
     const clone = el.cloneNode(true) as HTMLElement;
     clone.querySelectorAll('[data-no-print="true"]').forEach((n) => n.remove());
@@ -143,7 +143,7 @@ export default function ReportModal({
 <html>
 <head>
 <meta charset="utf-8">
-<title>${esc(athleteName)} — Training Load Report</title>
+<title>${esc(athleteName)} - Training Load Report</title>
 <style>
   :root {
     --ink: #ffffff; --panel: #f7f8fa; --panel2: #eef0f3; --line: #d8dde3;
@@ -361,7 +361,7 @@ export default function ReportModal({
 
           {options.loadProgression && options.ttl && hasStrength && (
             <div style={{ marginBottom: 24 }}>
-              <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " — TTL" : ""}</div>
+              <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " - TTL" : ""}</div>
               <div style={{ overflowX: "auto" }}>
                 <table style={styles.table}>
                   <thead>
@@ -418,7 +418,7 @@ export default function ReportModal({
 
           {options.loadProgression && options.e1rm && hasE1rm && (
             <div style={{ marginBottom: 24 }}>
-              <div style={styles.sectionTitle}>Load Progression — e1RM</div>
+              <div style={styles.sectionTitle}>Load Progression - e1RM</div>
               <div style={{ overflowX: "auto" }}>
                 <table style={styles.table}>
                   <thead>
@@ -481,7 +481,7 @@ export default function ReportModal({
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
-                  Strength — Total Training Load
+                  Strength - Total Training Load
                   <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
                     ({detailMode === "all" ? "all sessions" : "weekly avg"})
                   </span>
@@ -592,7 +592,7 @@ export default function ReportModal({
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, marginTop: options.ttl ? 24 : 0 }}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
-                  Strength — Estimated 1RM
+                  Strength - Estimated 1RM
                   <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
                     ({detailMode === "all" ? "all sessions" : "weekly peak"})
                   </span>
@@ -879,7 +879,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 8,
   },
   // Amber for "manual" (a coach-entered value worth noting) and red
-  // for "low-confidence" (a data-quality caution) — matches the
+  // for "low-confidence" (a data-quality caution) - matches the
   // prototype's tag semantics (athletiq-strength-report-prototype.html).
   manualTag: {
     fontSize: 10,

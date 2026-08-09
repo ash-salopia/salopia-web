@@ -91,7 +91,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
   }, []);
 
   // A "name" field change or a brand new "add"ed exercise both introduce an
-  // exercise identity that may or may not already be in the library — check
+  // exercise identity that may or may not already be in the library - check
   // whether it is so the coach can add it if not (matches the same exact +
   // normalized matching used by the CSV/Voice/Notes template flows), rather
   // than silently leaving it unlinked.
@@ -168,7 +168,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      setError("Could not access microphone — please allow permission.");
+      setError("Could not access microphone - please allow permission.");
       return;
     }
 
@@ -199,7 +199,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
       }
 
       if (!transcript.trim()) {
-        setError("No speech detected — try again.");
+        setError("No speech detected - try again.");
         setPhase("input");
         return;
       }
@@ -274,7 +274,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
 
           if (fetchErr) {
             console.error(`Could not add "${ne.name}" (${change.session_name}):`, fetchErr);
-            throw new Error(`${ne.name} (${change.session_name}): ${fetchErr.message}${fetchErr.hint ? ` — ${fetchErr.hint}` : ""}`);
+            throw new Error(`${ne.name} (${change.session_name}): ${fetchErr.message}${fetchErr.hint ? ` - ${fetchErr.hint}` : ""}`);
           }
           const nextSortOrder = existing?.length ? existing[0].sort_order + 1 : 0;
           const sets = ne.sets || 3;
@@ -296,7 +296,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
 
           if (insertErr) {
             console.error(`Could not add "${ne.name}" (${change.session_name}):`, insertErr);
-            throw new Error(`${ne.name} (${change.session_name}): ${insertErr.message}${insertErr.hint ? ` — ${insertErr.hint}` : ""}`);
+            throw new Error(`${ne.name} (${change.session_name}): ${insertErr.message}${insertErr.hint ? ` - ${insertErr.hint}` : ""}`);
           }
           continue;
         }
@@ -311,11 +311,11 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
           if (deleteErr) {
             console.error(`Could not remove "${change.exercise_name}" (${change.session_name}):`, deleteErr);
             throw new Error(
-              `${change.exercise_name} (${change.session_name}): ${deleteErr.message}${deleteErr.hint ? ` — ${deleteErr.hint}` : ""}`
+              `${change.exercise_name} (${change.session_name}): ${deleteErr.message}${deleteErr.hint ? ` - ${deleteErr.hint}` : ""}`
             );
           }
           if (!deletedRows?.length) {
-            throw new Error(`${change.exercise_name} (${change.session_name}): exercise no longer exists — it may have already been removed.`);
+            throw new Error(`${change.exercise_name} (${change.session_name}): exercise no longer exists - it may have already been removed.`);
           }
           continue;
         }
@@ -333,11 +333,11 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
         if (updateErr) {
           console.error(`Could not update "${change.exercise_name}" (${change.session_name}):`, updateErr);
           throw new Error(
-            `${change.exercise_name} (${change.session_name}): ${updateErr.message}${updateErr.hint ? ` — ${updateErr.hint}` : ""}`
+            `${change.exercise_name} (${change.session_name}): ${updateErr.message}${updateErr.hint ? ` - ${updateErr.hint}` : ""}`
           );
         }
         if (!updatedRows?.length) {
-          throw new Error(`${change.exercise_name} (${change.session_name}): exercise no longer exists — it may have been edited or removed since this was proposed.`);
+          throw new Error(`${change.exercise_name} (${change.session_name}): exercise no longer exists - it may have been edited or removed since this was proposed.`);
         }
       }
       onApplied();

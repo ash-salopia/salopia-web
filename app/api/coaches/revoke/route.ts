@@ -16,7 +16,7 @@ async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
   return coach;
 }
 
-// Cancels a PENDING invite only — removing an already-active coach is
+// Cancels a PENDING invite only - removing an already-active coach is
 // a separate, not-yet-built feature. Deletes the underlying auth user
 // too, since inviteUserByEmail has no supported resend path once an
 // auth.users row exists for an email; this is what lets the owner
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Coach not found" }, { status: 404 });
   }
   if (target.accepted_at) {
-    return NextResponse.json({ error: "This coach has already accepted — they can't be revoked this way" }, { status: 400 });
+    return NextResponse.json({ error: "This coach has already accepted - they can't be revoked this way" }, { status: 400 });
   }
 
   const { error: deleteError } = await service.from("coaches").delete().eq("id", coachId);

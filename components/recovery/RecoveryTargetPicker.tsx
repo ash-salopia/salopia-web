@@ -70,7 +70,7 @@ export default function RecoveryTargetPicker({
           onChange={(e) => onChange(e.target.value ? [e.target.value] : [])}
           style={s.input}
         >
-          <option value="">— Select athlete —</option>
+          <option value=""> - Select athlete - </option>
           {athletes.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
@@ -90,7 +90,7 @@ export default function RecoveryTargetPicker({
 
       {mode === "group" && (
         <select value={selectedGroupId} onChange={(e) => setSelectedGroupId(e.target.value)} style={s.input}>
-          <option value="">— Select group —</option>
+          <option value=""> - Select group - </option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>{g.name}{g.member_count != null ? ` (${g.member_count})` : ""}</option>
           ))}

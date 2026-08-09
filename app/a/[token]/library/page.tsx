@@ -66,7 +66,7 @@ export default function AthleteLibraryPage() {
             <div style={s.emptyIcon}>📚</div>
             <div style={s.emptyText}>No library sessions yet</div>
             <div style={s.emptySubtext}>
-              Your coach can share extra sessions here for you to do informally — separate from your regular programme.
+              Your coach can share extra sessions here for you to do informally - separate from your regular programme.
             </div>
           </div>
         ) : (

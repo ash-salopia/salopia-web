@@ -244,7 +244,7 @@ export default function DashboardPage() {
 
         <div style={st.panels}>
 
-          {/* Session comments — athlete notes the coach hasn't dismissed yet */}
+          {/* Session comments - athlete notes the coach hasn't dismissed yet */}
           {sessionNotes.length > 0 && (
             <div style={st.panel}>
               <div style={st.panelHead}>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                       style={st.noteDismissBtn}
                       onClick={() => handleDismissNote(n.sessionId)}
                       disabled={dismissingId === n.sessionId}
-                      title="Mark as read — no action needed"
+                      title="Mark as read - no action needed"
                     >
                       {dismissingId === n.sessionId ? "…" : "✓"}
                     </button>

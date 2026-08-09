@@ -75,7 +75,7 @@ async function readXlsxFile(file: File): Promise<string> {
           return `Sheet: ${name}\n${csv}`;
         }).filter(Boolean).join("\n\n");
         resolve(text);
-      } catch { reject(new Error("Could not parse Excel file — check it isn't password protected")); }
+      } catch { reject(new Error("Could not parse Excel file - check it isn't password protected")); }
     };
     reader.onerror = () => reject(new Error("Could not read file"));
     reader.readAsArrayBuffer(file);
@@ -129,7 +129,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       let text: string;
       if (ext === "xlsx" || ext === "xls") text = await readXlsxFile(file);
       else if (ext === "txt" || ext === "csv") text = await readTextFile(file);
-      else { setError("Unsupported file type — upload a .txt, .xlsx, or .pdf file"); return; }
+      else { setError("Unsupported file type - upload a .txt, .xlsx, or .pdf file"); return; }
       if (!text.trim()) { setError("File appears to be empty"); return; }
       setPdfBase64(null);
       setNotes(text);
@@ -302,7 +302,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
                   </span>
                 )}
               </div>
-              {pdfBase64 && <p style={s.hint}>PDF attached — add optional context below (e.g. "this is week 3"), or leave blank and generate.</p>}
+              {pdfBase64 && <p style={s.hint}>PDF attached - add optional context below (e.g. "this is week 3"), or leave blank and generate.</p>}
               <textarea value={notes} onChange={(e) => { setNotes(e.target.value); if (!pdfBase64) setFileName(""); }}
                 placeholder={pdfBase64 ? "Optional context for the PDF…" : "Paste your notes here…\n\ne.g.\nWeek 1 - Upper A\nBack Squat 4x6 @ 80kg, rest 3min\nBench Press 3x8 @ 60kg, rest 90s\n\nWeek 1 - Lower A\nDeadlift 4x4 @ 100kg, rest 3min"}
                 style={s.textarea} />

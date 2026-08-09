@@ -4,8 +4,8 @@
 // AssignProgrammeModal
 //
 // Two input modes:
-//   Visual — pick programme from dropdown + set start date + spacing
-//   Voice/Text — speak or type "Start 8-week strength programme this Monday"
+//   Visual - pick programme from dropdown + set start date + spacing
+//   Voice/Text - speak or type "Start 8-week strength programme this Monday"
 //                Claude extracts programme name + date, shows preview
 //
 // On confirm: assigns the programme to the athlete AND loads all sessions
@@ -120,7 +120,7 @@ export default function AssignProgrammeModal({
       if (!res.ok) throw new Error(data.error || "Could not parse instruction");
 
       const prog = programmes.find((p) => p.id === data.programmeId);
-      if (!prog) throw new Error(`Could not find programme "${data.programmeName}" — try selecting it manually`);
+      if (!prog) throw new Error(`Could not find programme "${data.programmeName}" - try selecting it manually`);
       if (!(prog.sessions ?? []).length) throw new Error("This programme has no sessions yet");
 
       setSelectedProgramme(prog);
@@ -147,7 +147,7 @@ export default function AssignProgrammeModal({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      setError("Could not access microphone — please allow permission.");
+      setError("Could not access microphone - please allow permission.");
       return;
     }
     streamRef.current = stream;
@@ -172,7 +172,7 @@ export default function AssignProgrammeModal({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         const transcript = data.transcript?.trim();
-        if (!transcript) { setError("No speech detected — try again."); setPhase("input"); return; }
+        if (!transcript) { setError("No speech detected - try again."); setPhase("input"); return; }
         await parseInstruction(transcript);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Transcription failed");
@@ -239,7 +239,7 @@ export default function AssignProgrammeModal({
               {loading ? (
                 <div style={s.loadingMsg}>Loading programmes…</div>
               ) : programmes.length === 0 ? (
-                <div style={s.empty}>No programmes yet — create one in the Programmes page first.</div>
+                <div style={s.empty}>No programmes yet - create one in the Programmes page first.</div>
               ) : (
                 <>
                   <div style={s.modeToggle}>

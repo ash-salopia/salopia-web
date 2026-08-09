@@ -3,11 +3,11 @@
 import type { RecoveryCategory, RecoveryConfig } from "@/types";
 import { RECOVERY_CATEGORIES, RECOVERY_INTENSITIES } from "@/lib/recovery-constants";
 
-// The "Quick Prescription" field group — deliberately just a handful
+// The "Quick Prescription" field group - deliberately just a handful
 // of plain fields (no sets/reps anywhere) so a coach can prescribe
 // rest, a walk, a sleep target etc. in well under 30 seconds. Reused
 // both when creating a session (RecoverySessionModal) and editing an
-// existing one (RecoverySessionEditor) — athleteNotes/completion are
+// existing one (RecoverySessionEditor) - athleteNotes/completion are
 // only ever shown in the latter context, since there's nothing to
 // show yet at creation time.
 export default function RecoveryQuickForm({
@@ -46,7 +46,7 @@ export default function RecoveryQuickForm({
           onChange={(e) => onCategoryChange((e.target.value || null) as RecoveryCategory | null)}
           style={s.input}
         >
-          <option value="">— Select —</option>
+          <option value=""> - Select - </option>
           {RECOVERY_CATEGORIES.map((c) => (
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
@@ -91,7 +91,7 @@ export default function RecoveryQuickForm({
             onChange={(e) => onConfigChange({ intensity: (e.target.value || null) as any })}
             style={s.input}
           >
-            <option value="">— None —</option>
+            <option value=""> - None - </option>
             {RECOVERY_INTENSITIES.map((i) => (
               <option key={i.value} value={i.value}>{i.label}</option>
             ))}

@@ -35,7 +35,7 @@ export default function RecoveryPresetPicker({ onSelect }: { onSelect: (preset: 
   if (!presets.length) {
     return (
       <div style={s.empty}>
-        No saved presets yet — build a Recovery session, then use &quot;Save as preset&quot; to reuse it later.
+        No saved presets yet - build a Recovery session, then use &quot;Save as preset&quot; to reuse it later.
       </div>
     );
   }

@@ -12,7 +12,7 @@ interface Props {
 }
 
 // Auto-dismisses after a few seconds so it never blocks the athlete
-// from getting back to logging the rest of the session — tapping
+// from getting back to logging the rest of the session - tapping
 // anywhere closes it immediately too.
 const AUTO_DISMISS_MS = 4000;
 
@@ -31,7 +31,7 @@ export default function PBCelebrationModal({ exerciseName, weightKg, reps, timeS
         <div style={s.value}>
           {formatPBValue({ weight_kg: weightKg, reps, time_seconds: timeSeconds })}
         </div>
-        <div style={s.sub}>Well done — nice work! 💪</div>
+        <div style={s.sub}>Well done - nice work! 💪</div>
         <button style={s.closeBtn} onClick={onClose}>Nice!</button>
       </div>
     </div>

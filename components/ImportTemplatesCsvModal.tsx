@@ -75,7 +75,7 @@ export default function ImportTemplatesCsvModal({ onCreated, onClose }: {
         setError(
           result.parseErrors.length
             ? `No valid rows found:\n${result.parseErrors.join("\n")}`
-            : "No valid rows found — check the Template Name / Session Name / Exercise Name columns are present."
+            : "No valid rows found - check the Template Name / Session Name / Exercise Name columns are present."
         );
         setPhase("select");
         return;
@@ -97,7 +97,7 @@ export default function ImportTemplatesCsvModal({ onCreated, onClose }: {
   };
 
   // SessionReviewEditor's own "apply to all sessions?" propagation only
-  // covers inline field edits — resolving an exercise via the library
+  // covers inline field edits - resolving an exercise via the library
   // picker (map to existing, or create new) never propagates to sibling
   // exercises of the same name. That matters far more here than for a
   // single notes-paste, since the same exercise name is likely to recur
@@ -208,7 +208,7 @@ export default function ImportTemplatesCsvModal({ onCreated, onClose }: {
           try {
             await deleteTemplate(templateId);
           } catch {
-            // best-effort rollback — leave the partial template for manual cleanup
+            // best-effort rollback - leave the partial template for manual cleanup
           }
         }
         outcomes.push({

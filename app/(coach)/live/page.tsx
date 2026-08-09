@@ -37,7 +37,7 @@ function fmtDate(iso: string): string {
 
 // Finds this exercise's most recent PRIOR session for the same
 // athlete (by name, case-insensitive) with at least one completed
-// set — so the coach can see what was actually lifted last time
+// set - so the coach can see what was actually lifted last time
 // without leaving Live Group to dig through session history.
 function findPreviousExercise(
   sessions: Session[],
@@ -61,7 +61,7 @@ function findPreviousExercise(
 
 // "50kg×8, 55kg×8" / "45s, 45s" / "×8, ×8" depending on how the
 // exercise was actually logged (weighted, bodyweight+time, or
-// bodyweight+reps) — only completed sets are included.
+// bodyweight+reps) - only completed sets are included.
 function formatPrevSets(ex: SessionExercise | null): string | null {
   if (!ex) return null;
   const timeMode = (ex.time ?? "").trim().length > 0;
@@ -103,7 +103,7 @@ export default function LiveGroupPage() {
   const [sessionMap, setSessionMap] = useState<Record<string, string>>({});
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   // Calculated %1RM target per set (kg) for whichever exercise is
-  // currently expanded — computed lazily (only the exercise actually
+  // currently expanded - computed lazily (only the exercise actually
   // being viewed) rather than for every athlete's every exercise up
   // front. Purely a preview: typing in the box still auto-completes
   // the set here, same as any other Live Group entry, matching real-
@@ -248,7 +248,7 @@ export default function LiveGroupPage() {
       if (i !== setIndex) return l;
       const nowDone = !l.done;
       // Marking done on a still-empty set with a calculated %1RM
-      // target captures that value as the real weight — same as
+      // target captures that value as the real weight - same as
       // completing it live would, without needing to type it in.
       if (nowDone && !l.weight.trim() && target != null) {
         return { ...l, weight: String(target), done: true };
@@ -268,7 +268,7 @@ export default function LiveGroupPage() {
   };
 
   // Coach's own thumbs up/down on whether the athlete could progress
-  // this exercise next time — no explanation prompt, just a direct
+  // this exercise next time - no explanation prompt, just a direct
   // tap, writing to the same session_exercises.progress field the
   // athlete app's own progress prompt uses. Tapping the already-set
   // value clears it back to unanswered.
@@ -293,7 +293,7 @@ export default function LiveGroupPage() {
   };
 
   // Recompute %1RM targets whenever the active session's prescribed
-  // percentages actually change — including the very first time real
+  // percentages actually change - including the very first time real
   // session data replaces the initial empty state, which a signature
   // tied only to activeTab/sessionMap would miss entirely.
   const targetsAthlete = shownAthletes.find((a) => a.id === activeTab) ?? shownAthletes[0];
@@ -333,7 +333,7 @@ export default function LiveGroupPage() {
     })();
     return () => { cancelled = true; };
     // Deliberately keyed off a content signature (not `sessions` or
-    // `loading` directly) — this ran once on mount before sessions had
+    // `loading` directly) - this ran once on mount before sessions had
     // actually loaded yet, saw nothing to compute, and with only
     // activeTab/sessionMap as deps it never re-fired once real session
     // data arrived, leaving Live Group's kg boxes permanently empty.
@@ -414,12 +414,12 @@ export default function LiveGroupPage() {
                       onChange={(e) => setSessionPin(activeAthlete.id, e.target.value)}>
                       {sessChoices.map((sess) => (
                         <option key={sess.id} value={sess.id}>
-                          {fmtDate(sess.date)} — {sess.name}
+                          {fmtDate(sess.date)} - {sess.name}
                         </option>
                       ))}
                     </select>
                   ) : activeSess ? (
-                    <div style={s.sesSingle}>{fmtDate(activeSess.date)} — {activeSess.name}</div>
+                    <div style={s.sesSingle}>{fmtDate(activeSess.date)} - {activeSess.name}</div>
                   ) : (
                     <div style={s.sesNone}>No upcoming sessions</div>
                   )}
@@ -449,7 +449,7 @@ export default function LiveGroupPage() {
                     const doneSets  = (ex.log ?? []).filter((l) => l.done).length;
                     const totalSets = ex.log?.length ?? 0;
                     // Same rule as the athlete app and coach session
-                    // builder — a bodyweight exercise has no weight to
+                    // builder - a bodyweight exercise has no weight to
                     // enter, and a time-based one (e.g. a plank hold)
                     // needs a Time column, not Reps. Without this,
                     // every exercise showed kg + reps regardless of
@@ -470,7 +470,7 @@ export default function LiveGroupPage() {
                         <div style={s.exRow} onClick={() => setExpandedEx(isExpanded ? null : ex.id)}>
                           <span style={s.exOrder}>{ex.order || String(i + 1)}</span>
                           <div style={s.exMeta}>
-                            <span style={s.exName}>{ex.name || "—"}</span>
+                            <span style={s.exName}>{ex.name || "-"}</span>
                             {(ex.sets || ex.reps || ex.target_load) && (
                               <span style={s.exPrescription}>
                                 {[ex.sets ? `${ex.sets}×` : "", ex.reps, ex.target_load]
@@ -499,7 +499,7 @@ export default function LiveGroupPage() {
                               <span style={s.setCount}>{doneSets}/{totalSets}</span>
                               {!isMobile && <span style={s.chevron}>{isExpanded ? "▴" : "▾"}</span>}
                             </div>
-                            {/* Coach's own progress call — no prompt,
+                            {/* Coach's own progress call - no prompt,
                                 just tap. Toggles off on a repeat tap.
                                 Stacked below the dots on mobile so the
                                 exercise name isn't squeezed for space. */}
@@ -568,7 +568,7 @@ export default function LiveGroupPage() {
                                     key={`r-${ex.id}-${si}-${set.reps}`}
                                     defaultValue={set.reps}
                                     type="number"
-                                    placeholder={ex.reps || "—"}
+                                    placeholder={ex.reps || "-"}
                                     inputMode="numeric"
                                     style={s.setInput}
                                     onBlur={(e) => {
@@ -595,7 +595,7 @@ export default function LiveGroupPage() {
 
               {activeSess && activeSess.type !== "strength" && (
                 <div style={s.noEx}>
-                  {meta.label} session — use "Open full session" above for the timer &amp; log.
+                  {meta.label} session - use "Open full session" above for the timer &amp; log.
                 </div>
               )}
 

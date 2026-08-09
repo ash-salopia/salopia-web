@@ -157,7 +157,7 @@ export default function ExportModal({ mode, athleteId, athleteName, onClose }: P
       URL.revokeObjectURL(url);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed — please try again");
+      setError(e instanceof Error ? e.message : "Export failed - please try again");
     } finally {
       setDownloading(false);
     }
@@ -259,7 +259,7 @@ export default function ExportModal({ mode, athleteId, athleteName, onClose }: P
         <div>
           <div style={s.sectionLabel}>
             Data to include
-            <span style={s.sectionSubLabel}> — click to toggle</span>
+            <span style={s.sectionSubLabel}> - click to toggle</span>
           </div>
           <div style={s.fieldList}>
             {FIELDS.map((field) => {

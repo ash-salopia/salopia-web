@@ -87,7 +87,7 @@ export default function AthleteSwapExerciseModal({
         <div style={s.header}>
           <div>
             <div style={s.title}>🔀 Swap &quot;{currentName}&quot;</div>
-            <div style={s.subtitle}>Only affects this session — your regular programme stays the same.</div>
+            <div style={s.subtitle}>Only affects this session - your regular programme stays the same.</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>

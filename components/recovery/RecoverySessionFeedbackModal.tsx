@@ -49,7 +49,7 @@ export default function RecoverySessionFeedbackModal({
     <div style={s.overlay} onClick={onSkip}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.title}>How was it?</div>
-        <div style={s.subtitle}>A quick check-in for your coach — all optional.</div>
+        <div style={s.subtitle}>A quick check-in for your coach - all optional.</div>
 
         {METRICS.map((m) => (
           <div key={m.key} style={s.metricBlock}>

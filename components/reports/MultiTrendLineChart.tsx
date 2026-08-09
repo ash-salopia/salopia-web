@@ -9,7 +9,7 @@ export interface TrendSeries {
   points: { date: string; value: number }[]; // date must be an ISO string (or otherwise lexicographically sortable) — formatted for display internally
 }
 
-// One chart, every exercise as its own line — replaces having a
+// One chart, every exercise as its own line - replaces having a
 // separate small line chart under each exercise, which made it hard
 // to compare exercises against each other. Weekly-granularity input
 // is expected (report-calc's weeklyExMap), since per-session dates

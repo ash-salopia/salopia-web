@@ -32,7 +32,7 @@ function FeedbackReadout({ sessionId }: { sessionId: string }) {
         {SCORE_LABELS.map((s) => (
           <div key={s.key} style={fs.scoreChip}>
             <span style={fs.scoreLabel}>{s.label}</span>
-            <span style={fs.scoreVal}>{feedback[s.key] ?? "—"}/5</span>
+            <span style={fs.scoreVal}>{feedback[s.key] ?? "-"}/5</span>
           </div>
         ))}
       </div>
@@ -64,7 +64,7 @@ const fs: Record<string, React.CSSProperties> = {
 };
 
 // Coach-side editor for an existing Recovery session, branched by
-// recovery_format — mirrors the 3-way strength/power_speed/hyrox-
+// recovery_format - mirrors the 3-way strength/power_speed/hyrox-
 // cardio branch in the session builder page one level down.
 export default function RecoverySessionEditor({
   session,
@@ -152,7 +152,7 @@ export default function RecoverySessionEditor({
 
   return (
     <div style={{ fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "20px 0" }}>
-      The {session.recovery_format} editor isn&apos;t built yet — coming in a follow-up update.
+      The {session.recovery_format} editor isn&apos;t built yet - coming in a follow-up update.
     </div>
   );
 }

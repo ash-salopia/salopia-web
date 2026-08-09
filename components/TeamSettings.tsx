@@ -65,7 +65,7 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
   async function handleArchiveToggle(coach: Coach) {
     if (!coach.archived) {
       const confirmed = confirm(
-        `Archive ${coach.name || coach.email}? They'll lose access to your organisation immediately, but nothing is deleted — you can restore them any time.`
+        `Archive ${coach.name || coach.email}? They'll lose access to your organisation immediately, but nothing is deleted - you can restore them any time.`
       );
       if (!confirmed) return;
     }
@@ -113,7 +113,7 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
           return (
             <div key={c.id} style={s.row}>
               <div style={s.rowMain}>
-                <div style={s.rowName}>{c.name || c.email || "—"}</div>
+                <div style={s.rowName}>{c.name || c.email || "-"}</div>
                 {c.email && <div style={s.rowEmail}>{c.email}</div>}
               </div>
               <div style={s.rowBadges}>

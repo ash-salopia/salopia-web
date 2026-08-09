@@ -63,14 +63,14 @@ export default function DocumentsManager({ athleteId, athleteName, onClose }: Pr
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Form state — file
+  // Form state - file
   const [fileTitle, setFileTitle] = useState("");
   const [fileNotes, setFileNotes] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form state — video link
+  // Form state - video link
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkNotes, setLinkNotes] = useState("");
@@ -112,7 +112,7 @@ export default function DocumentsManager({ athleteId, athleteName, onClose }: Pr
     }
 
     if (f.size > 10 * 1024 * 1024) {
-      setFileError("File is too large — maximum size is 10 MB.");
+      setFileError("File is too large - maximum size is 10 MB.");
       setSelectedFile(null);
       return;
     }
@@ -192,7 +192,7 @@ export default function DocumentsManager({ athleteId, athleteName, onClose }: Pr
       if (d.error) throw new Error(d.error);
       window.open(d.url, "_blank", "noopener");
     } catch {
-      setError("Could not open file — try again.");
+      setError("Could not open file - try again.");
     } finally {
       setOpeningId(null);
     }
@@ -304,7 +304,7 @@ export default function DocumentsManager({ athleteId, athleteName, onClose }: Pr
           <div style={s.form}>
             <div style={s.formTitle}>Upload file</div>
             <div style={s.formDesc}>
-              PDF, Word (.docx/.doc), or Excel (.xlsx/.xls) — max 10 MB
+              PDF, Word (.docx/.doc), or Excel (.xlsx/.xls) - max 10 MB
             </div>
 
             {/* Drop zone */}

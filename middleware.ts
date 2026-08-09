@@ -27,7 +27,8 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/auth") ||
     path.startsWith("/a/") ||               // athlete share-link pages
     path.startsWith("/api/athlete-link/") || // athlete APIs — token-validated in each handler
-    path.startsWith("/demo");               // public demo login link — always signs in as the fixed demo coach, regardless of any existing session
+    path.startsWith("/demo") ||             // public demo login link — always signs in as the fixed demo coach, regardless of any existing session
+    path.startsWith("/start");              // public marketing/signup landing page — no session implications either way, unlike /login it doesn't need to redirect an already-signed-in visitor away
 
   if (skipsAuthCheck) {
     return NextResponse.next({ request });

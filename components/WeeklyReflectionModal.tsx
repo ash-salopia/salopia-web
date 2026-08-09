@@ -19,9 +19,9 @@ interface Props {
 }
 
 // Colour logic per metric type:
-//   standard  — higher = better (intent, consistency, recovery)
-//   neutral   — 3 = ideal, diverge out from centre (load)
-//   inverted  — lower = better (stress: low stress is good for training)
+//   standard - higher = better (intent, consistency, recovery)
+//   neutral - 3 = ideal, diverge out from centre (load)
+//   inverted - lower = better (stress: low stress is good for training)
 const NEUTRAL_KEYS  = new Set(["load"]);
 const INVERTED_KEYS = new Set(["stress"]);
 
@@ -163,7 +163,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                   <div key={metric.key} style={s.metricBlock}>
                     <div style={s.metricTitle}>{metric.label}</div>
 
-                    {/* Score buttons — always show 5 down to 1 */}
+                    {/* Score buttons - always show 5 down to 1 */}
                     <div style={s.scoreRow}>
                       {[5, 4, 3, 2, 1].map(n => {
                         const def = scoreDefs?.find(o => o.score === n);
@@ -172,7 +172,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                         return (
                           <button
                             key={n}
-                            title={def ? `${def.label} — ${def.meaning}` : String(n)}
+                            title={def ? `${def.label} - ${def.meaning}` : String(n)}
                             style={{
                               ...s.scoreBtn,
                               background: active ? color : "var(--ink)",
@@ -192,12 +192,12 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                       })}
                     </div>
 
-                    {/* Scale anchors — what the two ends mean, visible
+                    {/* Scale anchors - what the two ends mean, visible
                         before picking, same as the session check-in's
                         low/high labels. Matches the buttons' fixed
                         5→1 left-to-right order, so this is "leftmost
                         button's meaning ↔ rightmost button's meaning"
-                        rather than a "worst→best" claim — direction
+                        rather than a "worst→best" claim - direction
                         varies per metric (e.g. load/stress: 1 isn't
                         always worse than 5), which the button colours
                         already communicate separately. */}
@@ -217,7 +217,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                         <span style={{ fontWeight: 700, color: scoreColor(metric.key, val) }}>
                           {selectedDef.label}
                         </span>
-                        {" — "}
+                        {" - "}
                         <span style={{ color: "var(--mute)" }}>{selectedDef.meaning}</span>
                       </div>
                     )}

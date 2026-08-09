@@ -75,7 +75,7 @@ export default function SettingsPage() {
     <div style={s.page}>
       <h1 style={s.title}>Settings</h1>
       <p style={s.subtitle}>
-        These preferences apply across your whole organisation — all coaches and athletes.
+        These preferences apply across your whole organisation - all coaches and athletes.
       </p>
 
       {error && <div style={s.errorBox}>{error}</div>}
@@ -159,7 +159,7 @@ export default function SettingsPage() {
         <div style={s.card}>
           <div style={s.cardLabel}>Weight unit</div>
           <div style={s.cardDesc}>
-            Applies to all weight displays across the app — session logs, goals, PBs, and exports.
+            Applies to all weight displays across the app - session logs, goals, PBs, and exports.
             Data is always stored in kg internally; this is a display preference only.
           </div>
           <div style={s.unitToggle}>
@@ -171,7 +171,7 @@ export default function SettingsPage() {
               >
                 <div style={s.unitLabel}>{u}</div>
                 <div style={s.unitSub}>
-                  {u === "kg" ? "Kilograms — standard in most sports" : "Pounds — common in US powerlifting"}
+                  {u === "kg" ? "Kilograms - standard in most sports" : "Pounds - common in US powerlifting"}
                 </div>
               </button>
             ))}
@@ -417,8 +417,7 @@ export default function SettingsPage() {
               <div style={s.cardLabel}>Flag after</div>
               <div style={s.cardDesc}>
                 How many low recovery scores in the last 7 days it takes to flag an athlete.
-                Set this to 1 to catch a single bad day and adjust tomorrow&apos;s training —
-                or 2–3 if you&apos;d rather wait and look for a pattern before acting.
+                Set this to 1 to catch a single bad day and adjust tomorrow&apos;s training -                 or 2–3 if you&apos;d rather wait and look for a pattern before acting.
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 {([

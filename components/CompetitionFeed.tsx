@@ -128,7 +128,7 @@ export default function CompetitionFeed({ competitions, athleteId, athleteName, 
       {/* Add form */}
       {adding && (
         <div style={s.formCard}>
-          {/* Athlete selector — coach side only */}
+          {/* Athlete selector - coach side only */}
           {!token && athletes.length > 0 && (
             <div>
               <div style={s.fieldLabel}>For athlete</div>

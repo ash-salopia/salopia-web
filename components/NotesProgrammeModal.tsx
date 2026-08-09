@@ -134,8 +134,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
     try {
       const result = await callParse(`Correction: ${corrText}\n\nCurrent sessions: ${JSON.stringify(sessions)}`, history);
       setSessions(result.sessions.map((s: any, i: number) => ({
-        // Preserve the coach's existing type unless the AI explicitly redetects one —
-        // a text correction about exercises shouldn't silently reset the session type.
+        // Preserve the coach's existing type unless the AI explicitly redetects one -         // a text correction about exercises shouldn't silently reset the session type.
         name: s.name, type: s.type ?? sessions[i]?.type ?? "strength",
         dayOffset: s.dayOffset, weekNumber: s.weekNumber,
         exercises: enrichWithLibrary(s.exercises, library),
@@ -212,7 +211,7 @@ export default function NotesProgrammeModal({ onCreated, onClose }: {
                     onClick={() => { setNotes(""); setFileName(""); setPdfBase64(null); }}>×</button>
                 </span>}
               </div>
-              {pdfBase64 && <p style={s.hint}>PDF attached — add optional context below, or leave blank and generate.</p>}
+              {pdfBase64 && <p style={s.hint}>PDF attached - add optional context below, or leave blank and generate.</p>}
               <textarea value={notes} onChange={(e) => { setNotes(e.target.value); if (!pdfBase64) setFileName(""); }}
                 placeholder={pdfBase64 ? "Optional context for the PDF…" : "Paste your programme here…\n\ne.g.\nWeek 1 Upper\nBench Press 4x6 @ 80kg\nBent Row 4x8\n\nWeek 1 Lower\nSquat 4x6 @ 100kg\nRDL 3x10\n\nWeek 2 Upper\n…"}
                 style={s.textarea} />

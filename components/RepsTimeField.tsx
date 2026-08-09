@@ -2,8 +2,7 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RepsTimeField
-// One box, toggled between reps-based and time-based prescription —
-// some exercises are reps-based (8 reps), others time-based (30s
+// One box, toggled between reps-based and time-based prescription - // some exercises are reps-based (8 reps), others time-based (30s
 // hold). Mode defaults to whichever of reps/time already has a value
 // (matches the inference SessionReviewEditor already uses elsewhere),
 // but an explicit toggle click always wins over that inference so a
@@ -49,7 +48,7 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
         <input
           value={value}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder={mode === "time" ? "30s" : "—"}
+          placeholder={mode === "time" ? "30s" : "-"}
           style={{ ...inputStyle, flex: 1, minWidth: 0 }}
         />
         <button

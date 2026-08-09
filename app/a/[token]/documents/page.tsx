@@ -74,7 +74,7 @@ export default function AthleteDocumentsPage() {
       if (d.error) throw new Error(d.error);
       window.open(d.url, "_blank", "noopener");
     } catch {
-      setError("Could not open file — try again.");
+      setError("Could not open file - try again.");
     } finally {
       setOpeningId(null);
     }

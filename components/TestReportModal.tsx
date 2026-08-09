@@ -114,8 +114,7 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
             <div style={s.csvIcon}>📄</div>
             <div style={s.csvTitle}>Export raw testing data</div>
             <div style={s.csvDesc}>
-              Downloads every logged trial across {sessions.length} test session{sessions.length !== 1 ? "s" : ""} as a CSV —
-              date, metric, side, trial number, value, bodyweight, and notes. No narrative, no benchmarking — just the numbers, ready for your own analysis.
+              Downloads every logged trial across {sessions.length} test session{sessions.length !== 1 ? "s" : ""} as a CSV -               date, metric, side, trial number, value, bodyweight, and notes. No narrative, no benchmarking - just the numbers, ready for your own analysis.
             </div>
             <button style={s.primaryBtn} onClick={handleExportCSV}>⬇ Download CSV</button>
           </div>
@@ -123,10 +122,10 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
           <div id="testing-report-content" style={s.content}>
             <div style={s.metaBar}>
               <MetaCell label="ATHLETE" value={athlete.name} />
-              <MetaCell label="AGE AT TEST" value={athleteAge != null ? `${athleteAge} yrs` : "—"} />
-              <MetaCell label="SEX" value={athlete.sex ? (athlete.sex === "male" ? "Male" : "Female") : "—"} />
+              <MetaCell label="AGE AT TEST" value={athleteAge != null ? `${athleteAge} yrs` : "-"} />
+              <MetaCell label="SEX" value={athlete.sex ? (athlete.sex === "male" ? "Male" : "Female") : "-"} />
               <MetaCell label="BODY MASS" value={latestSession?.bodyweight_kg ? `${latestSession.bodyweight_kg}kg` : "Not recorded"} />
-              <MetaCell label="TEST DATE" value={latestSession ? fmtDate(latestSession.date) : "—"} />
+              <MetaCell label="TEST DATE" value={latestSession ? fmtDate(latestSession.date) : "-"} />
             </div>
 
             {mode === "full" && (
@@ -171,7 +170,7 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
                           <td style={s.td}>{latest}{metric.unit}</td>
                           {prevSession && (
                             <td style={{ ...s.td, color: delta === null ? "var(--mute)" : improved ? "#2E9E5B" : "#E53935", fontWeight: 600 }}>
-                              {delta === null ? "—" : `${improved ? "▲" : "▼"}${Math.abs(delta).toFixed(2)}`}
+                              {delta === null ? "-" : `${improved ? "▲" : "▼"}${Math.abs(delta).toFixed(2)}`}
                             </td>
                           )}
                           {mode === "full" && (
@@ -188,17 +187,17 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
 
                 {mode === "full" && asymmetryRows.map(({ metric, left, right, pct, status, prevAsym }) => (
                   <div key={metric.id} style={s.asymBlock}>
-                    <div style={s.asymTitle}>{metric.name} — Asymmetry Screening</div>
+                    <div style={s.asymTitle}>{metric.name} - Asymmetry Screening</div>
                     <div style={s.asymGrid}>
                       <div style={s.asymCell}><div style={s.asymCellLabel}>Left</div><div style={s.asymCellValue}>{left}{metric.unit}</div></div>
                       <div style={s.asymCell}><div style={s.asymCellLabel}>Right</div><div style={s.asymCellValue}>{right}{metric.unit}</div></div>
                     </div>
                     <div style={{ ...s.asymSummary, color: ASYM_COLOR[status] }}>
                       Asymmetry index: <b>{pct.toFixed(1)}%</b>
-                      {prevAsym && ` (was ${prevAsym.pct.toFixed(1)}%)`} — {status === "normal" ? "Normal range" : status === "monitor" ? "Monitor" : "Clinical concern"}
+                      {prevAsym && ` (was ${prevAsym.pct.toFixed(1)}%)`} - {status === "normal" ? "Normal range" : status === "monitor" ? "Monitor" : "Clinical concern"}
                     </div>
                     <div style={s.asymNote}>
-                      Displayed for asymmetry screening only — no published youth height norms exist for this test. Benchmarks: &lt;10% normal, 10–15% monitor, &gt;15% clinical concern (Donskov et al. 2021).
+                      Displayed for asymmetry screening only - no published youth height norms exist for this test. Benchmarks: &lt;10% normal, 10–15% monitor, &gt;15% clinical concern (Donskov et al. 2021).
                     </div>
                   </div>
                 ))}

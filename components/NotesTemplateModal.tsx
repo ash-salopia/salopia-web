@@ -206,7 +206,7 @@ export default function NotesTemplateModal({ onCreated, onClose }: {
                     onClick={() => { setNotes(""); setFileName(""); setPdfBase64(null); }}>×</button>
                 </span>}
               </div>
-              {pdfBase64 && <p style={s.hint}>PDF attached — add optional context below, or leave blank and generate.</p>}
+              {pdfBase64 && <p style={s.hint}>PDF attached - add optional context below, or leave blank and generate.</p>}
               <textarea value={notes} onChange={(e) => { setNotes(e.target.value); if (!pdfBase64) setFileName(""); }}
                 placeholder={pdfBase64 ? "Optional context for the PDF…" : "Paste your template here…\n\ne.g.\nUpper A\nBench Press 4x6 @ 80kg\nBent Row 4x8\n\nLower A\nSquat 4x6 @ 100kg\nRDL 3x10"}
                 style={s.textarea} />
@@ -234,7 +234,7 @@ export default function NotesTemplateModal({ onCreated, onClose }: {
               </div>
               {sessions.length > 1 && (
                 <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
-                  <div style={s.fieldLabel}>{sessions.length} sessions detected — names editable</div>
+                  <div style={s.fieldLabel}>{sessions.length} sessions detected - names editable</div>
                   {sessions.map((s2, i) => (
                     <input key={i} value={sessionNames[i] ?? s2.name}
                       onChange={(e) => setSessionNames((prev) => { const n = [...prev]; n[i] = e.target.value; return n; })}

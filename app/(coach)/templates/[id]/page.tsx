@@ -304,7 +304,7 @@ function TemplateDefEditor({
                   inputMode="decimal"
                   style={styles.exMiniInput}
                 />
-                <label style={styles.exBodyweightLabel} title="Prescribe each set's own %1RM instead of a fixed load — e.g. a 70/80/90% ramp">
+                <label style={styles.exBodyweightLabel} title="Prescribe each set's own %1RM instead of a fixed load - e.g. a 70/80/90% ramp">
                   <input
                     type="checkbox"
                     checked={!!ex.use_percent_1rm}
@@ -321,7 +321,7 @@ function TemplateDefEditor({
                     style={styles.exMiniInput}
                   />
                 )}
-                <label style={styles.exBodyweightLabel} title="Bodyweight only — no load field, athlete logs reps/time only">
+                <label style={styles.exBodyweightLabel} title="Bodyweight only - no load field, athlete logs reps/time only">
                   <input
                     type="checkbox"
                     checked={!!ex.is_bodyweight}
@@ -343,7 +343,7 @@ function TemplateDefEditor({
       )}
       {def.type !== "strength" && (
         <div style={styles.hyroxNote}>
-          Hyrox/Cardio template configuration isn&apos;t built yet — this session type will load with
+          Hyrox/Cardio template configuration isn&apos;t built yet - this session type will load with
           no preset config. Set it up after loading onto an athlete.
         </div>
       )}

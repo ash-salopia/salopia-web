@@ -32,7 +32,7 @@ export default function RecoverySessionAthleteView({
   const intensityLabel = RECOVERY_INTENSITIES.find((i) => i.value === config.intensity)?.label;
 
   // recovery_config round-trips whole, same as every other jsonb-blob
-  // config in this codebase (hyrox_config, cardio_config) — merge
+  // config in this codebase (hyrox_config, cardio_config) - merge
   // client-side, PATCH the full object.
   const patchConfig = async (patch: Partial<RecoveryConfig>) => {
     const next = { ...config, ...patch };
@@ -133,7 +133,7 @@ export default function RecoverySessionAthleteView({
 
       {config.request_feedback && (
         feedbackSubmitted ? (
-          <div style={s.feedbackDone}>✓ Feedback submitted — thanks!</div>
+          <div style={s.feedbackDone}>✓ Feedback submitted - thanks!</div>
         ) : (
           <button style={s.finishBtn} onClick={() => setFeedbackOpen(true)}>Finish session</button>
         )

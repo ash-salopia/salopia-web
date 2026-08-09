@@ -8,7 +8,7 @@
 //   10m sprint, 20m sprint, Flying 10m, CMJ, Drop Jump RSI,
 //   Broad Jump, 505
 //
-// Data sourced from power/speed session logs — no separate
+// Data sourced from power/speed session logs - no separate
 // test table needed. Queries session_exercises for matching
 // exercise names and extracts best/latest from log.result.
 // ============================================================
@@ -292,7 +292,7 @@ export default function PowerSpeedDashboard() {
                             color: changePct === null ? "var(--mute)"
                               : (def.lowerIsBetter ? changePct <= 0 : changePct >= 0) ? "#10B981" : "#EF4444"
                           }}>
-                            {changePct === null ? "—" : `${changePct >= 0 ? "+" : ""}${changePct}%`}
+                            {changePct === null ? "-" : `${changePct >= 0 ? "+" : ""}${changePct}%`}
                           </div>
                         </div>
                       </div>
@@ -347,11 +347,11 @@ export default function PowerSpeedDashboard() {
                             : (r.def.lowerIsBetter ? r.changePct! <= 0 : r.changePct! >= 0) ? "#10B981" : "#EF4444",
                           fontWeight: 700,
                         }}>
-                          {r.changePct === null ? "—" : `${r.changePct! >= 0 ? "+" : ""}${r.changePct}%`}
+                          {r.changePct === null ? "-" : `${r.changePct! >= 0 ? "+" : ""}${r.changePct}%`}
                         </td>
                         <td style={s.td}>
                           <span style={{ ...s.ragBadge, background: RAG_COLOR[rag] + "22", color: RAG_COLOR[rag] }}>
-                            {rag === "none" ? "—" : rag.charAt(0).toUpperCase() + rag.slice(1)}
+                            {rag === "none" ? "-" : rag.charAt(0).toUpperCase() + rag.slice(1)}
                           </span>
                         </td>
                       </tr>

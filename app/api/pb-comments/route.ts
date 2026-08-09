@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const service = createServiceRoleClient();
 
   // Verify the PB belongs to an athlete in THIS coach's organisation
-  // before allowing the comment — stops cross-organisation writes.
+  // before allowing the comment - stops cross-organisation writes.
   const { data: pb } = await service
     .from("personal_bests")
     .select("id, athletes!inner(organisation_id)")
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest) {
   const service = createServiceRoleClient();
 
   // Verify the comment belongs to a PB whose athlete is in THIS coach's
-  // organisation before deleting — coaches can moderate any comment
+  // organisation before deleting - coaches can moderate any comment
   // within their own org (matches the pattern on the community page),
   // but never another organisation's data.
   const { data: comment } = await service

@@ -47,11 +47,11 @@ export default function PowerSpeedSummaryBar({ exercises }: Props) {
   const maxPain = painValues.length ? Math.max(...painValues) : null;
 
   const stats = [
-    { label: "Sprint metres", value: sprintMetres > 0 ? `${Math.round(sprintMetres)}m` : "—", color: "#F59E0B" },
-    { label: "High-speed efforts", value: highSpeedEfforts > 0 ? String(highSpeedEfforts) : "—", color: "#EF4444" },
-    { label: "Plyo contacts", value: plyoContacts > 0 ? String(plyoContacts) : "—", color: "#8B5CF6" },
-    { label: "Avg RPE", value: avgRpe ?? "—", color: avgRpe && parseFloat(avgRpe) >= 8 ? "#EF4444" : "#10B981" },
-    { label: "Max pain", value: maxPain !== null ? `${maxPain}/10` : "—", color: maxPain !== null && maxPain >= 5 ? "#EF4444" : maxPain !== null && maxPain >= 3 ? "#F59E0B" : "#10B981" },
+    { label: "Sprint metres", value: sprintMetres > 0 ? `${Math.round(sprintMetres)}m` : "-", color: "#F59E0B" },
+    { label: "High-speed efforts", value: highSpeedEfforts > 0 ? String(highSpeedEfforts) : "-", color: "#EF4444" },
+    { label: "Plyo contacts", value: plyoContacts > 0 ? String(plyoContacts) : "-", color: "#8B5CF6" },
+    { label: "Avg RPE", value: avgRpe ?? "-", color: avgRpe && parseFloat(avgRpe) >= 8 ? "#EF4444" : "#10B981" },
+    { label: "Max pain", value: maxPain !== null ? `${maxPain}/10` : "-", color: maxPain !== null && maxPain >= 5 ? "#EF4444" : maxPain !== null && maxPain >= 3 ? "#F59E0B" : "#10B981" },
   ];
 
   return (

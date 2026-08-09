@@ -17,7 +17,7 @@ import { saveLibraryEntry } from "@/lib/data/library";
 import { normalizeExerciseName } from "@/lib/exercise-name-match";
 import type { LibraryEntry } from "@/types";
 
-// ── Exported types — used by both modals ──────────────────────────────────────
+// ── Exported types - used by both modals ──────────────────────────────────────
 
 export interface ReviewExercise {
   name: string;
@@ -55,7 +55,7 @@ export const SESSION_TYPE_META: Record<string, { label: string; color: string }>
   recovery:     { label: "Recovery",      color: "#2DD4BF" },
 };
 
-// ── Exported helpers — call these when converting Claude output ───────────────
+// ── Exported helpers - call these when converting Claude output ───────────────
 
 export function enrichWithLibrary(
   exercises: Array<{
@@ -77,7 +77,7 @@ export function enrichWithLibrary(
       (l) => l.name.toLowerCase() === e.name.toLowerCase().trim()
     );
     // Fall back to a normalized match (abbreviations like DB/BB/KB/SL/SA
-    // expanded, simple trailing-s plurals stripped) — catches names a
+    // expanded, simple trailing-s plurals stripped) - catches names a
     // coach would consider obviously the same exercise (e.g. "DB Lateral
     // Raises" vs "Dumbbell Lateral Raise") without exact string equality.
     if (!lib) {
@@ -99,7 +99,7 @@ export function enrichWithLibrary(
       time: e.time,
       each_side: e.each_side,
       // No parsed signal for these two exists at this layer (unlike
-      // each_side, which comes from the AI/voice parse itself) — pure
+      // each_side, which comes from the AI/voice parse itself) - pure
       // library-default addition, so a match applies it directly.
       is_bodyweight: lib?.is_bodyweight ?? false,
       use_percent_1rm: lib?.use_percent_1rm ?? false,
@@ -163,7 +163,7 @@ export default function SessionReviewEditor({
         counter++;
         return updated;
       }
-      // Non-integer label (superset like "1A") — still advance counter if
+      // Non-integer label (superset like "1A") - still advance counter if
       // it's a new base number so that the next plain exercise gets the
       // right number.
       const baseNum = parseInt(ex.order ?? "");
@@ -333,7 +333,7 @@ export default function SessionReviewEditor({
 
       {hasUnresolved && (
         <div style={s.unresolvedBanner}>
-          ⚠️ Link or create unmatched exercises before saving — historical reporting depends on library links
+          ⚠️ Link or create unmatched exercises before saving - historical reporting depends on library links
         </div>
       )}
 
@@ -341,7 +341,7 @@ export default function SessionReviewEditor({
         const typeMeta = SESSION_TYPE_META[session.type] ?? SESSION_TYPE_META.strength;
         return (
         <div key={si} style={s.sessionBlock}>
-          {/* Session header — name (multi-session only) + type selector (always) */}
+          {/* Session header - name (multi-session only) + type selector (always) */}
           <div style={s.sessionHeaderRow}>
             {multiSession && (
               <div style={s.sessionLabel}>{session.name}</div>
@@ -397,12 +397,12 @@ export default function SessionReviewEditor({
                       color: ex.matched ? "var(--good)" : "#f5a623",
                       border: `1px solid ${ex.matched ? "#1a4a1a" : "#4a3000"}`,
                     }}
-                    title={ex.matched ? "Linked to library" : "Not in library — click name to link"}
+                    title={ex.matched ? "Linked to library" : "Not in library - click name to link"}
                   >
                     {ex.matched ? "✓" : "⚠"}
                   </div>
 
-                  {/* Exercise name — click to open picker */}
+                  {/* Exercise name - click to open picker */}
                   <button
                     style={{
                       ...s.nameBtn,
@@ -712,7 +712,7 @@ export default function SessionReviewEditor({
   );
 }
 
-// ── EditChip — a value that turns into an input on click ──────────────────────
+// ── EditChip - a value that turns into an input on click ──────────────────────
 
 function EditChip({
   label,

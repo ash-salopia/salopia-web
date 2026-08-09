@@ -167,7 +167,7 @@ function BatteriesTab({ batteries, metrics, selectedId, onSelect, onReload }: {
             />
             <div style={s.fieldLabel}>Metrics in this battery</div>
             <div style={s.metricCheckList}>
-              {metrics.length === 0 && <div style={s.emptyHint}>No metrics yet — create some in the Metrics tab first.</div>}
+              {metrics.length === 0 && <div style={s.emptyHint}>No metrics yet - create some in the Metrics tab first.</div>}
               {metrics.map((m) => (
                 <label key={m.id} style={s.metricCheckRow}>
                   <input type="checkbox" checked={selectedMetricIds.includes(m.id)} onChange={() => toggleMetric(m.id)} />
@@ -319,7 +319,7 @@ function BenchmarkList({ metricId, benchmarks, onReload }: {
 
   return (
     <div>
-      {benchmarks.length === 0 && <div style={s.emptyHint}>No benchmarks set — results will show without rating until you add Elite Youth and General Population thresholds.</div>}
+      {benchmarks.length === 0 && <div style={s.emptyHint}>No benchmarks set - results will show without rating until you add Elite Youth and General Population thresholds.</div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
         {benchmarks.map((b) => (
           <div key={b.id} style={s.benchmarkRow}>
@@ -355,7 +355,7 @@ function BenchmarkList({ metricId, benchmarks, onReload }: {
               </div>
             </Field>
           </div>
-          <div style={s.fieldLabel}>4-tier thresholds — a result worse than Average is rated Needs Work automatically</div>
+          <div style={s.fieldLabel}>4-tier thresholds - a result worse than Average is rated Needs Work automatically</div>
           <div style={s.row3}>
             <Field label="Average"><input value={form.average_threshold} onChange={(e) => setForm((p) => ({ ...p, average_threshold: e.target.value }))} style={s.input} /></Field>
             <Field label="Good"><input value={form.good_threshold} onChange={(e) => setForm((p) => ({ ...p, good_threshold: e.target.value }))} style={s.input} /></Field>

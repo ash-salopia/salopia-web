@@ -15,14 +15,14 @@ type EditorFormat = "quick" | "guided" | "checklist";
 type Step = "format" | "target" | "preset" | EditorFormat;
 
 const FORMAT_CARDS: { key: "quick" | "guided" | "checklist" | "preset"; title: string; desc: string }[] = [
-  { key: "quick", title: "Quick Prescription", desc: "A few fields — instructions, duration, intensity. Built for speed." },
-  { key: "guided", title: "Guided Recovery Routine", desc: "A block-based routine — instructions, mobility drills, timed activities, checklists, media." },
-  { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours — hydration, walking, mobility, nutrition, sleep targets." },
+  { key: "quick", title: "Quick Prescription", desc: "A few fields - instructions, duration, intensity. Built for speed." },
+  { key: "guided", title: "Guided Recovery Routine", desc: "A block-based routine - instructions, mobility drills, timed activities, checklists, media." },
+  { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours - hydration, walking, mobility, nutrition, sleep targets." },
   { key: "preset", title: "Saved Preset", desc: "Start from a preset your org has saved before." },
 ];
 
 // athleteId pinned (opened from an athlete's own page) skips the
-// target picker entirely — single athlete, zero extra taps, matching
+// target picker entirely - single athlete, zero extra taps, matching
 // the "under 30 seconds" goal. Left undefined (opened from a
 // standalone entry point) shows the full single/multiple/group picker.
 export default function RecoverySessionModal({
@@ -53,7 +53,7 @@ export default function RecoverySessionModal({
   const patchConfig = (patch: Partial<RecoveryConfig>) => setConfig((prev) => ({ ...prev, ...patch }));
 
   // Routes to the target picker first when the modal isn't pinned to
-  // one athlete — same landing step regardless of whether the coach
+  // one athlete - same landing step regardless of whether the coach
   // picked a format directly or applied a preset.
   const goToEditor = (format: EditorFormat) => {
     setPendingFormat(format);
@@ -110,7 +110,7 @@ export default function RecoverySessionModal({
       <div>
         <label style={s.label}>Recovery category</label>
         <select value={category ?? ""} onChange={(e) => setCategory((e.target.value || null) as RecoveryCategory | null)} style={s.input}>
-          <option value="">— Select —</option>
+          <option value=""> - Select - </option>
           {RECOVERY_CATEGORIES.map((c) => (
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
@@ -135,7 +135,7 @@ export default function RecoverySessionModal({
     <div style={s.overlay} onClick={onClose}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.headerRow}>
-          <div style={s.title}>New Recovery session{athleteName ? ` — ${athleteName}` : ""}</div>
+          <div style={s.title}>New Recovery session{athleteName ? ` - ${athleteName}` : ""}</div>
           <button style={s.closeBtn} onClick={onClose}>×</button>
         </div>
 
