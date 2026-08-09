@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/templates";
 import { createProgrammeFromTemplate } from "@/lib/data/programmes";
 import RepsTimeField from "@/components/RepsTimeField";
+import RecoveryTemplateDefEditor from "@/components/recovery/RecoveryTemplateDefEditor";
 import type { Template, TemplateDef, PrescribedExercise, SessionType } from "@/types";
 
 const DOW = [
@@ -341,7 +342,11 @@ function TemplateDefEditor({
           </button>
         </>
       )}
-      {def.type !== "strength" && (
+      {def.type === "recovery" && (
+        <RecoveryTemplateDefEditor def={def} onUpdate={onUpdate} />
+      )}
+
+      {def.type !== "strength" && def.type !== "recovery" && (
         <div style={styles.hyroxNote}>
           Hyrox/Cardio template configuration isn&apos;t built yet - this session type will load with
           no preset config. Set it up after loading onto an athlete.

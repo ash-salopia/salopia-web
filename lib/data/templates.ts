@@ -86,7 +86,7 @@ export async function addTemplateDef(templateId: string, sortOrder: number): Pro
 
 export async function updateTemplateDef(
   id: string,
-  patch: Partial<Pick<TemplateDef, "name" | "type" | "days" | "exercises" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config">>
+  patch: Partial<Pick<TemplateDef, "name" | "type" | "days" | "exercises" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("template_defs").update(patch).eq("id", id);
