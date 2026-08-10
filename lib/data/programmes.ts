@@ -227,9 +227,13 @@ export async function loadProgrammeSessionForAthlete(
       recovery_category: programmeSession.recovery_category,
       recovery_format: programmeSession.recovery_format,
       recovery_config: programmeSession.recovery_config,
-      // Store the programme session ID so the coach can propagate
-      // exercise changes to all future occurrences of this session.
-      source_session_id: programmeSession.id,
+      // source_session_id is a self-referencing FK into sessions(id) -
+      // programmeSession.id is a programme_sessions row, a different
+      // table/id-space entirely, so it can never satisfy that FK. Left
+      // unset here, matching loadTemplateForAthlete's same precedent:
+      // programme/template-loaded sessions don't support "update future
+      // occurrences" propagation (only copySessionToDates/copySessionsRange
+      // do, since those genuinely copy from a real prior sessions row).
     })
     .select()
     .single();
