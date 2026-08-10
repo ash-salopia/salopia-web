@@ -162,6 +162,23 @@ export async function createTestSession(params: {
   return data;
 }
 
+export async function updateTestSession(id: string, params: {
+  testBatteryId: string | null; date: string;
+  bodyweightKg: number | null; notes?: string;
+}): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("test_sessions")
+    .update({
+      test_battery_id: params.testBatteryId,
+      date: params.date,
+      bodyweight_kg: params.bodyweightKg,
+      notes: params.notes ?? "",
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteTestSession(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("test_sessions").delete().eq("id", id);

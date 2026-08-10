@@ -5,10 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import {
   listTestBatteries, listTestMetrics, listTestSessions, listBenchmarksForMetric,
-  createTestSession, saveTrials, deleteTestSession,
+  createTestSession, updateTestSession, saveTrials, deleteTestSession,
 } from "@/lib/data/testing";
 import TestReportModal from "@/components/TestReportModal";
-import type { Athlete, TestBattery, TestMetric, TestBenchmark, TestSession } from "@/types";
+import type { Athlete, TestBattery, TestMetric, TestBenchmark, TestSession, TestResult } from "@/types";
 import { todayISO } from "@/lib/date-utils";
 
 function calcAgeAtDate(dob: string | null, testDate: string): number | null {
@@ -40,7 +40,9 @@ export default function AthleteTestingPage() {
   const [showReport, setShowReport] = useState(false);
   const [showLog, setShowLog] = useState(false);
 
-  // Log new session form state
+  // Log/edit session form state - shared between "+ Log Session" (create)
+  // and editing an existing one, distinguished by editSessionId.
+  const [editSessionId, setEditSessionId] = useState<string | null>(null);
   const [logBatteryId, setLogBatteryId] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayISO());
   const [logBodyweight, setLogBodyweight] = useState<string>("");
@@ -82,28 +84,93 @@ export default function AthleteTestingPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Reset log form results when battery changes
-  useEffect(() => {
-    setLogResults({});
-  }, [logBatteryId]);
-
   const selectedBattery = batteries.find((b) => b.id === logBatteryId);
-  const batteryMetrics = selectedBattery?.metrics ?? [];
+  // Falls back to whichever metrics have populated results when editing a
+  // session whose battery no longer exists (test_battery_id goes null on
+  // delete, but its test_results survive - see deleteTestBattery) so those
+  // results stay editable rather than silently disappearing from the form.
+  const batteryMetrics = selectedBattery?.metrics
+    ?? (editSessionId ? metrics.filter((m) => logResults[m.id]) : []);
+
+  const resetLogForm = () => {
+    setEditSessionId(null);
+    setLogDate(todayISO());
+    setLogBodyweight("");
+    setLogAge("");
+    setLogNotes("");
+    setLogResults({});
+    setLogBatteryId(batteries[0]?.id ?? null);
+  };
+
+  const openLogModal = () => {
+    resetLogForm();
+    setShowLog(true);
+  };
+
+  const resultsFromSession = (metricId: string, isBilateral: boolean, results: TestResult[]) => {
+    const bySide = (side: "left" | "right" | null) =>
+      results
+        .filter((r) => r.test_metric_id === metricId && (r.side ?? null) === side)
+        .sort((a, b) => a.trial_number - b.trial_number)
+        .map((r) => String(r.value));
+    if (isBilateral) {
+      const left = bySide("left");
+      const right = bySide("right");
+      return { left: left.length ? left : [""], right: right.length ? right : [""], single: [""] };
+    }
+    const single = bySide(null);
+    return { left: [""], right: [""], single: single.length ? single : [""] };
+  };
+
+  const handleEditSession = (session: TestSession) => {
+    setEditSessionId(session.id);
+    setLogBatteryId(session.test_battery_id);
+    setLogDate(session.date);
+    setLogBodyweight(session.bodyweight_kg != null ? String(session.bodyweight_kg) : "");
+    setLogAge("");
+    setLogNotes(session.notes ?? "");
+
+    const battery = batteries.find((b) => b.id === session.test_battery_id);
+    const relevantMetrics = battery?.metrics
+      ?? metrics.filter((m) => (session.results ?? []).some((r) => r.test_metric_id === m.id));
+    const results: typeof logResults = {};
+    for (const metric of relevantMetrics) {
+      results[metric.id] = resultsFromSession(metric.id, metric.is_bilateral, session.results ?? []);
+    }
+    setLogResults(results);
+    setDeleteConfirm(null);
+    setShowLog(true);
+  };
 
   const handleSaveSession = async () => {
     if (!logDate) return;
     setSaving(true);
     setError("");
     try {
-      const session = await createTestSession({
-        athleteId,
-        testBatteryId: logBatteryId,
-        date: logDate,
-        bodyweightKg: logBodyweight ? parseFloat(logBodyweight) : null,
-        notes: logNotes,
-      });
+      let sessionId: string;
+      if (editSessionId) {
+        await updateTestSession(editSessionId, {
+          testBatteryId: logBatteryId,
+          date: logDate,
+          bodyweightKg: logBodyweight ? parseFloat(logBodyweight) : null,
+          notes: logNotes,
+        });
+        sessionId = editSessionId;
+      } else {
+        const session = await createTestSession({
+          athleteId,
+          testBatteryId: logBatteryId,
+          date: logDate,
+          bodyweightKg: logBodyweight ? parseFloat(logBodyweight) : null,
+          notes: logNotes,
+        });
+        sessionId = session.id;
+      }
 
-      // Save results for each metric
+      // Save results for each metric - always calls saveTrials (even with
+      // an empty array) rather than skipping, so clearing a trial back to
+      // blank during an edit actually deletes the stale value instead of
+      // leaving it untouched.
       for (const metric of batteryMetrics) {
         const res = logResults[metric.id];
         if (!res) continue;
@@ -111,17 +178,16 @@ export default function AthleteTestingPage() {
         if (metric.is_bilateral) {
           const leftVals = res.left.map((v) => parseFloat(v)).filter((v) => !isNaN(v));
           const rightVals = res.right.map((v) => parseFloat(v)).filter((v) => !isNaN(v));
-          if (leftVals.length > 0) await saveTrials({ testSessionId: session.id, testMetricId: metric.id, side: "left", values: leftVals });
-          if (rightVals.length > 0) await saveTrials({ testSessionId: session.id, testMetricId: metric.id, side: "right", values: rightVals });
+          await saveTrials({ testSessionId: sessionId, testMetricId: metric.id, side: "left", values: leftVals });
+          await saveTrials({ testSessionId: sessionId, testMetricId: metric.id, side: "right", values: rightVals });
         } else {
           const vals = res.single.map((v) => parseFloat(v)).filter((v) => !isNaN(v));
-          if (vals.length > 0) await saveTrials({ testSessionId: session.id, testMetricId: metric.id, side: null, values: vals });
+          await saveTrials({ testSessionId: sessionId, testMetricId: metric.id, side: null, values: vals });
         }
       }
 
       setShowLog(false);
-      setLogNotes("");
-      setLogResults({});
+      resetLogForm();
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save session");
@@ -178,7 +244,7 @@ export default function AthleteTestingPage() {
               📄 View Report
             </button>
           )}
-          <button style={s.primaryBtn} onClick={() => setShowLog(true)}>
+          <button style={s.primaryBtn} onClick={openLogModal}>
             + Log Session
           </button>
         </div>
@@ -193,7 +259,7 @@ export default function AthleteTestingPage() {
           <div style={{ fontSize: 40, marginBottom: 12 }}>🧪</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>No test sessions yet</div>
           <div style={{ fontSize: 14, color: "var(--mute)" }}>Log the first session to start tracking progress and generating reports.</div>
-          <button style={{ ...s.primaryBtn, marginTop: 16 }} onClick={() => setShowLog(true)}>Log First Session</button>
+          <button style={{ ...s.primaryBtn, marginTop: 16 }} onClick={openLogModal}>Log First Session</button>
         </div>
       ) : (
         <div style={s.sessionList}>
@@ -223,7 +289,10 @@ export default function AthleteTestingPage() {
                         <button style={s.ghostBtn} onClick={() => setDeleteConfirm(null)}>Cancel</button>
                       </>
                     ) : (
-                      <button style={s.ghostBtn} onClick={() => setDeleteConfirm(session.id)}>🗑</button>
+                      <>
+                        <button style={s.ghostBtn} onClick={() => handleEditSession(session)}>✎</button>
+                        <button style={s.ghostBtn} onClick={() => setDeleteConfirm(session.id)}>🗑</button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -245,8 +314,8 @@ export default function AthleteTestingPage() {
         <div style={s.overlay}>
           <div style={s.modal}>
             <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Log Test Session</div>
-              <button style={s.closeBtn} onClick={() => setShowLog(false)}>✕</button>
+              <div style={s.modalTitle}>{editSessionId ? "Edit Test Session" : "Log Test Session"}</div>
+              <button style={s.closeBtn} onClick={() => { setShowLog(false); resetLogForm(); }}>✕</button>
             </div>
 
             <div style={s.field}>
@@ -254,7 +323,7 @@ export default function AthleteTestingPage() {
               <select
                 style={s.select}
                 value={logBatteryId ?? ""}
-                onChange={(e) => setLogBatteryId(e.target.value || null)}
+                onChange={(e) => { setLogBatteryId(e.target.value || null); setLogResults({}); }}
               >
                 <option value=""> - No battery - </option>
                 {batteries.map((b) => (
@@ -361,9 +430,9 @@ export default function AthleteTestingPage() {
             {error && <div style={s.errorBox}>{error}</div>}
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-              <button style={s.ghostBtn} onClick={() => setShowLog(false)}>Cancel</button>
+              <button style={s.ghostBtn} onClick={() => { setShowLog(false); resetLogForm(); }}>Cancel</button>
               <button style={{ ...s.primaryBtn, opacity: saving ? 0.6 : 1 }} disabled={saving || !logDate} onClick={handleSaveSession}>
-                {saving ? "Saving…" : "Save Session"}
+                {saving ? "Saving…" : editSessionId ? "Save Changes" : "Save Session"}
               </button>
             </div>
           </div>
