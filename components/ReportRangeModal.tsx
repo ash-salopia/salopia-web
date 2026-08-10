@@ -16,6 +16,7 @@ export interface ReportOptions {
   radar: boolean; // Week 1 vs latest snapshot, normalised to % of baseline
   lineChart: boolean; // per-exercise value-over-time chart
   aiSummary: boolean; // AI overview + recurring-notes-themes paragraphs
+  coachContext: string; // free-text context fed to the AI summary only (e.g. "returning from hamstring injury") - never shown on the report itself
   athleteNotes: boolean; // raw athlete notes list
   // e1RM-only options - only meaningful (and only enabled in the UI) when e1rm is ticked.
   bodyweightRelative: boolean; // show e1RM ÷ bodyweight instead of raw kg
@@ -32,6 +33,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   radar: false,
   lineChart: false,
   aiSummary: true,
+  coachContext: "",
   athleteNotes: false,
   bodyweightRelative: false,
   exerciseLimit: 8,
@@ -190,6 +192,21 @@ export default function ReportRangeModal({
               </span>
             </label>
           ))}
+        </div>
+
+        <div style={{ ...styles.sectionLabel, opacity: options.aiSummary ? 1 : 0.5 }}>Context for AI summary</div>
+        <div style={{ marginBottom: 16, opacity: options.aiSummary ? 1 : 0.5, pointerEvents: options.aiSummary ? "auto" : "none" }}>
+          <div style={{ ...styles.fieldLabel, marginBottom: 6 }}>
+            Anything the AI should factor in - e.g. &quot;returning from hamstring injury&quot;, so a jump in leg e1RM reads as recovery, not just progress
+          </div>
+          <textarea
+            value={options.coachContext}
+            disabled={!options.aiSummary}
+            onChange={(e) => setOptions((prev) => ({ ...prev, coachContext: e.target.value.slice(0, 500) }))}
+            placeholder="Optional - e.g. returning from injury, competition taper, illness…"
+            maxLength={500}
+            style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "inherit" }}
+          />
         </div>
 
         <div style={{ ...styles.sectionLabel, opacity: options.e1rm ? 1 : 0.5 }}>e1RM options</div>

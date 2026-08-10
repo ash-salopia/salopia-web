@@ -308,7 +308,7 @@ export default function AthleteDetailPage() {
         fetch("/api/training-report-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ athleteId, rangeStart: start, rangeEnd: end, includeE1rm: options.e1rm }),
+          body: JSON.stringify({ athleteId, rangeStart: start, rangeEnd: end, includeE1rm: options.e1rm, coachContext: options.coachContext }),
         })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
           .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes }))

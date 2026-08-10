@@ -5,10 +5,10 @@ import { computeStrengthReport } from "@/lib/strength-report-calc";
 import { DEFAULT_SETTINGS } from "@/lib/data/settings";
 import type { Session, SessionExercise } from "@/types";
 
-const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks and the athlete's own notes from that period. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
+const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks, the athlete's own notes from that period, and optionally the coach's own context for this report. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
 
 SUMMARY:
-<2-3 sentences on the overall training load trend across the range — standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other.>
+<2-3 sentences on the overall training load trend across the range — standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it.>
 
 THEMES:
 <1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>`;
@@ -21,12 +21,14 @@ export async function POST(req: NextRequest) {
   let rangeStart: string | null;
   let rangeEnd: string | null;
   let includeE1rm: boolean;
+  let coachContext: string;
   try {
     const body = await req.json();
     athleteId = body.athleteId;
     rangeStart = body.rangeStart ?? null;
     rangeEnd = body.rangeEnd ?? null;
     includeE1rm = !!body.includeE1rm;
+    coachContext = typeof body.coachContext === "string" ? body.coachContext.trim().slice(0, 500) : "";
     if (!athleteId) throw new Error();
   } catch {
     return NextResponse.json({ error: "athleteId required" }, { status: 400 });
@@ -103,7 +105,12 @@ ESTIMATED 1RM (formula: ${oneRmFormula}, mode: ${oneRmSource === "fixed" ? "Fixe
 ${e1rmLines || "No e1RM data available in this range."}`;
   }
 
-  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.
+  const coachContextBlock = coachContext ? `
+
+COACH CONTEXT FOR THIS REPORT:
+${coachContext}` : "";
+
+  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}
 
 EXERCISES:
 ${exerciseLines || "No weighted strength data logged in this range."}${e1rmBlock}
