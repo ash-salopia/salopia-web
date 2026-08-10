@@ -128,10 +128,52 @@ export async function addProgrammeSession(programmeId: string, sortOrder: number
   return data;
 }
 
+export async function updateProgrammeSession(
+  id: string,
+  patch: Partial<Pick<ProgrammeSession, "name" | "type" | "exercises" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config">>
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("programme_sessions").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteProgrammeSession(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("programme_sessions").delete().eq("id", id);
   if (error) throw error;
+}
+
+// Imports every def from an existing Template into an already-existing
+// Programme, appended after its current sessions - the counterpart to
+// createProgrammeFromTemplate above, for when the programme isn't brand
+// new. Same snapshot-copy semantics: no live link back to the template.
+export async function addTemplateDefsToProgramme(
+  programmeId: string,
+  template: Template,
+  sortOrderStart: number
+): Promise<ProgrammeSession[]> {
+  const defs = template.defs ?? [];
+  if (!defs.length) return [];
+
+  const supabase = createClient();
+  const sessionRows = defs.map((def, i) => ({
+    programme_id: programmeId,
+    name: def.name,
+    type: def.type,
+    exercises: def.exercises ?? [],
+    hyrox_type: def.hyrox_type,
+    hyrox_config: def.hyrox_config,
+    cardio_type: def.cardio_type,
+    cardio_config: def.cardio_config,
+    recovery_category: def.recovery_category,
+    recovery_format: def.recovery_format,
+    recovery_config: def.recovery_config,
+    sort_order: sortOrderStart + i,
+  }));
+
+  const { data, error } = await supabase.from("programme_sessions").insert(sessionRows).select();
+  if (error) throw error;
+  return data;
 }
 
 // ------------------------------------------------------------

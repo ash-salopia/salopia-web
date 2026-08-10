@@ -20,6 +20,12 @@ interface Props {
 }
 
 export default function RepsTimeField({ reps, time, onChange, inputStyle, labelStyle }: Props) {
+  // Defensive against legacy exercise rows saved before the time field
+  // existed (or imported via CSV/voice parse without it) - their JSONB
+  // can genuinely lack these keys, so they arrive as undefined at
+  // runtime despite the prop type.
+  reps = reps ?? "";
+  time = time ?? "";
   const [explicitMode, setExplicitMode] = useState<"reps" | "time" | null>(null);
   const mode: "reps" | "time" = explicitMode ?? (time.trim() ? "time" : "reps");
   const value = mode === "time" ? time : reps;

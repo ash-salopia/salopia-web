@@ -3,7 +3,7 @@
 import RecoveryQuickForm from "@/components/recovery/RecoveryQuickForm";
 import RecoveryBlockBuilder from "@/components/recovery/RecoveryBlockBuilder";
 import RecoveryChecklistItemsEditor from "@/components/recovery/RecoveryChecklistItemsEditor";
-import type { RecoveryConfig, RecoveryFormat, TemplateDef } from "@/types";
+import type { RecoveryCategory, RecoveryConfig, RecoveryFormat } from "@/types";
 
 const FORMAT_CARDS: { key: RecoveryFormat; title: string; desc: string }[] = [
   { key: "quick", title: "Quick Prescription", desc: "A few fields - instructions, duration, intensity. Built for speed." },
@@ -11,16 +11,26 @@ const FORMAT_CARDS: { key: RecoveryFormat; title: string; desc: string }[] = [
   { key: "checklist", title: "Recovery Checklist", desc: "Tappable behaviours - hydration, walking, mobility, nutrition, sleep targets." },
 ];
 
-// Recovery editor for a template def, mirroring RecoverySessionEditor's
-// format-branched layout. Unlike a real session, a def has no id worth
-// fetching feedback for and no format-switcher once chosen (same
-// precedent as real sessions - format is picked once, up front).
-export default function RecoveryTemplateDefEditor({
+// Minimal shape shared by TemplateDef and ProgrammeSession - both carry
+// the same recovery columns, so this editor works unmodified for either.
+export interface RecoveryDefLike {
+  name: string;
+  recovery_category: RecoveryCategory | null;
+  recovery_format: RecoveryFormat | null;
+  recovery_config: RecoveryConfig;
+}
+
+// Recovery editor for a template def or programme session, mirroring
+// RecoverySessionEditor's format-branched layout. Unlike a real session,
+// a def has no id worth fetching feedback for and no format-switcher
+// once chosen (same precedent as real sessions - format is picked once,
+// up front).
+export default function RecoveryDefEditor({
   def,
   onUpdate,
 }: {
-  def: TemplateDef;
-  onUpdate: (patch: Partial<TemplateDef>) => void;
+  def: RecoveryDefLike;
+  onUpdate: (patch: Partial<RecoveryDefLike>) => void;
 }) {
   const patchConfig = (patch: Partial<RecoveryConfig>) =>
     onUpdate({ recovery_config: { ...def.recovery_config, ...patch } });
