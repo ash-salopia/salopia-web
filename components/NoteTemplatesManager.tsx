@@ -91,7 +91,7 @@ export default function NoteTemplatesManager() {
           <div style={s.subtitle}>These appear in the template picker inside Session Notes on any session.</div>
         </div>
         <button style={s.addBtn} onClick={() => { setCreating(true); setEditingId(null); }}>
-          + New template
+          + New note template
         </button>
       </div>
 

@@ -124,6 +124,8 @@ export default function TemplatesPage() {
         </div>
       )}
 
+      <NoteTemplatesManager />
+
       {voiceOpen && (
         <VoiceSessionModal
           mode="template"
