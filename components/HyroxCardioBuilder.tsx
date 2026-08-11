@@ -15,57 +15,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Session, HyroxConfig, CardioConfig, LibraryEntry } from "@/types";
-
-// ── Audio engine (ported exactly from the original) ───────────────────────────
-
-let _audioCtx: AudioContext | null = null;
-let _keepAliveOsc: OscillatorNode | null = null;
-let _soundMuted = false;
-
-function getAudioCtx(): AudioContext | null {
-  if (!_audioCtx) {
-    try { _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)(); } catch { return null; }
-  }
-  return _audioCtx;
-}
-function startKeepAlive() {
-  const ctx = getAudioCtx(); if (!ctx || _keepAliveOsc) return;
-  try {
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    gain.gain.value = 0.00001; osc.frequency.value = 20;
-    osc.connect(gain); gain.connect(ctx.destination); osc.start(); _keepAliveOsc = osc;
-  } catch {}
-}
-function stopKeepAlive() {
-  if (_keepAliveOsc) { try { _keepAliveOsc.stop(); } catch {} _keepAliveOsc = null; }
-}
-function unlockAudio() {
-  const ctx = getAudioCtx(); if (!ctx) return;
-  const finish = () => { startKeepAlive(); };
-  if (ctx.state === "suspended") ctx.resume().then(finish).catch(() => {}); else finish();
-}
-function doPlayBeep(ctx: AudioContext, freq: number, ms: number, vol: number, type: OscillatorType) {
-  try {
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = type; osc.frequency.value = freq; gain.gain.value = vol;
-    osc.connect(gain); gain.connect(ctx.destination);
-    const now = ctx.currentTime;
-    gain.gain.setValueAtTime(vol, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + ms / 1000);
-    osc.start(now); osc.stop(now + ms / 1000 + 0.02);
-  } catch {}
-}
-function playBeep(freq = 880, ms = 120, vol = 0.25, type: OscillatorType = "sine") {
-  if (_soundMuted) return;
-  const ctx = getAudioCtx(); if (!ctx) return;
-  if (ctx.state === "running") doPlayBeep(ctx, freq, ms, vol, type);
-  else ctx.resume().then(() => doPlayBeep(ctx, freq, ms, vol, type)).catch(() => {});
-}
-function playCountdownBeep() { playBeep(660, 110, 0.55, "sine"); }
-function playDing() { playBeep(988, 320, 0.7, "triangle"); }
-function playDoneBeep() {
-  playBeep(880, 180, 0.65); setTimeout(() => playBeep(1100, 180, 0.65), 180); setTimeout(() => playBeep(1320, 280, 0.7), 360);
-}
+import {
+  unlockAudio, stopKeepAlive, playCountdownBeep, playDing, playDoneBeep, setSoundMuted,
+} from "@/lib/timer-audio";
 
 // ── Type maps (ported from original) ─────────────────────────────────────────
 
@@ -167,6 +119,11 @@ export default function HyroxCardioBuilder({ session, color, library, onTypeChan
 
   const upd = (patch: object) => onConfigChange({ ...cfg, ...patch });
   const setType = (t: string) => {
+    // Re-clicking the already-selected type card is a no-op - it used to
+    // unconditionally wipe onConfigChange({}), so a stray re-click (or a
+    // coach just re-confirming their choice) silently discarded every
+    // exercise/work/rest value already entered for this session.
+    if (t === currentType) return;
     if (isHyrox) onTypeChange(t, null);
     else onTypeChange(null, t);
     onConfigChange({});
@@ -651,7 +608,7 @@ function HyroxTimer({ session, onClose, color }: { session: Session; onClose: ()
 
   const [display, setDisplay] = useState<TimerState>({ phase: "idle", timeLeft: workSec || 60, round: 1, cycle: 1 });
   const [muted, setMuted] = useState(false);
-  useEffect(() => { _soundMuted = muted; }, [muted]);
+  useEffect(() => { setSoundMuted(muted); }, [muted]);
 
   const stateRef = useRef<TimerState>({ phase: "idle", timeLeft: workSec || 60, round: 1, cycle: 1 });
   const intervalRef = useRef<any>(null);
@@ -796,15 +753,20 @@ function HyroxTimer({ session, onClose, color }: { session: Session; onClose: ()
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  hyroxCfg: { border: "1px solid", borderRadius: 12, padding: 16, marginBottom: 16 },
+  // borderWidth/borderStyle/borderColor kept separate (not the `border`
+  // shorthand) on anything that conditionally overrides just borderColor
+  // elsewhere - mixing shorthand and longhand across renders is a real
+  // React footgun (triggers its own dev warning) that can leave a stale
+  // border colour when toggling selection state.
+  hyroxCfg: { borderWidth: 1, borderStyle: "solid", borderRadius: 12, padding: 16, marginBottom: 16 },
   hyroxBanner: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    background: "#1a2030", border: "1px solid", borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+    background: "#1a2030", borderWidth: 1, borderStyle: "solid", borderRadius: 10, padding: "10px 14px", marginBottom: 12,
   },
   timerLaunchBtn: { border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, fontSize: 14, color: "#0a1420", cursor: "pointer" },
   dayLabelRow: { fontSize: 10, fontWeight: 700, color: "#8593A0", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8, marginTop: 10 },
   hyroxTypeGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 },
-  hyroxTypeCard: { display: "flex", flexDirection: "column", gap: 4, padding: "12px 10px", borderRadius: 10, border: "1px solid #2A343D", background: "#1F272E", cursor: "pointer", textAlign: "left", color: "#E8EDF1" },
+  hyroxTypeCard: { display: "flex", flexDirection: "column", gap: 4, padding: "12px 10px", borderRadius: 10, borderWidth: 1, borderStyle: "solid", borderColor: "#2A343D", background: "#1F272E", cursor: "pointer", textAlign: "left", color: "#E8EDF1" },
   hyroxTypeCardOn: { background: "#1a2840" },
   hyroxStepRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" },
   hyroxStepNum: { width: 24, height: 24, borderRadius: "50%", background: "#2a2240", color: "#B388FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 },

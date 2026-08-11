@@ -22,7 +22,6 @@ import { importCsv } from "@/lib/csv-import";
 import { listLibrary } from "@/lib/data/library";
 import { saveSessionAsTemplate } from "@/lib/data/templates";
 import ExerciseCard from "@/components/ExerciseCard";
-import HyroxTimer from "@/components/HyroxTimer";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import CheckInModal from "@/components/CheckInModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
@@ -58,11 +57,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
-  const [timerOpen, setTimerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [timerWork, setTimerWork] = useState(40);
-  const [timerRest, setTimerRest] = useState(20);
-  const [timerRounds, setTimerRounds] = useState(8);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkinEnabled, setCheckinEnabled] = useState(true);
@@ -564,10 +559,6 @@ export default function SessionDetailPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 
-  const handleStartTimer = (workSec: number, restSec: number, rounds: number) => {
-    setTimerWork(workSec); setTimerRest(restSec); setTimerRounds(rounds); setTimerOpen(true);
-  };
-
   if (loading) return <div style={styles.empty}>Loading…</div>;
   if (error && !session) return <div style={styles.errorBox}>{error}</div>;
   if (!session) return <div style={styles.empty}>Session not found.</div>;
@@ -931,16 +922,6 @@ export default function SessionDetailPage() {
           library={library}
           onTypeChange={handleSessionTypeChange}
           onConfigChange={handleConfigChange}
-        />
-      )}
-
-      {timerOpen && (
-        <HyroxTimer
-          workSec={timerWork}
-          restSec={timerRest}
-          totalRounds={timerRounds}
-          label={session.name}
-          onClose={() => setTimerOpen(false)}
         />
       )}
 
