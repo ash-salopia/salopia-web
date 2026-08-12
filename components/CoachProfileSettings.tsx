@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { updateCoachAvatar } from "@/lib/data/avatars";
 import Avatar from "@/components/Avatar";
+import CollapsibleSection from "@/components/CollapsibleSection";
 
 interface Props {
   coachId: string;
@@ -30,8 +31,7 @@ export default function CoachProfileSettings({ coachId, coachName, avatarUrl, on
   };
 
   return (
-    <div style={s.wrap}>
-      <div style={s.title}>👤 Your profile</div>
+    <CollapsibleSection title="👤 Your profile">
       {error && <div style={s.error}>{error}</div>}
       <div style={s.row}>
         <Avatar name={coachName} avatarUrl={avatarUrl} size={64} />
@@ -49,13 +49,11 @@ export default function CoachProfileSettings({ coachId, coachName, avatarUrl, on
           </button>
         </div>
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
-  wrap: { marginBottom: 32, borderBottom: "1px solid var(--line)", paddingBottom: 24 },
-  title: { fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 14 },
   error: { background: "#2a0c0c", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
   row: { display: "flex", alignItems: "center", gap: 16 },
   name: { fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 8 },

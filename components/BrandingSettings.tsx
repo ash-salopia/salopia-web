@@ -10,6 +10,7 @@
 import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import type { OrgBranding, OrgTier } from "@/types/branding";
+import CollapsibleSection from "@/components/CollapsibleSection";
 
 interface Props {
   orgId: string;
@@ -20,7 +21,7 @@ interface Props {
 }
 
 const PRESET_COLOURS = [
-  { label: "AthletiQ Teal", color: "#00d4ff", dim: "#002233" },
+  { label: "VIS BUILD Teal", color: "#00d4ff", dim: "#002233" },
   { label: "Electric Blue",  color: "#3B8BEB", dim: "#0a1a2e" },
   { label: "Purple",         color: "#A855F7", dim: "#1a0a2a" },
   { label: "Green",          color: "#10B981", dim: "#0a2218" },
@@ -70,16 +71,18 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
 
   async function handleLogoUpload(file: File) {
     setUploading(true);
+    setError("");
     try {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop();
-      const path = `${orgId}/logo.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("org-logos")
-        .upload(path, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from("org-logos").getPublicUrl(path);
-      setBranding(b => ({ ...b, logo_url: data.publicUrl }));
+      // Direct browser-to-storage RLS uploads don't work reliably in
+      // this project (see /api/org-logo, /api/coach-avatar) — this
+      // route uploads via service role and resolves the org from the
+      // coach's own session, never from the client-supplied orgId prop.
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/org-logo", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setBranding(b => ({ ...b, logo_url: data.logo_url }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
@@ -88,21 +91,15 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
   }
 
   return (
-    <div style={s.wrap}>
-      <div style={s.header}>
-        <div>
-          <div style={s.title}>🎨 Branding</div>
-          <div style={s.subtitle}>
-            {isPremium
-              ? "Premium - full white-label branding"
-              : "Standard - AthletiQ branding with your accent colour"}
-          </div>
-        </div>
+    <CollapsibleSection
+      title="🎨 Branding"
+      subtitle={isPremium ? "Premium - full white-label branding" : "Standard - VIS BUILD branding with your accent colour"}
+      headerRight={
         <div style={{ ...s.tierBadge, background: isPremium ? "#A855F722" : "var(--ink)", color: isPremium ? "#A855F7" : "var(--mute)", border: `1px solid ${isPremium ? "#A855F744" : "var(--line)"}` }}>
           {isPremium ? "⭐ Premium" : "Standard"}
         </div>
-      </div>
-
+      }
+    >
       {error && <div style={s.error}>{error}</div>}
 
       {/* Accent colour - both tiers */}
@@ -133,7 +130,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
         {/* Preview */}
         <div style={{ ...s.preview, borderColor: branding.primary_color ?? "#00d4ff" }}>
           <span style={{ color: branding.primary_color ?? "#00d4ff", fontWeight: 700, fontSize: 18, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2 }}>
-            AthletiQ
+            VIS BUILD
           </span>
           <button style={{ background: branding.primary_color ?? "#00d4ff", color: "#0a1420", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "default" }}>
             Button
@@ -146,7 +143,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
         <>
           <div style={s.section}>
             <div style={s.sectionLabel}>Brand name</div>
-            <div style={s.sectionDesc}>Replaces "AthletiQ" in the header and athlete app. Leave blank to use "AthletiQ".</div>
+            <div style={s.sectionDesc}>Replaces "VIS BUILD" in the header and athlete app. Leave blank to use "VIS BUILD".</div>
             <input
               value={branding.brand_name ?? ""}
               onChange={e => setBranding(b => ({ ...b, brand_name: e.target.value }))}
@@ -182,7 +179,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
                 onChange={e => setBranding(b => ({ ...b, show_powered_by: e.target.checked }))}
                 style={{ accentColor: "var(--accent)" }}
               />
-              Show "Powered by AthletiQ" in the footer
+              Show "Powered by VIS BUILD" in the footer
             </label>
           </div>
         </>
@@ -190,10 +187,10 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
         <div style={s.upgradeBox}>
           <div style={s.upgradeTitle}>🚀 Upgrade to Premium for full white-labelling</div>
           <div style={s.upgradeList}>
-            <div>✓ Custom brand name - replace "AthletiQ" with your brand</div>
+            <div>✓ Custom brand name - replace "VIS BUILD" with your brand</div>
             <div>✓ Logo upload - your logo in the header and athlete app</div>
-            <div>✓ Athletes see your brand, not AthletiQ</div>
-            <div>✓ Optional "Powered by AthletiQ" footer</div>
+            <div>✓ Athletes see your brand, not VIS BUILD</div>
+            <div>✓ Optional "Powered by VIS BUILD" footer</div>
           </div>
           <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 8 }}>
             Contact us to upgrade your organisation.
@@ -208,15 +205,11 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
       >
         {saving ? "Saving…" : success ? "✓ Saved" : "Save branding"}
       </button>
-    </div>
+    </CollapsibleSection>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
-  wrap: { marginTop: 32, borderTop: "1px solid var(--line)", paddingTop: 24 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
-  title: { fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
-  subtitle: { fontSize: 12, color: "var(--mute)" },
   tierBadge: { borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, flexShrink: 0 },
   error: { background: "#2a0c0c", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
   section: { marginBottom: 20 },

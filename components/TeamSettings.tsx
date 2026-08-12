@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import CollapsibleSection from "@/components/CollapsibleSection";
 
 interface Coach {
   id: string;
@@ -87,23 +88,21 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
   const activeCount = coaches.filter((c) => !c.archived).length;
 
   return (
-    <div style={s.wrap}>
-      <div style={s.header}>
-        <div>
-          <div style={s.title}>👥 Team</div>
-          <div style={s.subtitle}>
-            {coachSeatLimit != null
-              ? `${activeCount} of ${coachSeatLimit} coach seats used`
-              : "Coaches in your organisation"}
-          </div>
-        </div>
-        {isOwner && (
+    <CollapsibleSection
+      title="👥 Team"
+      subtitle={
+        coachSeatLimit != null
+          ? `${activeCount} of ${coachSeatLimit} coach seats used`
+          : "Coaches in your organisation"
+      }
+      headerRight={
+        isOwner && (
           <button style={s.inviteBtn} onClick={() => setInviteOpen(true)}>
             + Invite coach
           </button>
-        )}
-      </div>
-
+        )
+      }
+    >
       <div style={s.list}>
         {coaches.map((c) => {
           const pending = !c.accepted_at;
@@ -146,7 +145,7 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
           }}
         />
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -220,10 +219,6 @@ function InviteCoachModal({ onClose, onInvited }: { onClose: () => void; onInvit
 }
 
 const s: Record<string, React.CSSProperties> = {
-  wrap: { marginTop: 32, borderTop: "1px solid var(--line)", paddingTop: 24 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-  title: { fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
-  subtitle: { fontSize: 12, color: "var(--mute)" },
   inviteBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
   list: { display: "flex", flexDirection: "column" as const, gap: 8 },
   row: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px", gap: 12 },

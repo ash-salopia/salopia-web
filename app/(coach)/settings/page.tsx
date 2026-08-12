@@ -1,7 +1,9 @@
 "use client";
+import BillingSettings from "@/components/BillingSettings";
 import BrandingSettings from "@/components/BrandingSettings";
 import CoachProfileSettings from "@/components/CoachProfileSettings";
 import TeamSettings from "@/components/TeamSettings";
+import CollapsibleSection from "@/components/CollapsibleSection";
 
 import { useState, useEffect } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
@@ -90,9 +92,7 @@ export default function SettingsPage() {
       )}
 
       {/* ── Calculations ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Calculations</div>
-
+      <CollapsibleSection title="Calculations">
         <div style={s.card}>
           <div style={s.cardLabel}>1RM estimation formula</div>
           <div style={s.cardDesc}>
@@ -150,12 +150,10 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Units ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Units</div>
-
+      <CollapsibleSection title="Units">
         <div style={s.card}>
           <div style={s.cardLabel}>Weight unit</div>
           <div style={s.cardDesc}>
@@ -183,12 +181,10 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Session Types ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Session Types</div>
-
+      <CollapsibleSection title="Session Types">
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -212,12 +208,10 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Check-in ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Check-in</div>
-
+      <CollapsibleSection title="Check-in">
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -358,11 +352,10 @@ export default function SettingsPage() {
             </>
           )}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Reports ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Reports</div>
+      <CollapsibleSection title="Reports">
         <div style={s.card}>
           <div style={s.cardLabel}>Report reminder frequency</div>
           <div style={s.cardDesc}>
@@ -389,12 +382,10 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Recovery alerts ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Recovery alerts</div>
-
+      <CollapsibleSection title="Recovery alerts">
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -440,12 +431,10 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ── Weekly Reflection ── */}
-      <div style={s.section}>
-        <div style={s.sectionTitle}>Weekly Reflection</div>
-
+      <CollapsibleSection title="Weekly Reflection">
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -551,7 +540,7 @@ export default function SettingsPage() {
             </div>
           </>
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* ── Save ── */}
       <div style={s.saveRow}>
@@ -571,6 +560,7 @@ export default function SettingsPage() {
           coachSeatLimit={coachSeatLimit}
         />
       )}
+      {orgId && <BillingSettings orgId={orgId} role={coachRole} />}
       <BrandingSettings
         orgId={orgId}
         orgName=""
@@ -590,13 +580,11 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: "0 0 4px" },
   subtitle: { fontSize: 13, color: "var(--mute)", margin: "0 0 28px" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
-  section: { marginBottom: 28 },
   chipBtn: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   chipBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)", color: "var(--accent)" },
   metricInput: { flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" },
   removeMetricBtn: { background: "transparent", border: "1px solid var(--line)", color: "#FF6B6B", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" },
   addMetricBtn: { background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 0", fontSize: 13, cursor: "pointer" },
-  sectionTitle: { fontSize: 12, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 18, display: "flex", flexDirection: "column", gap: 14 },
   cardLabel: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
   cardDesc: { fontSize: 13, color: "var(--mute)", lineHeight: 1.5 },
