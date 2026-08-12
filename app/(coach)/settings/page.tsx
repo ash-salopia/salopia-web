@@ -5,21 +5,26 @@ import CoachProfileSettings from "@/components/CoachProfileSettings";
 import TeamSettings from "@/components/TeamSettings";
 import CollapsibleSection from "@/components/CollapsibleSection";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
 import { FORMULAS, type OneRMFormula, type WeightUnit } from "@/lib/one-rm";
 import { CHECKIN_CONDITIONS, CHECKIN_RULE_OPTIONS, DEFAULT_CHECKIN_RULES, type CheckInAction, type CheckInRules } from "@/lib/checkin";
 import type { OrgSettings, OneRMSource } from "@/lib/data/settings";
 
+const AUTOSAVE_DEBOUNCE_MS = 600;
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<OrgSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [orgId, setOrgId] = useState("");
   const [orgTier, setOrgTier] = useState<"standard"|"premium">("standard");
   const [orgBranding, setOrgBranding] = useState({});
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
+  // Skips the auto-save effect's very first run after the initial load
+  // settles - otherwise loading fresh data into `settings` would itself
+  // trigger a pointless "save" of the unchanged data straight back.
+  const skipNextAutosave = useRef(true);
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
   const [coachAvatarUrl, setCoachAvatarUrl] = useState<string | null>(null);
@@ -54,20 +59,31 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
-    setError("");
-    setSaved(false);
-    try {
-      await updateOrgSettings(settings);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save settings");
-    } finally {
-      setSaving(false);
+  // Auto-save: debounced so a run of toggle clicks or keystrokes settles
+  // into one write, not one per change. `loading` gates it off until the
+  // initial load has settled (see skipNextAutosave above for the run
+  // right after that).
+  useEffect(() => {
+    if (loading) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
     }
-  };
+    setSaveStatus("saving");
+    const timer = setTimeout(async () => {
+      setError("");
+      try {
+        await updateOrgSettings(settings);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save settings");
+        setSaveStatus("idle");
+      }
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, loading]);
 
   if (loading) return <div style={s.loading}>Loading…</div>;
 
@@ -75,10 +91,19 @@ export default function SettingsPage() {
 
   return (
     <div style={s.page}>
-      <h1 style={s.title}>Settings</h1>
-      <p style={s.subtitle}>
-        These preferences apply across your whole organisation - all coaches and athletes.
-      </p>
+      <div style={s.titleRow}>
+        <div>
+          <h1 style={s.title}>Settings</h1>
+          <p style={s.subtitle}>
+            These preferences apply across your whole organisation - all coaches and athletes.
+          </p>
+        </div>
+        {saveStatus !== "idle" && (
+          <span style={s.saveStatus}>
+            {saveStatus === "saving" ? "Saving…" : "✓ Saved"}
+          </span>
+        )}
+      </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
 
@@ -542,17 +567,6 @@ export default function SettingsPage() {
         )}
       </CollapsibleSection>
 
-      {/* ── Save ── */}
-      <div style={s.saveRow}>
-        {saved && <span style={s.savedMsg}>✓ Settings saved</span>}
-        <button
-          style={{ ...s.saveBtn, opacity: saving ? 0.6 : 1 }}
-          disabled={saving}
-          onClick={handleSave}
-        >
-          {saving ? "Saving…" : "Save settings"}
-        </button>
-      </div>
       {orgId && (
         <TeamSettings
           orgId={orgId}
@@ -605,10 +619,9 @@ const s: Record<string, React.CSSProperties> = {
   unitLabel: { fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
   unitSub: { fontSize: 12, color: "var(--mute)" },
   conversionNote: { fontSize: 12, color: "var(--mute)", fontStyle: "italic", background: "var(--ink)", borderRadius: 8, padding: "8px 12px" },
-  // Save
-  saveRow: { display: "flex", alignItems: "center", gap: 14, justifyContent: "flex-end" },
-  savedMsg: { fontSize: 13, color: "var(--good)", fontWeight: 600 },
-  saveBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  // Autosave status
+  titleRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  saveStatus: { fontSize: 12, fontWeight: 600, color: "var(--mute)", flexShrink: 0, marginTop: 6 },
   toggleSwitch: { width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative" as const, flexShrink: 0, transition: "background 0.2s" },
   toggleThumb: { position: "absolute" as const, top: 3, left: 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "transform 0.2s" },
   ruleBlock: { background: "var(--panel2)", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column" as const, gap: 8 },
