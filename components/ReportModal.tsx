@@ -30,6 +30,19 @@ function pctColor(pct: number | null): string {
   return pct >= 0 ? "var(--good)" : "#ff7d7d";
 }
 
+const TYPE_LABEL: Record<string, string> = {
+  strength: "Strength", hyrox: "Hyrox", cardio: "Cardio", power_speed: "Power/Speed", recovery: "Recovery",
+};
+
+// Low RPE (light session) reads as good/expected, not a warning - only
+// climbs toward amber/red at the genuinely max-effort end of the scale.
+function rpeColor(rpe: number): string {
+  if (rpe <= 4) return "var(--good)";
+  if (rpe <= 6) return "#74C0FC";
+  if (rpe <= 8) return "#FFA94D";
+  return "#ff7d7d";
+}
+
 export default function ReportModal({
   data,
   athleteName,
@@ -57,6 +70,8 @@ export default function ReportModal({
     hyroxSessions,
     cardioSessions = [],
     powerSpeedSessions = [],
+    rpeEntries = [],
+    rpeWeekly = [],
     generated,
     rangeStart,
     rangeEnd,
@@ -76,6 +91,10 @@ export default function ReportModal({
   const hasHyrox = hyroxSessions.length > 0;
   const hasCardio = cardioSessions.length > 0;
   const hasPowerSpeed = powerSpeedSessions.length > 0;
+  const hasRpe = rpeEntries.length > 0;
+  const avgRpe = hasRpe
+    ? Math.round((rpeEntries.reduce((sum, e) => sum + e.rpe, 0) / rpeEntries.length) * 10) / 10
+    : null;
   const formulaName = FORMULAS.find((f) => f.id === oneRmFormula)?.name ?? oneRmFormula;
   const bwUnit = options.bodyweightRelative && bodyweightKg ? "×BW" : "kg";
   const e1rmDisplay = (kg: number) =>
@@ -101,13 +120,16 @@ export default function ReportModal({
       name: e.name,
       points: (strength.weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: e1rmValue(w.e1rm) })),
     }));
+  const rpeLineSeries = [
+    { name: "Avg RPE", points: rpeWeekly.map((w) => ({ date: w.weekStart, value: w.avgRpe })) },
+  ];
 
   const handleCopy = () => {
     const el = document.getElementById("report-content");
     if (!el) return;
     const text = el.innerText || el.textContent || "";
     navigator.clipboard
-      ?.writeText("AthletiQ TRAINING REPORT\n\n" + text)
+      ?.writeText("VIS BUILD TRAINING REPORT\n\n" + text)
       .catch(() => {
         // Clipboard can fail (permissions, insecure context) - the
         // content is still visible on screen and printable either way.
@@ -161,7 +183,7 @@ export default function ReportModal({
 </style>
 </head>
 <body>
-  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--accent);letter-spacing:2px;">AthletiQ</div>
+  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--accent);letter-spacing:2px;">VIS BUILD</div>
   <div style="font-size:13px;font-weight:600;margin-top:2px;">${esc(athleteName)}${athleteGroup ? ` · ${esc(athleteGroup)}` : ""}, Training Load Report</div>
   <div style="font-size:11px;color:var(--mute);${options.e1rm ? "margin-bottom:2px;" : "margin-bottom:20px;"}">Generated ${esc(generated)}${rangeStart && rangeEnd ? ` · ${esc(rangeStart)} to ${esc(rangeEnd)}` : " · All time"}</div>
   ${options.e1rm ? `<div style="font-size:11px;color:var(--mute);margin-bottom:20px;">e1RM formula: ${esc(formulaName)} · Mode: ${esc(oneRmSource === "fixed" ? "Fixed (vs reference max)" : "Rolling")}</div>` : ""}
@@ -180,7 +202,7 @@ export default function ReportModal({
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <div>
-            <div style={styles.brand}>AthletiQ</div>
+            <div style={styles.brand}>VIS BUILD</div>
             <div style={styles.athleteLine}>
               {athleteName}
               {athleteGroup ? ` · ${athleteGroup}` : ""}, Training Load Report
@@ -209,7 +231,7 @@ export default function ReportModal({
         </div>
 
         <div id="report-content" style={{ padding: 20 }}>
-          {!hasStrength && !hasE1rm && !hasHyrox && !hasCardio && !hasPowerSpeed && !notes.length && (
+          {!hasStrength && !hasE1rm && !hasHyrox && !hasCardio && !hasPowerSpeed && !hasRpe && !notes.length && (
             <div style={styles.emptyNote}>
               No logged data found in this range. Log weights in strength sessions to generate a
               load report.
@@ -744,6 +766,38 @@ export default function ReportModal({
                 ))}
               </div>
             </>
+          )}
+
+          {options.sessionRpe && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ ...styles.sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span>Session RPE</span>
+                {avgRpe != null && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: rpeColor(avgRpe) }}>
+                    Avg {avgRpe}/10
+                  </span>
+                )}
+              </div>
+              {!hasRpe ? (
+                <div style={styles.highlightEmpty}>No RPE logged in this range.</div>
+              ) : (
+                <>
+                  {rpeWeekly.length >= 2 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <MultiTrendLineChart series={rpeLineSeries} unit="" fmtDate={fmtDate} height={200} yDomain={[0, 10]} />
+                    </div>
+                  )}
+                  <div style={styles.hyroxList}>
+                    {rpeEntries.map((e, i) => (
+                      <div key={i} style={styles.hyroxRow}>
+                        <span>{fmtDate(e.date)} · {e.sessName} <span style={{ color: "var(--mute)" }}>({TYPE_LABEL[e.type] ?? e.type})</span></span>
+                        <span style={{ fontWeight: 700, color: rpeColor(e.rpe) }}>{e.rpe}/10</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {options.athleteNotes && (

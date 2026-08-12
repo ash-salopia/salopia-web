@@ -19,11 +19,13 @@ export default function MultiTrendLineChart({
   unit,
   fmtDate,
   height = 320,
+  yDomain,
 }: {
   series: TrendSeries[];
   unit: string;
   fmtDate: (iso: string) => string;
   height?: number;
+  yDomain?: [number, number]; // fixes the axis range instead of auto-scaling to the data (e.g. RPE's fixed 1-10 scale)
 }) {
   if (series.length === 0) return null;
 
@@ -47,7 +49,7 @@ export default function MultiTrendLineChart({
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
           <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--mute)" }} tickLine={false} axisLine={{ stroke: "var(--line)" }} />
-          <YAxis tick={{ fontSize: 10, fill: "var(--mute)" }} tickLine={false} axisLine={false} width={44} unit={unit} />
+          <YAxis tick={{ fontSize: 10, fill: "var(--mute)" }} tickLine={false} axisLine={false} width={44} unit={unit} domain={yDomain ?? ["auto", "auto"]} />
           <Tooltip
             contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12 }}
             labelStyle={{ color: "var(--text)" }}
