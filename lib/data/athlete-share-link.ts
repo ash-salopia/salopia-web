@@ -96,9 +96,11 @@ export async function getCurrentOneRM(
 
   const { data: rows } = await supabase
     .from("session_exercises")
-    .select("log, reps, sessions!inner(athlete_id)")
+    .select("log, reps, is_primer, sessions!inner(athlete_id, is_primer)")
     .ilike("name", exerciseName)
-    .eq("sessions.athlete_id", athleteId);
+    .eq("sessions.athlete_id", athleteId)
+    .eq("is_primer", false)
+    .eq("sessions.is_primer", false);
 
   return bestRollingOneRM(rows ?? [], orgSettings.one_rm_formula);
 }
@@ -147,7 +149,7 @@ async function attachComputedTargets(athleteId: string, sessions: Session[]): Pr
   const rollingFor = (key: string): number | null => {
     if (!rollingByName.has(key)) {
       const rows = sessions.flatMap((s) =>
-        (s.exercises ?? []).filter((e) => e.name.trim().toLowerCase() === key)
+        s.is_primer ? [] : (s.exercises ?? []).filter((e) => e.name.trim().toLowerCase() === key && !e.is_primer)
       );
       rollingByName.set(key, bestRollingOneRM(rows, settings.one_rm_formula));
     }

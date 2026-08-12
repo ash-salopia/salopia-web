@@ -131,8 +131,9 @@ export function computeStrengthReport(
   const exMap: StrengthExerciseMap = {};
 
   for (const sess of strSessions) {
+    if (sess.is_primer) continue;
     for (const ex of sess.exercises ?? []) {
-      if (!ex.name) continue;
+      if (!ex.name || ex.is_primer) continue;
       const prescribedReps = parseInt(ex.reps) || 0;
       const win = winningSet(ex.log ?? [], prescribedReps, formula);
       if (!win) continue;

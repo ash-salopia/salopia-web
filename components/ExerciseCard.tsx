@@ -462,6 +462,15 @@ export default function ExerciseCard({
             <span style={{ color: exercise.use_percent_1rm ? "var(--accent)" : "var(--mute)" }}>Use %1RM</span>
           </label>
         )}
+        <label style={styles.checkboxRow} title="A deliberately lighter primer/activation effort (e.g. pre-match). Excluded from reports and the rolling %1RM estimate, so it won't look like a strength drop.">
+          <input
+            type="checkbox"
+            checked={!!exercise.is_primer}
+            onChange={(e) => onEditPresc({ is_primer: e.target.checked })}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          <span style={{ color: exercise.is_primer ? "var(--accent)" : "var(--mute)" }}>Primer / activation</span>
+        </label>
       </div>
 
       <div style={styles.prescRow}>

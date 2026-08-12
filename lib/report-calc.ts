@@ -138,8 +138,9 @@ export function computeReport(allSessions: Session[]): ComputedReport {
   const exMap: ExerciseMap = {};
 
   for (const sess of strSessions) {
+    if (sess.is_primer) continue;
     for (const ex of sess.exercises ?? []) {
-      if (!ex.name) continue;
+      if (!ex.name || ex.is_primer) continue;
       const done = (ex.log ?? []).filter((s) => parseFloat(s.weight) > 0);
       if (!done.length) continue;
 

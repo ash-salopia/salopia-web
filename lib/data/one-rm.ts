@@ -71,9 +71,11 @@ export async function resolveCurrentOneRM(
 
   const { data: rows } = await supabase
     .from("session_exercises")
-    .select("log, reps, sessions!inner(athlete_id)")
+    .select("log, reps, is_primer, sessions!inner(athlete_id, is_primer)")
     .ilike("name", exerciseName)
-    .eq("sessions.athlete_id", athleteId);
+    .eq("sessions.athlete_id", athleteId)
+    .eq("is_primer", false)
+    .eq("sessions.is_primer", false);
 
   return bestRollingOneRM(rows ?? [], formula);
 }
@@ -102,9 +104,11 @@ export async function resolveCurrentOneRMWithSource(
 
   const { data: rows } = await supabase
     .from("session_exercises")
-    .select("log, reps, sessions!inner(athlete_id)")
+    .select("log, reps, is_primer, sessions!inner(athlete_id, is_primer)")
     .ilike("name", exerciseName)
-    .eq("sessions.athlete_id", athleteId);
+    .eq("sessions.athlete_id", athleteId)
+    .eq("is_primer", false)
+    .eq("sessions.is_primer", false);
 
   return { value: bestRollingOneRM(rows ?? [], formula), source: "rolling" };
 }

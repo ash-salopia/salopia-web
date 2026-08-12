@@ -114,6 +114,7 @@ export interface SessionExercise extends ExerciseBase {
   swapped_from: string | null; // 0035 — original prescribed name, set when the athlete swaps
   opted_out: boolean;          // 0035 — athlete skipped this exercise, no replacement
   athlete_exercise_notes: string; // 0040 — athlete's own note on this exercise, separate from the coach's `notes` and session-level athlete_notes
+  is_primer?: boolean; // 0053 — coach-set: a deliberately lighter primer/activation effort, excluded from reports and the rolling %1RM estimate. Only on real dated sessions, not ExerciseBase, so it never gets prescribed ahead of time via templates/programmes
   // 0045 — not a DB column: per-set calculated %1RM targets (kg),
   // attached when sessions are fetched for the athlete app. Shown as
   // a greyed suggestion in the load box, never written to log[i].weight
@@ -304,6 +305,7 @@ export interface Session {
   recovery_format: RecoveryFormat | null; // 0046
   recovery_config: RecoveryConfig; // 0046
   sort_order: number; // 0049 — position among same-day sessions, set by the coach's drag-to-reorder
+  is_primer?: boolean; // 0053 — coach-set: whole session is primer/activation (e.g. a pre-match wake-up), excluded from reports and the rolling %1RM estimate. Equivalent to flagging every exercise in it
   exercises?: SessionExercise[];
 }
 

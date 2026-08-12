@@ -251,6 +251,15 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handlePrimerChange = async (is_primer: boolean) => {
+    setSession((prev) => (prev ? { ...prev, is_primer } : prev));
+    try {
+      await updateSession(sessionId, { is_primer });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save");
+    }
+  };
+
   const handleAddExercise = async () => {
     if (!session) return;
     const supabase = createClient();
@@ -638,6 +647,23 @@ export default function SessionDetailPage() {
           style={styles.dateInput}
         />
       </div>
+
+      {session.type === "strength" && (
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer" }}
+          title="A deliberately lighter primer/activation session (e.g. pre-match). Excluded from reports and the rolling %1RM estimate for every exercise in it, so it won't look like a strength drop."
+        >
+          <input
+            type="checkbox"
+            checked={!!session.is_primer}
+            onChange={(e) => handlePrimerChange(e.target.checked)}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          <span style={{ fontSize: 13, fontWeight: 600, color: session.is_primer ? "var(--accent)" : "var(--mute)" }}>
+            Primer / activation session
+          </span>
+        </label>
+      )}
 
       {session.type === "strength" && totalSets > 0 && (
         <div style={styles.progressWrap}>

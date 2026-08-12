@@ -135,6 +135,7 @@ export interface NewExerciseInput {
   each_side?: boolean;
   is_bodyweight?: boolean;
   use_percent_1rm?: boolean;
+  is_primer?: boolean;
   notes?: string;
   video_url?: string;
 }
@@ -154,6 +155,7 @@ function exerciseDefaults(over: NewExerciseInput) {
     each_side: over.each_side ?? false,
     is_bodyweight: over.is_bodyweight ?? false,
     use_percent_1rm: over.use_percent_1rm ?? false,
+    is_primer: over.is_primer ?? false,
     notes: over.notes ?? "",
     video_url: over.video_url ?? "",
     session_notes: "",
@@ -238,7 +240,7 @@ export async function addExercisesToSession(
 
 export async function updateSession(
   sessionId: string,
-  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config">>
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);
