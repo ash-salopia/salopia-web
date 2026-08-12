@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { listLiveGroupAthletes } from "@/lib/data/athletes";
-import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise } from "@/lib/data/sessions";
+import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise, updateSession } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
@@ -110,6 +110,19 @@ export default function LiveGroupPage() {
   // time logging alongside the athlete.
   const [oneRmTargets, setOneRmTargets] = useState<Record<string, (number | null)[]>>({});
   const tabBarRef = useRef<HTMLDivElement>(null);
+  // Session note = sessions.session_notes (coach-authored, session-
+  // wide, athlete-visible). Exercise note = session_exercises.notes
+  // (coach-authored coaching cue, same field the full session builder
+  // already edits inline) - reused here rather than a new column,
+  // just surfaced through a popup so the compact Live Group cards
+  // don't need a permanently-visible textarea per exercise.
+  const [noteModal, setNoteModal] = useState<
+    | { kind: "session"; sessionId: string }
+    | { kind: "exercise"; sessionId: string; exerciseId: string; exerciseName: string }
+    | null
+  >(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -292,6 +305,51 @@ export default function LiveGroupPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 
+  const openSessionNote = (session: Session) => {
+    setNoteDraft(session.session_notes ?? "");
+    setNoteModal({ kind: "session", sessionId: session.id });
+  };
+
+  const openExerciseNote = (sessionId: string, ex: SessionExercise) => {
+    setNoteDraft(ex.notes ?? "");
+    setNoteModal({ kind: "exercise", sessionId, exerciseId: ex.id, exerciseName: ex.name });
+  };
+
+  const closeNoteModal = () => {
+    setNoteModal(null);
+    setNoteDraft("");
+  };
+
+  const saveNote = async () => {
+    if (!noteModal) return;
+    setSavingNote(true);
+    try {
+      if (noteModal.kind === "session") {
+        await updateSession(noteModal.sessionId, { session_notes: noteDraft });
+        setSessions((prev) =>
+          prev.map((s) => (s.id === noteModal.sessionId ? { ...s, session_notes: noteDraft } : s))
+        );
+      } else {
+        await updateExercise(noteModal.exerciseId, { notes: noteDraft });
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id !== noteModal.sessionId ? s : {
+              ...s,
+              exercises: s.exercises?.map((e) =>
+                e.id === noteModal.exerciseId ? { ...e, notes: noteDraft } : e
+              ),
+            }
+          )
+        );
+      }
+      closeNoteModal();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save note");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   // Recompute %1RM targets whenever the active session's prescribed
   // percentages actually change - including the very first time real
   // session data replaces the initial empty state, which a signature
@@ -424,6 +482,15 @@ export default function LiveGroupPage() {
                     <div style={s.sesNone}>No upcoming sessions</div>
                   )}
                   {activeSess && (
+                    <button
+                      style={{ ...s.noteBtn, ...(activeSess.session_notes?.trim() ? s.noteBtnActive : {}) }}
+                      onClick={() => openSessionNote(activeSess)}
+                      title={activeSess.session_notes?.trim() ? "Edit session note" : "Add session note"}
+                    >
+                      📝 {activeSess.session_notes?.trim() ? "Session note" : "Add note"}
+                    </button>
+                  )}
+                  {activeSess && (
                     <button style={s.openBtn}
                       onClick={() => router.push(`/athletes/${activeAthlete.id}/sessions/${activeSess.id}`)}>
                       Open full session →
@@ -504,6 +571,12 @@ export default function LiveGroupPage() {
                                 Stacked below the dots on mobile so the
                                 exercise name isn't squeezed for space. */}
                             <div style={s.thumbRow} onClick={(e) => e.stopPropagation()}>
+                              <button
+                                title={ex.notes?.trim() ? "Edit exercise note" : "Add exercise note"}
+                                onClick={() => openExerciseNote(activeSess.id, ex)}
+                                style={{ ...s.thumbBtn, ...(ex.notes?.trim() ? s.thumbBtnNoted : {}) }}>
+                                📝
+                              </button>
                               <button
                                 title="Athlete could progress this next time"
                                 onClick={() => handleSetProgress(activeSess.id, ex.id, "yes")}
@@ -612,6 +685,29 @@ export default function LiveGroupPage() {
           )}
         </>
       )}
+
+      {noteModal && (
+        <div style={s.noteOverlay} onClick={closeNoteModal}>
+          <div style={s.notePanel} onClick={(e) => e.stopPropagation()}>
+            <div style={s.noteTitle}>
+              {noteModal.kind === "session" ? "Session note" : `Note - ${noteModal.exerciseName}`}
+            </div>
+            <textarea
+              autoFocus
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder={noteModal.kind === "session" ? "Note for this session…" : "Coaching cue for this exercise…"}
+              style={s.noteTextarea}
+            />
+            <div style={s.noteBtns}>
+              <button style={s.noteCancelBtn} onClick={closeNoteModal}>Cancel</button>
+              <button style={{ ...s.noteSaveBtn, opacity: savingNote ? 0.6 : 1 }} disabled={savingNote} onClick={saveNote}>
+                {savingNote ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -641,6 +737,8 @@ const s: Record<string, React.CSSProperties> = {
   sesSingle:    { fontSize: 13, color: "var(--mute)" },
   sesNone:      { fontSize: 13, color: "var(--mute)", fontStyle: "italic" as const },
   openBtn:      { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+  noteBtn:      { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  noteBtnActive:{ background: "var(--accent-dim)", borderColor: "var(--accent)", color: "var(--accent)" },
   typeBadge:    { fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6, alignSelf: "flex-start" as const },
   exList:       { display: "flex", flexDirection: "column" as const, gap: 6 },
   noEx:         { fontSize: 13, color: "var(--mute)", padding: "8px 0" },
@@ -662,6 +760,7 @@ const s: Record<string, React.CSSProperties> = {
   thumbBtn:     { background: "transparent", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 5px", fontSize: 12, cursor: "pointer", opacity: 0.5, lineHeight: 1 },
   thumbBtnYes:  { opacity: 1, background: "var(--good-dim)", borderColor: "var(--good)" },
   thumbBtnNo:   { opacity: 1, background: "var(--panel2)", borderColor: "var(--mute)" },
+  thumbBtnNoted:{ opacity: 1, background: "var(--accent-dim)", borderColor: "var(--accent)" },
   dots:         { display: "flex", gap: 4 },
   dot:          { width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--line)", background: "transparent", cursor: "pointer", padding: 0, flexShrink: 0 },
   dotOn:        { background: "var(--good)", borderColor: "var(--good)" },
@@ -675,4 +774,11 @@ const s: Record<string, React.CSSProperties> = {
   setInput:     { background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 7, padding: "6px 8px", fontSize: 14, fontWeight: 600, width: "100%", boxSizing: "border-box" as const },
   doneBtn:      { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 0", fontSize: 16, cursor: "pointer", width: "100%", textAlign: "center" as const },
   doneBtnOn:    { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
+  noteOverlay:  { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 },
+  notePanel:    { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: 18, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column" as const, gap: 10 },
+  noteTitle:    { fontSize: 15, fontWeight: 700, color: "var(--text)" },
+  noteTextarea: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 14, minHeight: 120, resize: "vertical" as const, fontFamily: "inherit" },
+  noteBtns:     { display: "flex", gap: 8, justifyContent: "flex-end" },
+  noteCancelBtn:{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  noteSaveBtn:  { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
 };
