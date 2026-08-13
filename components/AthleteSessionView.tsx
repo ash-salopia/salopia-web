@@ -517,6 +517,10 @@ export default function AthleteSessionView({
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
                   {ex.is_bodyweight ? " · 🏋️ bodyweight" : ""}
                   {ex.target_load ? ` · ${ex.target_load}` : ""}
+                  {/* Tempo is a rep-cadence concept (e.g. 3-1-1-0) - doesn't
+                      apply to a timed hold, so it only shows for reps-based
+                      exercises, matching the coach builder's same rule. */}
+                  {!(ex.time && !ex.reps) && ex.tempo ? ` · tempo ${ex.tempo}` : ""}
                   {ex.use_percent_1rm && (ex.set_percents ?? []).some((p) => p)
                     ? ` · ${(ex.set_percents ?? []).filter((p) => p).join("/")}%1RM`
                     : ""}
