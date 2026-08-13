@@ -212,7 +212,7 @@ export default function AthleteLinkShell({
             </button>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={st.brand}>{branding?.displayName ?? "AthletiQ"}</div>
+            <div style={st.brand}>{branding?.displayName ?? "VIS BUILD"}</div>
             <div style={st.athleteName}>{athlete.name}</div>
           </div>
           <button

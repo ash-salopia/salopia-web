@@ -45,6 +45,24 @@ export interface NoteEntry {
   note: string;
 }
 
+// Post-session RPE (1-10, "how hard did that feel") logged by the
+// athlete via SessionRPEBlock. Spans every non-recovery session type
+// (strength/hyrox/cardio/power_speed), unlike the exercise-tonnage
+// data above which is strength-only — so this is built directly from
+// allSessions, not strSessions.
+export interface RPEEntry {
+  date: string;
+  sessName: string;
+  type: Session["type"];
+  rpe: number;
+}
+
+export interface RPEWeeklyPoint {
+  weekStart: string; // Monday of that week, ISO date
+  avgRpe: number;
+  sessionCount: number;
+}
+
 export interface ComputedReport {
   exMap: ExerciseMap;
   exerciseSummaries: ExerciseSummary[]; // alphabetical, for the Load Progression summary table
@@ -55,6 +73,8 @@ export interface ComputedReport {
   hyroxSessions: Session[];
   cardioSessions: Session[];
   powerSpeedSessions: Session[];
+  rpeEntries: RPEEntry[]; // chronological
+  rpeWeekly: RPEWeeklyPoint[]; // chronological
 }
 
 function weekStartISO(dateISO: string): string {
@@ -100,6 +120,29 @@ function summarize(exMap: ExerciseMap): ExerciseSummary[] {
       return { name, entries, overallPct, weightPct };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function collectRPE(allSessions: Session[]): { entries: RPEEntry[]; weekly: RPEWeeklyPoint[] } {
+  const entries: RPEEntry[] = allSessions
+    .filter((s) => s.type !== "recovery" && s.rpe != null && !s.is_primer)
+    .map((s) => ({ date: s.date, sessName: s.name, type: s.type, rpe: s.rpe as number }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  const byWeek = new Map<string, number[]>();
+  for (const e of entries) {
+    const wk = weekStartISO(e.date);
+    if (!byWeek.has(wk)) byWeek.set(wk, []);
+    byWeek.get(wk)!.push(e.rpe);
+  }
+  const weekly = Array.from(byWeek.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([weekStart, values]) => ({
+      weekStart,
+      avgRpe: Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10,
+      sessionCount: values.length,
+    }));
+
+  return { entries, weekly };
 }
 
 function collectNotes(allSessions: Session[]): NoteEntry[] {
@@ -187,6 +230,8 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     .filter((s) => s.type === "power_speed")
     .filter((s) => (s.exercises ?? []).some((e) => (e.log ?? []).some((l) => l.done)));
 
+  const { entries: rpeEntries, weekly: rpeWeekly } = collectRPE(allSessions);
+
   return {
     exMap,
     exerciseSummaries,
@@ -197,5 +242,7 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     hyroxSessions,
     cardioSessions,
     powerSpeedSessions,
+    rpeEntries,
+    rpeWeekly,
   };
 }

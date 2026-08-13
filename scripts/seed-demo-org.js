@@ -30,7 +30,7 @@ const env = Object.fromEntries(
 const { createClient } = require("@supabase/supabase-js");
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-const DEMO_ORG_NAME = "AthletiQ Demo";
+const DEMO_ORG_NAME = "VIS BUILD Demo";
 const CLONE_SOURCE_ORG_NAME = "Salopia Health & Performance";
 
 const DEMO_COACH_EMAIL = env.DEMO_COACH_EMAIL;
@@ -165,6 +165,7 @@ async function cloneTestingSetup(demoOrgId) {
   const { data: sourceMetrics } = await sb.from("test_metrics").select("*").eq("organisation_id", sourceOrg.id);
   const metricIdMap = new Map(); // old id -> new id
   const metricIdByName = new Map(); // name -> new id
+  const metricBilateralById = new Map(); // new id -> is_bilateral
   for (const m of sourceMetrics ?? []) {
     const { data: newMetric, error } = await sb
       .from("test_metrics")
@@ -174,6 +175,7 @@ async function cloneTestingSetup(demoOrgId) {
     if (error) throw error;
     metricIdMap.set(m.id, newMetric.id);
     metricIdByName.set(newMetric.name, newMetric.id);
+    metricBilateralById.set(newMetric.id, newMetric.is_bilateral);
   }
   console.log(`Cloned ${metricIdMap.size} test metrics.`);
 
@@ -214,7 +216,7 @@ async function cloneTestingSetup(demoOrgId) {
   }
   console.log(`Cloned ${sourceBatteries?.length ?? 0} test batteries.`);
 
-  return { batteryId: firstNewBatteryId, metricIdByName };
+  return { batteryId: firstNewBatteryId, metricIdByName, metricBilateralById };
 }
 
 // ── 4. Exercise library ────────────────────────────────────────────────────────
@@ -495,9 +497,14 @@ async function seedSessionsAndPBs(athletes) {
       }
     }
 
+    // Post-session RPE only exists for sessions the athlete has
+    // actually done — a future/upcoming session can't have one yet.
+    const rpe = s.isPast ? Math.round(5 + Math.random() * 4) : null; // 5-9, moderate-hard
+    const rpeLoggedAt = s.isPast ? new Date(s.date + "T18:00:00Z").toISOString() : null;
+
     const { data: session, error } = await sb
       .from("sessions")
-      .insert({ athlete_id: s.athlete_id, type: s.type, date: s.date, name: s.name, athlete_notes: athleteNotes })
+      .insert({ athlete_id: s.athlete_id, type: s.type, date: s.date, name: s.name, athlete_notes: athleteNotes, rpe, rpe_logged_at: rpeLoggedAt })
       .select()
       .single();
     if (error) throw error;
@@ -594,7 +601,7 @@ async function seedPercentOneRM(athletes) {
 
 // ── 8. Testing session + results ──────────────────────────────────────────────
 
-async function seedTesting(athletes, batteryId, metricIdByName) {
+async function seedTesting(athletes, batteryId, metricIdByName, metricBilateralById) {
   if (!batteryId || !metricIdByName.size) { console.log("No cloned battery — skipping testing seed."); return; }
 
   const testAthletes = athletes.slice(0, 4);
@@ -611,15 +618,29 @@ async function seedTesting(athletes, batteryId, metricIdByName) {
     const resultRows = [];
     for (const [name, metricId] of metricIdByName) {
       const key = name.toLowerCase();
-      let value;
-      if (key.includes("sprint")) value = (1.6 + Math.random() * 0.4).toFixed(2);
-      else if (key.includes("cmj") || key.includes("jump height")) value = (28 + Math.random() * 12).toFixed(1);
-      else if (key.includes("imtp") || key.includes("force")) value = Math.round(1800 + Math.random() * 900);
-      else if (key.includes("rsi")) value = (1.4 + Math.random() * 0.8).toFixed(2);
-      else if (key.includes("plank") || key.includes("hold")) value = Math.round(45 + Math.random() * 60);
-      else if (key.includes("5-0-5") || key.includes("agility")) value = (2.2 + Math.random() * 0.5).toFixed(2);
-      else value = Math.round(10 + Math.random() * 40);
-      resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, value });
+      // Matched against each metric's real seeded name (see the norms
+      // block in 0027_testing_real_norms.sql) -- checked in this order
+      // because some keywords are substrings of others (e.g. "imtp"
+      // alone would also match "IMTP Relative (N/kg)", so that needs
+      // its own branch checked first to get a realistic N/kg-scale
+      // value instead of the kg-scale peak-force one).
+      const genValue = () => {
+        if (key.includes("imtp") && key.includes("relative")) return (18 + Math.random() * 20).toFixed(1); // N/kg
+        if (key.includes("imtp") || key.includes("force")) return Math.round(120 + Math.random() * 150); // kg
+        if (key.includes("sprint")) return (1.6 + Math.random() * 0.4).toFixed(2); // s
+        if (key.includes("jump") || key.includes("cmj")) return (28 + Math.random() * 12).toFixed(1); // cm
+        if (key.includes("reactive strength") || key.includes("rsi")) return (1.4 + Math.random() * 0.8).toFixed(2); // m/s
+        if (key.includes("plank") || key.includes("hold")) return Math.round(45 + Math.random() * 60); // s
+        if (key.includes("agility") || key.includes("change of direction") || key.includes("505")) return (2.2 + Math.random() * 0.5).toFixed(2); // s
+        if (key.includes("grip")) return Math.round(15 + Math.random() * 35); // kg
+        return Math.round(10 + Math.random() * 40); // unmatched custom metric -- generic placeholder range
+      };
+      if (metricBilateralById.get(metricId)) {
+        resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, side: "left", value: genValue() });
+        resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, side: "right", value: genValue() });
+      } else {
+        resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, value: genValue() });
+      }
     }
     if (resultRows.length) {
       const { error: resErr } = await sb.from("test_results").insert(resultRows);
@@ -687,12 +708,12 @@ async function seedCommunity(demoOrgId, coachId) {
 async function main() {
   await resetExistingDemoOrg();
   const { org, coachId } = await createDemoOrgAndCoach();
-  const { batteryId, metricIdByName } = await cloneTestingSetup(org.id);
+  const { batteryId, metricIdByName, metricBilateralById } = await cloneTestingSetup(org.id);
   await seedLibrary(org.id);
   const { athletes } = await seedAthletes(org.id);
   await seedSessionsAndPBs(athletes);
   await seedPercentOneRM(athletes);
-  await seedTesting(athletes, batteryId, metricIdByName);
+  await seedTesting(athletes, batteryId, metricIdByName, metricBilateralById);
   await seedTemplateAndProgramme(org.id, athletes);
   await seedCommunity(org.id, coachId);
 

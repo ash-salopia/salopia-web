@@ -13,14 +13,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
-import { listProgrammes, assignProgrammeToAthlete, loadProgrammeSessionForAthlete } from "@/lib/data/programmes";
-import { todayISO, addDaysISO } from "@/lib/date-utils";
+import {
+  listProgrammes,
+  assignProgrammeToAthlete,
+  loadProgrammeSessionForAthlete,
+  scheduleProgrammeSessions,
+} from "@/lib/data/programmes";
+import { todayISO } from "@/lib/date-utils";
 import type { Programme } from "@/types";
 
 type Phase = "input" | "parsing" | "preview" | "saving";
 type InputMode = "visual" | "text" | "voice";
 
 interface ScheduledSession {
+  sessionId: string;
   name: string;
   date: string;
   sortOrder: number;
@@ -43,17 +49,19 @@ function formatTime(s: number): string {
   return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
+// Defaults to the exact day pattern the programme was saved with
+// (including rest-day gaps) - pass a numeric spacingDays to override with
+// even spacing instead, e.g. from the "every other day" wording of a
+// parsed text/voice instruction.
 function scheduleSessions(
   programme: Programme,
   startDate: string,
-  spacingDays: number
+  spacingDays: number | "original"
 ): ScheduledSession[] {
   const sessions = programme.sessions ?? [];
-  return sessions.map((s, i) => ({
-    name: s.name,
-    date: addDaysISO(startDate, i * spacingDays),
-    sortOrder: s.sort_order,
-  }));
+  return scheduleProgrammeSessions(sessions, startDate, spacingDays === "original" ? undefined : spacingDays).map(
+    ({ session, date }) => ({ sessionId: session.id, name: session.name, date, sortOrder: session.sort_order })
+  );
 }
 
 export default function AssignProgrammeModal({
@@ -68,7 +76,7 @@ export default function AssignProgrammeModal({
   // Visual mode state
   const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
   const [startDate, setStartDate] = useState(todayISO());
-  const [spacingDays, setSpacingDays] = useState(2);
+  const [spacingDays, setSpacingDays] = useState<number | "original">("original");
 
   // Voice/text state
   const [textInstruction, setTextInstruction] = useState("");
@@ -198,13 +206,13 @@ export default function AssignProgrammeModal({
     setError("");
     try {
       await assignProgrammeToAthlete(selectedProgramme.id, athleteId);
-      const sessions = selectedProgramme.sessions ?? [];
-      for (let i = 0; i < sessions.length; i++) {
-        const s = scheduledSessions[i];
-        if (!s) continue;
-        await loadProgrammeSessionForAthlete(sessions[i], athleteId, s.date);
+      const sessionsById = new Map((selectedProgramme.sessions ?? []).map((s) => [s.id, s]));
+      for (const scheduled of scheduledSessions) {
+        const session = sessionsById.get(scheduled.sessionId);
+        if (!session) continue;
+        await loadProgrammeSessionForAthlete(session, athleteId, scheduled.date);
       }
-      onScheduled(sessions.length);
+      onScheduled(scheduledSessions.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not schedule programme");
       setPhase("preview");
@@ -285,9 +293,10 @@ export default function AssignProgrammeModal({
                           <div style={s.fieldLabel}>Session spacing</div>
                           <select
                             value={spacingDays}
-                            onChange={(e) => setSpacingDays(Number(e.target.value))}
+                            onChange={(e) => setSpacingDays(e.target.value === "original" ? "original" : Number(e.target.value))}
                             style={s.select}
                           >
+                            <option value="original">Original day pattern</option>
                             <option value={1}>Every day</option>
                             <option value={2}>Every 2 days</option>
                             <option value={3}>Every 3 days</option>

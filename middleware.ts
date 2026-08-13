@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isReadOnlyRestricted } from "@/lib/billing/access";
 
 // Runs on every request. Two jobs:
 // 1. Refresh the Supabase auth session so it doesn't silently expire.
@@ -27,6 +28,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/auth") ||
     path.startsWith("/a/") ||               // athlete share-link pages
     path.startsWith("/api/athlete-link/") || // athlete APIs — token-validated in each handler
+    path.startsWith("/api/webhooks/") ||    // Stripe (and future) webhooks — signature-verified in the handler itself, no Supabase session exists
     path.startsWith("/demo") ||             // public demo login link — always signs in as the fixed demo coach, regardless of any existing session
     path.startsWith("/start");              // public marketing/signup landing page — no session implications either way, unlike /login it doesn't need to redirect an already-signed-in visitor away
 
@@ -88,6 +90,45 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  // Payment-failure grace period enforcement. Scoped narrowly to
+  // mutating requests against coach API routes (reads always work, so
+  // a restricted coach can still see all their existing data) and
+  // never against /api/billing/* itself, so a restricted org can
+  // still reach checkout/portal to actually fix the problem. This is
+  // the one central choke point rather than a check duplicated into
+  // every write route.
+  const needsBillingCheck =
+    user &&
+    request.method !== "GET" &&
+    path.startsWith("/api/") &&
+    !path.startsWith("/api/billing/");
+
+  if (needsBillingCheck) {
+    const { data: coach } = await supabase
+      .from("coaches")
+      .select("organisation_id")
+      .eq("id", user.id)
+      .single();
+
+    if (coach) {
+      const { data: org } = await supabase
+        .from("organisations")
+        .select("subscription_status, past_due_since")
+        .eq("id", coach.organisation_id)
+        .single();
+
+      if (org && isReadOnlyRestricted(org)) {
+        return NextResponse.json(
+          {
+            error:
+              "Your subscription payment needs attention before you can make changes. Update your card details in Settings > Billing.",
+          },
+          { status: 403 }
+        );
+      }
+    }
   }
 
   return response;

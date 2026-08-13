@@ -38,7 +38,7 @@ export default function StartPage() {
   return (
     <div style={s.page}>
       <div style={s.hero}>
-        <div style={s.title}>AthletiQ</div>
+        <div style={s.title}>VIS BUILD</div>
         <div style={s.tagline}>Coaching software for coaches who train people, not spreadsheets.</div>
         <p style={s.subtext}>
           Everything below, in one place. Currently free while in trial.

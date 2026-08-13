@@ -6,16 +6,16 @@
 // Modes:
 //   "new" - creates a new Session on the athlete's calendar
 //   "add" - appends exercises to an existing session
-//   "template" - creates a new Template in the template library
-//   "programme" - creates a new Programme in the programme library
+//
+// Templates/Programmes are no longer built directly - everything is
+// built in the athlete session builder (voice included) and saved as
+// a template/programme from there, so this modal only ever creates or
+// appends to a real session.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { createSession } from "@/lib/data/sessions";
-import { createTemplate, addTemplateDef, updateTemplateDef } from "@/lib/data/templates";
-import { createProgramme, addProgrammeSession } from "@/lib/data/programmes";
 import { listLibrary } from "@/lib/data/library";
 import { todayISO } from "@/lib/date-utils";
 import SessionReviewEditor, {
@@ -40,7 +40,7 @@ type ConvMessage = { role: "user" | "assistant"; content: string };
 type Phase = "idle" | "recording" | "transcribing" | "parsing" | "review" | "saving";
 
 interface Props {
-  mode: "new" | "add" | "template" | "programme";
+  mode: "new" | "add";
   // mode="new"
   athleteId?: string;
   sessionCount?: number;
@@ -64,15 +64,12 @@ function getBestMimeType(): string {
 const TITLE: Record<Props["mode"], string> = {
   new: "🎤 New session by voice",
   add: "🎤 Add exercises by voice",
-  template: "🎤 New template by voice",
-  programme: "🎤 New programme by voice",
 };
 
 export default function VoiceSessionModal({
   mode, athleteId, sessionCount = 0, onCreated,
   sessionId, exerciseCount = 0, onAdded, onClose,
 }: Props) {
-  const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
@@ -167,7 +164,7 @@ export default function VoiceSessionModal({
         if (!transcript.trim()) { setError("No speech detected - please try again."); setPhase("idle"); return; }
         setPhase("parsing");
         try {
-          const result = await callParse(`Parse this ${mode === "template" ? "template" : mode === "programme" ? "programme" : "strength & conditioning session"}: ${transcript}`, []);
+          const result = await callParse(`Parse this strength & conditioning session: ${transcript}`, []);
           setSessions(toReviewSessions(result.exercises, result.session_type));
           setHistory(result.history);
           setAiMessage(result.message);
@@ -267,28 +264,6 @@ export default function VoiceSessionModal({
           .from("session_exercises").insert(rows).select();
         if (insertErr) throw insertErr;
         onAdded?.(inserted ?? []);
-
-      } else if (mode === "template") {
-        const template = await createTemplate();
-        await updateTemplateDef(template.defs![0].id, {
-          name: sessionName.trim() || "Session 1",
-          exercises: exInputs.map((e, i) => ({ ...e, order: String(i + 1) })) as any,
-        });
-        router.push(`/templates/${template.id}`);
-        onClose();
-
-      } else if (mode === "programme") {
-        const programme = await createProgramme();
-        const ps = await addProgrammeSession(programme.id, 0);
-        await createClient()
-          .from("programme_sessions")
-          .update({
-            name: sessionName.trim() || "Session 1",
-            exercises: exInputs.map((e, i) => ({ ...e, order: String(i + 1) })),
-          })
-          .eq("id", ps.id);
-        router.push(`/programmes/${programme.id}`);
-        onClose();
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
@@ -323,11 +298,7 @@ export default function VoiceSessionModal({
           {phase === "idle" && (
             <div style={s.centre}>
               <p style={s.hint}>
-                {mode === "template"
-                  ? "Speak your template - exercises, sets, reps, load, rest. I'll structure it ready to review."
-                  : mode === "programme"
-                  ? "Speak your programme sessions - I'll structure them ready to review."
-                  : "Speak your session naturally - exercises, sets, reps, load, rest periods."}
+                Speak your session naturally - exercises, sets, reps, load, rest periods.
               </p>
               <button style={s.micBtn} onClick={startRecording}>🎤 Tap to record</button>
             </div>
@@ -351,20 +322,16 @@ export default function VoiceSessionModal({
 
           {phase === "review" && (
             <>
-              {(mode === "new" || mode === "template" || mode === "programme") && (
+              {mode === "new" && (
                 <div style={s.metaRow}>
                   <div style={{ flex: 2 }}>
-                    <div style={s.fieldLabel}>
-                      {mode === "template" ? "Template name" : mode === "programme" ? "Programme name" : "Session name"}
-                    </div>
+                    <div style={s.fieldLabel}>Session name</div>
                     <input value={sessionName} onChange={(e) => setSessionName(e.target.value)} style={s.metaInput} />
                   </div>
-                  {mode === "new" && (
-                    <div style={{ flex: 1 }}>
-                      <div style={s.fieldLabel}>Date</div>
-                      <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} style={s.metaInput} />
-                    </div>
-                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={s.fieldLabel}>Date</div>
+                    <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} style={s.metaInput} />
+                  </div>
                 </div>
               )}
 

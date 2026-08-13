@@ -377,6 +377,39 @@ export async function updateAthleteSessionNotes(
   if (error) throw error;
 }
 
+// Athlete's own post-session RPE (1-10, rate of perceived exertion —
+// how hard the whole session felt). Same ownership-check pattern as
+// updateAthleteSessionNotes above. Not gated on session type here —
+// the athlete app only ever renders the prompt for non-recovery
+// sessions (see AthleteSessionView.tsx), so a recovery session's
+// rpe/rpe_logged_at simply stay null, which report-calc.ts's rpeEntries
+// relies on to exclude them without needing its own type check.
+export async function updateSessionRPE(
+  sessionId: string,
+  athleteId: string,
+  rpe: number
+): Promise<void> {
+  if (!Number.isInteger(rpe) || rpe < 1 || rpe > 10) {
+    throw new Error("RPE must be a whole number from 1 to 10");
+  }
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) {
+    throw new Error("This session does not belong to you");
+  }
+
+  const { error } = await supabase
+    .from("sessions")
+    .update({ rpe, rpe_logged_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
 // Athlete-side completion taps on a Recovery session — checklist
 // ticks, block done-flags, the whole-session "mark done" toggle for
 // Quick Prescription. Same ownership-check shape as

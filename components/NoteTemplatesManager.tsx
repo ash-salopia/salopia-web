@@ -13,6 +13,7 @@ import {
   updateNoteTemplate, deleteNoteTemplate,
   type NoteTemplate,
 } from "@/lib/data/note-templates";
+import CollapsibleSection from "@/components/CollapsibleSection";
 
 const CATEGORIES: NoteTemplate["category"][] = ["general", "warm_up", "strength", "power_speed", "cardio"];
 const CATEGORY_LABELS: Record<NoteTemplate["category"], string> = {
@@ -141,28 +142,28 @@ export default function NoteTemplatesManager() {
               <div style={s.groupLabel}>{CATEGORY_LABELS[cat]}</div>
               {group.map(t => {
                 const isEditing = editingId === t.id;
-                return (
+                return isEditing ? (
                   <div key={t.id} style={s.templateCard}>
-                    {isEditing ? (
-                      <EditForm
-                        template={t}
-                        saving={saving}
-                        onSave={handleUpdate}
-                        onCancel={() => setEditingId(null)}
-                      />
-                    ) : (
-                      <>
-                        <div style={s.templateHeader}>
-                          <div style={s.templateName}>{t.name}</div>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button style={s.editBtn} onClick={() => setEditingId(t.id)}>Edit</button>
-                            <button style={s.deleteBtn} onClick={() => handleDelete(t.id, t.name)}>Delete</button>
-                          </div>
-                        </div>
-                        <pre style={s.preview}>{t.content.slice(0, 200)}{t.content.length > 200 ? "…" : ""}</pre>
-                      </>
-                    )}
+                    <EditForm
+                      template={t}
+                      saving={saving}
+                      onSave={handleUpdate}
+                      onCancel={() => setEditingId(null)}
+                    />
                   </div>
+                ) : (
+                  <CollapsibleSection
+                    key={t.id}
+                    title={t.name}
+                    headerRight={
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button style={s.editBtn} onClick={() => setEditingId(t.id)}>Edit</button>
+                        <button style={s.deleteBtn} onClick={() => handleDelete(t.id, t.name)}>Delete</button>
+                      </div>
+                    }
+                  >
+                    <pre style={s.preview}>{t.content}</pre>
+                  </CollapsibleSection>
                 );
               })}
             </div>
@@ -215,9 +216,7 @@ const s: Record<string, React.CSSProperties> = {
   group: { marginBottom: 20 },
   groupLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 8 },
   templateCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: 14, marginBottom: 8 },
-  templateHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  templateName: { fontSize: 14, fontWeight: 700, color: "var(--text)" },
-  preview: { fontSize: 11, color: "var(--mute)", fontFamily: "monospace", whiteSpace: "pre-wrap" as const, margin: 0, lineHeight: 1.5 },
+  preview: { fontSize: 12, color: "var(--mute)", fontFamily: "monospace", whiteSpace: "pre-wrap" as const, margin: 0, lineHeight: 1.5 },
   editBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" },
   deleteBtn: { background: "transparent", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" },
   formCard: { background: "var(--panel)", border: "1px solid var(--accent)44", borderRadius: 12, padding: 16, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 10 },

@@ -224,12 +224,49 @@ export async function saveTrials(params: {
 // Best trial from a set of results for one metric (+ optional side),
 // using the metric's better_direction — not an average, matching the
 // original tool's approach.
+// Report display grouping. test_metrics has no category column, so this
+// is a display-only heuristic on the metric name -- the same approach
+// TestReportModal already uses to split IMTP abs/relative. Falls back to
+// "Other" (sorted last) for custom coach-created metrics that don't match
+// any keyword, so nothing silently disappears from the report.
+const METRIC_GROUP_ORDER = ["Jumps & RSI", "Sprint & Agility", "Strength", "Core", "Other"] as const;
+export type MetricGroup = (typeof METRIC_GROUP_ORDER)[number];
+
+export function metricGroup(name: string): MetricGroup {
+  const key = name.toLowerCase();
+  if (key.includes("jump") || key.includes("cmj") || key.includes("reactive strength") || key.includes("rsi")) return "Jumps & RSI";
+  if (key.includes("sprint") || key.includes("agility") || key.includes("change of direction") || key.includes("505")) return "Sprint & Agility";
+  if (key.includes("imtp") || key.includes("force") || key.includes("grip")) return "Strength";
+  if (key.includes("plank") || key.includes("hold") || key.includes("core")) return "Core";
+  return "Other";
+}
+
+export function sortByMetricGroup<T>(items: T[], getName: (item: T) => string): T[] {
+  return [...items].sort((a, b) => {
+    const groupDiff = METRIC_GROUP_ORDER.indexOf(metricGroup(getName(a))) - METRIC_GROUP_ORDER.indexOf(metricGroup(getName(b)));
+    return groupDiff !== 0 ? groupDiff : getName(a).localeCompare(getName(b));
+  });
+}
+
 export function bestTrial(
   results: TestResult[],
   metric: TestMetric,
   side: "left" | "right" | null = null
 ): number | null {
   const matching = results.filter((r) => r.test_metric_id === metric.id && (r.side ?? null) === side);
+  if (matching.length === 0) return null;
+  const values = matching.map((r) => r.value);
+  return metric.better_direction === "lower" ? Math.min(...values) : Math.max(...values);
+}
+
+// For the rated-metrics table: most metrics only ever have side=null
+// trials, so this is equivalent to bestTrial(..., null) for them. The
+// one exception is a metric that is both bilateral AND rated (currently
+// only "505 Change of Direction") -- its trials are saved under
+// side="left"/"right" (see the testing entry page), never null, so a
+// side-agnostic lookup is required or its rated score is silently empty.
+export function bestTrialAnySide(results: TestResult[], metric: TestMetric): number | null {
+  const matching = results.filter((r) => r.test_metric_id === metric.id);
   if (matching.length === 0) return null;
   const values = matching.map((r) => r.value);
   return metric.better_direction === "lower" ? Math.min(...values) : Math.max(...values);

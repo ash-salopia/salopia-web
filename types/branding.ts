@@ -5,11 +5,11 @@
 export type OrgTier = 'standard' | 'premium';
 
 export interface OrgBranding {
-  brand_name?: string;       // premium: replaces "AthletiQ"
+  brand_name?: string;       // premium: replaces "VIS BUILD"
   logo_url?: string;         // premium: logo image URL
   primary_color?: string;    // both: hex accent colour
   primary_color_dim?: string;// both: dim version for backgrounds
-  show_powered_by?: boolean; // premium: show "Powered by AthletiQ" footer
+  show_powered_by?: boolean; // premium: show "Powered by VIS BUILD" footer
 }
 
 export interface OrgWithBranding {
@@ -22,8 +22,8 @@ export interface OrgWithBranding {
 // Resolved branding — what the UI actually uses
 export interface ResolvedBranding {
   // Display name in header
-  displayName: string;         // premium: brand_name; standard: "AthletiQ"
-  showOrgName: boolean;        // standard: true (shows "AthletiQ · OrgName"); premium: false
+  displayName: string;         // premium: brand_name; standard: "VIS BUILD"
+  showOrgName: boolean;        // standard: true (shows "VIS BUILD · OrgName"); premium: false
   logoUrl: string | null;      // premium only
   primaryColor: string;        // hex
   primaryColorDim: string;     // hex — for button backgrounds etc.
@@ -32,7 +32,7 @@ export interface ResolvedBranding {
 }
 
 export const DEFAULT_BRANDING: ResolvedBranding = {
-  displayName: "AthletiQ",
+  displayName: "VIS BUILD",
   showOrgName: true,
   logoUrl: null,
   primaryColor: "#00d4ff",
@@ -48,7 +48,7 @@ export function resolveBranding(
   const b = org.branding ?? {};
 
   return {
-    displayName: isPremium && b.brand_name ? b.brand_name : "AthletiQ",
+    displayName: isPremium && b.brand_name ? b.brand_name : "VIS BUILD",
     showOrgName: !isPremium,
     logoUrl: isPremium ? (b.logo_url ?? null) : null,
     primaryColor: b.primary_color ?? DEFAULT_BRANDING.primaryColor,

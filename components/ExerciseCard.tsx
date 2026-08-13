@@ -474,7 +474,7 @@ export default function ExerciseCard({
       </div>
 
       <div style={styles.prescRow}>
-        <Field label="Sets">
+        <Field label="Sets" flex={0.6}>
           <input
             value={exercise.sets}
             onChange={(e) => onEditPresc({ sets: parseInt(e.target.value) || 0 })}
@@ -482,7 +482,7 @@ export default function ExerciseCard({
             style={styles.miniInput}
           />
         </Field>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1.6, minWidth: 0 }}>
           <RepsTimeField
             reps={exercise.reps}
             time={exercise.time}
@@ -617,13 +617,15 @@ function Field({
   label,
   children,
   grow,
+  flex,
 }: {
   label: string;
   children: React.ReactNode;
   grow?: boolean;
+  flex?: number;
 }) {
   return (
-    <div style={{ flex: grow ? 1.5 : 1, minWidth: 0 }}>
+    <div style={{ flex: flex ?? (grow ? 1.5 : 1), minWidth: 0 }}>
       <div style={styles.fieldLabel}>{label}</div>
       {children}
     </div>
@@ -637,7 +639,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     padding: 14,
   },
-  cardHead: { display: "flex", alignItems: "center", gap: 8 },
+  cardHead: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const },
   orderInput: {
     width: 36,
     flexShrink: 0,
@@ -664,7 +666,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1,
     padding: "1px 4px",
   },
-  nameFieldWrap: { flex: 1, position: "relative", minWidth: 0 },
+  nameFieldWrap: { flex: 1, position: "relative", minWidth: 140 },
   nameInput: {
     width: "100%",
     background: "var(--ink)",

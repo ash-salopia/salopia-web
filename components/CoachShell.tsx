@@ -22,17 +22,24 @@ const NAV_ITEMS = [
   { href: "/settings",    label: "Settings",    icon: "⚙️" },
 ];
 
+type BillingBanner =
+  | { type: "past_due"; daysLeft: number | null }
+  | { type: "canceled" }
+  | null;
+
 export default function CoachShell({
   coachName,
   coachAvatarUrl = null,
   orgName,
   branding = DEFAULT_BRANDING,
+  billingBanner = null,
   children,
 }: {
   coachName: string;
   coachAvatarUrl?: string | null;
   orgName: string;
   branding?: ResolvedBranding;
+  billingBanner?: BillingBanner;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -101,6 +108,16 @@ export default function CoachShell({
         </div>
       </header>
 
+      {billingBanner && (
+        <Link href="/settings" style={styles.billingBanner}>
+          {billingBanner.type === "canceled"
+            ? "Your subscription is cancelled — the account is read-only. Tap to resubscribe."
+            : billingBanner.daysLeft != null && billingBanner.daysLeft > 0
+            ? `Payment failed — update your card within ${billingBanner.daysLeft} day${billingBanner.daysLeft === 1 ? "" : "s"} to avoid losing access. Tap to fix.`
+            : "Payment failed — the account is now read-only until this is fixed. Tap to fix."}
+        </Link>
+      )}
+
       <div style={styles.body}>
         {isMobile && sidebarOpen && (
           <div style={styles.backdrop} onClick={() => setSidebarOpen(false)} />
@@ -134,7 +151,7 @@ export default function CoachShell({
       </div>
 
       {branding.showPoweredBy && (
-        <div style={styles.poweredBy}>Powered by AthletiQ</div>
+        <div style={styles.poweredBy}>Powered by VIS BUILD</div>
       )}
     </div>
   );
@@ -174,6 +191,18 @@ const styles: Record<string, React.CSSProperties> = {
     height: 34,
     fontSize: 16,
     cursor: "pointer",
+    flexShrink: 0,
+  },
+  billingBanner: {
+    display: "block",
+    background: "#2a1e00",
+    color: "#F59E0B",
+    fontSize: 13,
+    fontWeight: 600,
+    textAlign: "center",
+    padding: "8px 16px",
+    textDecoration: "none",
+    borderBottom: "1px solid #F59E0B44",
     flexShrink: 0,
   },
   signOutBtn: {

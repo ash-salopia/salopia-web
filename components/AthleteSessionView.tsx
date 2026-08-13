@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import VideoModal from "@/components/VideoModal";
 import CheckInModal from "@/components/CheckInModal";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import SessionRPEBlock from "@/components/SessionRPEBlock";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import PBCelebrationModal from "@/components/PBCelebrationModal";
@@ -237,6 +238,23 @@ export default function AthleteSessionView({
     }
   };
 
+  const handleRPESave = async (rpe: number) => {
+    if (!session) return;
+    const sessionId = session.id;
+    setSession((prev) => (prev ? { ...prev, rpe, rpe_logged_at: new Date().toISOString() } : prev));
+    const result = await saveWithRetry(`rpe:${sessionId}`, "/api/athlete-link/rpe", {
+      token,
+      sessionId,
+      rpe,
+    });
+    if (result.ok) {
+      setError("");
+    } else if (!result.queued) {
+      setError(result.error);
+      throw new Error(result.error);
+    }
+  };
+
   const toggleNotesFor = (exerciseId: string) => {
     setOpenNotesFor((prev) => {
       const next = new Set(prev);
@@ -430,16 +448,6 @@ export default function AthleteSessionView({
         value={session.session_notes ?? ""}
         onChange={() => {}}
         readOnly={true}
-      />
-
-      <SessionNotesBlock
-        value={session.athlete_notes ?? ""}
-        onChange={handleAthleteNotesChange}
-        onBlur={() => saveAthleteNotes(session.id, session.athlete_notes ?? "")}
-        label="Your Notes"
-        icon="📝"
-        placeholder="How did the session feel? Anything to flag for your coach…"
-        enableTemplates={false}
       />
 
       <div style={styles.exerciseList}>
@@ -764,6 +772,18 @@ export default function AthleteSessionView({
         })}
         {!exercises.length && <div style={styles.empty}>No exercises in this session.</div>}
       </div>
+
+      <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
+
+      <SessionNotesBlock
+        value={session.athlete_notes ?? ""}
+        onChange={handleAthleteNotesChange}
+        onBlur={() => saveAthleteNotes(session.id, session.athlete_notes ?? "")}
+        label="Your Notes"
+        icon="📝"
+        placeholder="How did the session feel? Anything to flag for your coach…"
+        enableTemplates={false}
+      />
 
       {videoModal && (
         <VideoModal

@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 import { redirect } from "next/navigation";
 import CoachShell from "@/components/CoachShell";
 import { resolveBranding, DEFAULT_BRANDING } from "@/types/branding";
+import { graceDaysRemaining } from "@/lib/billing/access";
 
 export default async function CoachLayout({
   children,
@@ -16,7 +17,7 @@ export default async function CoachLayout({
 
   const { data: coach, error: coachError } = await supabase
     .from("coaches")
-    .select("*, organisations(id, name, tier, branding)")
+    .select("*, organisations(id, name, tier, branding, subscription_status, past_due_since)")
     .eq("id", user.id)
     .single();
 
@@ -47,12 +48,20 @@ export default async function CoachLayout({
     ? resolveBranding({ name: org.name, tier: org.tier ?? "standard", branding: org.branding ?? {} })
     : DEFAULT_BRANDING;
 
+  const billingBanner =
+    org?.subscription_status === "canceled"
+      ? ({ type: "canceled" } as const)
+      : org?.subscription_status === "past_due"
+      ? ({ type: "past_due", daysLeft: graceDaysRemaining(org) } as const)
+      : null;
+
   return (
     <CoachShell
       coachName={coach.name}
       coachAvatarUrl={coach.avatar_url}
       orgName={org?.name ?? ""}
       branding={branding}
+      billingBanner={billingBanner}
     >
       {children}
     </CoachShell>

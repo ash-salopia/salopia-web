@@ -18,6 +18,7 @@ export interface ReportOptions {
   aiSummary: boolean; // AI overview + recurring-notes-themes paragraphs
   coachContext: string; // free-text context fed to the AI summary only (e.g. "returning from hamstring injury") - never shown on the report itself
   athleteNotes: boolean; // raw athlete notes list
+  sessionRpe: boolean; // post-session RPE (1-10) list + range average
   // e1RM-only options - only meaningful (and only enabled in the UI) when e1rm is ticked.
   bodyweightRelative: boolean; // show e1RM ÷ bodyweight instead of raw kg
   exerciseLimit: number; // cap on exercises shown in radar/line chart
@@ -35,6 +36,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   aiSummary: true,
   coachContext: "",
   athleteNotes: false,
+  sessionRpe: true,
   bodyweightRelative: false,
   exerciseLimit: 8,
   lowConfidenceCap: 12,
@@ -56,6 +58,7 @@ const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string 
 
 const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "athleteNotes", label: "Athlete notes", hint: "Raw list of the athlete's own session/exercise notes" },
+  { key: "sessionRpe", label: "Session RPE", hint: "Perceived exertion (1-10) logged after each session, plus range average" },
 ];
 
 export default function ReportRangeModal({

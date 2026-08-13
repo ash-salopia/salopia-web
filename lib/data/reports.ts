@@ -7,7 +7,7 @@ import { resolveCurrentOneRMWithSource } from "@/lib/data/one-rm";
 import type { OneRMSource } from "@/lib/data/settings";
 import type { OneRMFormula } from "@/lib/one-rm";
 
-export type { ReportRow, ExerciseMap, ExerciseSummary, WeeklyPoint, WeeklyExerciseMap, NoteEntry } from "@/lib/report-calc";
+export type { ReportRow, ExerciseMap, ExerciseSummary, WeeklyPoint, WeeklyExerciseMap, NoteEntry, RPEEntry, RPEWeeklyPoint } from "@/lib/report-calc";
 export type { StrengthRow, StrengthExerciseMap, StrengthExerciseSummary, StrengthWeeklyPoint, StrengthWeeklyMap } from "@/lib/strength-report-calc";
 
 export interface ReportData extends ComputedReport {

@@ -7,12 +7,14 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import {
   listSessionsForAthlete,
+  listSessionsForAthleteInRange,
   createSession,
   deleteSession,
   copySessionsRange,
   deleteSessionsRange,
   updateSession,
 } from "@/lib/data/sessions";
+import { createProgrammeFromSessions } from "@/lib/data/programmes";
 import { todayISO } from "@/lib/date-utils";
 import { listTemplates, loadTemplateForAthlete } from "@/lib/data/templates";
 import { generateReport, type ReportData } from "@/lib/data/reports";
@@ -123,6 +125,11 @@ export default function AthleteDetailPage() {
   const [loadStart, setLoadStart] = useState(todayISO());
   const [loadEnd, setLoadEnd] = useState(todayISO());
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [saveProgrammeOpen, setSaveProgrammeOpen] = useState(false);
+  const [saveProgrammeName, setSaveProgrammeName] = useState("");
+  const [saveProgrammeStart, setSaveProgrammeStart] = useState(todayISO());
+  const [saveProgrammeEnd, setSaveProgrammeEnd] = useState(todayISO());
+  const [savingProgramme, setSavingProgramme] = useState(false);
   const [reportRangeOpen, setReportRangeOpen] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [reportOptions, setReportOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
@@ -291,6 +298,28 @@ export default function AthleteDetailPage() {
       setError(e instanceof Error ? e.message : "Could not load template");
     } finally {
       setLoadingTemplate(false);
+    }
+  };
+
+  const handleSaveAsProgramme = async () => {
+    const name = saveProgrammeName.trim();
+    if (!name || !saveProgrammeStart || !saveProgrammeEnd) return;
+    setSavingProgramme(true);
+    setError("");
+    try {
+      const rangeSessions = await listSessionsForAthleteInRange(athleteId, saveProgrammeStart, saveProgrammeEnd);
+      if (!rangeSessions.length) {
+        setError("No sessions found in that date range.");
+        return;
+      }
+      await createProgrammeFromSessions(rangeSessions, name);
+      setFlash(`Saved as programme: "${name}" (${rangeSessions.length} session${rangeSessions.length === 1 ? "" : "s"})`);
+      setTimeout(() => setFlash(""), 3000);
+      setSaveProgrammeOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save as programme");
+    } finally {
+      setSavingProgramme(false);
     }
   };
 
@@ -548,6 +577,16 @@ export default function AthleteDetailPage() {
               { key: "notes", label: "📝 Notes", onClick: () => setNotesOpen(true) },
               { key: "modify", label: "✏️ Modify", onClick: () => setModifyOpen(true) },
               { key: "assign", label: "📅 Assign programme", onClick: () => setAssignOpen(true) },
+              {
+                key: "saveprogramme",
+                label: "💾 Save as programme",
+                onClick: () => {
+                  setSaveProgrammeName("");
+                  setSaveProgrammeStart(todayISO());
+                  setSaveProgrammeEnd(todayISO());
+                  setSaveProgrammeOpen(true);
+                },
+              },
               { key: "profile", label: "👤 Profile", onClick: () => router.push(`/athletes/${athleteId}/profile`) },
               { key: "goals", label: "🎯 Goals", onClick: () => setGoalsOpen(true) },
             ];
@@ -834,6 +873,56 @@ export default function AthleteDetailPage() {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {saveProgrammeOpen && (
+        <div style={styles.overlay} onClick={() => setSaveProgrammeOpen(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Save as programme</div>
+            <div style={styles.fieldLabel}>Programme name</div>
+            <input
+              autoFocus
+              value={saveProgrammeName}
+              onChange={(e) => setSaveProgrammeName(e.target.value)}
+              style={styles.modalInput}
+            />
+            <div style={styles.modalRow}>
+              <div style={{ flex: 1 }}>
+                <div style={styles.fieldLabel}>Start date</div>
+                <input
+                  type="date"
+                  value={saveProgrammeStart}
+                  onChange={(e) => setSaveProgrammeStart(e.target.value)}
+                  style={styles.modalInput}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={styles.fieldLabel}>End date</div>
+                <input
+                  type="date"
+                  value={saveProgrammeEnd}
+                  onChange={(e) => setSaveProgrammeEnd(e.target.value)}
+                  style={styles.modalInput}
+                />
+              </div>
+            </div>
+            <p style={styles.modalNote}>
+              Every session on this athlete&apos;s calendar within this range is saved into the new
+              programme, in date order.
+            </p>
+            <button
+              disabled={!saveProgrammeName.trim() || !saveProgrammeStart || !saveProgrammeEnd || savingProgramme}
+              style={{
+                ...styles.primaryBtn,
+                width: "100%",
+                opacity: saveProgrammeName.trim() && saveProgrammeStart && saveProgrammeEnd && !savingProgramme ? 1 : 0.5,
+              }}
+              onClick={handleSaveAsProgramme}
+            >
+              {savingProgramme ? "Saving…" : "Save as programme"}
+            </button>
           </div>
         </div>
       )}

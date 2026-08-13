@@ -19,7 +19,7 @@ export default function AthleteNotFound() {
         color: "var(--accent)",
         marginBottom: 8,
       }}>
-        AthletiQ
+        VIS BUILD
       </div>
       <div style={{ fontSize: 36 }}>?</div>
       <h1 style={{

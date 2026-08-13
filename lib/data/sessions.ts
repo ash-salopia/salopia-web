@@ -79,6 +79,36 @@ export async function listSessionsForAthlete(athleteId: string): Promise<Session
   }));
 }
 
+// Same as listSessionsForAthlete but scoped to a date range (inclusive)
+// - used by "Save as programme" in the session builder to gather the
+// real sessions a coach wants to snapshot, without pulling the
+// athlete's entire history. Excludes session_source "library" (the
+// athlete's own informal, self-started sessions) since those were
+// never coach-built and don't belong in a programme, same exclusion
+// the Training Load Report already applies.
+export async function listSessionsForAthleteInRange(
+  athleteId: string,
+  start: string,
+  end: string
+): Promise<Session[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("*, session_exercises(*)")
+    .eq("athlete_id", athleteId)
+    .neq("session_source", "library")
+    .gte("date", start)
+    .lte("date", end)
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((s) => ({
+    ...s,
+    exercises: (s.session_exercises ?? []).sort(
+      (a: SessionExercise, b: SessionExercise) => a.sort_order - b.sort_order
+    ),
+  }));
+}
+
 // Same as listSessionsForAthlete but for several athletes in one
 // query — used by the Live Group view, which needs every starred
 // athlete's sessions (with exercises, for the tappable set dots) at

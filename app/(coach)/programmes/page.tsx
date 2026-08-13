@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listProgrammes, createProgramme, deleteProgramme } from "@/lib/data/programmes";
-import VoiceSessionModal from "@/components/VoiceSessionModal";
-import NotesProgrammeModal from "@/components/NotesProgrammeModal";
+import { listProgrammes, deleteProgramme } from "@/lib/data/programmes";
 import type { Programme } from "@/types";
 
 export default function ProgrammesPage() {
@@ -13,9 +11,6 @@ export default function ProgrammesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -32,18 +27,6 @@ export default function ProgrammesPage() {
   useEffect(() => {
     load();
   }, []);
-
-  const handleCreate = async () => {
-    setCreating(true);
-    try {
-      const p = await createProgramme();
-      router.push(`/programmes/${p.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create programme");
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const handleDelete = async (p: Programme) => {
     if (!confirm(`Delete programme "${p.name}"?`)) return;
@@ -65,15 +48,10 @@ export default function ProgrammesPage() {
         <div>
           <h1 style={styles.title}>Programme Library</h1>
           <p style={styles.subtitle}>
-            Bundle sessions together and assign them to athletes as a labelled package.
+            Build sessions in an athlete&apos;s calendar, then use &quot;Save as programme&quot; to
+            add a date range here - or build one from a Template. This page is for browsing,
+            renaming, and assigning saved programmes to athletes.
           </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={styles.ghostBtn} onClick={() => setVoiceOpen(true)}>🎤 Voice</button>
-          <button style={styles.ghostBtn} onClick={() => setNotesOpen(true)}>📝 Notes</button>
-          <button style={styles.primaryBtn} disabled={creating} onClick={handleCreate}>
-            {creating ? "Creating…" : "+ New programme"}
-          </button>
         </div>
       </div>
 
@@ -92,8 +70,8 @@ export default function ProgrammesPage() {
         <div style={styles.empty}>Loading…</div>
       ) : !programmes.length ? (
         <div style={styles.empty}>
-          No programmes yet. Create one above, or build a Template first and use &quot;Add to
-          Programme Library&quot; from its page.
+          No programmes yet. Build sessions for an athlete and use &quot;Save as programme&quot;, or
+          open a Template and use &quot;Add to Programme Library&quot;.
         </div>
       ) : !filtered.length ? (
         <div style={styles.empty}>No programmes match &quot;{query}&quot;.</div>
@@ -122,19 +100,6 @@ export default function ProgrammesPage() {
           ))}
         </div>
       )}
-
-      {voiceOpen && (
-        <VoiceSessionModal
-          mode="programme"
-          onClose={() => setVoiceOpen(false)}
-        />
-      )}
-      {notesOpen && (
-        <NotesProgrammeModal
-          onCreated={() => { setNotesOpen(false); load(); }}
-          onClose={() => setNotesOpen(false)}
-        />
-      )}
     </div>
   );
 }
@@ -144,27 +109,6 @@ const styles: Record<string, React.CSSProperties> = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: 0 },
   subtitle: { fontSize: 13, color: "var(--mute)", marginTop: 4, maxWidth: 420 },
-  primaryBtn: {
-    background: "var(--accent)",
-    color: "#0a1420",
-    border: "none",
-    borderRadius: 10,
-    padding: "10px 16px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  ghostBtn: {
-    background: "transparent",
-    border: "1px solid var(--line)",
-    color: "var(--mute)",
-    borderRadius: 10,
-    padding: "9px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
   input: {
     width: "100%",
     background: "var(--ink)",

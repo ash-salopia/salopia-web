@@ -160,7 +160,7 @@ export default function AthleteCommunityPage() {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <div style={s.brand}>AthletiQ</div>
+        <div style={s.brand}>VIS BUILD</div>
         <button style={s.backBtn} onClick={() => router.push(`/a/${token}`)}>
           Back
         </button>

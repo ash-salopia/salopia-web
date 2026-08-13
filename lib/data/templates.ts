@@ -144,6 +144,7 @@ export async function saveSessionAsTemplate(session: Session, templateName: stri
       recovery_category: session.recovery_category,
       recovery_format: session.recovery_format,
       recovery_config: session.recovery_config,
+      notes: session.session_notes ?? "",
     })
     .select()
     .single();
@@ -186,6 +187,7 @@ export async function loadTemplateForAthlete(
     recovery_category: string | null;
     recovery_format: string | null;
     recovery_config: unknown;
+    notes: string;
   }
   const pending: PendingSession[] = [];
 
@@ -208,6 +210,7 @@ export async function loadTemplateForAthlete(
         recovery_category: def.recovery_category,
         recovery_format: def.recovery_format,
         recovery_config: def.recovery_config,
+        notes: def.notes ?? "",
       });
     }
   }
@@ -230,6 +233,7 @@ export async function loadTemplateForAthlete(
     recovery_category: p.recovery_category,
     recovery_format: p.recovery_format,
     recovery_config: p.recovery_config,
+    session_notes: p.notes,
   }));
   const { data: createdSessions, error: sessErr } = await supabase
     .from("sessions")

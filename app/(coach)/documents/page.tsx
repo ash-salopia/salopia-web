@@ -73,7 +73,7 @@ export default function DocumentsPage() {
   const [groupMemberIds, setGroupMemberIds] = useState<Set<string>>(new Set());
 
   // Add doc state
-  const [addMode, setAddMode] = useState<null | "file" | "link" | "group-file" | "group-link">(null);
+  const [addMode, setAddMode] = useState<null | "file" | "link" | "group-file" | "group-link" | "everyone-file" | "everyone-link">(null);
   const [saving, setSaving] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -198,6 +198,32 @@ export default function DocumentsPage() {
     }
   };
 
+  // ── Submit file to every active athlete ───────────────────────────────────
+
+  const handleEveryoneFileSubmit = async () => {
+    if (!selectedFile || !fileTitle.trim() || athletes.length === 0) return;
+    setSaving(true);
+    setFileError("");
+    try {
+      await Promise.all(athletes.map(async (a) => {
+        const fd = new FormData();
+        fd.append("athlete_id", a.id);
+        fd.append("title", fileTitle.trim());
+        fd.append("notes", fileNotes.trim());
+        fd.append("file", selectedFile!);
+        const r = await fetch("/api/documents", { method: "POST", body: fd });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+      }));
+      await load();
+      resetForms();
+    } catch (e: any) {
+      setFileError(e.message ?? "Upload failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ── Submit link for single athlete ────────────────────────────────────────
 
   const handleLinkSubmit = async (athleteId: string) => {
@@ -233,6 +259,30 @@ export default function DocumentsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ athlete_id: m.athlete_id, title: linkTitle.trim(), video_url: linkUrl.trim(), notes: linkNotes.trim() }),
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+      }));
+      await load();
+      resetForms();
+    } catch (e: any) {
+      setError(e.message ?? "Could not save link");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Submit link to every active athlete ───────────────────────────────────
+
+  const handleEveryoneLinkSubmit = async () => {
+    if (!linkTitle.trim() || !linkUrl.trim() || athletes.length === 0) return;
+    setSaving(true);
+    try {
+      await Promise.all(athletes.map(async (a) => {
+        const r = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ athlete_id: a.id, title: linkTitle.trim(), video_url: linkUrl.trim(), notes: linkNotes.trim() }),
         });
         const d = await r.json();
         if (d.error) throw new Error(d.error);
@@ -296,8 +346,9 @@ export default function DocumentsPage() {
     ? athletes.filter((a) => a.name.toLowerCase().includes(addAthleteSearch.toLowerCase())).slice(0, 8)
     : [];
 
-  const isFileMode = addMode === "file" || addMode === "group-file";
+  const isFileMode = addMode === "file" || addMode === "group-file" || addMode === "everyone-file";
   const isGroupMode = addMode === "group-file" || addMode === "group-link";
+  const isEveryoneMode = addMode === "everyone-file" || addMode === "everyone-link";
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -308,8 +359,10 @@ export default function DocumentsPage() {
         <div style={{ display: "flex", gap: 8 }}>
           <button style={s.addBtn} onClick={() => setAddMode("file")}>⬆ Upload to athlete</button>
           <button style={s.addBtn} onClick={() => setAddMode("group-file")}>⬆ Upload to group</button>
+          <button style={s.addBtn} onClick={() => setAddMode("everyone-file")}>⬆ Upload to everyone</button>
           <button style={s.addBtn} onClick={() => setAddMode("link")}>🔗 Link to athlete</button>
           <button style={s.addBtn} onClick={() => setAddMode("group-link")}>🔗 Link to group</button>
+          <button style={s.addBtn} onClick={() => setAddMode("everyone-link")}>🔗 Link to everyone</button>
         </div>
       </div>
 
@@ -321,12 +374,18 @@ export default function DocumentsPage() {
           <div style={s.addFormTitle}>
             {addMode === "file" && "Upload file to athlete"}
             {addMode === "group-file" && "Upload file to group"}
+            {addMode === "everyone-file" && "Upload file to everyone"}
             {addMode === "link" && "Add video link for athlete"}
             {addMode === "group-link" && "Add video link to group"}
+            {addMode === "everyone-link" && "Add video link to everyone"}
           </div>
 
           {/* Target selector */}
-          {isGroupMode ? (
+          {isEveryoneMode ? (
+            <div style={s.targetHint}>
+              Will be shared with all {athletes.length} active athlete{athletes.length === 1 ? "" : "s"}
+            </div>
+          ) : isGroupMode ? (
             <div>
               <div style={s.fieldLabel}>Group</div>
               <select
@@ -422,7 +481,8 @@ export default function DocumentsPage() {
                   (isFileMode && (!selectedFile || !fileTitle.trim())) ||
                   (!isFileMode && (!linkTitle.trim() || !linkUrl.trim())) ||
                   (isGroupMode && !addTargetGroupId) ||
-                  (!isGroupMode && !addTargetAthleteId)
+                  (isEveryoneMode && athletes.length === 0) ||
+                  (!isGroupMode && !isEveryoneMode && !addTargetAthleteId)
                 ) ? 0.4 : 1
               }}
               disabled={
@@ -430,16 +490,21 @@ export default function DocumentsPage() {
                 (isFileMode && (!selectedFile || !fileTitle.trim())) ||
                 (!isFileMode && (!linkTitle.trim() || !linkUrl.trim())) ||
                 (isGroupMode && !addTargetGroupId) ||
-                (!isGroupMode && !addTargetAthleteId)
+                (isEveryoneMode && athletes.length === 0) ||
+                (!isGroupMode && !isEveryoneMode && !addTargetAthleteId)
               }
               onClick={() => {
                 if (addMode === "file") handleFileSubmit(addTargetAthleteId);
                 if (addMode === "group-file") handleGroupFileSubmit(addTargetGroupId);
+                if (addMode === "everyone-file") handleEveryoneFileSubmit();
                 if (addMode === "link") handleLinkSubmit(addTargetAthleteId);
                 if (addMode === "group-link") handleGroupLinkSubmit(addTargetGroupId);
+                if (addMode === "everyone-link") handleEveryoneLinkSubmit();
               }}
             >
-              {saving ? (isGroupMode ? "Sending to group…" : "Saving…") : (isGroupMode ? "Send to group" : "Save")}
+              {saving
+                ? (isGroupMode ? "Sending to group…" : isEveryoneMode ? "Sending to everyone…" : "Saving…")
+                : (isGroupMode ? "Send to group" : isEveryoneMode ? "Send to everyone" : "Save")}
             </button>
           </div>
         </div>

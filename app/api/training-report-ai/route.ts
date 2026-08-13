@@ -8,7 +8,7 @@ import type { Session, SessionExercise } from "@/types";
 const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks, the athlete's own notes from that period, and optionally the coach's own context for this report. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
 
 SUMMARY:
-<2-3 sentences on the overall training load trend across the range — standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it.>
+<2-3 sentences on the overall training load trend across the range — standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it. If session RPE data is included, read it alongside the load trend rather than in isolation: rising load with stable or falling RPE reads as adapting well; rising RPE alongside flat or falling load is worth flagging as possible fatigue or overreaching; RPE isn't included for recovery sessions and shouldn't be discussed as if it should be.>
 
 THEMES:
 <1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>`;
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   const report = computeReport(allSessions);
 
-  if (!report.exerciseSummaries.length && !report.notes.length) {
+  if (!report.exerciseSummaries.length && !report.notes.length && !report.rpeEntries.length) {
     return NextResponse.json({
       summary: "No logged training data in this range yet.",
       themes: "No recurring themes noted.",
@@ -71,6 +71,16 @@ export async function POST(req: NextRequest) {
   }).join("\n");
 
   const notesLines = report.notes.slice(0, 25).map((n) => `${n.date} (${n.label}): "${n.note}"`).join("\n");
+
+  let rpeBlock = "";
+  if (report.rpeEntries.length) {
+    const avgRpe = Math.round((report.rpeEntries.reduce((s, e) => s + e.rpe, 0) / report.rpeEntries.length) * 10) / 10;
+    const rpeLines = report.rpeEntries.map((e) => `${e.date} (${e.sessName}, ${e.type}): RPE ${e.rpe}/10`).join("\n");
+    rpeBlock = `
+
+SESSION RPE (athlete-rated perceived exertion for the whole session, 1-10, logged after strength/hyrox/cardio/power-speed sessions — not recovery). Average across this range: ${avgRpe}/10.
+${rpeLines}`;
+  }
 
   let e1rmBlock = "";
   if (includeE1rm) {
@@ -113,7 +123,7 @@ ${coachContext}` : "";
   const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}
 
 EXERCISES:
-${exerciseLines || "No weighted strength data logged in this range."}${e1rmBlock}
+${exerciseLines || "No weighted strength data logged in this range."}${e1rmBlock}${rpeBlock}
 
 ATHLETE NOTES:
 ${notesLines || "No notes logged in this range."}`;

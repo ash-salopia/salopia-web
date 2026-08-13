@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase-browser";
 import { getMyOrganisationId } from "@/lib/data/athletes";
-import type { Programme, ProgrammeSession, PrescribedExercise, Template } from "@/types";
+import { addDaysISO, daysBetween } from "@/lib/date-utils";
+import type { Programme, ProgrammeSession, PrescribedExercise, Template, Session } from "@/types";
 
 export async function listProgrammes(): Promise<Programme[]> {
   const supabase = createClient();
@@ -95,7 +96,11 @@ export async function createProgrammeFromTemplate(template: Template): Promise<P
     recovery_category: def.recovery_category,
     recovery_format: def.recovery_format,
     recovery_config: def.recovery_config,
+    notes: def.notes ?? "",
     sort_order: i,
+    // Templates carry a days[]-weekday-repeat concept, not real dates, so
+    // there's no rest-day pattern to preserve here - one day per def.
+    day_offset: i,
   }));
 
   let sessions: ProgrammeSession[] = [];
@@ -111,6 +116,101 @@ export async function createProgrammeFromTemplate(template: Template): Promise<P
   return { ...programme, sessions, assigned_to: [] };
 }
 
+// ------------------------------------------------------------
+// Save a date range of an athlete's real, already-built sessions as a
+// reusable Programme — the "Save as Programme" entry point in the
+// athlete session builder, alongside createProgrammeFromTemplate
+// above. Sessions become programme_sessions in chronological order
+// (same-day sessions keep their calendar sort_order); a programme has
+// no weekday-repeat concept, unlike Templates, so ordering is all it
+// needs to preserve.
+// ------------------------------------------------------------
+export async function createProgrammeFromSessions(sessions: Session[], name: string): Promise<Programme> {
+  const supabase = createClient();
+  const organisation_id = await getMyOrganisationId();
+
+  const { data: programme, error: pError } = await supabase
+    .from("programmes")
+    .insert({ organisation_id, name, description: "" })
+    .select()
+    .single();
+  if (pError) throw pError;
+
+  const ordered = [...sessions].sort((a, b) =>
+    a.date === b.date ? a.sort_order - b.sort_order : a.date < b.date ? -1 : 1
+  );
+  const rangeStart = ordered[0]?.date;
+
+  const sessionRows = ordered.map((s, i) => ({
+    programme_id: programme.id,
+    name: s.name,
+    type: s.type,
+    exercises: (s.exercises ?? []).map((e): PrescribedExercise => ({
+      id: crypto.randomUUID(),
+      name: e.name,
+      order: e.order,
+      sets: e.sets,
+      reps: e.reps,
+      time: e.time,
+      rest: e.rest,
+      target_load: e.target_load,
+      tempo: e.tempo,
+      each_side: e.each_side,
+      notes: e.notes,
+      video_url: e.video_url,
+    })),
+    hyrox_type: s.hyrox_type,
+    hyrox_config: s.hyrox_config,
+    cardio_type: s.cardio_type,
+    cardio_config: s.cardio_config,
+    recovery_category: s.recovery_category,
+    recovery_format: s.recovery_format,
+    recovery_config: s.recovery_config,
+    notes: s.session_notes ?? "",
+    sort_order: i,
+    day_offset: rangeStart ? daysBetween(rangeStart, s.date) : i,
+  }));
+
+  let progSessions: ProgrammeSession[] = [];
+  if (sessionRows.length) {
+    const { data, error: sError } = await supabase
+      .from("programme_sessions")
+      .insert(sessionRows)
+      .select();
+    if (sError) throw sError;
+    progSessions = data;
+  }
+
+  return { ...programme, sessions: progSessions, assigned_to: [] };
+}
+
+// Computes which calendar date each session lands on when a programme is
+// loaded starting at `startDate`. By default this reproduces the exact
+// day pattern the programme was saved with (day_offset), including rest
+// days - e.g. a session saved as day_offset 3 lands 3 days after
+// startDate, whatever gap that leaves for the sessions either side of it.
+// Offsets are normalised to the earliest one in `sessions` so that
+// whichever session comes first (even if some earlier ones were left
+// unchecked before calling this) always lands exactly on startDate.
+// Passing `spacingDays` overrides this and instead spaces every session
+// evenly by that many days - for a coach who explicitly wants a
+// different cadence than the one it was originally trained on.
+export function scheduleProgrammeSessions(
+  sessions: ProgrammeSession[],
+  startDate: string,
+  spacingDays?: number
+): { session: ProgrammeSession; date: string }[] {
+  const ordered = [...sessions].sort((a, b) => a.day_offset - b.day_offset);
+  if (spacingDays != null) {
+    return ordered.map((session, i) => ({ session, date: addDaysISO(startDate, i * spacingDays) }));
+  }
+  const minOffset = ordered.length ? ordered[0].day_offset : 0;
+  return ordered.map((session) => ({
+    session,
+    date: addDaysISO(startDate, session.day_offset - minOffset),
+  }));
+}
+
 export async function addProgrammeSession(programmeId: string, sortOrder: number): Promise<ProgrammeSession> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -121,6 +221,7 @@ export async function addProgrammeSession(programmeId: string, sortOrder: number
       type: "strength",
       exercises: [],
       sort_order: sortOrder,
+      day_offset: sortOrder,
     })
     .select()
     .single();
@@ -168,7 +269,9 @@ export async function addTemplateDefsToProgramme(
     recovery_category: def.recovery_category,
     recovery_format: def.recovery_format,
     recovery_config: def.recovery_config,
+    notes: def.notes ?? "",
     sort_order: sortOrderStart + i,
+    day_offset: sortOrderStart + i,
   }));
 
   const { data, error } = await supabase.from("programme_sessions").insert(sessionRows).select();
@@ -227,6 +330,7 @@ export async function loadProgrammeSessionForAthlete(
       recovery_category: programmeSession.recovery_category,
       recovery_format: programmeSession.recovery_format,
       recovery_config: programmeSession.recovery_config,
+      session_notes: programmeSession.notes ?? "",
       // source_session_id is a self-referencing FK into sessions(id) -
       // programmeSession.id is a programme_sessions row, a different
       // table/id-space entirely, so it can never satisfy that FK. Left

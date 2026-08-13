@@ -220,7 +220,7 @@ export default function AthleteGoalsPage() {
     <div style={s.page}>
       {/* Header */}
       <div style={s.header}>
-        <div style={s.brand}>AthletiQ</div>
+        <div style={s.brand}>VIS BUILD</div>
         <button style={s.backBtn} onClick={() => router.push(`/a/${token}`)}>
           ← Sessions
         </button>

@@ -334,6 +334,7 @@ export interface TemplateDef {
   recovery_category: RecoveryCategory | null; // 0046
   recovery_format: RecoveryFormat | null; // 0046
   recovery_config: RecoveryConfig; // 0046
+  notes: string; // 0055 — snapshot of the source session's session_notes
   sort_order: number;
   created_at: string;
 }
@@ -386,7 +387,9 @@ export interface ProgrammeSession {
   recovery_category: RecoveryCategory | null; // 0046
   recovery_format: RecoveryFormat | null; // 0046
   recovery_config: RecoveryConfig; // 0046
+  notes: string; // 0055 — snapshot of the source session's session_notes
   sort_order: number;
+  day_offset: number; // 0056 — day number relative to the first session in the saved range (0-indexed), preserves rest-day gaps when loaded back onto a calendar
 }
 
 export interface ProgrammeAssignment {

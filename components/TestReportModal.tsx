@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import {
-  bestTrial, ageInYears, matchBothBenchmarks, ragStatus, RAG_COLOR, RAG_LABEL,
-  asymmetryIndex, testResultsToCSV, downloadCSV,
+  bestTrial, bestTrialAnySide, ageInYears, matchBothBenchmarks, ragStatus, RAG_COLOR, RAG_LABEL,
+  asymmetryIndex, testResultsToCSV, downloadCSV, sortByMetricGroup,
 } from "@/lib/data/testing";
 import type { TestSession, TestMetric, TestBenchmark, Athlete, RagStatus } from "@/types";
 
@@ -34,22 +34,25 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
   };
 
   const hasBodyweight = latestSession?.bodyweight_kg != null;
-  const visibleMetrics = metrics.filter((m) => {
-    const isImtpAbs = m.name.toLowerCase().includes("imtp") && m.unit === "kg";
-    const isImtpRel = m.name.toLowerCase().includes("imtp") && m.unit === "N/kg";
-    if (isImtpAbs && hasBodyweight) return false;
-    if (isImtpRel && !hasBodyweight) return false;
-    return true;
-  });
+  const visibleMetrics = sortByMetricGroup(
+    metrics.filter((m) => {
+      const isImtpAbs = m.name.toLowerCase().includes("imtp") && m.unit === "kg";
+      const isImtpRel = m.name.toLowerCase().includes("imtp") && m.unit === "N/kg";
+      if (isImtpAbs && hasBodyweight) return false;
+      if (isImtpRel && !hasBodyweight) return false;
+      return true;
+    }),
+    (m) => m.name
+  );
 
   const ratedMetrics = visibleMetrics.filter((m) => !m.screening_only);
   const screeningMetrics = visibleMetrics.filter((m) => m.screening_only);
 
   const metricRows = ratedMetrics
     .map((metric) => {
-      const latest = latestSession ? bestTrial(latestSession.results ?? [], metric, null) : null;
+      const latest = latestSession ? bestTrialAnySide(latestSession.results ?? [], metric) : null;
       if (latest === null) return null;
-      const prev = prevSession ? bestTrial(prevSession.results ?? [], metric, null) : null;
+      const prev = prevSession ? bestTrialAnySide(prevSession.results ?? [], metric) : null;
 
       const { elite, population } = mode === "full"
         ? matchBothBenchmarks(benchmarksByMetric[metric.id] ?? [], athlete.sex, athleteAge)
@@ -89,7 +92,7 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.header} className="no-print">
           <div>
-            <div style={s.brand}>AthletiQ</div>
+            <div style={s.brand}>VIS BUILD</div>
             <div style={s.athleteLine}>{athlete.name} · Physical Testing Report</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>✕</button>

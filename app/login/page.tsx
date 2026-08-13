@@ -70,7 +70,9 @@ function LoginForm() {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <div style={styles.title}>AthletiQ</div>
+        <div style={styles.logoChip}>
+          <img src="/logo/vis-build-square.png" alt="VIS BUILD" style={styles.logo} />
+        </div>
         <div style={styles.subtitle}>Coach sign in</div>
 
         {status === "sent" ? (
@@ -118,7 +120,7 @@ function LoginForm() {
                   id="orgName"
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
-                  placeholder="e.g. AthletiQ Health & Performance"
+                  placeholder="e.g. VIS BUILD Health & Performance"
                   style={styles.input}
                 />
                 <button
@@ -167,13 +169,17 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 16,
     padding: 28,
   },
-  title: {
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 700,
-    fontSize: 26,
-    letterSpacing: 3,
-    color: "#3B8BEB",
-    marginBottom: 2,
+  logoChip: {
+    background: "#FEFAF6",
+    borderRadius: 14,
+    padding: "16px 22px",
+    display: "inline-flex",
+    marginBottom: 14,
+  },
+  logo: {
+    height: 68,
+    width: "auto",
+    display: "block",
   },
   subtitle: { fontSize: 14, color: "#8593A0", marginBottom: 22 },
   form: { display: "flex", flexDirection: "column", gap: 10 },

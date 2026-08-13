@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listTemplates, createTemplate, deleteTemplate } from "@/lib/data/templates";
-import VoiceSessionModal from "@/components/VoiceSessionModal";
-import NotesTemplateModal from "@/components/NotesTemplateModal";
-import ImportTemplatesCsvModal from "@/components/ImportTemplatesCsvModal";
+import { listTemplates, deleteTemplate } from "@/lib/data/templates";
 import NoteTemplatesManager from "@/components/NoteTemplatesManager";
 import type { Template } from "@/types";
 
@@ -15,10 +12,6 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [csvOpen, setCsvOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -35,18 +28,6 @@ export default function TemplatesPage() {
   useEffect(() => {
     load();
   }, []);
-
-  const handleCreate = async () => {
-    setCreating(true);
-    try {
-      const t = await createTemplate();
-      router.push(`/templates/${t.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create template");
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const handleDelete = async (t: Template) => {
     if (!confirm(`Delete template "${t.name}"?`)) return;
@@ -68,17 +49,10 @@ export default function TemplatesPage() {
         <div>
           <h1 style={styles.title}>Template Library</h1>
           <p style={styles.subtitle}>
-            Build reusable session structures. Set exercises and tick repeat days, then load onto an
-            athlete from their page.
+            Build a session in an athlete&apos;s calendar, then use &quot;Save as template&quot; to
+            add it here. This page is for browsing, renaming, and loading saved templates onto
+            athletes.
           </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={styles.ghostBtn} onClick={() => setVoiceOpen(true)}>🎤 Voice</button>
-          <button style={styles.ghostBtn} onClick={() => setNotesOpen(true)}>📝 Notes</button>
-          <button style={styles.ghostBtn} onClick={() => setCsvOpen(true)}>📄 Import CSV</button>
-          <button style={styles.primaryBtn} disabled={creating} onClick={handleCreate}>
-            {creating ? "Creating…" : "+ New template"}
-          </button>
         </div>
       </div>
 
@@ -96,7 +70,10 @@ export default function TemplatesPage() {
       {loading ? (
         <div style={styles.empty}>Loading…</div>
       ) : !templates.length ? (
-        <div style={styles.empty}>No templates yet. Create your first one above.</div>
+        <div style={styles.empty}>
+          No templates yet. Build a session for an athlete, then use &quot;Save as template&quot; to
+          add it here.
+        </div>
       ) : !filtered.length ? (
         <div style={styles.empty}>No templates match &quot;{query}&quot;.</div>
       ) : (
@@ -125,25 +102,6 @@ export default function TemplatesPage() {
       )}
 
       <NoteTemplatesManager />
-
-      {voiceOpen && (
-        <VoiceSessionModal
-          mode="template"
-          onClose={() => setVoiceOpen(false)}
-        />
-      )}
-      {notesOpen && (
-        <NotesTemplateModal
-          onCreated={() => { setNotesOpen(false); load(); }}
-          onClose={() => setNotesOpen(false)}
-        />
-      )}
-      {csvOpen && (
-        <ImportTemplatesCsvModal
-          onCreated={() => { setCsvOpen(false); load(); }}
-          onClose={() => setCsvOpen(false)}
-        />
-      )}
     </div>
   );
 }
@@ -153,27 +111,6 @@ const styles: Record<string, React.CSSProperties> = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: 0 },
   subtitle: { fontSize: 13, color: "var(--mute)", marginTop: 4, maxWidth: 420 },
-  primaryBtn: {
-    background: "var(--accent)",
-    color: "#0a1420",
-    border: "none",
-    borderRadius: 10,
-    padding: "10px 16px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  ghostBtn: {
-    background: "transparent",
-    border: "1px solid var(--line)",
-    color: "var(--mute)",
-    borderRadius: 10,
-    padding: "9px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
   input: {
     width: "100%",
     background: "var(--ink)",
