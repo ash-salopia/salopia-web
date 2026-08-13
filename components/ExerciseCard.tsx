@@ -136,6 +136,12 @@ export default function ExerciseCard({
     onEditPresc({ set_percents: next });
   };
 
+  // Reps vs time is decided purely by whether the exercise is prescribed
+  // in time mode (exercise.time set) - same rule as the athlete app's own
+  // session view. Tempo (a rep-cadence concept, e.g. 3-1-1-0) doesn't
+  // apply to a timed hold like a side plank, so it hides in time mode.
+  const timeMode = (exercise.time ?? "").trim().length > 0;
+
   return (
     <div style={styles.card}>
       <div style={styles.cardHead}>
@@ -509,18 +515,20 @@ export default function ExerciseCard({
             />
           </Field>
         )}
-        <Field label="Tempo">
-          <input
-            value={exercise.tempo ?? "2-0-2"}
-            onChange={(e) => {
-              const v = e.target.value.replace(/[^0-9-]/g, "");
-              onEditPresc({ tempo: v });
-            }}
-            placeholder="2-0-2"
-            inputMode="numeric"
-            style={styles.miniInput}
-          />
-        </Field>
+        {!timeMode && (
+          <Field label="Tempo">
+            <input
+              value={exercise.tempo ?? "2-0-2"}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9-]/g, "");
+                onEditPresc({ tempo: v });
+              }}
+              placeholder="2-0-2"
+              inputMode="numeric"
+              style={styles.miniInput}
+            />
+          </Field>
+        )}
       </div>
 
       {/* Exercise notes - coaching cues, technique reminders */}
@@ -535,13 +543,6 @@ export default function ExerciseCard({
 
       <div style={styles.setGrid}>
         {log.map((set, i) => {
-          // Reps vs time is decided purely by whether the exercise is
-          // prescribed in time mode (exercise.time set) - same rule
-          // as the athlete app's own session view, so a time-based
-          // exercise's actually-completed hold (e.g. 40s against a
-          // 30s prescription) is visible and editable here instead of
-          // being stuck showing a "reps" box.
-          const timeMode = (exercise.time ?? "").trim().length > 0;
           const target = percentTargets?.[i] ?? null;
           return (
             <div key={i} style={{ ...styles.setChip, ...(set.done ? styles.setChipDone : {}) }}>
