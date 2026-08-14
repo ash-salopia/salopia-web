@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/templates",   label: "Templates",   icon: "▦"  },
   { href: "/programmes",  label: "Programmes",  icon: "🗂"  },
   { href: "/library",     label: "Library",     icon: "📚" },
+  { href: "/reporting",   label: "Reporting",   icon: "📊" },
   { href: "/dashboard",   label: "Dashboard",   icon: "📋" },
   { href: "/settings",    label: "Settings",    icon: "⚙️" },
 ];
