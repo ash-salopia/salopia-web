@@ -28,6 +28,25 @@ export function addDaysISO(iso: string, n: number): string {
   return new Date(utcMidnight).toISOString().slice(0, 10);
 }
 
+export type ReportRangeMode = "4w" | "8w" | "12w" | "all" | "custom";
+
+// Resolves a report date-range preset (or a custom range) into concrete
+// start/end dates - extracted from ReportRangeModal's handleGenerate so the
+// bulk Reporting tab can resolve the same presets without duplicating the
+// week-count math.
+export function resolveDateRange(
+  mode: ReportRangeMode,
+  customStart: string,
+  customEnd: string
+): { start: string | null; end: string | null } {
+  if (mode === "all") return { start: null, end: null };
+  if (mode === "custom") return { start: customStart || null, end: customEnd || null };
+  const weeks = mode === "4w" ? 4 : mode === "8w" ? 8 : 12;
+  const end = todayISO();
+  const start = addDaysISO(end, -weeks * 7);
+  return { start, end };
+}
+
 export function datesInRange(start: string, end: string, cap = 90): string[] {
   if (!start || !end || end < start) return [];
   const out: string[] = [];
