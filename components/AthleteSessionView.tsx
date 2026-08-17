@@ -10,7 +10,7 @@ import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModa
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import PBCelebrationModal from "@/components/PBCelebrationModal";
 import RecoverySessionAthleteView from "@/components/recovery/RecoverySessionAthleteView";
-import { saveWithRetry, usePendingSaveCount } from "@/lib/save-queue";
+import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import type { Session, SessionExercise, SetLog } from "@/types";
 
 interface DetectedPB {
@@ -146,6 +146,7 @@ export default function AthleteSessionView({
   const [restTimer, setRestTimer] = useState<{ exerciseId: string; endAt: number; total: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const pendingSaves = usePendingSaveCount();
+  const failedSaves = useFailedSaveCount();
 
   useEffect(() => {
     if (!restTimer) return;
@@ -441,6 +442,16 @@ export default function AthleteSessionView({
       {pendingSaves > 0 && (
         <div style={styles.pendingBox}>
           ☁️ {pendingSaves} change{pendingSaves !== 1 ? "s" : ""} waiting for a connection - will save automatically
+        </div>
+      )}
+
+      {failedSaves > 0 && (
+        <div style={styles.failedBox}>
+          <span>
+            ⚠️ {failedSaves} change{failedSaves !== 1 ? "s" : ""} couldn&apos;t be saved - you may need to log{" "}
+            {failedSaves !== 1 ? "these" : "this"} again
+          </span>
+          <button style={styles.failedDismissBtn} onClick={() => clearFailedSaves()}>Dismiss</button>
         </div>
       )}
 
@@ -884,6 +895,31 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 600,
     marginBottom: 16,
+  },
+  failedBox: {
+    background: "#2a0c0c",
+    border: "1px solid #FF6B6B44",
+    color: "#FF6B6B",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    marginBottom: 16,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  failedDismissBtn: {
+    background: "transparent",
+    border: "1px solid #FF6B6B66",
+    color: "#FF6B6B",
+    borderRadius: 6,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    flexShrink: 0,
   },
   exerciseList: { display: "flex", flexDirection: "column", gap: 12 },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },

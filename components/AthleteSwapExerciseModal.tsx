@@ -39,9 +39,21 @@ export default function AthleteSwapExerciseModal({
       .finally(() => setLoading(false));
   }, [token]);
 
+  // Unlike logging a set, a swap needs an immediate yes/no (the athlete
+  // is waiting in this modal to know what to actually do next), so it
+  // isn't a good fit for the background retry queue - but a plain
+  // "Could not swap exercise" when the real cause is just no signal is
+  // still confusing, so that specific case gets its own message.
+  const OFFLINE_ERROR = "You're offline - reconnect and try again.";
+
   const performSwap = async (name: string) => {
     setWorking(name);
     setError("");
+    if (!navigator.onLine) {
+      setError(OFFLINE_ERROR);
+      setWorking(null);
+      return;
+    }
     try {
       const videoUrl = library.find((l) => l.name === name)?.video_url ?? "";
       const res = await fetch("/api/athlete-link/swap-exercise", {
@@ -53,7 +65,7 @@ export default function AthleteSwapExerciseModal({
       if (!res.ok || data.error) throw new Error(data.error || "Could not swap exercise");
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not swap exercise");
+      setError(!navigator.onLine ? OFFLINE_ERROR : e instanceof Error ? e.message : "Could not swap exercise");
       setWorking(null);
     }
   };
@@ -61,6 +73,11 @@ export default function AthleteSwapExerciseModal({
   const performSkip = async () => {
     setWorking("__skip__");
     setError("");
+    if (!navigator.onLine) {
+      setError(OFFLINE_ERROR);
+      setWorking(null);
+      return;
+    }
     try {
       const res = await fetch("/api/athlete-link/opt-out-exercise", {
         method: "POST",
@@ -71,7 +88,7 @@ export default function AthleteSwapExerciseModal({
       if (!res.ok || data.error) throw new Error(data.error || "Could not update");
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update");
+      setError(!navigator.onLine ? OFFLINE_ERROR : e instanceof Error ? e.message : "Could not update");
       setWorking(null);
     }
   };

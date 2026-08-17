@@ -5,9 +5,27 @@ import { useEffect, useState } from "react";
 // Athlete-app save retry queue. A save that never reaches the server
 // (dropped gym wifi, phone loses signal mid-set) is persisted to
 // localStorage and retried every 30s + immediately on reconnect, rather
-// than just failing silently. A save the server actively rejects (bad
-// token, ownership check, validation) is NOT queued — retrying won't
-// fix that — and is surfaced to the caller as a normal error instead.
+// than just failing silently. A save the server actively rejects on the
+// FIRST attempt (bad token, ownership check, validation) is NOT queued
+// — retrying won't fix that — and is surfaced to the caller as a normal
+// error instead.
+//
+// Two things a real gym session needs that a "retry for a minute or
+// two" queue doesn't cover, both fixed here:
+//  1. No attempt ceiling for network failures. A session can run well
+//     over an hour with patchy signal (basement gyms, poor carrier
+//     coverage) - silently discarding logged sets after ~20 minutes
+//     because the queue "gave up" would lose real training data with
+//     no way for the athlete to know. Attempts are still counted (for
+//     staleness/debugging) but never trigger deletion on their own -
+//     an item only ever leaves the pending queue via success or an
+//     explicit server rejection once reachable again.
+//  2. A retried save that DOES reach the server but gets rejected (the
+//     session was deleted while offline, an ownership check now fails,
+//     etc.) used to be silently dequeued as if it had succeeded - the
+//     athlete would believe the set saved when it didn't. Rejections
+//     during retry now move to a separate `failed` list instead of
+//     just vanishing, so the UI can tell the athlete plainly.
 
 interface QueuedSave {
   key: string;
@@ -17,12 +35,19 @@ interface QueuedSave {
   queuedAt: number;
 }
 
+interface FailedSave {
+  key: string;
+  error: string;
+  failedAt: number;
+}
+
 const STORAGE_KEY = "athletiq_save_queue_v1";
+const FAILED_STORAGE_KEY = "athletiq_save_queue_failed_v1";
 const RETRY_INTERVAL_MS = 30_000;
-const MAX_ATTEMPTS = 40; // ~20 min of periodic retries before giving up
 
 type Listener = (pending: number) => void;
 const listeners = new Set<Listener>();
+const failedListeners = new Set<Listener>();
 
 function readQueue(): QueuedSave[] {
   if (typeof window === "undefined") return [];
@@ -44,6 +69,26 @@ function writeQueue(queue: QueuedSave[]) {
   listeners.forEach((fn) => fn(queue.length));
 }
 
+function readFailed(): FailedSave[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(FAILED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFailed(failed: FailedSave[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(FAILED_STORAGE_KEY, JSON.stringify(failed));
+  } catch {
+    // storage full/unavailable — nothing more we can do
+  }
+  failedListeners.forEach((fn) => fn(failed.length));
+}
+
 function enqueue(key: string, url: string, body: Record<string, unknown>) {
   // A newer save for the same target replaces any older queued attempt,
   // so a retry always sends the latest value rather than a stale one.
@@ -56,6 +101,10 @@ function dequeue(key: string, queuedAt: number) {
   writeQueue(readQueue().filter((q) => !(q.key === key && q.queuedAt === queuedAt)));
 }
 
+function markFailed(key: string, error: string) {
+  writeFailed([...readFailed().filter((f) => f.key !== key), { key, error, failedAt: Date.now() }]);
+}
+
 export function subscribeToSaveQueue(listener: Listener): () => void {
   listeners.add(listener);
   listener(readQueue().length);
@@ -66,6 +115,25 @@ export function subscribeToSaveQueue(listener: Listener): () => void {
 
 export function pendingSaveCount(): number {
   return readQueue().length;
+}
+
+export function subscribeToFailedSaves(listener: Listener): () => void {
+  failedListeners.add(listener);
+  listener(readFailed().length);
+  return () => {
+    failedListeners.delete(listener);
+  };
+}
+
+export function failedSaveCount(): number {
+  return readFailed().length;
+}
+
+// Lets the UI dismiss failed saves once the athlete has acknowledged
+// them (e.g. re-logged the set manually) - there's no automatic
+// recovery path for a save the server actively rejected.
+export function clearFailedSaves() {
+  writeFailed([]);
 }
 
 // Attempts a save immediately. Resolves { ok: true, data } on success
@@ -102,29 +170,29 @@ export async function flushSaveQueue() {
   try {
     for (const item of readQueue()) {
       try {
-        await fetch(item.url, {
+        const res = await fetch(item.url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(item.body),
           cache: "no-store",
         });
-        // Whether the server accepted or actively rejected it, there's
-        // nothing more retrying can do — either way, stop retrying.
         dequeue(item.key, item.queuedAt);
-      } catch {
-        // Still unreachable — leave it queued and bump the attempt count.
-        const stillThere = readQueue().find((q) => q.key === item.key && q.queuedAt === item.queuedAt);
-        if (stillThere) {
-          if (stillThere.attempts + 1 >= MAX_ATTEMPTS) {
-            dequeue(item.key, item.queuedAt);
-          } else {
-            writeQueue(
-              readQueue().map((q) =>
-                q.key === item.key && q.queuedAt === item.queuedAt ? { ...q, attempts: q.attempts + 1 } : q
-              )
-            );
-          }
+        if (!res.ok) {
+          // Reached the server, but it rejected the retry (e.g. the
+          // session was deleted while offline) - retrying again won't
+          // help, but silently dropping it would look like a success.
+          const errBody = await res.json().catch(() => ({}));
+          markFailed(item.key, errBody.error || "Could not save");
         }
+      } catch {
+        // Still unreachable - leave it queued and bump the attempt
+        // count (informational only, no ceiling - see the module
+        // comment on why this never gives up on its own).
+        writeQueue(
+          readQueue().map((q) =>
+            q.key === item.key && q.queuedAt === item.queuedAt ? { ...q, attempts: q.attempts + 1 } : q
+          )
+        );
       }
     }
   } finally {
@@ -149,6 +217,15 @@ export function usePendingSaveCount(): number {
   useEffect(() => {
     initSaveQueue();
     return subscribeToSaveQueue(setCount);
+  }, []);
+  return count;
+}
+
+export function useFailedSaveCount(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    initSaveQueue();
+    return subscribeToFailedSaves(setCount);
   }, []);
   return count;
 }
