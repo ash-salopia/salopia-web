@@ -147,8 +147,13 @@ function BatteriesTab({ batteries, metrics, selectedId, onSelect, onReload }: {
           <>
             <div style={s.detailHead}>
               <input
-                value={battery.name}
-                onChange={async (e) => { await updateTestBattery(battery.id, { name: e.target.value }); onReload(); }}
+                key={`battery-name-${battery.id}`}
+                defaultValue={battery.name}
+                onBlur={async (e) => {
+                  if (e.target.value === battery.name) return;
+                  await updateTestBattery(battery.id, { name: e.target.value });
+                  onReload();
+                }}
                 style={s.detailNameInput}
               />
               <button style={s.dangerBtn} onClick={async () => {
@@ -158,9 +163,13 @@ function BatteriesTab({ batteries, metrics, selectedId, onSelect, onReload }: {
               }}>Delete</button>
             </div>
             <textarea
-              value={battery.description}
-              onChange={async (e) => { await updateTestBattery(battery.id, { description: e.target.value }); }}
-              onBlur={onReload}
+              key={`battery-desc-${battery.id}`}
+              defaultValue={battery.description}
+              onBlur={async (e) => {
+                if (e.target.value === battery.description) return;
+                await updateTestBattery(battery.id, { description: e.target.value });
+                onReload();
+              }}
               placeholder="Description (optional)"
               rows={2}
               style={s.textarea}
@@ -249,7 +258,16 @@ function MetricsTab({ metrics, selectedId, onSelect, onReload }: {
         ) : (
           <>
             <div style={s.detailHead}>
-              <input value={metric.name} onChange={async (e) => { await updateTestMetric(metric.id, { name: e.target.value }); onReload(); }} style={s.detailNameInput} />
+              <input
+                key={`metric-name-${metric.id}`}
+                defaultValue={metric.name}
+                onBlur={async (e) => {
+                  if (e.target.value === metric.name) return;
+                  await updateTestMetric(metric.id, { name: e.target.value });
+                  onReload();
+                }}
+                style={s.detailNameInput}
+              />
               <button style={s.dangerBtn} onClick={async () => {
                 if (!confirm(`Delete "${metric.name}"? This also removes its benchmarks. Logged results are kept.`)) return;
                 await deleteTestMetric(metric.id);
@@ -259,7 +277,16 @@ function MetricsTab({ metrics, selectedId, onSelect, onReload }: {
 
             <div style={s.row3}>
               <Field label="Unit">
-                <input value={metric.unit} onChange={async (e) => { await updateTestMetric(metric.id, { unit: e.target.value }); onReload(); }} style={s.input} />
+                <input
+                  key={`metric-unit-${metric.id}`}
+                  defaultValue={metric.unit}
+                  onBlur={async (e) => {
+                    if (e.target.value === metric.unit) return;
+                    await updateTestMetric(metric.id, { unit: e.target.value });
+                    onReload();
+                  }}
+                  style={s.input}
+                />
               </Field>
               <Field label="Better direction">
                 <select value={metric.better_direction} onChange={async (e) => { await updateTestMetric(metric.id, { better_direction: e.target.value as any }); onReload(); }} style={s.input}>
