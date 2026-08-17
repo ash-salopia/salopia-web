@@ -16,19 +16,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { getOrgSettings, type PowerSpeedBenchmarkDef } from "@/lib/data/settings";
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface BenchmarkDef {
-  key: string;
-  label: string;
-  unit: string;
-  lowerIsBetter: boolean;
-  exerciseNames: string[];  // exercise names to match (case-insensitive)
-  icon: string;
-  greenThreshold: number | null;
-  amberThreshold: number | null;
-}
+type BenchmarkDef = PowerSpeedBenchmarkDef;
 
 interface BenchmarkResult {
   def: BenchmarkDef;
@@ -39,46 +31,6 @@ interface BenchmarkResult {
   changePct: number | null;
   history: { date: string; value: number }[];
 }
-
-// ── Benchmark definitions ─────────────────────────────────────
-
-const BENCHMARKS: BenchmarkDef[] = [
-  {
-    key: "10m", label: "10m Sprint", unit: "s", lowerIsBetter: true, icon: "⚡",
-    exerciseNames: ["acceleration sprint", "10m sprint", "10m"],
-    greenThreshold: 1.80, amberThreshold: 1.95,
-  },
-  {
-    key: "20m", label: "20m Sprint", unit: "s", lowerIsBetter: true, icon: "🏃",
-    exerciseNames: ["20m sprint", "flying sprint", "20m"],
-    greenThreshold: 2.80, amberThreshold: 3.00,
-  },
-  {
-    key: "flying10", label: "Flying 10m", unit: "s", lowerIsBetter: true, icon: "💨",
-    exerciseNames: ["flying 10m", "flying 10", "flying sprint"],
-    greenThreshold: 1.05, amberThreshold: 1.15,
-  },
-  {
-    key: "cmj", label: "CMJ Height", unit: "cm", lowerIsBetter: false, icon: "🦘",
-    exerciseNames: ["countermovement jump", "cmj", "countermovement jump (cmj)"],
-    greenThreshold: 45, amberThreshold: 35,
-  },
-  {
-    key: "dj_rsi", label: "Drop Jump RSI", unit: "", lowerIsBetter: false, icon: "📉",
-    exerciseNames: ["drop jump", "depth jump"],
-    greenThreshold: 1.8, amberThreshold: 1.2,
-  },
-  {
-    key: "broad", label: "Broad Jump", unit: "m", lowerIsBetter: false, icon: "📏",
-    exerciseNames: ["broad jump", "standing broad jump", "standing long jump"],
-    greenThreshold: 2.5, amberThreshold: 2.2,
-  },
-  {
-    key: "505", label: "505 Test", unit: "s", lowerIsBetter: true, icon: "🔄",
-    exerciseNames: ["505", "505 test", "pro agility"],
-    greenThreshold: 2.3, amberThreshold: 2.6,
-  },
-];
 
 // ── RAG status ─────────────────────────────────────────────────
 
@@ -121,6 +73,8 @@ export default function PowerSpeedDashboard() {
     setError("");
     try {
       const supabase = createClient();
+      const orgSettings = await getOrgSettings();
+      const benchmarkDefs = orgSettings.power_speed_benchmarks;
 
       // Get athlete name
       const { data: athlete } = await supabase
@@ -157,7 +111,7 @@ export default function PowerSpeedDashboard() {
       }
 
       // Process each benchmark
-      const processed: BenchmarkResult[] = BENCHMARKS.map(def => {
+      const processed: BenchmarkResult[] = benchmarkDefs.map(def => {
         const matches = exercises.filter((ex: any) => {
           const exName = ex.name?.toLowerCase().trim() ?? "";
           return def.exerciseNames.some(n => exName.includes(n.toLowerCase()));
@@ -170,12 +124,21 @@ export default function PowerSpeedDashboard() {
           const log: any[] = ex.log ?? [];
           for (const set of log) {
             if (!set.done) continue;
-            // For RSI benchmarks, use rsi field; otherwise use result
-            const raw = def.key === "dj_rsi" ? set.rsi : set.result;
-            const val = parseFloat(raw);
-            if (!isNaN(val) && val > 0) {
-              history.push({ date, value: val });
+            // For RSI benchmarks, use the rsi field; otherwise take the
+            // best (min for time, max otherwise) of that set's
+            // rep_results - PowerSpeedExerciseCard.tsx logs per-rep
+            // results into that array, there's no single "result" field.
+            if (def.key === "dj_rsi") {
+              const val = parseFloat(set.rsi);
+              if (!isNaN(val) && val > 0) history.push({ date, value: val });
+              continue;
             }
+            const repVals = (set.rep_results ?? [])
+              .map((r: string) => parseFloat(r))
+              .filter((v: number) => !isNaN(v) && v > 0);
+            if (!repVals.length) continue;
+            const best = def.lowerIsBetter ? Math.min(...repVals) : Math.max(...repVals);
+            history.push({ date, value: best });
           }
         }
 

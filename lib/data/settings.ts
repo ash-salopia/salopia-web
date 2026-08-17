@@ -18,6 +18,61 @@ export interface ReflectionMetric {
   scores?: ReflectionScoreOption[]; // if omitted, uses generic 1–5
 }
 
+// Definitions for the Power/Speed Benchmark Dashboard
+// (athletes/[id]/power-speed) - was a hardcoded array there, moved
+// here so coaches can add their own (a swim time, a sport-specific
+// agility test) instead of only the seeded athletics-style set.
+// exerciseNames is matched case-insensitively as a substring against
+// logged exercise names, same as the dashboard's original matching.
+export interface PowerSpeedBenchmarkDef {
+  key: string;
+  label: string;
+  unit: string;
+  lowerIsBetter: boolean;
+  exerciseNames: string[];
+  icon: string;
+  greenThreshold: number | null;
+  amberThreshold: number | null;
+}
+
+export const DEFAULT_POWER_SPEED_BENCHMARKS: PowerSpeedBenchmarkDef[] = [
+  {
+    key: "10m", label: "10m Sprint", unit: "s", lowerIsBetter: true, icon: "⚡",
+    exerciseNames: ["acceleration sprint", "10m sprint", "10m"],
+    greenThreshold: 1.80, amberThreshold: 1.95,
+  },
+  {
+    key: "20m", label: "20m Sprint", unit: "s", lowerIsBetter: true, icon: "🏃",
+    exerciseNames: ["20m sprint", "flying sprint", "20m"],
+    greenThreshold: 2.80, amberThreshold: 3.00,
+  },
+  {
+    key: "flying10", label: "Flying 10m", unit: "s", lowerIsBetter: true, icon: "💨",
+    exerciseNames: ["flying 10m", "flying 10", "flying sprint"],
+    greenThreshold: 1.05, amberThreshold: 1.15,
+  },
+  {
+    key: "cmj", label: "CMJ Height", unit: "cm", lowerIsBetter: false, icon: "🦘",
+    exerciseNames: ["countermovement jump", "cmj", "countermovement jump (cmj)"],
+    greenThreshold: 45, amberThreshold: 35,
+  },
+  {
+    key: "dj_rsi", label: "Drop Jump RSI", unit: "", lowerIsBetter: false, icon: "📉",
+    exerciseNames: ["drop jump", "depth jump"],
+    greenThreshold: 1.8, amberThreshold: 1.2,
+  },
+  {
+    key: "broad", label: "Broad Jump", unit: "m", lowerIsBetter: false, icon: "📏",
+    exerciseNames: ["broad jump", "standing broad jump", "standing long jump"],
+    greenThreshold: 2.5, amberThreshold: 2.2,
+  },
+  {
+    key: "505", label: "505 Test", unit: "s", lowerIsBetter: true, icon: "🔄",
+    exerciseNames: ["505", "505 test", "pro agility"],
+    greenThreshold: 2.3, amberThreshold: 2.6,
+  },
+];
+
 export const DEFAULT_REFLECTION_METRICS: ReflectionMetric[] = [
   {
     key: "intent",
@@ -97,6 +152,7 @@ export interface OrgSettings {
   reflection_how_prompt: string;
   recovery_alert_enabled: boolean;
   recovery_alert_threshold: 1 | 2 | 3; // low recovery-score feedback entries in the last 7 days needed to flag an athlete
+  power_speed_benchmarks: PowerSpeedBenchmarkDef[];
 }
 
 export const DEFAULT_SETTINGS: OrgSettings = {
@@ -114,6 +170,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   reflection_how_prompt: "How will you improve next week?",
   recovery_alert_enabled: true,
   recovery_alert_threshold: 2,
+  power_speed_benchmarks: DEFAULT_POWER_SPEED_BENCHMARKS,
 };
 
 // ── Coach-side (uses authenticated client) ────────────────────────────────────
