@@ -18,6 +18,7 @@ interface Props {
   tier: OrgTier;
   branding: OrgBranding;
   onSaved: (branding: OrgBranding) => void;
+  role: "owner" | "coach";
 }
 
 const PRESET_COLOURS = [
@@ -31,7 +32,7 @@ const PRESET_COLOURS = [
   { label: "White",          color: "#ffffff", dim: "#1a1a1a" },
 ];
 
-export default function BrandingSettings({ orgId, orgName, tier, branding: initialBranding, onSaved }: Props) {
+export default function BrandingSettings({ orgId, orgName, tier, branding: initialBranding, onSaved, role }: Props) {
   const [branding, setBranding] = useState<OrgBranding>(initialBranding);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -40,8 +41,10 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isPremium = tier === "premium";
+  const isOwner = role === "owner";
 
   async function handleSave() {
+    if (!isOwner) return;
     setSaving(true);
     setError("");
     setSuccess(false);
@@ -70,6 +73,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
   }
 
   async function handleLogoUpload(file: File) {
+    if (!isOwner) return;
     setUploading(true);
     setError("");
     try {
@@ -101,7 +105,9 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
       }
     >
       {error && <div style={s.error}>{error}</div>}
+      {!isOwner && <div style={s.ownerNote}>Only the organisation owner can change branding.</div>}
 
+      <fieldset disabled={!isOwner} style={s.fieldset}>
       {/* Accent colour - both tiers */}
       <div style={s.section}>
         <div style={s.sectionLabel}>Accent colour</div>
@@ -205,6 +211,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
       >
         {saving ? "Saving…" : success ? "✓ Saved" : "Save branding"}
       </button>
+      </fieldset>
     </CollapsibleSection>
   );
 }
@@ -212,6 +219,8 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
 const s: Record<string, React.CSSProperties> = {
   tierBadge: { borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, flexShrink: 0 },
   error: { background: "#2a0c0c", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
+  ownerNote: { background: "var(--panel)", color: "var(--mute)", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
+  fieldset: { border: "none", margin: 0, padding: 0 },
   section: { marginBottom: 20 },
   sectionLabel: { fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
   sectionDesc: { fontSize: 12, color: "var(--mute)", marginBottom: 10 },

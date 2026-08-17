@@ -22,17 +22,21 @@ function getSupabase() {
 // reliably in this project. organisation_id is resolved from the
 // authenticated coach's own row, never trusted from the client, so
 // one coach can never write into another org's logo path.
-// BrandingSettings.tsx isn't owner-gated (no role prop, unlike
-// BillingSettings), so any coach in the org can replace the logo —
-// this route doesn't add a stricter check than the UI already has.
+// Owner-gated (2026-08-16, alongside 0060_owner_only_org_settings.sql
+// restricting the organisations row itself) - this route uses the
+// service-role client, which bypasses RLS entirely, so it needs its
+// own explicit role check rather than inheriting that policy.
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
   const service = createServiceRoleClient();
-  const { data: coach } = await service.from("coaches").select("organisation_id").eq("id", user.id).single();
+  const { data: coach } = await service.from("coaches").select("organisation_id, role").eq("id", user.id).single();
   if (!coach) return NextResponse.json({ error: "Coach not found" }, { status: 404 });
+  if (coach.role !== "owner") {
+    return NextResponse.json({ error: "Only the organisation owner can change branding" }, { status: 403 });
+  }
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
