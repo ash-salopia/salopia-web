@@ -3,9 +3,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ExportModal
 //
-// Used from two places:
+// Used from three places:
 //   - Athlete page: mode="single", athleteId + athleteName pre-set
 //   - Athletes list: mode="all"
+//   - Reporting tab: mode="selection", athleteIds pre-resolved by
+//     ReportTargetPicker (individual ticks or a whole group flattened to
+//     member IDs) - the Scope section is hidden since the target was
+//     already chosen upstream.
 //
 // Lets the coach choose: scope (single/all), format (CSV/JSON),
 // date range, and which optional data fields to include.
@@ -88,16 +92,17 @@ const FIELDS: FieldDef[] = [
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  mode: "single" | "all";
+  mode: "single" | "all" | "selection";
   athleteId?: string;
   athleteName?: string;
+  athleteIds?: string[];
   onClose: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ExportModal({ mode, athleteId, athleteName, onClose }: Props) {
-  const [scope, setScope] = useState<"single" | "all">(mode);
+export default function ExportModal({ mode, athleteId, athleteName, athleteIds, onClose }: Props) {
+  const [scope, setScope] = useState<"single" | "all">(mode === "single" ? "single" : "all");
   const [format, setFormat] = useState<"csv" | "json">("csv");
   const [dateRange, setDateRange] = useState<"all" | "custom">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -123,13 +128,22 @@ export default function ExportModal({ mode, athleteId, athleteName, onClose }: P
     setDownloading(true);
     setError("");
 
-    const opts = {
-      athleteId: scope === "all" ? "all" : athleteId!,
-      format,
-      fields: Array.from(selected),
-      dateFrom: dateRange === "custom" ? dateFrom : undefined,
-      dateTo: dateRange === "custom" ? dateTo : undefined,
-    };
+    const opts =
+      mode === "selection"
+        ? {
+            athleteIds: athleteIds ?? [],
+            format,
+            fields: Array.from(selected),
+            dateFrom: dateRange === "custom" ? dateFrom : undefined,
+            dateTo: dateRange === "custom" ? dateTo : undefined,
+          }
+        : {
+            athleteId: scope === "all" ? "all" : athleteId!,
+            format,
+            fields: Array.from(selected),
+            dateFrom: dateRange === "custom" ? dateFrom : undefined,
+            dateTo: dateRange === "custom" ? dateTo : undefined,
+          };
 
     try {
       const res = await fetch("/api/export", {
@@ -149,7 +163,12 @@ export default function ExportModal({ mode, athleteId, athleteName, onClose }: P
       const a = document.createElement("a");
       a.href = url;
       const date = new Date().toISOString().slice(0, 10);
-      const scopeLabel = scope === "all" ? "all-athletes" : athleteName?.toLowerCase().replace(/\s+/g, "-") ?? "athlete";
+      const scopeLabel =
+        mode === "selection"
+          ? "selected-athletes"
+          : scope === "all"
+            ? "all-athletes"
+            : athleteName?.toLowerCase().replace(/\s+/g, "-") ?? "athlete";
       a.download = `athletiq-export-${scopeLabel}-${date}.${format}`;
       document.body.appendChild(a);
       a.click();
@@ -175,25 +194,27 @@ export default function ExportModal({ mode, athleteId, athleteName, onClose }: P
 
         {error && <div style={s.errorBox}>{error}</div>}
 
-        {/* Scope */}
-        <div>
-          <div style={s.sectionLabel}>Scope</div>
-          <div style={s.toggle}>
-            <button
-              style={{ ...s.toggleBtn, ...(scope === "single" ? s.toggleBtnActive : {}) }}
-              onClick={() => setScope("single")}
-              disabled={!athleteId}
-            >
-              {athleteName ?? "This athlete"}
-            </button>
-            <button
-              style={{ ...s.toggleBtn, ...(scope === "all" ? s.toggleBtnActive : {}) }}
-              onClick={() => setScope("all")}
-            >
-              All athletes
-            </button>
+        {/* Scope - hidden when the target was already chosen upstream (Reporting tab) */}
+        {mode !== "selection" && (
+          <div>
+            <div style={s.sectionLabel}>Scope</div>
+            <div style={s.toggle}>
+              <button
+                style={{ ...s.toggleBtn, ...(scope === "single" ? s.toggleBtnActive : {}) }}
+                onClick={() => setScope("single")}
+                disabled={!athleteId}
+              >
+                {athleteName ?? "This athlete"}
+              </button>
+              <button
+                style={{ ...s.toggleBtn, ...(scope === "all" ? s.toggleBtnActive : {}) }}
+                onClick={() => setScope("all")}
+              >
+                All athletes
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Format */}
         <div>
@@ -292,7 +313,9 @@ export default function ExportModal({ mode, athleteId, athleteName, onClose }: P
         <div style={s.footer}>
           <div style={s.footerMeta}>
             {selected.size} field{selected.size !== 1 ? "s" : ""} selected · {format.toUpperCase()}
-            {scope === "all" ? " · All athletes" : athleteName ? ` · ${athleteName}` : ""}
+            {mode === "selection"
+              ? ` · ${athleteIds?.length ?? 0} athlete${(athleteIds?.length ?? 0) !== 1 ? "s" : ""}`
+              : scope === "all" ? " · All athletes" : athleteName ? ` · ${athleteName}` : ""}
           </div>
           <button
             style={{ ...s.downloadBtn, opacity: downloading ? 0.6 : 1 }}

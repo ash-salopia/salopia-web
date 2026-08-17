@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase-server";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ExportOptions {
-  athleteId: "all" | string;
+  athleteId?: "all" | string;
+  // Explicit subset of athlete IDs - used by the Reporting tab's bulk
+  // export, where the target (ticked athletes or a whole group flattened
+  // to member IDs) was already resolved client-side. Takes precedence
+  // over athleteId when present.
+  athleteIds?: string[];
   format: "csv" | "json";
   fields: string[];
   dateFrom?: string;
@@ -42,6 +47,10 @@ function buildCsvRow(values: (string | number | null | undefined)[]): string {
 async function fetchExportData(opts: ExportOptions) {
   const supabase = await createClient();
 
+  // An explicit ID list (Reporting tab) takes precedence over the
+  // legacy single/"all" athleteId scope (Athlete page / Athletes list).
+  const targetIds = opts.athleteIds?.length ? opts.athleteIds : null;
+
   // Build sessions query
   let sessionQuery = supabase
     .from("sessions")
@@ -54,7 +63,9 @@ async function fetchExportData(opts: ExportOptions) {
     `)
     .order("date", { ascending: true });
 
-  if (opts.athleteId !== "all") {
+  if (targetIds) {
+    sessionQuery = sessionQuery.in("athlete_id", targetIds);
+  } else if (opts.athleteId !== "all") {
     sessionQuery = sessionQuery.eq("athlete_id", opts.athleteId);
   }
   if (opts.dateFrom) sessionQuery = sessionQuery.gte("date", opts.dateFrom);
@@ -70,7 +81,8 @@ async function fetchExportData(opts: ExportOptions) {
       .from("personal_bests")
       .select("*, athletes(name)")
       .order("date", { ascending: true });
-    if (opts.athleteId !== "all") pbQuery = pbQuery.eq("athlete_id", opts.athleteId);
+    if (targetIds) pbQuery = pbQuery.in("athlete_id", targetIds);
+    else if (opts.athleteId !== "all") pbQuery = pbQuery.eq("athlete_id", opts.athleteId);
     if (opts.dateFrom) pbQuery = pbQuery.gte("date", opts.dateFrom);
     if (opts.dateTo) pbQuery = pbQuery.lte("date", opts.dateTo);
     const { data } = await pbQuery;
@@ -83,7 +95,8 @@ async function fetchExportData(opts: ExportOptions) {
     let progQuery = supabase
       .from("programme_assignments")
       .select("athlete_id, programmes(name)");
-    if (opts.athleteId !== "all") progQuery = progQuery.eq("athlete_id", opts.athleteId);
+    if (targetIds) progQuery = progQuery.in("athlete_id", targetIds);
+    else if (opts.athleteId !== "all") progQuery = progQuery.eq("athlete_id", opts.athleteId);
     const { data } = await progQuery;
     programmeAssignments = data ?? [];
   }
@@ -336,7 +349,7 @@ export async function POST(req: NextRequest) {
   let opts: ExportOptions;
   try {
     opts = await req.json();
-    if (!opts.format || !opts.fields || !opts.athleteId) throw new Error();
+    if (!opts.format || !opts.fields || !(opts.athleteId || opts.athleteIds?.length)) throw new Error();
   } catch {
     return NextResponse.json({ error: "Invalid export options" }, { status: 400 });
   }
@@ -352,7 +365,7 @@ export async function POST(req: NextRequest) {
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  const scope = opts.athleteId === "all" ? "all-athletes" : "athlete";
+  const scope = opts.athleteIds?.length ? "selected-athletes" : opts.athleteId === "all" ? "all-athletes" : "athlete";
 
   if (opts.format === "json") {
     const json = buildJSON(data, opts);
