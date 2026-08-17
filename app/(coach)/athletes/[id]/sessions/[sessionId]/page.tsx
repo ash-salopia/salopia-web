@@ -286,21 +286,11 @@ export default function SessionDetailPage() {
   };
 
   const handleEditExercise = async (exerciseId: string, patch: Partial<SessionExercise>) => {
-    // If the "order" field was changed to a clean integer that differs
-    // from this exercise's current 1-based position, treat it as a
-    // request to move the exercise there rather than just relabel it.
-    // Non-numeric values (e.g. "1A"/"1B" for supersets, matching how
-    // the prototype always allowed free-text labels here) just update
-    // the label with no reordering — only a plain number triggers a move.
-    if (patch.order != null && session) {
-      const targetPos = parseInt(patch.order, 10);
-      const isCleanInteger = /^\d+$/.test(patch.order.trim());
-      if (isCleanInteger && targetPos >= 1) {
-        await handleReorderExercise(exerciseId, targetPos);
-        return;
-      }
-    }
-
+    // The "order" field is always just a free-text label (A, 1A, 3,
+    // whatever the coach wants) — it never triggers a reorder on its
+    // own. Reordering is exclusively the ↑/↓ arrows (handleReorderExercise),
+    // so typing a plain number here can't unexpectedly move the
+    // exercise out from under the coach mid-edit.
     setSession((prev) =>
       prev
         ? {
