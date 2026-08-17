@@ -111,6 +111,48 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
 - **Save retry queue** (`lib/save-queue.ts`): athlete app saves that
   fail (bad gym signal) get queued and retried every 30s + immediately
   on reconnect, rather than just failing silently or losing data.
+  Network-failure retries never expire on their own (a session can run
+  well past a short retry window); a retry that reaches the server but
+  is actively rejected moves to a separate `failed` list instead of
+  being silently dequeued as if it had succeeded.
+- **Web Push notifications** (`lib/push/`, `0061_push_subscriptions.sql`):
+  VAPID-based, no third-party push service. `PushNotificationToggle.tsx`
+  is the shared subscribe/unsubscribe UI for both surfaces (coach
+  Settings page, athlete `/a/[token]/settings`) — once subscribed, it
+  also shows per-notification-type checkboxes (`notify_pb` on
+  `coaches`; `notify_missed_session`/`notify_rpe_reminder`/
+  `notify_morning_reminder` on `athletes`, `0062`/`0063`), so turning
+  off one alert doesn't require unsubscribing from push entirely. Coach
+  prefs save via a direct Supabase client update (RLS already lets a
+  coach update their own row); athlete prefs go through
+  `/api/athlete-link/notification-settings` since athletes have no
+  auth session. There's no "subscribe by default" on the web platform
+  — a permission prompt always needs an explicit user tap, and
+  triggering it unprompted on page load risks browsers auto-denying it
+  as spam — so `AthleteLinkShell.tsx` shows a one-time dismissible
+  banner on an athlete's first visit instead (tracked per-athlete in
+  localStorage), rather than burying the toggle in Settings.
+  Coaches get a push the moment an athlete hits a PB (`notifyCoachesOfPB`,
+  wired into `detectPB` in `api/athlete-link/log/route.ts`, already
+  filters by `notify_pb`). Athletes get two kinds of reminder: a
+  morning "you have a session today" push at whatever time they picked
+  via the native `<input type="time">` in `PushNotificationToggle.tsx`
+  (`api/cron/morning-reminder`, runs every 15 min so each athlete's
+  chosen time actually lands in its own window — needs a Vercel plan
+  whose cron supports sub-daily schedules, Hobby is daily-only), and
+  the original evening "haven't started / haven't rated" reminder
+  (`api/cron/notifications`, once daily) if today's session is still
+  outstanding by then. Neither cron is timezone-aware yet (no
+  per-athlete/org timezone field exists) - times are compared against
+  server/UTC "today", treated as ~= the coach's local time (`dub1`
+  region implies UK/Ireland). Requires `NEXT_PUBLIC_VAPID_PUBLIC_KEY` /
+  `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` / `CRON_SECRET` set in
+  Vercel's env vars (generate VAPID keys via `npx web-push
+  generate-vapid-keys`) — silently no-ops without them, never breaks
+  the write that would have triggered a notification. iOS Safari only
+  delivers push to a site added to the home screen, hence
+  `public/manifest.json` + `apple-mobile-web-app` metadata in
+  `app/layout.tsx`.
 
 ## Workflow preferences
 
@@ -150,4 +192,40 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
   metrics, wiring session RPE into Training Load Report, "recent
   testing results" card on athlete profile to bridge testing and PB
   systems (kept deliberately separate as data sources, per product
-  decision — don't merge them without discussing first).
+  decision — don't merge them without discussing first). Athlete
+  comparisons (side-by-side, likely on the Reporting tab) — explicitly
+  deferred by Ash on 2026-08-14 while building the Reporting tab/Squad
+  Report, logged here rather than built then.
+- **Security: Next.js major-version upgrade needed** (found 2026-08-17,
+  deliberately deferred rather than rushed). `npm audit` flags 1
+  critical + 3 high vulnerabilities in `next` (currently pinned at
+  `14.2.15`) — `npm audit fix --dry-run` shows no fix exists within the
+  14.x line; the advisory data requires jumping straight to
+  `next@16.3.1`, skipping 15 entirely. Some of the flagged CVEs are
+  genuinely relevant to this app's shape (authorization bypass in
+  middleware, SSRF, cache poisoning, unauthenticated Server Function
+  endpoint disclosure) — this isn't noise, but a same-session bolt-on
+  fix was rejected on purpose: a 14→16 jump touches App Router
+  internals, middleware, caching, and Server Actions across the whole
+  app (coach dashboard, athlete share-link app, PDF reporting, Stripe
+  billing, the testing system, public Home Programmes), and needs a
+  full regression pass on a branch (ideally against a staging Supabase
+  project) before it ever reaches production — not something to rush
+  at the tail of an unrelated session. Note RLS, not middleware, is
+  this app's actual data-access enforcement layer (see the
+  architecture section above), so the practical exploitability of the
+  middleware-specific CVEs here is likely narrower than their raw
+  severity rating suggests — worth keeping in mind when scoping how
+  urgently to schedule this, but it should still get dedicated time
+  soon, not sit indefinitely. `postcss` (also flagged, high) is a
+  transitive dependency of `next` and resolves itself once `next` is
+  upgraded — no independent action needed. `xlsx` (also flagged, high
+  — Prototype Pollution + ReDoS) has **no available npm fix at all**:
+  SheetJS stopped publishing security patches to the public npm
+  package and moved them to their own CDN instead. Used client-side in
+  `components/NotesSessionModal.tsx` to parse a coach-uploaded
+  `.xlsx`/`.xls` file for session-notes import — real but bounded
+  exposure (a coach's own file in their own browser tab, not
+  server-side parsing of internet-facing input). Options if this needs
+  closing: switch to SheetJS's CDN-hosted build, swap to a different
+  xlsx-parsing library, or accept the risk given the bounded exposure.
