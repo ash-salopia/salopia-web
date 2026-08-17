@@ -63,6 +63,29 @@ export interface RPEWeeklyPoint {
   sessionCount: number;
 }
 
+// Power/speed exercises have no structured numeric field (unlike
+// strength's weight/reps) - a set's result lives in the free-text
+// `time` or `reps` string (e.g. "1.68s", "2.31m", "42cm"), entered
+// straight off the builder in HyroxCardioBuilder-style flows. This
+// parses the leading number + unit off whichever field is filled in,
+// so exercises can still get a trend line without a schema change.
+export interface PowerSpeedRow {
+  date: string;
+  sessName: string;
+  value: number; // best set that session (min for time-based, max otherwise)
+  unit: string; // e.g. "s", "m", "cm", "" (unitless)
+}
+
+export interface PowerSpeedSummary {
+  name: string;
+  unit: string;
+  direction: "lower" | "higher"; // which way is improvement
+  entries: PowerSpeedRow[];
+  overallPct: number | null; // first-vs-last, signed so positive always = improvement
+}
+
+export type PowerSpeedMap = Record<string, PowerSpeedRow[]>;
+
 export interface ComputedReport {
   exMap: ExerciseMap;
   exerciseSummaries: ExerciseSummary[]; // alphabetical, for the Load Progression summary table
@@ -73,8 +96,18 @@ export interface ComputedReport {
   hyroxSessions: Session[];
   cardioSessions: Session[];
   powerSpeedSessions: Session[];
+  powerSpeedExMap: PowerSpeedMap;
+  powerSpeedSummaries: PowerSpeedSummary[]; // alphabetical
   rpeEntries: RPEEntry[]; // chronological
   rpeWeekly: RPEWeeklyPoint[]; // chronological
+  // Session-completion, for the Squad Report's completion boards - % of
+  // prescribed sets marked done across every coach-assigned ("programme"
+  // source, not athlete-started "library") session in range. Null (not
+  // 0) when there's nothing to judge, so a squad board can tell "hasn't
+  // trained at all in this range" apart from "trained but skipped sets".
+  completionPct: number | null;
+  completedSets: number;
+  totalSets: number;
 }
 
 function weekStartISO(dateISO: string): string {
@@ -143,6 +176,91 @@ function collectRPE(allSessions: Session[]): { entries: RPEEntry[]; weekly: RPEW
     }));
 
   return { entries, weekly };
+}
+
+function collectCompletion(allSessions: Session[]): { completionPct: number | null; completedSets: number; totalSets: number } {
+  let completedSets = 0;
+  let totalSets = 0;
+  for (const s of allSessions) {
+    // Only coach-assigned sessions count toward adherence - an
+    // athlete-started "library" session was never assigned, so
+    // completing (or not) has no bearing on whether they did what was
+    // programmed for them.
+    if (s.session_source !== "programme" || s.is_primer) continue;
+    for (const ex of s.exercises ?? []) {
+      if (ex.is_primer) continue;
+      for (const set of ex.log ?? []) {
+        totalSets++;
+        if (set.done) completedSets++;
+      }
+    }
+  }
+  const completionPct = totalSets > 0 ? Math.round((completedSets / totalSets) * 1000) / 10 : null;
+  return { completionPct, completedSets, totalSets };
+}
+
+// Power/speed logs don't use the generic {weight,reps,done,time} SetLog
+// shape - PowerSpeedExerciseCard.tsx writes its own PSSetLog shape
+// (rep_results: string[], rsi, etc.), and the exercise's measurement
+// type (what those numbers actually mean) rides in the `tempo` column
+// (see toPSExercise/handlePSExerciseChange in the session detail page -
+// "measurement_type stored in tempo"). Mirrored here rather than
+// imported since PSSetLog/MeasurementType live in a "use client"
+// component file this Supabase-free module can't depend on.
+const PS_UNIT: Record<string, string> = {
+  time_s: "s", height_cm: "cm", distance_m: "m", rsi: "", power_w: "W", none: "",
+};
+function psLowerBetter(measurementType: string): boolean {
+  return measurementType === "time_s";
+}
+
+function collectPowerSpeed(powerSpeedSessions: Session[]): { exMap: PowerSpeedMap; summaries: PowerSpeedSummary[] } {
+  const exMap: PowerSpeedMap = {};
+  for (const sess of powerSpeedSessions) {
+    if (sess.is_primer) continue;
+    for (const ex of sess.exercises ?? []) {
+      if (!ex.name || ex.is_primer) continue;
+      const measurementType = (ex as any).tempo || "time_s";
+      if (measurementType === "none") continue;
+      const unit = PS_UNIT[measurementType] ?? "";
+      const lowerBetter = psLowerBetter(measurementType);
+
+      const values: number[] = [];
+      for (const set of (ex.log ?? []) as any[]) {
+        if (!set?.done) continue;
+        if (measurementType === "rsi") {
+          const v = parseFloat(set.rsi);
+          if (isFinite(v)) values.push(v);
+          continue;
+        }
+        for (const raw of set.rep_results ?? []) {
+          const v = parseFloat(raw);
+          if (isFinite(v)) values.push(v);
+        }
+      }
+      if (!values.length) continue;
+
+      const best = lowerBetter ? Math.min(...values) : Math.max(...values);
+      if (!exMap[ex.name]) exMap[ex.name] = [];
+      exMap[ex.name].push({ date: sess.date, sessName: sess.name, value: best, unit });
+    }
+  }
+
+  const summaries: PowerSpeedSummary[] = Object.entries(exMap)
+    .map(([name, entries]) => {
+      const unit = entries[0].unit;
+      const direction: "lower" | "higher" = unit === "s" ? "lower" : "higher";
+      const first = entries[0];
+      const last = entries[entries.length - 1];
+      const overallPct =
+        entries.length >= 2 && first.value !== 0
+          ? ((direction === "lower" ? first.value - last.value : last.value - first.value) / Math.abs(first.value)) * 100
+          : null;
+      return { name, unit, direction, entries, overallPct };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { exMap, summaries };
 }
 
 function collectNotes(allSessions: Session[]): NoteEntry[] {
@@ -231,6 +349,8 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     .filter((s) => (s.exercises ?? []).some((e) => (e.log ?? []).some((l) => l.done)));
 
   const { entries: rpeEntries, weekly: rpeWeekly } = collectRPE(allSessions);
+  const { completionPct, completedSets, totalSets } = collectCompletion(allSessions);
+  const { exMap: powerSpeedExMap, summaries: powerSpeedSummaries } = collectPowerSpeed(powerSpeedSessions);
 
   return {
     exMap,
@@ -242,7 +362,12 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     hyroxSessions,
     cardioSessions,
     powerSpeedSessions,
+    powerSpeedExMap,
+    powerSpeedSummaries,
     rpeEntries,
     rpeWeekly,
+    completionPct,
+    completedSets,
+    totalSets,
   };
 }

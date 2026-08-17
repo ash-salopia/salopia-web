@@ -179,7 +179,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
   },
-  logo: { height: 32, width: "auto", objectFit: "contain" },
+  logo: { height: 42, width: "auto", objectFit: "contain" },
   orgSeparator: { fontSize: 14, fontWeight: 400, color: "var(--mute)", letterSpacing: 0 },
   headerRight: { display: "flex", alignItems: "center", gap: 12 },
   coachInfo: { fontSize: 13, color: "var(--mute)" },
