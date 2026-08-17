@@ -4,6 +4,7 @@ import BrandingSettings from "@/components/BrandingSettings";
 import CoachProfileSettings from "@/components/CoachProfileSettings";
 import TeamSettings from "@/components/TeamSettings";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import PushNotificationToggle from "@/components/PushNotificationToggle";
 
 import { useState, useEffect, useRef } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
@@ -69,6 +70,11 @@ export default function SettingsPage() {
       skipNextAutosave.current = false;
       return;
     }
+    // Non-owner coaches can't change these (0060_owner_only_org_settings.sql
+    // restricts the organisations row to the owner) - the fieldset below
+    // already stops them from editing, but skip firing a save at all
+    // rather than let a stray update slip through and hit an RLS error.
+    if (coachRole !== "owner") return;
     setSaveStatus("saving");
     const timer = setTimeout(async () => {
       setError("");
@@ -83,7 +89,7 @@ export default function SettingsPage() {
     }, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, loading]);
+  }, [settings, loading, coachRole]);
 
   if (loading) return <div style={s.loading}>Loading…</div>;
 
@@ -115,6 +121,16 @@ export default function SettingsPage() {
           onUpdated={setCoachAvatarUrl}
         />
       )}
+
+      <PushNotificationToggle mode="coach" />
+
+      {coachRole !== "owner" && (
+        <div style={s.ownerNote}>
+          Only the organisation owner can change these org-wide settings — you can view them below, but changes won't save.
+        </div>
+      )}
+
+      <fieldset disabled={coachRole !== "owner"} style={s.fieldset}>
 
       {/* ── Calculations ── */}
       <CollapsibleSection title="Calculations">
@@ -567,6 +583,124 @@ export default function SettingsPage() {
         )}
       </CollapsibleSection>
 
+      <CollapsibleSection title="Power/Speed Benchmarks">
+        <div style={s.card}>
+          <div style={s.cardLabel}>Benchmarks</div>
+          <div style={s.cardDesc}>
+            Shown on each athlete's Power/Speed dashboard. An exercise counts toward a benchmark when its logged
+            name contains any of that benchmark's match phrases (comma-separated, case-insensitive) - e.g.
+            "10m sprint, acceleration sprint" matches both "10m Sprint" and "Acceleration Sprint A1".
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 10, marginTop: 10 }}>
+            {settings.power_speed_benchmarks.map((b, i) => (
+              <div key={b.key} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    style={{ ...s.metricInput, width: 40, flex: "0 0 auto", textAlign: "center" as const }}
+                    value={b.icon}
+                    placeholder="⚡"
+                    onChange={(e) => setSettings((prev) => ({
+                      ...prev,
+                      power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) => j === i ? { ...x, icon: e.target.value } : x),
+                    }))}
+                  />
+                  <input
+                    style={{ ...s.metricInput, flex: 2 }}
+                    value={b.label}
+                    placeholder="Benchmark name, e.g. 10m Sprint"
+                    onChange={(e) => setSettings((prev) => ({
+                      ...prev,
+                      power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) => j === i ? { ...x, label: e.target.value } : x),
+                    }))}
+                  />
+                  <input
+                    style={{ ...s.metricInput, flex: 1 }}
+                    value={b.unit}
+                    placeholder="Unit, e.g. s"
+                    onChange={(e) => setSettings((prev) => ({
+                      ...prev,
+                      power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) => j === i ? { ...x, unit: e.target.value } : x),
+                    }))}
+                  />
+                  <button
+                    style={s.removeMetricBtn}
+                    onClick={() => setSettings((prev) => ({
+                      ...prev,
+                      power_speed_benchmarks: prev.power_speed_benchmarks.filter((_, j) => j !== i),
+                    }))}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <input
+                  style={s.metricInput}
+                  value={b.exerciseNames.join(", ")}
+                  placeholder="Match phrases, comma-separated"
+                  onChange={(e) => setSettings((prev) => ({
+                    ...prev,
+                    power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) =>
+                      j === i ? { ...x, exerciseNames: e.target.value.split(",").map((n) => n.trim()).filter(Boolean) } : x
+                    ),
+                  }))}
+                />
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--mute)" }}>
+                    <input
+                      type="checkbox"
+                      checked={b.lowerIsBetter}
+                      onChange={(e) => setSettings((prev) => ({
+                        ...prev,
+                        power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) => j === i ? { ...x, lowerIsBetter: e.target.checked } : x),
+                      }))}
+                      style={{ accentColor: "var(--accent)" }}
+                    />
+                    Lower is better
+                  </label>
+                  <input
+                    style={{ ...s.metricInput, flex: 1 }}
+                    type="number"
+                    value={b.greenThreshold ?? ""}
+                    placeholder="Green threshold"
+                    onChange={(e) => setSettings((prev) => ({
+                      ...prev,
+                      power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) =>
+                        j === i ? { ...x, greenThreshold: e.target.value === "" ? null : parseFloat(e.target.value) } : x
+                      ),
+                    }))}
+                  />
+                  <input
+                    style={{ ...s.metricInput, flex: 1 }}
+                    type="number"
+                    value={b.amberThreshold ?? ""}
+                    placeholder="Amber threshold"
+                    onChange={(e) => setSettings((prev) => ({
+                      ...prev,
+                      power_speed_benchmarks: prev.power_speed_benchmarks.map((x, j) =>
+                        j === i ? { ...x, amberThreshold: e.target.value === "" ? null : parseFloat(e.target.value) } : x
+                      ),
+                    }))}
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              style={s.addMetricBtn}
+              onClick={() => setSettings((prev) => ({
+                ...prev,
+                power_speed_benchmarks: [
+                  ...prev.power_speed_benchmarks,
+                  { key: `custom_${Date.now()}`, label: "", unit: "", lowerIsBetter: true, exerciseNames: [], icon: "⚡", greenThreshold: null, amberThreshold: null },
+                ],
+              }))}
+            >
+              + Add benchmark
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      </fieldset>
+
       {orgId && (
         <TeamSettings
           orgId={orgId}
@@ -581,6 +715,7 @@ export default function SettingsPage() {
         tier={orgTier}
         branding={orgBranding}
         onSaved={setOrgBranding}
+        role={coachRole}
       />
     </div>
   );
@@ -594,6 +729,8 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: "0 0 4px" },
   subtitle: { fontSize: 13, color: "var(--mute)", margin: "0 0 28px" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
+  ownerNote: { background: "var(--panel)", color: "var(--mute)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
+  fieldset: { border: "none", margin: 0, padding: 0 },
   chipBtn: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   chipBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)", color: "var(--accent)" },
   metricInput: { flex: 1, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" },

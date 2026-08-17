@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { getAthleteByShareToken, updateAthleteSetLog } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { notifyCoachesOfPB } from "@/lib/push/send";
 import type { SetLog } from "@/types";
+
+function fmtPBValue(pb: DetectedPB): string {
+  if (pb.weightKg != null) return `${pb.weightKg}kg`;
+  if (pb.reps != null) return `${pb.reps} reps`;
+  if (pb.timeSeconds != null) return `${pb.timeSeconds}s`;
+  return "";
+}
 
 export async function POST(request: Request) {
   let body: { token?: string; sessionId?: string; exerciseId?: string; log?: SetLog[] };
@@ -21,6 +29,15 @@ export async function POST(request: Request) {
     // celebration popup off the same response — a couple of extra fast
     // lookups is worth it for the immediate "New PB!" feedback.
     const pb = await detectPB(athlete.id, exerciseId, sessionId, log);
+    if (pb) {
+      // Awaited like detectPB above, but never lets a push failure
+      // (missing VAPID config, a dead subscription) fail the actual
+      // set save - notifyCoachesOfPB never throws.
+      await notifyCoachesOfPB(athlete.organisation_id, {
+        title: `🏆 ${athlete.name} hit a PB!`,
+        body: `${pb.exerciseName} — ${fmtPBValue(pb)}`,
+      }).catch(() => {});
+    }
     return NextResponse.json({ ok: true, pb });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Could not save" }, { status: 400 });

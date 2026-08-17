@@ -8,6 +8,7 @@ import type { Athlete, Session, SessionType } from "@/types";
 import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/components/WeeklyReflectionModal";
 import Avatar from "@/components/Avatar";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
+import { isPushSupported, currentPushSubscription, subscribeToPush } from "@/lib/push/subscribe-client";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
@@ -100,6 +101,56 @@ export default function AthleteLinkShell({
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [fetchSessions]);
+
+  // Push can't be turned on "by default" - the browser always requires
+  // an explicit tap on its own permission prompt, and silently calling
+  // requestPermission() on page load (no click) risks some browsers'
+  // spam-prevention heuristics auto-denying it before the athlete even
+  // sees it. This is the closest safe equivalent: a prominent one-time
+  // banner on first visit rather than requiring them to find the
+  // toggle buried in Settings. Dismissing (or enabling) marks it seen
+  // per-athlete so it never nags again.
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [pushPromptBusy, setPushPromptBusy] = useState(false);
+  const pushPromptKey = `athletiq_push_prompted_${athlete.id}`;
+
+  useEffect(() => {
+    if (!isPushSupported() || typeof Notification === "undefined") return;
+    if (localStorage.getItem(pushPromptKey)) return;
+    if (Notification.permission === "denied") {
+      localStorage.setItem(pushPromptKey, "1"); // already declined at browser level - don't nag
+      return;
+    }
+    currentPushSubscription().then((sub) => {
+      if (sub) {
+        localStorage.setItem(pushPromptKey, "1");
+        return;
+      }
+      setShowPushPrompt(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const dismissPushPrompt = () => {
+    localStorage.setItem(pushPromptKey, "1");
+    setShowPushPrompt(false);
+  };
+
+  const handleEnablePush = async () => {
+    setPushPromptBusy(true);
+    await subscribeToPush(async (sub) => {
+      const res = await fetch("/api/athlete-link/push-subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...sub, token }),
+      });
+      if (!res.ok) throw new Error("Could not save subscription");
+    });
+    localStorage.setItem(pushPromptKey, "1");
+    setShowPushPrompt(false);
+    setPushPromptBusy(false);
+  };
+
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const [calView, setCalView] = useState<"month" | "week">("week");
@@ -190,6 +241,20 @@ export default function AthleteLinkShell({
 
   return (
     <div style={st.page}>
+      {showPushPrompt && (
+        <div style={st.pushBanner}>
+          <div>
+            <div style={st.pushBannerTitle}>🔔 Turn on notifications?</div>
+            <div style={st.pushBannerDesc}>Get reminded when you have a session, or if you forget to log one.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button style={st.pushBannerDismiss} onClick={dismissPushPrompt}>Not now</button>
+            <button style={st.pushBannerEnable} onClick={handleEnablePush} disabled={pushPromptBusy}>
+              {pushPromptBusy ? "…" : "Enable"}
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={st.header}>
         <div style={st.headerRow}>
@@ -441,6 +506,14 @@ export default function AthleteLinkShell({
 
 const st: Record<string, React.CSSProperties> = {
   page: { minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: "0 0 40px" },
+  pushBanner: {
+    display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+    background: "var(--accent-dim)", borderBottom: "1px solid var(--accent)44", padding: "12px 16px",
+  },
+  pushBannerTitle: { fontSize: 13, fontWeight: 700, color: "var(--text)" },
+  pushBannerDesc: { fontSize: 11, color: "var(--mute)", marginTop: 2, maxWidth: 260 },
+  pushBannerDismiss: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "8px 6px" },
+  pushBannerEnable: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   header: { padding: "20px 16px 12px", borderBottom: "1px solid var(--line)" },
   headerRow: { display: "flex", alignItems: "center", gap: 12 },
   avatarEditBtn: {

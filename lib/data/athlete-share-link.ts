@@ -594,3 +594,24 @@ export async function updateAthleteVisibilitySettings(
   const { error } = await supabase.from("athletes").update(patch).eq("id", athleteId);
   if (error) throw error;
 }
+
+// Per-notification-type opt-out (0062/0063) — separate from whether
+// push is subscribed at all (see lib/push/). notify_missed_session
+// gates the evening "you haven't started today's session" reminder,
+// notify_rpe_reminder gates "rate today's session" (both from
+// api/cron/notifications), notify_morning_reminder + the time-of-day
+// it fires at gate the morning "you have a session today" push (from
+// api/cron/morning-reminder).
+export async function updateAthleteNotificationSettings(
+  athleteId: string,
+  patch: {
+    notify_missed_session?: boolean;
+    notify_rpe_reminder?: boolean;
+    notify_morning_reminder?: boolean;
+    morning_reminder_time?: string;
+  }
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("athletes").update(patch).eq("id", athleteId);
+  if (error) throw error;
+}

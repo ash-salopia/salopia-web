@@ -4,6 +4,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "VIS BUILD",
   description: "Coach-managed programme builder",
+  manifest: "/manifest.json",
+  // iOS Safari only supports Web Push for a site added to the home
+  // screen (installed as a PWA) — apple-mobile-web-app-capable is what
+  // makes that installable/standalone rather than opening back in
+  // Safari's chrome every time.
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "VIS BUILD" },
 };
 
 // No viewport meta previously — mobile browsers fell back to a virtual

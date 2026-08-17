@@ -1,0 +1,11 @@
+{
+  "name": "VIS BUILD",
+  "short_name": "VIS BUILD",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1420",
+  "theme_color": "#0a1420",
+  "icons": [
+    { "src": "/logo/vis-build-square.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

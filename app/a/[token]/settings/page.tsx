@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import PushNotificationToggle from "@/components/PushNotificationToggle";
 
 export default function AthleteSettingsPage() {
   const params = useParams();
@@ -9,7 +10,9 @@ export default function AthleteSettingsPage() {
   const token = params?.token as string;
 
   const [hidePBs, setHidePBs] = useState(false);
-  const [firstNameOnly, setFirstNameOnly] = useState(false);
+  // Matches the DB default for newly created athletes (0063) - purely
+  // cosmetic, overwritten the moment the real fetched value lands.
+  const [firstNameOnly, setFirstNameOnly] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +84,8 @@ export default function AthleteSettingsPage() {
         </div>
 
         {error && <div style={s.errorBox}>{error}</div>}
+
+        {token && <PushNotificationToggle mode="athlete" token={token} />}
 
         {loading ? (
           <div style={s.loading}>Loading…</div>
