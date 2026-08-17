@@ -13,6 +13,7 @@ import { createProgrammeFromTemplate } from "@/lib/data/programmes";
 import { listAthletes } from "@/lib/data/athletes";
 import { todayISO } from "@/lib/date-utils";
 import SessionDefView from "@/components/SessionDefView";
+import HomeProgrammePanel from "@/components/HomeProgrammePanel";
 import type { Template, Athlete } from "@/types";
 
 export default function TemplateDetailPage() {
@@ -164,6 +165,8 @@ export default function TemplateDetailPage() {
           Delete template
         </button>
       </div>
+
+      <HomeProgrammePanel template={template} onRefresh={load} />
 
       <div style={styles.layout}>
         <div style={styles.defList}>

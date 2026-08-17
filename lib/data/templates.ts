@@ -60,6 +60,46 @@ export async function updateTemplate(id: string, patch: { name: string }): Promi
   if (error) throw error;
 }
 
+// ------------------------------------------------------------
+// Home Programmes (0058) — publish/unpublish a template as a public,
+// no-login link at /g/<share_code>. The org's subscription status is
+// checked live in the public route itself (lib/data/home-programme-
+// public.ts), not stored here, so revoking a link never needs an
+// unpublish action on every template if a coach's billing lapses.
+// ------------------------------------------------------------
+
+const SHARE_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // no 0/O/1/I — avoids misreads on a printed handout
+function generateShareCode(length = 8): string {
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += SHARE_CODE_ALPHABET[Math.floor(Math.random() * SHARE_CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+// Retries on the (astronomically unlikely) chance of a collision with
+// an existing code — unique constraint on templates.share_code makes
+// that safe to detect via the insert's own error rather than a
+// separate existence check.
+export async function publishTemplate(id: string, expiresInDays: number | null): Promise<{ share_code: string; share_expires_at: string | null }> {
+  const supabase = createClient();
+  const share_expires_at = expiresInDays ? new Date(Date.now() + expiresInDays * 86_400_000).toISOString() : null;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const share_code = generateShareCode();
+    const { error } = await supabase.from("templates").update({ share_code, share_expires_at }).eq("id", id);
+    if (!error) return { share_code, share_expires_at };
+    if (!error.message.includes("duplicate")) throw error;
+  }
+  throw new Error("Could not generate a unique share code — try again.");
+}
+
+export async function unpublishTemplate(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("templates").update({ share_code: null, share_expires_at: null }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteTemplate(id: string): Promise<void> {
   const supabase = createClient();
   // template_defs cascade-delete with the template.

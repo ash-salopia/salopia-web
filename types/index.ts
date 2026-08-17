@@ -99,6 +99,30 @@ export interface ExerciseBase {
   use_percent_1rm?: boolean; // 0045 — when true, set_percents[i] prescribes each set's own %1RM (a ramping scheme, e.g. 70/80/90%), rather than one uniform load for the exercise
   set_percents?: string[]; // 0045 — per-set %1RM prescriptions, index-aligned with `sets` (and, for a real session, with `log`)
   is_bodyweight?: boolean; // 0041 — coach-set: this exercise has no load, athlete logs reps or time only
+  // 0058 — Home Programmes only (see templates.share_code). `equipment`
+  // tags what this prescription needs (e.g. "Dumbbells", "" = none/
+  // bodyweight); `alternatives` are coach-authored equipment swaps the
+  // public /g/<code> view offers instead when a viewer picks equipment
+  // that doesn't match. Unused/ignored everywhere else (real sessions,
+  // programmes) — never surfaced in the athlete-link app.
+  equipment?: string;
+  alternatives?: ExerciseAlternative[];
+}
+
+// 0058 — one coach-authored equipment variant of a Home Programme
+// exercise. Deliberately a small, separate shape rather than a nested
+// ExerciseBase — a home-programme alternative only ever needs enough
+// to display and re-prescribe, never the live-logging fields
+// (rpe/percent_1rm/tempo/etc.) that only mean something for a real,
+// trackable session.
+export interface ExerciseAlternative {
+  name: string;
+  equipment: string;
+  sets?: number;
+  reps?: string;
+  rest?: string;
+  notes?: string;
+  video_url?: string;
 }
 
 export interface SessionExercise extends ExerciseBase {
@@ -318,6 +342,8 @@ export interface Template {
   name: string;
   created_at: string;
   defs?: TemplateDef[];
+  share_code: string | null; // 0058 — set = published as a public Home Programme at /g/<share_code>
+  share_expires_at: string | null; // 0058 — optional coach-set expiry for that link
 }
 
 export interface TemplateDef {

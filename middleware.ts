@@ -27,6 +27,7 @@ export async function middleware(request: NextRequest) {
   const skipsAuthCheck =
     path.startsWith("/auth") ||
     path.startsWith("/a/") ||               // athlete share-link pages
+    path.startsWith("/g/") ||               // public Home Programme links (0058) — share-code-validated in the route itself, no identity at all
     path.startsWith("/api/athlete-link/") || // athlete APIs — token-validated in each handler
     path.startsWith("/api/webhooks/") ||    // Stripe (and future) webhooks — signature-verified in the handler itself, no Supabase session exists
     path.startsWith("/demo") ||             // public demo login link — always signs in as the fixed demo coach, regardless of any existing session
