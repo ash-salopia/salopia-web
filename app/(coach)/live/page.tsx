@@ -523,7 +523,7 @@ export default function LiveGroupPage() {
                     // how it was actually prescribed.
                     const showWeight = !ex.is_bodyweight;
                     const timeMode = (ex.time ?? "").trim().length > 0;
-                    const setGridCols = showWeight ? "32px 1fr 1fr 44px" : "32px 1fr 44px";
+                    const setGridCols = showWeight ? "32px 1fr 1fr 40px 44px" : "32px 1fr 40px 44px";
                     // What the athlete actually did last time on this
                     // exercise, so the coach doesn't have to leave
                     // Live Group and dig through past sessions to see
@@ -601,6 +601,7 @@ export default function LiveGroupPage() {
                               <span style={s.setColLabel}>Set</span>
                               {showWeight && <span style={s.setColLabel}>Weight (kg)</span>}
                               <span style={s.setColLabel}>{timeMode ? "Time (s)" : "Reps"}</span>
+                              <span style={s.setColLabel} />
                               <span style={s.setColLabel}>Done</span>
                             </div>
                             {(ex.log ?? []).map((set, si) => (
@@ -651,6 +652,26 @@ export default function LiveGroupPage() {
                                     }}
                                   />
                                 )}
+                                {(() => {
+                                  const prev = si > 0 ? (ex.log ?? [])[si - 1] : null;
+                                  const hasPrev = !!prev && (prev.weight?.trim() || prev.reps?.trim() || prev.time?.trim());
+                                  return (
+                                    <button
+                                      title={hasPrev ? "Copy the previous set" : undefined}
+                                      disabled={!hasPrev}
+                                      onClick={() => {
+                                        if (!prev) return;
+                                        const patch: Partial<SetLog> = { done: true };
+                                        if (showWeight) patch.weight = prev.weight;
+                                        if (timeMode) patch.time = prev.time;
+                                        else patch.reps = prev.reps;
+                                        handleLogChange(activeSess.id, ex.id, si, patch);
+                                      }}
+                                      style={{ ...s.repeatBtn, ...(hasPrev ? {} : s.repeatBtnDisabled) }}>
+                                      ↻
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   onClick={() => handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null)}
                                   style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }}>
@@ -774,6 +795,13 @@ const s: Record<string, React.CSSProperties> = {
   setInput:     { background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 7, padding: "6px 8px", fontSize: 14, fontWeight: 600, width: "100%", boxSizing: "border-box" as const },
   doneBtn:      { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 0", fontSize: 16, cursor: "pointer", width: "100%", textAlign: "center" as const },
   doneBtnOn:    { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
+  // Copies the previous set's weight/reps (or time) into this one and
+  // marks it done - straight sets (same weight/reps across sets) are
+  // the common case, so this saves re-typing the same numbers for set
+  // 2, 3, 4... Disabled on set 1 (nothing to copy from) and on any set
+  // whose predecessor is itself still empty.
+  repeatBtn:    { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 0", fontSize: 15, cursor: "pointer", width: "100%", textAlign: "center" as const },
+  repeatBtnDisabled: { opacity: 0.3, cursor: "default" as const },
   noteOverlay:  { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 },
   notePanel:    { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: 18, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column" as const, gap: 10 },
   noteTitle:    { fontSize: 15, fontWeight: 700, color: "var(--text)" },
