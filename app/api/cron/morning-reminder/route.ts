@@ -5,7 +5,7 @@ import { sendPushToAthlete } from "@/lib/push/send";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/cron/morning-reminder — runs every 15 minutes (see
+// GET /api/cron/morning-reminder — runs once daily at 07:00 UTC (see
 // vercel.json), one athlete-configurable "you have a session today"
 // push, separate from the evening "haven't started/rated" reminder in
 // api/cron/notifications (that one only fires if they still haven't
@@ -13,15 +13,19 @@ export const dynamic = "force-dynamic";
 // whatever time the athlete picked via the <input type="time"> in
 // PushNotificationToggle.tsx).
 //
-// Runs every 15 min rather than once daily so morning_reminder_time
-// can actually be "the exact time the athlete chose" rather than one
-// fixed time for everyone — each athlete's chosen time falls into
-// exactly one 15-minute window per day, so this naturally sends once
-// per athlete per day without needing a separate "already sent today"
-// table. Requires a Vercel plan whose cron supports sub-daily
-// schedules (Hobby is once-per-day only) — on Hobby this route still
-// works, it just only gets a chance to fire once a day at whatever
-// time Vercel actually runs it, not at each athlete's chosen minute.
+// Originally ran every 15 min so morning_reminder_time could be "the
+// exact time the athlete chose" rather than one fixed time for
+// everyone (each athlete's chosen time falls into exactly one
+// 15-minute window per day, so it naturally sent once per athlete per
+// day without needing a separate "already sent today" table) — but
+// sub-daily cron schedules require a paid Vercel plan (Hobby is
+// once-per-day only), so this is pinned to a single daily run for now.
+// The window-matching logic below still only notifies athletes whose
+// chosen time falls in the window containing this run, so it degrades
+// to "only athletes who happened to pick close to 07:00 UTC get
+// notified" rather than notifying everyone at the wrong time. Bump
+// back to "*/15 * * * *" in vercel.json (no code change needed here)
+// if/when the project moves to a plan that allows it.
 //
 // No per-athlete timezone field exists yet (see 0063's migration
 // comment) - morning_reminder_time is compared against server/UTC

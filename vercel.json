@@ -2,6 +2,6 @@
   "regions": ["dub1"],
   "crons": [
     { "path": "/api/cron/notifications", "schedule": "0 19 * * *" },
-    { "path": "/api/cron/morning-reminder", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron/morning-reminder", "schedule": "0 7 * * *" }
   ]
 }
