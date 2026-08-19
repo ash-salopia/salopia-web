@@ -9,6 +9,8 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import CoachAthleteAssignModal from "@/components/CoachAthleteAssignModal";
+import { setCoachAthleteAccess, listCoachAssignedAthleteIds } from "@/lib/data/coach-access";
 
 interface Coach {
   id: string;
@@ -17,6 +19,7 @@ interface Coach {
   role: "owner" | "coach";
   accepted_at: string | null;
   archived: boolean;
+  athlete_access: "all" | "assigned";
 }
 
 interface Props {
@@ -29,6 +32,8 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [assignedCounts, setAssignedCounts] = useState<Record<string, number>>({});
+  const [assignModalCoach, setAssignModalCoach] = useState<Coach | null>(null);
 
   const isOwner = role === "owner";
 
@@ -36,11 +41,17 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
     const supabase = createClient();
     const { data } = await supabase
       .from("coaches")
-      .select("id, name, email, role, accepted_at, archived")
+      .select("id, name, email, role, accepted_at, archived, athlete_access")
       .eq("organisation_id", orgId)
       .order("created_at", { ascending: true });
     setCoaches(data ?? []);
     setLoading(false);
+
+    const restricted = (data ?? []).filter((c) => c.athlete_access === "assigned");
+    const counts = await Promise.all(
+      restricted.map(async (c) => [c.id, (await listCoachAssignedAthleteIds(c.id)).length] as const)
+    );
+    setAssignedCounts(Object.fromEntries(counts));
   }
 
   useEffect(() => {
@@ -83,6 +94,16 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
     setCoaches((prev) => prev.map((c) => (c.id === coach.id ? { ...c, archived: data.coach.archived } : c)));
   }
 
+  async function handleAccessChange(coach: Coach, access: "all" | "assigned") {
+    try {
+      await setCoachAthleteAccess(coach.id, access);
+      setCoaches((prev) => prev.map((c) => (c.id === coach.id ? { ...c, athlete_access: access } : c)));
+      if (access === "assigned") setAssignModalCoach({ ...coach, athlete_access: access });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not update athlete access");
+    }
+  }
+
   if (loading) return null;
 
   const activeCount = coaches.filter((c) => !c.archived).length;
@@ -110,31 +131,62 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
           const statusLabel = { pending: "Pending", archived: "Archived", active: "Active" }[status];
           const statusStyle = { pending: s.badgePending, archived: s.badgeArchived, active: s.badgeActive }[status];
           return (
-            <div key={c.id} style={s.row}>
-              <div style={s.rowMain}>
-                <div style={s.rowName}>{c.name || c.email || "-"}</div>
-                {c.email && <div style={s.rowEmail}>{c.email}</div>}
+            <div key={c.id} style={s.rowWrap}>
+              <div style={s.row}>
+                <div style={s.rowMain}>
+                  <div style={s.rowName}>{c.name || c.email || "-"}</div>
+                  {c.email && <div style={s.rowEmail}>{c.email}</div>}
+                </div>
+                <div style={s.rowBadges}>
+                  <span style={{ ...s.badge, ...(c.role === "owner" ? s.badgeOwner : s.badgeCoach) }}>
+                    {c.role === "owner" ? "Owner" : "Coach"}
+                  </span>
+                  <span style={{ ...s.badge, ...statusStyle }}>{statusLabel}</span>
+                  {isOwner && pending && (
+                    <button style={s.revokeBtn} onClick={() => handleRevoke(c.id)}>
+                      Revoke
+                    </button>
+                  )}
+                  {isOwner && !pending && c.role !== "owner" && (
+                    <button style={c.archived ? s.reactivateBtn : s.revokeBtn} onClick={() => handleArchiveToggle(c)}>
+                      {c.archived ? "Reactivate" : "Archive"}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={s.rowBadges}>
-                <span style={{ ...s.badge, ...(c.role === "owner" ? s.badgeOwner : s.badgeCoach) }}>
-                  {c.role === "owner" ? "Owner" : "Coach"}
-                </span>
-                <span style={{ ...s.badge, ...statusStyle }}>{statusLabel}</span>
-                {isOwner && pending && (
-                  <button style={s.revokeBtn} onClick={() => handleRevoke(c.id)}>
-                    Revoke
-                  </button>
-                )}
-                {isOwner && !pending && c.role !== "owner" && (
-                  <button style={c.archived ? s.reactivateBtn : s.revokeBtn} onClick={() => handleArchiveToggle(c)}>
-                    {c.archived ? "Reactivate" : "Archive"}
-                  </button>
-                )}
-              </div>
+              {isOwner && c.role !== "owner" && (
+                <div style={s.accessRow}>
+                  <select
+                    value={c.athlete_access}
+                    onChange={(e) => handleAccessChange(c, e.target.value as "all" | "assigned")}
+                    style={s.accessSelect}
+                  >
+                    <option value="all">All athletes</option>
+                    <option value="assigned">Assigned only</option>
+                  </select>
+                  {c.athlete_access === "assigned" && (
+                    <button style={s.manageBtn} onClick={() => setAssignModalCoach(c)}>
+                      Manage athletes ({assignedCounts[c.id] ?? 0})
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {assignModalCoach && (
+        <CoachAthleteAssignModal
+          coachId={assignModalCoach.id}
+          coachName={assignModalCoach.name}
+          onClose={() => setAssignModalCoach(null)}
+          onSaved={(count) => {
+            setAssignedCounts((prev) => ({ ...prev, [assignModalCoach.id]: count }));
+            setAssignModalCoach(null);
+          }}
+        />
+      )}
 
       {inviteOpen && (
         <InviteCoachModal
@@ -221,7 +273,11 @@ function InviteCoachModal({ onClose, onInvited }: { onClose: () => void; onInvit
 const s: Record<string, React.CSSProperties> = {
   inviteBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
   list: { display: "flex", flexDirection: "column" as const, gap: 8 },
-  row: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px", gap: 12 },
+  rowWrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" },
+  row: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  accessRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)" },
+  accessSelect: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 600 },
+  manageBtn: { background: "transparent", border: "1px solid var(--accent)", color: "var(--accent)", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   rowMain: { minWidth: 0 },
   rowName: { fontSize: 14, fontWeight: 600, color: "var(--text)" },
   rowEmail: { fontSize: 12, color: "var(--mute)", marginTop: 1 },

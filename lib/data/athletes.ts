@@ -84,6 +84,22 @@ export async function createAthlete(name: string, group: string, bodyweightKg: n
     }
     throw error;
   }
+
+  // Assign the new athlete to whoever created it, regardless of that
+  // coach's current athlete_access (0064_coach_athlete_access.sql) -
+  // this is what makes "add new athletes" work for a restricted
+  // coach with no separate assignment step, and is harmless for an
+  // 'all' coach (the row just sits unused unless they're later
+  // restricted, in which case athletes they created stay accessible
+  // with no manual re-assignment needed). Best-effort: an assignment
+  // failure shouldn't undo a successfully created athlete.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    await supabase.from("coach_athletes").insert({ coach_id: user.id, athlete_id: data.id });
+  }
+
   return data;
 }
 

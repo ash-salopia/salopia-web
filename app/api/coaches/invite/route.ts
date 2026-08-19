@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       name,
       accepted_at: null,
     })
-    .select("id, name, email, role, accepted_at")
+    .select("id, name, email, role, accepted_at, archived, athlete_access")
     .single();
 
   if (coachError) {
