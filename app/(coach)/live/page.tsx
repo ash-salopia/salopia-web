@@ -59,6 +59,15 @@ function findPreviousExercise(
   return null;
 }
 
+// A prescribed reps string only counts as an auto-fillable default
+// when it's a single clean number ("8") - a range ("8-12") has no one
+// value that's obviously "what was done", so it's left for the coach
+// to type explicitly.
+function singleRepValue(prescribedReps?: string): string | null {
+  const t = (prescribedReps ?? "").trim();
+  return /^\d+$/.test(t) ? t : null;
+}
+
 // "50kg×8, 55kg×8" / "45s, 45s" / "×8, ×8" depending on how the
 // exercise was actually logged (weighted, bodyweight+time, or
 // bodyweight+reps) - only completed sets are included.
@@ -255,18 +264,23 @@ export default function LiveGroupPage() {
     exerciseId: string,
     setIndex: number,
     currentLog: SetLog[],
-    target: number | null = null
+    target: number | null = null,
+    prescribedReps?: string
   ) => {
+    const singleRep = singleRepValue(prescribedReps);
     const newLog = currentLog.map((l, i) => {
       if (i !== setIndex) return l;
       const nowDone = !l.done;
-      // Marking done on a still-empty set with a calculated %1RM
-      // target captures that value as the real weight - same as
-      // completing it live would, without needing to type it in.
-      if (nowDone && !l.weight.trim() && target != null) {
-        return { ...l, weight: String(target), done: true };
-      }
-      return { ...l, done: nowDone };
+      if (!nowDone) return { ...l, done: nowDone };
+      // Marking done on a still-empty set captures the calculated %1RM
+      // target as the real weight, and the prescribed rep count as the
+      // real reps (only when it's one specific number, not a range) -
+      // same as completing it live would, without needing to type
+      // in numbers that were already showing as the placeholder.
+      const patch: Partial<SetLog> = { done: true };
+      if (!l.weight.trim() && target != null) patch.weight = String(target);
+      if (!l.reps.trim() && singleRep) patch.reps = singleRep;
+      return { ...l, ...patch };
     });
     setSessions((prev) =>
       prev.map((s) => s.id !== sessionId ? s : {
@@ -619,7 +633,15 @@ export default function LiveGroupPage() {
                                     onBlur={(e) => {
                                       const v = e.target.value;
                                       if (v === set.weight) return;
-                                      handleLogChange(activeSess.id, ex.id, si, { weight: v, done: v.trim().length > 0 ? true : set.done });
+                                      const willBeDone = v.trim().length > 0 ? true : set.done;
+                                      const patch: Partial<SetLog> = { weight: v, done: willBeDone };
+                                      // Load just got typed in, marking the set done - if reps
+                                      // is still blank, carry over the prescribed rep count
+                                      // (only when it's one specific number, not a range like
+                                      // "8-12") rather than saving it as blank.
+                                      const singleRep = singleRepValue(ex.reps);
+                                      if (willBeDone && !set.reps.trim() && singleRep) patch.reps = singleRep;
+                                      handleLogChange(activeSess.id, ex.id, si, patch);
                                     }}
                                   />
                                 )}
@@ -673,7 +695,7 @@ export default function LiveGroupPage() {
                                   );
                                 })()}
                                 <button
-                                  onClick={() => handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null)}
+                                  onClick={() => handleToggleDot(activeSess.id, ex.id, si, ex.log ?? [], oneRmTargets[ex.id]?.[si] ?? null, ex.reps)}
                                   style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }}>
                                   {set.done ? "✓" : "○"}
                                 </button>
