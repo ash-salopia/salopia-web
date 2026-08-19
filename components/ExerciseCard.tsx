@@ -657,15 +657,16 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     flexShrink: 0,
+    gap: 2,
   },
   moveBtn: {
     background: "transparent",
     border: "none",
     color: "var(--mute)",
     cursor: "pointer",
-    fontSize: 11,
+    fontSize: 22,
     lineHeight: 1,
-    padding: "1px 4px",
+    padding: "4px 8px",
   },
   nameFieldWrap: { flex: 1, position: "relative", minWidth: 140 },
   nameInput: {
