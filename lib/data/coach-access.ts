@@ -7,13 +7,22 @@ import { createClient } from "@/lib/supabase-browser";
 // so every athlete-scoped query across the app narrows automatically -
 // these functions only manage the assignment/access-level data itself.
 
+// Goes through /api/coaches/athlete-access, not a direct client
+// update - the coaches table's own RLS only lets a coach update THEIR
+// OWN row, so an owner changing a colleague's access level needs the
+// service-role path (same reason archive/invite/revoke are API
+// routes rather than direct client calls).
 export async function setCoachAthleteAccess(
   coachId: string,
   access: "all" | "assigned"
 ): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.from("coaches").update({ athlete_access: access }).eq("id", coachId);
-  if (error) throw error;
+  const res = await fetch("/api/coaches/athlete-access", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ coachId, athleteAccess: access }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not update athlete access");
 }
 
 export async function listCoachAssignedAthleteIds(coachId: string): Promise<string[]> {
