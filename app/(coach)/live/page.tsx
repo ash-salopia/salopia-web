@@ -670,7 +670,7 @@ export default function LiveGroupPage() {
                                     onBlur={(e) => {
                                       const v = e.target.value;
                                       if (v === set.reps) return;
-                                      handleLogChange(activeSess.id, ex.id, si, { reps: v });
+                                      handleLogChange(activeSess.id, ex.id, si, { reps: v, done: v.trim().length > 0 ? true : set.done });
                                     }}
                                   />
                                 )}
