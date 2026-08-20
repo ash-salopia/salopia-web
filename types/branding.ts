@@ -9,7 +9,7 @@ export interface OrgBranding {
   logo_url?: string;         // premium: logo image URL
   primary_color?: string;    // both: hex accent colour
   primary_color_dim?: string;// both: dim version for backgrounds
-  show_powered_by?: boolean; // premium: show "Powered by VIS BUILD" footer
+  show_powered_by?: boolean; // premium: show "Powered by VISBUILD.CO.UK" footer
 }
 
 export interface OrgWithBranding {

@@ -170,7 +170,7 @@ export default function HomeProgrammeView({ template, branding }: { template: Te
 
       {videoUrl && <VideoModal videoUrl={videoUrl.url} title={videoUrl.title} onClose={() => setVideoUrl(null)} />}
 
-      {branding.showPoweredBy && <div style={s.poweredBy}>Powered by VIS BUILD</div>}
+      {branding.showPoweredBy && <div style={s.poweredBy}>Powered by VISBUILD.CO.UK</div>}
     </div>
   );
 }

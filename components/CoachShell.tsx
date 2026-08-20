@@ -152,7 +152,7 @@ export default function CoachShell({
       </div>
 
       {branding.showPoweredBy && (
-        <div style={styles.poweredBy}>Powered by VIS BUILD</div>
+        <div style={styles.poweredBy}>Powered by VISBUILD.CO.UK</div>
       )}
     </div>
   );

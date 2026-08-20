@@ -185,7 +185,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
                 onChange={e => setBranding(b => ({ ...b, show_powered_by: e.target.checked }))}
                 style={{ accentColor: "var(--accent)" }}
               />
-              Show "Powered by VIS BUILD" in the footer
+              Show "Powered by VISBUILD.CO.UK" in the footer
             </label>
           </div>
         </>
@@ -196,7 +196,7 @@ export default function BrandingSettings({ orgId, orgName, tier, branding: initi
             <div>✓ Custom brand name - replace "VIS BUILD" with your brand</div>
             <div>✓ Logo upload - your logo in the header and athlete app</div>
             <div>✓ Athletes see your brand, not VIS BUILD</div>
-            <div>✓ Optional "Powered by VIS BUILD" footer</div>
+            <div>✓ Optional "Powered by VISBUILD.CO.UK" footer</div>
           </div>
           <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 8 }}>
             Contact us to upgrade your organisation.
