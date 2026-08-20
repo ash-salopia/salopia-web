@@ -635,12 +635,16 @@ export default function LiveGroupPage() {
                                       if (v === set.weight) return;
                                       const willBeDone = v.trim().length > 0 ? true : set.done;
                                       const patch: Partial<SetLog> = { weight: v, done: willBeDone };
-                                      // Load just got typed in, marking the set done - if reps
-                                      // is still blank, carry over the prescribed rep count
-                                      // (only when it's one specific number, not a range like
-                                      // "8-12") rather than saving it as blank.
+                                      // Tabbing forward into the reps box for this same set
+                                      // is a normal keyboard move, not "leaving the set" - the
+                                      // reps box's own key includes set.reps, so filling it in
+                                      // here would remount it out from under the incoming Tab
+                                      // focus. Skip the carry-over in that case and let the reps
+                                      // box's own onBlur below fill it in once it's actually left.
+                                      const tabbingIntoReps = e.relatedTarget instanceof HTMLElement
+                                        && e.relatedTarget.id === `reps-${ex.id}-${si}`;
                                       const singleRep = singleRepValue(ex.reps);
-                                      if (willBeDone && !set.reps.trim() && singleRep) patch.reps = singleRep;
+                                      if (willBeDone && !tabbingIntoReps && !set.reps.trim() && singleRep) patch.reps = singleRep;
                                       handleLogChange(activeSess.id, ex.id, si, patch);
                                     }}
                                   />
@@ -661,6 +665,7 @@ export default function LiveGroupPage() {
                                   />
                                 ) : (
                                   <input
+                                    id={`reps-${ex.id}-${si}`}
                                     key={`r-${ex.id}-${si}-${set.reps}`}
                                     defaultValue={set.reps}
                                     type="number"
@@ -669,7 +674,17 @@ export default function LiveGroupPage() {
                                     style={s.setInput}
                                     onBlur={(e) => {
                                       const v = e.target.value;
-                                      if (v === set.reps) return;
+                                      if (v === set.reps) {
+                                        // Weight's onBlur deliberately skipped carrying over the
+                                        // prescribed reps when tabbing forward into this box
+                                        // (see there) - if it's still empty now that it's
+                                        // actually being left, fill it in here instead.
+                                        const singleRep = singleRepValue(ex.reps);
+                                        if (set.done && !v.trim() && singleRep) {
+                                          handleLogChange(activeSess.id, ex.id, si, { reps: singleRep });
+                                        }
+                                        return;
+                                      }
                                       handleLogChange(activeSess.id, ex.id, si, { reps: v, done: v.trim().length > 0 ? true : set.done });
                                     }}
                                   />
