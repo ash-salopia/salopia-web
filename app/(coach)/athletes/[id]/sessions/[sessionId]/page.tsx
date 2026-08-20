@@ -830,22 +830,6 @@ export default function SessionDetailPage() {
         </div>
       )}
 
-      <SessionNotesBlock
-        value={(session as any).session_notes ?? ""}
-        onChange={handleSessionNotesChange}
-        sessionType={session.type}
-      />
-
-      {session.athlete_notes && (
-        <SessionNotesBlock
-          value={session.athlete_notes}
-          onChange={() => {}}
-          readOnly={true}
-          label="Athlete's Notes"
-          icon="📝"
-        />
-      )}
-
       {/* ── Update future occurrences banner ── */}
       {session.source_session_id && (
         <div style={styles.propagateBanner}>
@@ -878,6 +862,22 @@ export default function SessionDetailPage() {
             </button>
           )}
         </div>
+      )}
+
+      <SessionNotesBlock
+        value={(session as any).session_notes ?? ""}
+        onChange={handleSessionNotesChange}
+        sessionType={session.type}
+      />
+
+      {session.athlete_notes && (
+        <SessionNotesBlock
+          value={session.athlete_notes}
+          onChange={() => {}}
+          readOnly={true}
+          label="Athlete's Notes"
+          icon="📝"
+        />
       )}
 
       {session.type === "strength" ? (

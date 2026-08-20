@@ -470,7 +470,11 @@ export async function applyToFutureSessions(
 // ------------------------------------------------------------
 // Used by the "Update future occurrences" feature on the session
 // editor. Finds future sessions that share the same source as the
-// current session, then syncs exercises:
+// current session, then syncs:
+//   NOTES — session_notes (coach's own notes) filled in from the
+//           source session's current value, but only on targets that
+//           don't already have their own notes (never overwrites a
+//           note the coach has customized on that occurrence)
 //   ADD  — exercises in source not yet in target
 //   UPDATE — prescription fields (sets/reps/etc.) for matching exercises
 //            leaving any logged weight/reps data untouched
@@ -489,7 +493,7 @@ export async function propagateFutureOccurrences(
   // Find future sessions that share this source
   const { data: futures, error: findErr } = await supabase
     .from("sessions")
-    .select("id, date, session_exercises(*)")
+    .select("id, date, session_notes, session_exercises(*)")
     .eq("source_session_id", sourceId)
     .gt("date", session.date)
     .order("date", { ascending: true });
@@ -505,6 +509,16 @@ export async function propagateFutureOccurrences(
   const sourceExercises = (session.exercises ?? []) as SessionExercise[];
 
   for (const target of targets) {
+    // Only fill in notes if the target doesn't already have its own —
+    // never clobber a note the coach has customized on that occurrence.
+    if (!(target as any).session_notes?.trim()) {
+      const { error: notesError } = await supabase
+        .from("sessions")
+        .update({ session_notes: session.session_notes ?? "" })
+        .eq("id", target.id);
+      if (notesError) throw notesError;
+    }
+
     const targetExercises: any[] = target.session_exercises ?? [];
     const targetByName = new Map(targetExercises.map((e: any) => [e.name.toLowerCase().trim(), e]));
     const sourceByName = new Map(sourceExercises.map((e) => [e.name.toLowerCase().trim(), e]));
