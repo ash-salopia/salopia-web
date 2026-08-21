@@ -181,7 +181,7 @@ export default function AthletesPage() {
         <h1 style={styles.title}>Athletes</h1>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
-            📥 Export all
+            Export all
           </button>
           <button style={styles.ghostBtn} onClick={handleShowArchivedToggle}>
             {showArchived ? "← Back to active" : `Archived (${archivedAthletes.length})`}

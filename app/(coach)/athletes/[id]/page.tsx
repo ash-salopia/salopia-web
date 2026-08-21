@@ -552,8 +552,8 @@ export default function AthleteDetailPage() {
                   setLoadTemplateOpen(true);
                 },
               },
-              { key: "library", label: "📚 Session Library", onClick: () => setLibraryAccessOpen(true) },
-              { key: "reports", label: "📊 Reports", onClick: () => setReportRangeOpen(true) },
+              { key: "library", label: "Session Library", onClick: () => setLibraryAccessOpen(true) },
+              { key: "reports", label: "Reports", onClick: () => setReportRangeOpen(true) },
               {
                 key: "copyrange",
                 label: "Copy range",
@@ -573,13 +573,13 @@ export default function AthleteDetailPage() {
                   setRangeToolOpen("delete");
                 },
               },
-              { key: "voice", label: "🎤 Voice", onClick: () => setVoiceOpen(true) },
-              { key: "notes", label: "📝 Notes", onClick: () => setNotesOpen(true) },
-              { key: "modify", label: "✏️ Modify", onClick: () => setModifyOpen(true) },
-              { key: "assign", label: "📅 Assign programme", onClick: () => setAssignOpen(true) },
+              { key: "voice", label: "Voice", onClick: () => setVoiceOpen(true) },
+              { key: "notes", label: "Notes", onClick: () => setNotesOpen(true) },
+              { key: "modify", label: "Modify", onClick: () => setModifyOpen(true) },
+              { key: "assign", label: "Assign programme", onClick: () => setAssignOpen(true) },
               {
                 key: "saveprogramme",
-                label: "💾 Save as programme",
+                label: "Save as programme",
                 onClick: () => {
                   setSaveProgrammeName("");
                   setSaveProgrammeStart(todayISO());
@@ -587,8 +587,8 @@ export default function AthleteDetailPage() {
                   setSaveProgrammeOpen(true);
                 },
               },
-              { key: "profile", label: "👤 Profile", onClick: () => router.push(`/athletes/${athleteId}/profile`) },
-              { key: "goals", label: "🎯 Goals", onClick: () => setGoalsOpen(true) },
+              { key: "profile", label: "Profile", onClick: () => router.push(`/athletes/${athleteId}/profile`) },
+              { key: "goals", label: "Goals", onClick: () => setGoalsOpen(true) },
             ];
 
             // On mobile these 12 buttons used to force the whole header

@@ -684,10 +684,10 @@ export default function SessionDetailPage() {
               Import CSV
             </button>
             <button style={styles.ghostBtn} onClick={() => setVoiceOpen(true)}>
-              🎤 Voice
+              Voice
             </button>
             <button style={styles.ghostBtn} onClick={() => setNotesOpen(true)}>
-              📝 Notes
+              Notes
             </button>
           </>
         )}
@@ -711,7 +711,7 @@ export default function SessionDetailPage() {
           } catch { setReport("Could not generate report."); }
           finally { setReportLoading(false); }
         }}>
-          📊 AI Report
+          AI Report
         </button>
         <button style={styles.ghostBtn} onClick={async () => {
           try {
@@ -726,7 +726,7 @@ export default function SessionDetailPage() {
             }
           } catch {}
         }}>
-          ✨ Summary
+          Summary
         </button>
         <button
           style={styles.ghostBtn}
