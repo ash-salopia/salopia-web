@@ -410,14 +410,14 @@ export default function DashboardPage() {
               </div>
               <div style={st.athleteList}>
                 {recentPBs.slice(0, 8).map((pb) => (
-                  <button key={pb.id} style={st.athleteChip} onClick={() => router.push("/community")}>
+                  <button key={pb.id} style={st.athleteChip} onClick={() => router.push(`/community?tab=feed&pb=${pb.id}`)}>
                     <span style={{ fontWeight: 400, color: "var(--mute)" }}>{(pb as any).athlete?.name}</span>
                     <span>· {pb.exercise_name}</span>
                     <span style={{ color: "var(--accent)", fontWeight: 700 }}>{formatPBValue(pb)}</span>
                   </button>
                 ))}
               </div>
-              <button style={st.viewPBsBtn} onClick={() => router.push("/community")}>
+              <button style={st.viewPBsBtn} onClick={() => router.push("/community?tab=feed")}>
                 React &amp; comment on PBs →
               </button>
             </div>

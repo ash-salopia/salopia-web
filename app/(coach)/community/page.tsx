@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   listGroups, createGroup, deleteGroup, listGroupMembers,
   addGroupMember, removeGroupMember, type Group, type GroupMember,
@@ -34,8 +35,15 @@ const GROUP_COLOURS = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const VALID_TABS: Tab[] = ["groups", "announcements", "feed", "chat", "comps"];
+
 export default function CommunityPage() {
-  const [tab, setTab] = useState<Tab>("groups");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialTab = (VALID_TABS as string[]).includes(tabParam ?? "") ? (tabParam as Tab) : "groups";
+  const highlightPbId = searchParams.get("pb");
+
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [groups, setGroups] = useState<Group[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [pbs, setPbs] = useState<PersonalBest[]>([]);
@@ -126,6 +134,7 @@ export default function CommunityPage() {
               coachId={coachId}
               coachName={coachName}
               onPbsChange={setPbs}
+              highlightId={highlightPbId}
             />
           )}
           {tab === "chat" && (
@@ -453,13 +462,23 @@ function AnnouncementsTab({ announcements, groups, onAnnouncementsChange }: {
 
 // ── PB Feed tab ───────────────────────────────────────────────────────────────
 
-function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
+function FeedTab({ pbs, coachId, coachName, onPbsChange, highlightId }: {
   pbs: PersonalBest[];
   coachId: string;
   coachName: string;
   onPbsChange: (p: PersonalBest[]) => void;
+  highlightId?: string | null;
 }) {
   const [error, setError] = useState("");
+
+  // Deep-link from the dashboard's "Recent PBs" panel: jump straight
+  // to the PB that was clicked instead of leaving the coach to scroll
+  // through the whole feed to find it.
+  useEffect(() => {
+    if (!highlightId) return;
+    const el = document.getElementById(`pb-${highlightId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId, pbs]);
 
   const handleDelete = async (pbId: string) => {
     if (!confirm("Delete this PB record? This cannot be undone.")) return;
@@ -527,6 +546,7 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
             pb={pb}
             myReaction={myReaction}
             reactionGroups={reactionGroups}
+            highlighted={pb.id === highlightId}
             onReact={(emoji) => handleReaction(pb, emoji)}
             onDelete={() => handleDelete(pb.id)}
             onCommentDeleted={(commentId) => {
@@ -553,10 +573,11 @@ function FeedTab({ pbs, coachId, coachName, onPbsChange }: {
 
 // ── PB Card ──────────────────────────────────────────────────────────────────
 
-function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, onCommentDeleted, coachId, coachName, onCommentAdded, s }: {
+function PBCard({ pb, myReaction, reactionGroups, highlighted, onReact, onDelete, onCommentDeleted, coachId, coachName, onCommentAdded, s }: {
   pb: PersonalBest;
   myReaction: any;
   reactionGroups: Record<string, number>;
+  highlighted?: boolean;
   onReact: (emoji: string) => void;
   onDelete: () => void;
   onCommentDeleted: (commentId: string) => void;
@@ -565,7 +586,7 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, onCommentDe
   onCommentAdded: (comment: any) => void;
   s: Record<string, React.CSSProperties>;
 }) {
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(!!highlighted);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
   const [deletingComment, setDeletingComment] = useState<string | null>(null);
@@ -611,7 +632,13 @@ function PBCard({ pb, myReaction, reactionGroups, onReact, onDelete, onCommentDe
   };
 
   return (
-    <div style={s.pbCard}>
+    <div
+      id={`pb-${pb.id}`}
+      style={{
+        ...s.pbCard,
+        ...(highlighted ? { outline: "2px solid var(--accent)", outlineOffset: 2 } : {}),
+      }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={s.pbAthlete}>{pb.athlete?.name ?? "Unknown athlete"}</div>
         <button
