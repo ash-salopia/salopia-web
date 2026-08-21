@@ -166,6 +166,7 @@ async function cloneTestingSetup(demoOrgId) {
   const metricIdMap = new Map(); // old id -> new id
   const metricIdByName = new Map(); // name -> new id
   const metricBilateralById = new Map(); // new id -> is_bilateral
+  const metricDirectionById = new Map(); // new id -> 'higher' | 'lower'
   for (const m of sourceMetrics ?? []) {
     const { data: newMetric, error } = await sb
       .from("test_metrics")
@@ -176,6 +177,7 @@ async function cloneTestingSetup(demoOrgId) {
     metricIdMap.set(m.id, newMetric.id);
     metricIdByName.set(newMetric.name, newMetric.id);
     metricBilateralById.set(newMetric.id, newMetric.is_bilateral);
+    metricDirectionById.set(newMetric.id, newMetric.better_direction);
   }
   console.log(`Cloned ${metricIdMap.size} test metrics.`);
 
@@ -216,7 +218,7 @@ async function cloneTestingSetup(demoOrgId) {
   }
   console.log(`Cloned ${sourceBatteries?.length ?? 0} test batteries.`);
 
-  return { batteryId: firstNewBatteryId, metricIdByName, metricBilateralById };
+  return { batteryId: firstNewBatteryId, metricIdByName, metricBilateralById, metricDirectionById };
 }
 
 // ── 4. Exercise library ────────────────────────────────────────────────────────
@@ -417,11 +419,13 @@ async function seedSessionsAndPBs(athletes) {
       exerciseState.set(ex.name, { raw: start, factor: archetypeFor(i).factor });
     });
 
-    // 8 weeks back through 1 week ahead, 2 sessions/week — so every
+    // 14 weeks back through 1 week ahead, 2 sessions/week — so every
     // athlete has upcoming sessions on the calendar (not just logged
-    // history) and enough depth for the report's 8/12-week presets
-    // and weekly-average view to actually show a trend.
-    for (let week = 8; week >= -1; week--) {
+    // history), the report's "Last 12 weeks" preset actually differs
+    // from "Last 8 weeks" instead of showing identical data, and
+    // there's enough depth for the weekly-average view to show a
+    // real trend.
+    for (let week = 14; week >= -1; week--) {
       for (const dayOffset of [1, 4]) {
         const date = addDaysISO(today, -(week * 7) - (7 - dayOffset));
         const isPast = date < today;
@@ -601,50 +605,89 @@ async function seedPercentOneRM(athletes) {
 
 // ── 8. Testing session + results ──────────────────────────────────────────────
 
-async function seedTesting(athletes, batteryId, metricIdByName, metricBilateralById) {
+// Three testing dates spread across the same window as the training
+// history (~12 weeks) rather than one isolated session, so the
+// testing report's history/trend view has something real to plot
+// instead of a single dot. Values trend in each metric's own
+// `better_direction` (session-to-session, not perfectly linear) so
+// the improvement reads as genuine rather than randomly scattered.
+const TEST_SESSION_OFFSETS_DAYS = [-84, -42, -10];
+const TEST_TREND_STEP = 0.05; // ~5% improvement per session, +/- noise
+
+async function seedTesting(athletes, batteryId, metricIdByName, metricBilateralById, metricDirectionById) {
   if (!batteryId || !metricIdByName.size) { console.log("No cloned battery — skipping testing seed."); return; }
 
-  const testAthletes = athletes.slice(0, 4);
+  const testAthletes = athletes.slice(0, 6);
   const today = todayISO();
 
-  for (const athlete of testAthletes) {
-    const { data: testSession, error } = await sb
-      .from("test_sessions")
-      .insert({ athlete_id: athlete.id, test_battery_id: batteryId, date: addDaysISO(today, -10), bodyweight_kg: athlete.bodyweight_kg, notes: "" })
-      .select()
-      .single();
-    if (error) throw error;
+  // Matched against each metric's real seeded name (see the norms
+  // block in 0027_testing_real_norms.sql) -- checked in this order
+  // because some keywords are substrings of others (e.g. "imtp"
+  // alone would also match "IMTP Relative (N/kg)", so that needs
+  // its own branch checked first to get a realistic N/kg-scale value
+  // instead of the kg-scale peak-force one). Returns the baseline
+  // (first-session) value and its typical scale for that metric.
+  function baselineFor(key) {
+    if (key.includes("imtp") && key.includes("relative")) return 18 + Math.random() * 20; // N/kg
+    if (key.includes("imtp") || key.includes("force")) return 120 + Math.random() * 150; // kg
+    if (key.includes("sprint")) return 1.6 + Math.random() * 0.4; // s
+    if (key.includes("jump") || key.includes("cmj")) return 28 + Math.random() * 12; // cm
+    if (key.includes("reactive strength") || key.includes("rsi")) return 1.4 + Math.random() * 0.8; // m/s
+    if (key.includes("plank") || key.includes("hold")) return 45 + Math.random() * 60; // s
+    if (key.includes("agility") || key.includes("change of direction") || key.includes("505")) return 2.2 + Math.random() * 0.5; // s
+    if (key.includes("grip")) return 15 + Math.random() * 35; // kg
+    return 10 + Math.random() * 40; // unmatched custom metric -- generic placeholder range
+  }
+  function formatFor(key, value) {
+    if (key.includes("imtp") && key.includes("relative")) return value.toFixed(1);
+    if (key.includes("imtp") || key.includes("force")) return Math.round(value);
+    if (key.includes("sprint")) return value.toFixed(2);
+    if (key.includes("jump") || key.includes("cmj")) return value.toFixed(1);
+    if (key.includes("reactive strength") || key.includes("rsi")) return value.toFixed(2);
+    if (key.includes("plank") || key.includes("hold")) return Math.round(value);
+    if (key.includes("agility") || key.includes("change of direction") || key.includes("505")) return value.toFixed(2);
+    if (key.includes("grip")) return Math.round(value);
+    return Math.round(value);
+  }
 
-    const resultRows = [];
+  for (const athlete of testAthletes) {
+    // Fixed per-athlete, per-metric baseline so the trend compounds
+    // consistently across this athlete's three sessions instead of
+    // re-randomizing from scratch each time.
+    const stateByMetric = new Map();
     for (const [name, metricId] of metricIdByName) {
-      const key = name.toLowerCase();
-      // Matched against each metric's real seeded name (see the norms
-      // block in 0027_testing_real_norms.sql) -- checked in this order
-      // because some keywords are substrings of others (e.g. "imtp"
-      // alone would also match "IMTP Relative (N/kg)", so that needs
-      // its own branch checked first to get a realistic N/kg-scale
-      // value instead of the kg-scale peak-force one).
-      const genValue = () => {
-        if (key.includes("imtp") && key.includes("relative")) return (18 + Math.random() * 20).toFixed(1); // N/kg
-        if (key.includes("imtp") || key.includes("force")) return Math.round(120 + Math.random() * 150); // kg
-        if (key.includes("sprint")) return (1.6 + Math.random() * 0.4).toFixed(2); // s
-        if (key.includes("jump") || key.includes("cmj")) return (28 + Math.random() * 12).toFixed(1); // cm
-        if (key.includes("reactive strength") || key.includes("rsi")) return (1.4 + Math.random() * 0.8).toFixed(2); // m/s
-        if (key.includes("plank") || key.includes("hold")) return Math.round(45 + Math.random() * 60); // s
-        if (key.includes("agility") || key.includes("change of direction") || key.includes("505")) return (2.2 + Math.random() * 0.5).toFixed(2); // s
-        if (key.includes("grip")) return Math.round(15 + Math.random() * 35); // kg
-        return Math.round(10 + Math.random() * 40); // unmatched custom metric -- generic placeholder range
-      };
-      if (metricBilateralById.get(metricId)) {
-        resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, side: "left", value: genValue() });
-        resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, side: "right", value: genValue() });
-      } else {
-        resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, value: genValue() });
-      }
+      stateByMetric.set(metricId, baselineFor(name.toLowerCase()));
     }
-    if (resultRows.length) {
-      const { error: resErr } = await sb.from("test_results").insert(resultRows);
-      if (resErr) throw resErr;
+
+    for (let i = 0; i < TEST_SESSION_OFFSETS_DAYS.length; i++) {
+      const { data: testSession, error } = await sb
+        .from("test_sessions")
+        .insert({ athlete_id: athlete.id, test_battery_id: batteryId, date: addDaysISO(today, TEST_SESSION_OFFSETS_DAYS[i]), bodyweight_kg: athlete.bodyweight_kg, notes: "" })
+        .select()
+        .single();
+      if (error) throw error;
+
+      const resultRows = [];
+      for (const [name, metricId] of metricIdByName) {
+        const key = name.toLowerCase();
+        if (i > 0) {
+          const direction = metricDirectionById.get(metricId) === "lower" ? -1 : 1;
+          const noise = 0.6 + Math.random() * 0.8; // some athletes/metrics improve faster than others
+          const step = direction * TEST_TREND_STEP * noise;
+          stateByMetric.set(metricId, stateByMetric.get(metricId) * (1 + step));
+        }
+        const genValue = () => formatFor(key, stateByMetric.get(metricId));
+        if (metricBilateralById.get(metricId)) {
+          resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, side: "left", value: genValue() });
+          resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, side: "right", value: genValue() });
+        } else {
+          resultRows.push({ test_session_id: testSession.id, test_metric_id: metricId, trial_number: 1, value: genValue() });
+        }
+      }
+      if (resultRows.length) {
+        const { error: resErr } = await sb.from("test_results").insert(resultRows);
+        if (resErr) throw resErr;
+      }
     }
   }
   console.log(`Seeded testing sessions for ${testAthletes.length} athletes.`);
@@ -708,12 +751,12 @@ async function seedCommunity(demoOrgId, coachId) {
 async function main() {
   await resetExistingDemoOrg();
   const { org, coachId } = await createDemoOrgAndCoach();
-  const { batteryId, metricIdByName, metricBilateralById } = await cloneTestingSetup(org.id);
+  const { batteryId, metricIdByName, metricBilateralById, metricDirectionById } = await cloneTestingSetup(org.id);
   await seedLibrary(org.id);
   const { athletes } = await seedAthletes(org.id);
   await seedSessionsAndPBs(athletes);
   await seedPercentOneRM(athletes);
-  await seedTesting(athletes, batteryId, metricIdByName, metricBilateralById);
+  await seedTesting(athletes, batteryId, metricIdByName, metricBilateralById, metricDirectionById);
   await seedTemplateAndProgramme(org.id, athletes);
   await seedCommunity(org.id, coachId);
 
