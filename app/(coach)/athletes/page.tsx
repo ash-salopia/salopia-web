@@ -179,7 +179,7 @@ export default function AthletesPage() {
     <div style={styles.page}>
       <div style={styles.headerRow}>
         <h1 style={styles.title}>Athletes</h1>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
             📥 Export all
           </button>
@@ -360,6 +360,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
     marginBottom: 20,
   },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: 0 },

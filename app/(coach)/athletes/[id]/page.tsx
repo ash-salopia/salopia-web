@@ -538,7 +538,7 @@ export default function AthleteDetailPage() {
             {athlete.group && <div style={styles.groupLabel}>{athlete.group}</div>}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, position: "relative" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", position: "relative" }}>
           {(() => {
             const toolbarActions: { key: string; label: string; onClick: () => void }[] = [
               { key: "share", label: linkCopied ? "Copied!" : "Copy share link", onClick: handleCopyShareLink },
@@ -1197,6 +1197,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    flexWrap: "wrap",
+    gap: 10,
     marginBottom: 20,
   },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: 0 },

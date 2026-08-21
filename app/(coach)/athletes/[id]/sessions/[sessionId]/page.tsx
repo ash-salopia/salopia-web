@@ -1036,7 +1036,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 14px",
     fontSize: 14,
   },
-  toolbar: { display: "flex", gap: 8, marginBottom: 20 },
+  toolbar: { display: "flex", gap: 8, flexWrap: "wrap" as const, marginBottom: 20 },
   ghostBtn: {
     background: "transparent",
     border: "1px solid var(--line)",
