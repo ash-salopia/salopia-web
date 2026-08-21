@@ -596,7 +596,7 @@ export default function AthleteDetailPage() {
             return (
               <div style={{ position: "relative" }}>
                 <button style={styles.ghostBtn} onClick={() => setMoreMenuOpen((v) => !v)}>
-                  ⋯ Tools
+                  Manage
                 </button>
                 {moreMenuOpen && (
                   <div style={styles.moreMenu}>
