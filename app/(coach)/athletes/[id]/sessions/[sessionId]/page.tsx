@@ -23,7 +23,6 @@ import { listLibrary } from "@/lib/data/library";
 import { saveSessionAsTemplate } from "@/lib/data/templates";
 import ExerciseCard from "@/components/ExerciseCard";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
-import CheckInModal from "@/components/CheckInModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
 import PowerSpeedExerciseCard from "@/components/PowerSpeedExerciseCard";
@@ -59,8 +58,6 @@ export default function SessionDetailPage() {
   const [flash, setFlash] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
-  const [checkInOpen, setCheckInOpen] = useState(false);
-  const [checkinEnabled, setCheckinEnabled] = useState(true);
   const [saveTemplateName, setSaveTemplateName] = useState("");
   const [savePresetOpen, setSavePresetOpen] = useState(false);
   const [savePresetName, setSavePresetName] = useState("");
@@ -126,10 +123,6 @@ export default function SessionDetailPage() {
 
   useEffect(() => {
     if (sessionId) load();
-    // Check org-wide checkin setting
-    getOrgSettings().then((s) => {
-      if (!s.checkin_enabled) setCheckinEnabled(false);
-    }).catch(() => {});
     // Fetch other sessions for navigation (lightweight - id/name/date/type only)
     if (athleteId) {
       const supabase = createClient();
@@ -691,11 +684,6 @@ export default function SessionDetailPage() {
             </button>
           </>
         )}
-        {checkinEnabled && (
-          <button style={styles.ghostBtn} onClick={() => setCheckInOpen(true)}>
-            Check-in
-          </button>
-        )}
         <button style={styles.ghostBtn} onClick={async () => {
           setReportOpen(true);
           setReportLoading(true);
@@ -712,21 +700,6 @@ export default function SessionDetailPage() {
           finally { setReportLoading(false); }
         }}>
           AI Report
-        </button>
-        <button style={styles.ghostBtn} onClick={async () => {
-          try {
-            const res = await fetch("/api/session-summary", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sessionId }),
-            });
-            const data = await res.json();
-            if (data.summary) {
-              setSession((prev) => prev ? { ...prev, coach_summary: data.summary } : prev);
-            }
-          } catch {}
-        }}>
-          Summary
         </button>
         <button
           style={styles.ghostBtn}
@@ -760,8 +733,6 @@ export default function SessionDetailPage() {
           </button>
         )}
       </div>
-
-      {checkInOpen && <CheckInModal onClose={() => setCheckInOpen(false)} />}
 
       {reportOpen && (
         <div style={styles.overlay} onClick={() => setReportOpen(false)}>

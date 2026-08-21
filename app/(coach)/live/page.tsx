@@ -6,6 +6,7 @@ import { listLiveGroupAthletes } from "@/lib/data/athletes";
 import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise, updateSession } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
+import CheckInModal from "@/components/CheckInModal";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
 import { useIsMobile } from "@/lib/use-is-mobile";
@@ -132,6 +133,8 @@ export default function LiveGroupPage() {
   >(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [checkinEnabled, setCheckinEnabled] = useState(true);
+  const [checkInOpen, setCheckInOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -169,6 +172,12 @@ export default function LiveGroupPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    getOrgSettings().then((s) => {
+      if (!s.checkin_enabled) setCheckinEnabled(false);
+    }).catch(() => {});
+  }, []);
 
   const changeMode = (m: "starred" | "group") => {
     setMode(m); lsSet(LS_MODE, m);
@@ -504,6 +513,11 @@ export default function LiveGroupPage() {
                       📝 {activeSess.session_notes?.trim() ? "Session note" : "Add note"}
                     </button>
                   )}
+                  {checkinEnabled && (
+                    <button style={s.noteBtn} onClick={() => setCheckInOpen(true)} title="Session check-in">
+                      ✅
+                    </button>
+                  )}
                   {activeSess && (
                     <button style={s.openBtn}
                       onClick={() => router.push(`/athletes/${activeAthlete.id}/sessions/${activeSess.id}`)}>
@@ -743,6 +757,8 @@ export default function LiveGroupPage() {
           )}
         </>
       )}
+
+      {checkInOpen && <CheckInModal onClose={() => setCheckInOpen(false)} />}
 
       {noteModal && (
         <div style={s.noteOverlay} onClick={closeNoteModal}>

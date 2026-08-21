@@ -33,7 +33,6 @@ import RecoverySessionModal from "@/components/RecoverySessionModal";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
-import { useIsMobile } from "@/lib/use-is-mobile";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
@@ -89,7 +88,6 @@ function EditableName({ name, onSave }: { name: string; onSave: (n: string) => P
 export default function AthleteDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const isMobile = useIsMobile();
   const athleteId = params.id;
 
   const [athlete, setAthlete] = useState<Athlete | null>(null);
@@ -591,41 +589,33 @@ export default function AthleteDetailPage() {
               { key: "goals", label: "Goals", onClick: () => setGoalsOpen(true) },
             ];
 
-            // On mobile these 12 buttons used to force the whole header
-            // into a horizontal-scroll situation just to reach "Modify"
-            // or "Voice" - collapsed into one dropdown instead, with
-            // Add session kept separate since it's the primary action.
-            if (isMobile) {
-              return (
-                <div style={{ position: "relative" }}>
-                  <button style={styles.ghostBtn} onClick={() => setMoreMenuOpen((v) => !v)}>
-                    ⋯ More
-                  </button>
-                  {moreMenuOpen && (
-                    <div style={styles.moreMenu}>
-                      {toolbarActions.map((a) => (
-                        <button
-                          key={a.key}
-                          style={styles.typeOption}
-                          onClick={() => {
-                            setMoreMenuOpen(false);
-                            a.onClick();
-                          }}
-                        >
-                          {a.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            return toolbarActions.map((a) => (
-              <button key={a.key} style={styles.ghostBtn} onClick={a.onClick}>
-                {a.label}
-              </button>
-            ));
+            // These 12 buttons in a row looked cluttered even wrapped
+            // across multiple lines on a full desktop screen - collapsed
+            // into one dropdown at every screen size instead, with Add
+            // session kept separate since it's the primary action.
+            return (
+              <div style={{ position: "relative" }}>
+                <button style={styles.ghostBtn} onClick={() => setMoreMenuOpen((v) => !v)}>
+                  ⋯ Tools
+                </button>
+                {moreMenuOpen && (
+                  <div style={styles.moreMenu}>
+                    {toolbarActions.map((a) => (
+                      <button
+                        key={a.key}
+                        style={styles.typeOption}
+                        onClick={() => {
+                          setMoreMenuOpen(false);
+                          a.onClick();
+                        }}
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
           })()}
           <button style={styles.primaryBtn} onClick={() => setTypePicker((v) => !v)}>
             + {calendarAddDate && calendarAddDate !== todayStr
