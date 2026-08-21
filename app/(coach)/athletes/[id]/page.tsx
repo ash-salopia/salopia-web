@@ -538,22 +538,20 @@ export default function AthleteDetailPage() {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", position: "relative" }}>
           {(() => {
-            const toolbarActions: { key: string; label: string; onClick: () => void }[] = [
-              { key: "share", label: linkCopied ? "Copied!" : "Copy share link", onClick: handleCopyShareLink },
-              {
-                key: "template",
-                label: "Load template",
-                onClick: () => {
-                  setLoadTemplateId(templates[0]?.id ?? "");
-                  setLoadStart(todayISO());
-                  setLoadEnd(todayISO());
-                  setLoadTemplateOpen(true);
-                },
-              },
-              { key: "library", label: "Session Library", onClick: () => setLibraryAccessOpen(true) },
-              { key: "reports", label: "Reports", onClick: () => setReportRangeOpen(true) },
+            const toolbarActions: { key: string; label: string; onClick: () => void; groupStart?: boolean }[] = [
+              // Ordered by how often a coach actually reaches for each one
+              // day-to-day, grouped with related actions kept adjacent
+              // rather than alphabetically/by when they were added.
+
+              // Session content tools - used constantly while building/logging
+              { key: "voice", label: "Voice", onClick: () => setVoiceOpen(true) },
+              { key: "notes", label: "Notes", onClick: () => setNotesOpen(true) },
+              { key: "modify", label: "Modify", onClick: () => setModifyOpen(true) },
+
+              // Bulk calendar operations
               {
                 key: "copyrange",
+                groupStart: true,
                 label: "Copy range",
                 onClick: () => {
                   setRangeStart(todayISO());
@@ -571,9 +569,19 @@ export default function AthleteDetailPage() {
                   setRangeToolOpen("delete");
                 },
               },
-              { key: "voice", label: "Voice", onClick: () => setVoiceOpen(true) },
-              { key: "notes", label: "Notes", onClick: () => setNotesOpen(true) },
-              { key: "modify", label: "Modify", onClick: () => setModifyOpen(true) },
+
+              // Templates & programmes
+              {
+                key: "template",
+                groupStart: true,
+                label: "Load template",
+                onClick: () => {
+                  setLoadTemplateId(templates[0]?.id ?? "");
+                  setLoadStart(todayISO());
+                  setLoadEnd(todayISO());
+                  setLoadTemplateOpen(true);
+                },
+              },
               { key: "assign", label: "Assign programme", onClick: () => setAssignOpen(true) },
               {
                 key: "saveprogramme",
@@ -585,6 +593,11 @@ export default function AthleteDetailPage() {
                   setSaveProgrammeOpen(true);
                 },
               },
+
+              // Reference / occasional
+              { key: "library", groupStart: true, label: "Session Library", onClick: () => setLibraryAccessOpen(true) },
+              { key: "reports", label: "Reports", onClick: () => setReportRangeOpen(true) },
+              { key: "share", label: linkCopied ? "Copied!" : "Copy share link", onClick: handleCopyShareLink },
               { key: "profile", label: "Profile", onClick: () => router.push(`/athletes/${athleteId}/profile`) },
               { key: "goals", label: "Goals", onClick: () => setGoalsOpen(true) },
             ];
@@ -601,16 +614,18 @@ export default function AthleteDetailPage() {
                 {moreMenuOpen && (
                   <div style={styles.moreMenu}>
                     {toolbarActions.map((a) => (
-                      <button
-                        key={a.key}
-                        style={styles.typeOption}
-                        onClick={() => {
-                          setMoreMenuOpen(false);
-                          a.onClick();
-                        }}
-                      >
-                        {a.label}
-                      </button>
+                      <div key={a.key}>
+                        {a.groupStart && <div style={styles.menuDivider} />}
+                        <button
+                          style={styles.typeOption}
+                          onClick={() => {
+                            setMoreMenuOpen(false);
+                            a.onClick();
+                          }}
+                        >
+                          {a.label}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1301,6 +1316,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     textAlign: "left",
   },
+  menuDivider: { height: 1, background: "var(--line)", margin: "6px 4px" },
   errorBox: {
     background: "#2a0c0c",
     border: "1px solid #FF6B6B44",
