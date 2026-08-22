@@ -677,10 +677,10 @@ export default function SessionDetailPage() {
               Import CSV
             </button>
             <button style={styles.ghostBtn} onClick={() => setVoiceOpen(true)}>
-              Voice
+              Build · Voice
             </button>
             <button style={styles.ghostBtn} onClick={() => setNotesOpen(true)}>
-              Notes
+              Build · Notes
             </button>
           </>
         )}

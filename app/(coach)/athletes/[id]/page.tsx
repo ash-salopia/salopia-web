@@ -544,8 +544,8 @@ export default function AthleteDetailPage() {
               // rather than alphabetically/by when they were added.
 
               // Session content tools - used constantly while building/logging
-              { key: "voice", label: "Voice", onClick: () => setVoiceOpen(true) },
-              { key: "notes", label: "Notes", onClick: () => setNotesOpen(true) },
+              { key: "voice", label: "Build · Voice", onClick: () => setVoiceOpen(true) },
+              { key: "notes", label: "Build · Notes", onClick: () => setNotesOpen(true) },
               { key: "modify", label: "Modify", onClick: () => setModifyOpen(true) },
 
               // Bulk calendar operations
