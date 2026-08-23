@@ -551,7 +551,12 @@ export default function LiveGroupPage() {
                     // how it was actually prescribed.
                     const showWeight = !ex.is_bodyweight;
                     const timeMode = (ex.time ?? "").trim().length > 0;
-                    const setGridCols = showWeight ? "32px 1fr 1fr 40px 44px" : "32px 1fr 40px 44px";
+                    const completionOnly = !!ex.completion_only;
+                    const showVelocity = !!ex.track_velocity && !completionOnly;
+                    const setGridCols = completionOnly
+                      ? "32px 44px"
+                      : [showWeight ? "1fr" : "", "1fr", showVelocity ? "1fr" : "", "40px", "44px"]
+                          .filter(Boolean).join(" ").replace(/^/, "32px ");
                     // What the athlete actually did last time on this
                     // exercise, so the coach doesn't have to leave
                     // Live Group and dig through past sessions to see
@@ -627,12 +632,22 @@ export default function LiveGroupPage() {
                           <div style={s.setEditor}>
                             <div style={{ ...s.setHeaderRow, gridTemplateColumns: setGridCols }}>
                               <span style={s.setColLabel}>Set</span>
-                              {showWeight && <span style={s.setColLabel}>Weight (kg)</span>}
-                              <span style={s.setColLabel}>{timeMode ? "Time (s)" : "Reps"}</span>
-                              <span style={s.setColLabel} />
+                              {!completionOnly && showWeight && <span style={s.setColLabel}>Weight (kg)</span>}
+                              {!completionOnly && <span style={s.setColLabel}>{timeMode ? "Time (s)" : "Reps"}</span>}
+                              {showVelocity && <span style={s.setColLabel}>Speed (m/s)</span>}
+                              {!completionOnly && <span style={s.setColLabel} />}
                               <span style={s.setColLabel}>Done</span>
                             </div>
-                            {(ex.log ?? []).map((set, si) => (
+                            {(ex.log ?? []).map((set, si) => completionOnly ? (
+                              <div key={si} style={{ ...s.setRow, gridTemplateColumns: setGridCols }}>
+                                <span style={s.setNum}>{si + 1}</span>
+                                <button
+                                  onClick={() => handleLogChange(activeSess.id, ex.id, si, { done: !set.done })}
+                                  style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }}>
+                                  ✓
+                                </button>
+                              </div>
+                            ) : (
                               <div key={si} style={{ ...s.setRow, gridTemplateColumns: setGridCols }}>
                                 <span style={s.setNum}>{si + 1}</span>
                                 {showWeight && (
@@ -700,6 +715,22 @@ export default function LiveGroupPage() {
                                         return;
                                       }
                                       handleLogChange(activeSess.id, ex.id, si, { reps: v, done: v.trim().length > 0 ? true : set.done });
+                                    }}
+                                  />
+                                )}
+                                {showVelocity && (
+                                  <input
+                                    key={`v-${ex.id}-${si}-${set.velocity}`}
+                                    defaultValue={set.velocity ?? ""}
+                                    type="number"
+                                    step="0.01"
+                                    placeholder={ex.target_velocity ? `${ex.target_velocity} m/s` : "m/s"}
+                                    inputMode="decimal"
+                                    style={s.setInput}
+                                    onBlur={(e) => {
+                                      const v = e.target.value;
+                                      if (v === (set.velocity ?? "")) return;
+                                      handleLogChange(activeSess.id, ex.id, si, { velocity: v });
                                     }}
                                   />
                                 )}

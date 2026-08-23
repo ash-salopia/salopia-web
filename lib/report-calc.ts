@@ -86,6 +86,56 @@ export interface PowerSpeedSummary {
 
 export type PowerSpeedMap = Record<string, PowerSpeedRow[]>;
 
+// Bar speed (m/s), only ever present on exercises the coach turned
+// track_velocity on — most sessions in the range will have none, so
+// this is entirely separate from the tonnage-based ExerciseMap above
+// rather than bolted onto it, and the report section it feeds only
+// renders when at least one exercise actually has entries.
+export interface VelocityRow {
+  date: string;
+  sessName: string;
+  avgVelocity: number;
+  maxVelocity: number;
+}
+export type VelocityMap = Record<string, VelocityRow[]>;
+export interface VelocitySummary {
+  name: string;
+  entries: VelocityRow[];
+  overallPct: number | null; // higher velocity = better
+}
+
+function collectVelocity(strengthSessions: Session[]): { exMap: VelocityMap; summaries: VelocitySummary[] } {
+  const exMap: VelocityMap = {};
+  for (const sess of strengthSessions) {
+    if (sess.is_primer) continue;
+    for (const ex of sess.exercises ?? []) {
+      if (!ex.name || ex.is_primer || !(ex as any).track_velocity) continue;
+      const values = (ex.log ?? [])
+        .map((s) => parseFloat((s as any).velocity))
+        .filter((v) => isFinite(v));
+      if (!values.length) continue;
+
+      const avgVelocity = values.reduce((a, b) => a + b, 0) / values.length;
+      if (!exMap[ex.name]) exMap[ex.name] = [];
+      exMap[ex.name].push({ date: sess.date, sessName: sess.name, avgVelocity, maxVelocity: Math.max(...values) });
+    }
+  }
+
+  const summaries: VelocitySummary[] = Object.entries(exMap)
+    .map(([name, entries]) => {
+      const first = entries[0];
+      const last = entries[entries.length - 1];
+      const overallPct =
+        entries.length >= 2 && first.avgVelocity !== 0
+          ? ((last.avgVelocity - first.avgVelocity) / Math.abs(first.avgVelocity)) * 100
+          : null;
+      return { name, entries, overallPct };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { exMap, summaries };
+}
+
 export interface ComputedReport {
   exMap: ExerciseMap;
   exerciseSummaries: ExerciseSummary[]; // alphabetical, for the Load Progression summary table
@@ -108,6 +158,8 @@ export interface ComputedReport {
   completionPct: number | null;
   completedSets: number;
   totalSets: number;
+  velocityExMap: VelocityMap;
+  velocitySummaries: VelocitySummary[]; // alphabetical, empty when no exercise in range tracked bar speed
 }
 
 function weekStartISO(dateISO: string): string {
@@ -208,7 +260,7 @@ function collectCompletion(allSessions: Session[]): { completionPct: number | nu
 // imported since PSSetLog/MeasurementType live in a "use client"
 // component file this Supabase-free module can't depend on.
 const PS_UNIT: Record<string, string> = {
-  time_s: "s", height_cm: "cm", distance_m: "m", rsi: "", power_w: "W", none: "",
+  time_s: "s", height_cm: "cm", distance_m: "m", rsi: "", power_w: "W", velocity_ms: "m/s", none: "",
 };
 function psLowerBetter(measurementType: string): boolean {
   return measurementType === "time_s";
@@ -351,6 +403,13 @@ export function computeReport(allSessions: Session[]): ComputedReport {
   const { entries: rpeEntries, weekly: rpeWeekly } = collectRPE(allSessions);
   const { completionPct, completedSets, totalSets } = collectCompletion(allSessions);
   const { exMap: powerSpeedExMap, summaries: powerSpeedSummaries } = collectPowerSpeed(powerSpeedSessions);
+  // Bar speed can be tracked on any strength exercise regardless of
+  // whether it also has loggable weight (e.g. a bodyweight jump
+  // squat), so this runs against every strength session directly
+  // rather than reusing strSessions' weight>0 filter above.
+  const { exMap: velocityExMap, summaries: velocitySummaries } = collectVelocity(
+    allSessions.filter((s) => s.type === "strength")
+  );
 
   return {
     exMap,
@@ -369,5 +428,7 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     completionPct,
     completedSets,
     totalSets,
+    velocityExMap,
+    velocitySummaries,
   };
 }

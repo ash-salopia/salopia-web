@@ -24,6 +24,7 @@ export type MeasurementType =
   | "distance_m"  // broad jump / sprint distance result
   | "rsi"         // reactive strength index
   | "power_w"    // power in watts
+  | "velocity_ms" // bar/movement speed in m/s
   | "none";       // just tick done
 
 export interface PSSetLog {
@@ -71,6 +72,7 @@ const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; p
   distance_m:{ label: "Distance", unit: "m",   placeholder: "" },
   rsi:       { label: "RSI",      unit: "",    placeholder: "" },
   power_w:   { label: "Power",    unit: "W",   placeholder: "" },
+  velocity_ms:{ label: "Velocity", unit: "m/s", placeholder: "" },
   none:      { label: "None",     unit: "",    placeholder: "-" },
 };
 
@@ -122,7 +124,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Local state prevents dropdown/log flickering on parent re-renders
-  const validMeasureTypes: MeasurementType[] = ["time_s","height_cm","distance_m","rsi","power_w","none"];
+  const validMeasureTypes: MeasurementType[] = ["time_s","height_cm","distance_m","rsi","power_w","velocity_ms","none"];
   const initMeasure: MeasurementType = validMeasureTypes.includes(exercise.measurement_type as any)
     ? exercise.measurement_type as MeasurementType
     : "time_s";

@@ -138,7 +138,7 @@ function buildCSV(data: any, opts: ExportOptions): string {
   ];
   if (f.includes("reps")) headers.push("Prescribed Reps", "Logged Reps");
   if (f.includes("weight")) headers.push("Prescribed Load", "Logged Weight (kg)");
-  headers.push("Set Completed");
+  headers.push("Set Completed", "Bar Speed (m/s)");
   if (f.includes("volume")) headers.push("Set Volume (kg)", "Session Total Volume (kg)");
   if (f.includes("programme")) headers.push("Programme(s)");
   if (f.includes("summary")) headers.push("AI Session Summary");
@@ -191,6 +191,7 @@ function buildCSV(data: any, opts: ExportOptions): string {
           row.push(ex.target_load ?? "", w > 0 ? w : "");
         }
         row.push(set.done ? "Yes" : "No");
+        row.push((set as any).velocity ?? "");
         if (f.includes("volume")) {
           row.push(setVolume > 0 ? setVolume : "", exVolume > 0 ? exVolume : "");
         }

@@ -302,7 +302,7 @@ export default function AthleteReportPdf({
 }) {
   const {
     exMap, exerciseSummaries, weeklyExMap, topProgressed, toReview, notes,
-    hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], rpeEntries = [], rpeWeekly = [],
+    hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], rpeEntries = [], rpeWeekly = [],
     generated, rangeStart, rangeEnd, strength, oneRmFormula, oneRmSource, bodyweightKg, oneRmReference,
   } = data;
 
@@ -601,6 +601,24 @@ export default function AthleteReportPdf({
                 <LineChart
                   series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.value })) }]}
                   unit={ex.unit}
+                  height={100}
+                  showLegend={false}
+                  title={`${ex.name}${ex.overallPct != null ? `  (${ex.overallPct >= 0 ? "+" : ""}${ex.overallPct.toFixed(1)}%)` : ""}`}
+                  titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
+                />
+              </View>
+            ))}
+          </View>
+        )}
+
+        {options.barSpeedTrend && velocitySummaries.length > 0 && (
+          <View>
+            <Text style={s.sectionTitle}>BAR SPEED TRENDS</Text>
+            {velocitySummaries.map((ex) => (
+              <View key={ex.name} style={{ marginBottom: 10 }}>
+                <LineChart
+                  series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.avgVelocity })) }]}
+                  unit="m/s"
                   height={100}
                   showLegend={false}
                   title={`${ex.name}${ex.overallPct != null ? `  (${ex.overallPct >= 0 ? "+" : ""}${ex.overallPct.toFixed(1)}%)` : ""}`}

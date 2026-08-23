@@ -565,25 +565,46 @@ export default function AthleteSessionView({
                   // so the column headers can share the same values.
                   const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
                   const timeMode = (ex.time ?? "").trim().length > 0;
+                  const completionOnly = !!ex.completion_only;
+                  const showVelocity = !!ex.track_velocity && !completionOnly;
                   // Header and every row share this exact template string
                   // so the Load/Reps/Time columns line up pixel-for-pixel -                   // the "copy last set" slot is always reserved as its own
                   // fixed-width track (populated or not) so a row that
                   // happens to show that button doesn't squeeze its input
                   // columns narrower than the header or its sibling rows.
-                  const gridCols = showWeight ? "22px 1fr 1fr 56px 32px" : "22px 1fr 56px 32px";
+                  const gridCols = completionOnly
+                    ? "22px 32px"
+                    : [showWeight ? "1fr" : "", "1fr", showVelocity ? "1fr" : "", "56px", "32px"]
+                        .filter(Boolean).join(" ").replace(/^/, "22px ");
                   return (
                 <div style={styles.setSectionRow}>
                   <div style={styles.setsVerticalLabel}>SETS</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ ...styles.setColHeaders, gridTemplateColumns: gridCols }}>
-                      <div />
-                      {showWeight && <div style={styles.setColLabel}>Load</div>}
-                      <div style={styles.setColLabel}>{timeMode ? "Time" : "Reps"}</div>
-                      <div />
-                      <div />
-                    </div>
+                    {!completionOnly && (
+                      <div style={{ ...styles.setColHeaders, gridTemplateColumns: gridCols }}>
+                        <div />
+                        {showWeight && <div style={styles.setColLabel}>Load</div>}
+                        <div style={styles.setColLabel}>{timeMode ? "Time" : "Reps"}</div>
+                        {showVelocity && <div style={styles.setColLabel}>Speed</div>}
+                        <div />
+                        <div />
+                      </div>
+                    )}
                     <div style={styles.setGrid}>
                   {(ex.log ?? []).map((set, i) => {
+                    if (completionOnly) {
+                      return (
+                        <div key={i} style={{ ...styles.setChip, gridTemplateColumns: gridCols, ...(set.done ? styles.setChipDone : {}) }}>
+                          <div style={styles.setIdx}>{i + 1}</div>
+                          <button
+                            style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
+                            onClick={() => handleSetUpdate(ex.id, i, { done: !set.done })}
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      );
+                    }
                     // For a %1RM-prescribed exercise the weight box
                     // arrives pre-filled with the calculated target
                     // before the athlete has done anything - so its
@@ -646,6 +667,21 @@ export default function AthleteSessionView({
                             onFocus={(e) => e.target.select()}
                             placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (ex.reps || "reps")}
                             inputMode="numeric"
+                            style={styles.setInput}
+                          />
+                        )}
+                        {showVelocity && (
+                          <input
+                            key={`${ex.id}-${i}-v-${set.velocity}`}
+                            defaultValue={set.velocity ?? ""}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                              const v = e.target.value;
+                              if (v === (set.velocity ?? "")) return;
+                              handleSetUpdate(ex.id, i, { velocity: v });
+                            }}
+                            placeholder={ex.target_velocity ? `${ex.target_velocity} m/s` : "m/s"}
+                            inputMode="decimal"
                             style={styles.setInput}
                           />
                         )}
@@ -714,7 +750,7 @@ export default function AthleteSessionView({
                   <button style={styles.addSetBtn} onClick={() => handleAddSet(ex.id)}>
                     + Add set
                   </button>
-                  {ex.is_bodyweight && !showLoadFor.has(ex.id) && (
+                  {ex.is_bodyweight && !ex.completion_only && !showLoadFor.has(ex.id) && (
                     <button
                       style={styles.addSetBtn}
                       onClick={() => setShowLoadFor((prev) => new Set(prev).add(ex.id))}

@@ -448,16 +448,18 @@ export default function ExerciseCard({
             Leave unticked for single-side-only moves.
           </div>
         )}
-        <label style={styles.checkboxRow}>
-          <input
-            type="checkbox"
-            checked={!!exercise.is_bodyweight}
-            onChange={(e) => onEditPresc({ is_bodyweight: e.target.checked })}
-            style={{ accentColor: "var(--accent)" }}
-          />
-          <span style={{ color: exercise.is_bodyweight ? "var(--accent)" : "var(--mute)" }}>Bodyweight only</span>
-        </label>
-        {!exercise.is_bodyweight && (
+        {!exercise.completion_only && (
+          <label style={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={!!exercise.is_bodyweight}
+              onChange={(e) => onEditPresc({ is_bodyweight: e.target.checked })}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: exercise.is_bodyweight ? "var(--accent)" : "var(--mute)" }}>Bodyweight only</span>
+          </label>
+        )}
+        {!exercise.is_bodyweight && !exercise.completion_only && (
           <label style={styles.checkboxRow} title="Prescribe each set's own %1RM (e.g. a 70/80/90% ramp) instead of a fixed load">
             <input
               type="checkbox"
@@ -477,6 +479,26 @@ export default function ExerciseCard({
           />
           <span style={{ color: exercise.is_primer ? "var(--accent)" : "var(--mute)" }}>Primer / activation</span>
         </label>
+        <label style={styles.checkboxRow} title="Nothing to track for this exercise (e.g. a mobility drill or warm-up) — logging is just a done tick per set, no weight/reps/time boxes">
+          <input
+            type="checkbox"
+            checked={!!exercise.completion_only}
+            onChange={(e) => onEditPresc({ completion_only: e.target.checked })}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          <span style={{ color: exercise.completion_only ? "var(--accent)" : "var(--mute)" }}>Completion only</span>
+        </label>
+        {!exercise.completion_only && (
+          <label style={styles.checkboxRow} title="Show a bar speed (m/s) box per set, for velocity-based training">
+            <input
+              type="checkbox"
+              checked={!!exercise.track_velocity}
+              onChange={(e) => onEditPresc({ track_velocity: e.target.checked })}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: exercise.track_velocity ? "var(--accent)" : "var(--mute)" }}>Bar speed (m/s)</span>
+          </label>
+        )}
       </div>
 
       <div style={styles.prescRow}>
@@ -505,12 +527,23 @@ export default function ExerciseCard({
             style={styles.miniInput}
           />
         </Field>
-        {!exercise.is_bodyweight && !exercise.use_percent_1rm && (
+        {!exercise.is_bodyweight && !exercise.use_percent_1rm && !exercise.completion_only && (
           <Field label="Load" grow>
             <input
               value={exercise.target_load}
               onChange={(e) => onEditPresc({ target_load: e.target.value })}
               placeholder="e.g. 60kg"
+              style={styles.miniInput}
+            />
+          </Field>
+        )}
+        {exercise.track_velocity && !exercise.completion_only && (
+          <Field label="Target speed">
+            <input
+              value={exercise.target_velocity ?? ""}
+              onChange={(e) => onEditPresc({ target_velocity: e.target.value })}
+              placeholder="e.g. 0.8"
+              inputMode="decimal"
               style={styles.miniInput}
             />
           </Field>
@@ -544,6 +577,19 @@ export default function ExerciseCard({
       <div style={styles.setGrid}>
         {log.map((set, i) => {
           const target = percentTargets?.[i] ?? null;
+          if (exercise.completion_only) {
+            return (
+              <div key={i} style={{ ...styles.setChip, ...(set.done ? styles.setChipDone : {}) }}>
+                <div style={styles.setIdx}>{i + 1}</div>
+                <button
+                  style={{ ...styles.doneBtn, ...(set.done ? styles.doneBtnOn : {}) }}
+                  onClick={() => updateSet(i, { done: !set.done })}
+                >
+                  ✓
+                </button>
+              </div>
+            );
+          }
           return (
             <div key={i} style={{ ...styles.setChip, ...(set.done ? styles.setChipDone : {}) }}>
               <div style={styles.setIdx}>{i + 1}</div>
@@ -583,6 +629,15 @@ export default function ExerciseCard({
                   onChange={(e) => updateSet(i, { reps: e.target.value })}
                   placeholder={exercise.reps || "reps"}
                   inputMode="numeric"
+                  style={styles.setInput}
+                />
+              )}
+              {exercise.track_velocity && (
+                <input
+                  value={set.velocity ?? ""}
+                  onChange={(e) => updateSet(i, { velocity: e.target.value })}
+                  placeholder={exercise.target_velocity ? `${exercise.target_velocity} m/s` : "m/s"}
+                  inputMode="decimal"
                   style={styles.setInput}
                 />
               )}

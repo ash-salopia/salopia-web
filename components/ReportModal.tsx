@@ -71,6 +71,7 @@ export default function ReportModal({
     cardioSessions = [],
     powerSpeedSessions = [],
     powerSpeedSummaries = [],
+    velocitySummaries = [],
     rpeEntries = [],
     rpeWeekly = [],
     generated,
@@ -785,6 +786,30 @@ export default function ReportModal({
                   <MultiTrendLineChart
                     series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.value })) }]}
                     unit={ex.unit}
+                    fmtDate={fmtDate}
+                    height={140}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {options.barSpeedTrend && velocitySummaries.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={styles.sectionTitle}>Bar Speed Trends</div>
+              {velocitySummaries.map((ex) => (
+                <div key={ex.name} style={{ marginBottom: 16 }}>
+                  <div style={styles.metricSubheading}>
+                    {ex.name}
+                    {ex.overallPct != null && (
+                      <span style={{ color: ex.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
+                        ({ex.overallPct >= 0 ? "+" : ""}{ex.overallPct.toFixed(1)}%)
+                      </span>
+                    )}
+                  </div>
+                  <MultiTrendLineChart
+                    series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.avgVelocity })) }]}
+                    unit="m/s"
                     fmtDate={fmtDate}
                     height={140}
                   />

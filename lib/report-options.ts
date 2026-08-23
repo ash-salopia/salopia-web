@@ -18,6 +18,7 @@ export interface ReportOptions {
   athleteNotes: boolean; // raw athlete notes list
   sessionRpe: boolean; // post-session RPE (1-10) list + range average
   powerSpeedTrend: boolean; // per-exercise time/distance trend for power & speed sessions
+  barSpeedTrend: boolean; // per-exercise bar speed (m/s) trend, for strength exercises with track_velocity on
   // e1RM-only options - only meaningful (and only enabled in the UI) when e1rm is ticked.
   bodyweightRelative: boolean; // show e1RM ÷ bodyweight instead of raw kg
   exerciseLimit: number; // cap on exercises shown in radar/line chart
@@ -37,6 +38,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   athleteNotes: false,
   sessionRpe: true,
   powerSpeedTrend: false,
+  barSpeedTrend: false,
   bodyweightRelative: false,
   exerciseLimit: 8,
   lowConfidenceCap: 12,
@@ -60,4 +62,5 @@ export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: stri
   { key: "athleteNotes", label: "Athlete notes", hint: "Raw list of the athlete's own session/exercise notes" },
   { key: "sessionRpe", label: "Session RPE", hint: "Perceived exertion (1-10) logged after each session, plus range average" },
   { key: "powerSpeedTrend", label: "Power/Speed trend charts", hint: "Per-exercise time/distance progress from power & speed sessions" },
+  { key: "barSpeedTrend", label: "Bar speed trend charts", hint: "Per-exercise velocity (m/s) progress, for exercises tracking bar speed" },
 ];

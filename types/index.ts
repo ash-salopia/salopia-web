@@ -77,6 +77,7 @@ export interface SetLog {
   reps: string;
   done: boolean;
   time?: string; // 0041 — actual time achieved for a time-mode bodyweight set (e.g. a plank hold), separate from the prescribed ex.time
+  velocity?: string; // bar speed (m/s) actually achieved on this set — only shown/entered when the exercise has track_velocity on
 }
 
 // ------------------------------------------------------------
@@ -99,6 +100,9 @@ export interface ExerciseBase {
   use_percent_1rm?: boolean; // 0045 — when true, set_percents[i] prescribes each set's own %1RM (a ramping scheme, e.g. 70/80/90%), rather than one uniform load for the exercise
   set_percents?: string[]; // 0045 — per-set %1RM prescriptions, index-aligned with `sets` (and, for a real session, with `log`)
   is_bodyweight?: boolean; // 0041 — coach-set: this exercise has no load, athlete logs reps or time only
+  completion_only?: boolean; // coach-set: nothing to track for this exercise (e.g. a mobility drill) — hides weight/reps/time entirely, logging is just a done tick per set
+  track_velocity?: boolean; // coach-set: show a bar speed (m/s) box per set, in addition to whatever else this exercise logs
+  target_velocity?: string; // prescribed target bar speed (m/s), shown alongside the logged velocity — only meaningful when track_velocity is on
   // 0058 — Home Programmes only (see templates.share_code). `equipment`
   // tags what this prescription needs (e.g. "Dumbbells", "" = none/
   // bodyweight); `alternatives` are coach-authored equipment swaps the
