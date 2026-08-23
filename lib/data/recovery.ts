@@ -93,7 +93,12 @@ export async function saveRecoveryPreset(params: {
   config: RecoveryConfig;
 }): Promise<RecoveryPreset> {
   const supabase = createClient();
-  const { data: coach, error: coachErr } = await supabase.from("coaches").select("organisation_id").single();
+  // Coaches RLS returns every colleague in the org, not just this one
+  // - .single() with no filter silently breaks (throws here) for any
+  // org with more than one coach, so this has to resolve auth.uid() first.
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Not signed in");
+  const { data: coach, error: coachErr } = await supabase.from("coaches").select("organisation_id").eq("id", auth.user.id).single();
   if (coachErr) throw coachErr;
 
   const { data, error } = await supabase

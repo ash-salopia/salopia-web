@@ -5,13 +5,18 @@ export type FeatureRequestCategory =
 export type FeatureRequestStatus =
   | "open" | "planned" | "in_progress" | "done" | "closed";
 
+export interface CoachProfile {
+  name: string;
+  is_app_admin: boolean;
+}
+
 export interface FeatureRequestComment {
   id: string;
   request_id: string;
   coach_id: string;
   body: string;
   created_at: string;
-  coach?: { name: string } | null;
+  coach?: CoachProfile | null;
 }
 
 export interface FeatureRequest {
@@ -22,25 +27,46 @@ export interface FeatureRequest {
   category: FeatureRequestCategory;
   status: FeatureRequestStatus;
   created_at: string;
-  coach?: { name: string } | null;
+  coach?: CoachProfile | null;
   votes: { coach_id: string }[];
   comments: FeatureRequestComment[];
 }
 
-// Explicit FK names below are required, not stylistic - feature_request_votes
-// has both request_id and coach_id as its primary key, which PostgREST reads
-// as a many-to-many bridge between feature_requests and coaches, making a
-// plain "coaches(name)" embed ambiguous with the direct coach_id FK.
-const SELECT_SHAPE =
-  "*, coach:coaches!feature_requests_coach_id_fkey(name), votes:feature_request_votes(coach_id), comments:feature_request_comments(*, coach:coaches!feature_request_comments_coach_id_fkey(name))";
+// This board is global across every organisation (see
+// 0068_feature_requests.sql), but coaches.RLS only lets a coach see
+// colleagues in their OWN org - a plain embedded "coaches(name)"
+// select would silently resolve to nothing for a request/comment
+// posted by a coach in a different org. get_coach_public_profiles
+// (0069) is a narrow SECURITY DEFINER function exposing just
+// name/is_app_admin for any coach id, so author names resolve
+// correctly regardless of which org posted them.
+async function resolveCoachProfiles(
+  supabase: ReturnType<typeof createClient>,
+  coachIds: string[]
+): Promise<Map<string, CoachProfile>> {
+  const unique = [...new Set(coachIds)];
+  if (!unique.length) return new Map();
+  const { data, error } = await supabase.rpc("get_coach_public_profiles", { coach_ids: unique });
+  if (error) throw error;
+  return new Map((data ?? []).map((c: any) => [c.id, { name: c.name, is_app_admin: c.is_app_admin }]));
+}
+
+const SELECT_SHAPE = "*, votes:feature_request_votes(coach_id), comments:feature_request_comments(*)";
+
+function attachProfiles(rows: FeatureRequest[], profiles: Map<string, CoachProfile>) {
+  for (const r of rows) {
+    r.coach = profiles.get(r.coach_id) ?? null;
+    r.comments = (r.comments ?? [])
+      .map((c) => ({ ...c, coach: profiles.get(c.coach_id) ?? null }))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+}
 
 export type RequestSort = "top" | "new";
 
-// Global board — every coach across every organisation reads the
-// same list (see 0068_feature_requests.sql for why this is the one
-// table in the schema that isn't org-scoped). Sorting by vote count
-// happens client-side since it depends on the embedded votes array
-// length, not a real column Postgres can order by directly.
+// Sorting by vote count happens client-side since it depends on the
+// embedded votes array length, not a real column Postgres can order
+// by directly.
 export async function listFeatureRequests(sort: RequestSort = "top"): Promise<FeatureRequest[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -49,9 +75,10 @@ export async function listFeatureRequests(sort: RequestSort = "top"): Promise<Fe
     .order("created_at", { ascending: false });
   if (error) throw error;
   const rows = (data ?? []) as unknown as FeatureRequest[];
-  for (const r of rows) {
-    r.comments = (r.comments ?? []).sort((a, b) => a.created_at.localeCompare(b.created_at));
-  }
+
+  const ids = rows.flatMap((r) => [r.coach_id, ...(r.comments ?? []).map((c) => c.coach_id)]);
+  attachProfiles(rows, await resolveCoachProfiles(supabase, ids));
+
   if (sort === "top") {
     rows.sort((a, b) => (b.votes?.length ?? 0) - (a.votes?.length ?? 0));
   }
@@ -74,7 +101,9 @@ export async function createFeatureRequest(
     .select(SELECT_SHAPE)
     .single();
   if (error) throw error;
-  return data as unknown as FeatureRequest;
+  const row = data as unknown as FeatureRequest;
+  attachProfiles([row], await resolveCoachProfiles(supabase, [coachId]));
+  return row;
 }
 
 export async function toggleVote(requestId: string, coachId: string, currentlyVoted: boolean): Promise<void> {
@@ -99,10 +128,13 @@ export async function addComment(requestId: string, coachId: string, body: strin
   const { data, error } = await supabase
     .from("feature_request_comments")
     .insert({ request_id: requestId, coach_id: coachId, body: body.trim() })
-    .select("*, coach:coaches!feature_request_comments_coach_id_fkey(name)")
+    .select("*")
     .single();
   if (error) throw error;
-  return data as unknown as FeatureRequestComment;
+  const comment = data as unknown as FeatureRequestComment;
+  const profiles = await resolveCoachProfiles(supabase, [coachId]);
+  comment.coach = profiles.get(coachId) ?? null;
+  return comment;
 }
 
 export async function deleteComment(commentId: string): Promise<void> {

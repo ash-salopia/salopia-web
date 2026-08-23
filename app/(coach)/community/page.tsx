@@ -56,8 +56,15 @@ export default function CommunityPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from("coaches").select("id, name").single().then(({ data }) => {
-      if (data) { setCoachId(data.id); setCoachName(data.name); }
+    // Coaches RLS returns every colleague in the org, not just this
+    // one - .single() with no filter silently breaks for any org with
+    // more than one coach, so this has to resolve auth.uid() first.
+    supabase.auth.getUser().then(({ data: auth }) => {
+      const uid = auth.user?.id;
+      if (!uid) return;
+      supabase.from("coaches").select("id, name").eq("id", uid).single().then(({ data }) => {
+        if (data) { setCoachId(data.id); setCoachName(data.name); }
+      });
     });
     loadAll();
   }, []);

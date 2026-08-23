@@ -63,8 +63,15 @@ export default function RequestsPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from("coaches").select("id, is_app_admin").single().then(({ data }) => {
-      if (data) { setCoachId(data.id); setIsAdmin(!!(data as any).is_app_admin); }
+    // Coaches RLS returns every colleague in the org, not just this
+    // one - .single() with no filter silently breaks for any org with
+    // more than one coach, so this has to resolve auth.uid() first.
+    supabase.auth.getUser().then(({ data: auth }) => {
+      const uid = auth.user?.id;
+      if (!uid) return;
+      supabase.from("coaches").select("id, is_app_admin").eq("id", uid).single().then(({ data }) => {
+        if (data) { setCoachId(data.id); setIsAdmin(!!(data as any).is_app_admin); }
+      });
     });
     load(sort);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,6 +274,7 @@ export default function RequestsPage() {
                     {req.comments.map((c) => (
                       <div key={c.id} style={styles.commentRow}>
                         <span style={styles.commentAuthor}>{c.coach?.name ?? "A coach"}</span>
+                        {c.coach?.is_app_admin && <span style={styles.teamBadge}>VIS BUILD Team</span>}
                         <span style={styles.commentBody}>{c.body}</span>
                         {(c.coach_id === coachId || isAdmin) && (
                           <button style={styles.commentDelete} onClick={() => handleDeleteComment(req, c.id)}>✕</button>
@@ -334,6 +342,7 @@ const styles: Record<string, React.CSSProperties> = {
   commentsWrap: { borderTop: "1px solid var(--line)", marginTop: 12, paddingTop: 10, display: "flex", flexDirection: "column" as const, gap: 8, paddingLeft: 56 },
   commentRow: { display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12 },
   commentAuthor: { fontWeight: 700, color: "var(--text)", flexShrink: 0 },
+  teamBadge: { fontSize: 10, fontWeight: 700, color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 5, padding: "1px 6px", flexShrink: 0, textTransform: "uppercase" as const, letterSpacing: "0.03em" },
   commentBody: { color: "var(--mute)", flex: 1 },
   commentDelete: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer", padding: 0, flexShrink: 0 },
   commentInputRow: { display: "flex", gap: 8, marginTop: 4 },

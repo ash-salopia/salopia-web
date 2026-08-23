@@ -90,7 +90,13 @@ ${rpeLines}`;
     // which is browser-client-only and can't be called from here.
     let oneRmFormula = DEFAULT_SETTINGS.one_rm_formula;
     let oneRmSource = DEFAULT_SETTINGS.one_rm_source;
-    const { data: coach } = await supabase.from("coaches").select("organisation_id").single();
+    // Coaches RLS returns every colleague in the org, not just this
+    // one - .single() with no filter silently breaks for any org with
+    // more than one coach, so this has to resolve auth.uid() first.
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: coach } = user
+      ? await supabase.from("coaches").select("organisation_id").eq("id", user.id).single()
+      : { data: null };
     if (coach) {
       const { data: org } = await supabase
         .from("organisations")
