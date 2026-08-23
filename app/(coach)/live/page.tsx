@@ -135,6 +135,11 @@ export default function LiveGroupPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [checkinEnabled, setCheckinEnabled] = useState(true);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [editModal, setEditModal] = useState<{ sessionId: string; exercise: SessionExercise } | null>(null);
+  const [editDraft, setEditDraft] = useState<{ name: string; sets: string; mode: "reps" | "time"; reps: string; time: string; rest: string; target_load: string }>({
+    name: "", sets: "", mode: "reps", reps: "", time: "", rest: "", target_load: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -373,6 +378,56 @@ export default function LiveGroupPage() {
     }
   };
 
+  // Quick exercise edit - swap name, change sets/reps, or flip to time
+  // mode, without leaving Live Group for the full session editor.
+  // Deliberately a small field set (not every ExerciseCard option) so
+  // it stays fast for the common mid-session tweak.
+  const openEditExercise = (sessionId: string, ex: SessionExercise) => {
+    const timeMode = (ex.time ?? "").trim().length > 0;
+    setEditDraft({
+      name: ex.name,
+      sets: String(ex.sets ?? ""),
+      mode: timeMode ? "time" : "reps",
+      reps: ex.reps ?? "",
+      time: ex.time ?? "",
+      rest: ex.rest ?? "",
+      target_load: ex.target_load ?? "",
+    });
+    setEditModal({ sessionId, exercise: ex });
+  };
+
+  const closeEditExercise = () => setEditModal(null);
+
+  const saveEditExercise = async () => {
+    if (!editModal) return;
+    setSavingEdit(true);
+    setError("");
+    const patch: Partial<SessionExercise> = {
+      name: editDraft.name.trim(),
+      sets: parseInt(editDraft.sets, 10) || editModal.exercise.sets,
+      rest: editDraft.rest,
+      target_load: editDraft.target_load,
+      reps: editDraft.mode === "reps" ? editDraft.reps : "",
+      time: editDraft.mode === "time" ? editDraft.time : "",
+    };
+    try {
+      await updateExercise(editModal.exercise.id, patch);
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id !== editModal.sessionId ? s : {
+            ...s,
+            exercises: s.exercises?.map((e) => e.id === editModal.exercise.id ? { ...e, ...patch } : e),
+          }
+        )
+      );
+      closeEditExercise();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save changes");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // Recompute %1RM targets whenever the active session's prescribed
   // percentages actually change - including the very first time real
   // session data replaces the initial empty state, which a signature
@@ -571,9 +626,9 @@ export default function LiveGroupPage() {
                           <span style={s.exOrder}>{ex.order || String(i + 1)}</span>
                           <div style={s.exMeta}>
                             <span style={s.exName}>{ex.name || "-"}</span>
-                            {(ex.sets || ex.reps || ex.target_load) && (
+                            {(ex.sets || ex.reps || ex.time || ex.target_load) && (
                               <span style={s.exPrescription}>
-                                {[ex.sets ? `${ex.sets}×` : "", ex.reps, ex.target_load]
+                                {[ex.sets ? `${ex.sets}×` : "", ex.time || ex.reps, ex.target_load]
                                   .filter(Boolean).join(" ")}
                               </span>
                             )}
@@ -604,6 +659,12 @@ export default function LiveGroupPage() {
                                 Stacked below the dots on mobile so the
                                 exercise name isn't squeezed for space. */}
                             <div style={s.thumbRow} onClick={(e) => e.stopPropagation()}>
+                              <button
+                                title="Swap exercise / change sets, reps, or time"
+                                onClick={() => openEditExercise(activeSess.id, ex)}
+                                style={s.thumbBtn}>
+                                ✏️
+                              </button>
                               <button
                                 title={ex.notes?.trim() ? "Edit exercise note" : "Add exercise note"}
                                 onClick={() => openExerciseNote(activeSess.id, ex)}
@@ -813,6 +874,82 @@ export default function LiveGroupPage() {
           </div>
         </div>
       )}
+
+      {editModal && (
+        <div style={s.noteOverlay} onClick={closeEditExercise}>
+          <div style={s.notePanel} onClick={(e) => e.stopPropagation()}>
+            <div style={s.noteTitle}>Edit exercise</div>
+            <div style={s.editFieldLabel}>Name</div>
+            <input
+              autoFocus
+              value={editDraft.name}
+              onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+              style={s.editInput}
+            />
+            <div style={s.editRow}>
+              <div style={{ flex: 1 }}>
+                <div style={s.editFieldLabel}>Sets</div>
+                <input
+                  value={editDraft.sets}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, sets: e.target.value }))}
+                  inputMode="numeric"
+                  style={s.editInput}
+                />
+              </div>
+              <div style={{ flex: 2 }}>
+                <div style={s.editModeToggle}>
+                  <button
+                    style={{ ...s.editModeBtn, ...(editDraft.mode === "reps" ? s.editModeBtnActive : {}) }}
+                    onClick={() => setEditDraft((d) => ({ ...d, mode: "reps" }))}>
+                    Reps
+                  </button>
+                  <button
+                    style={{ ...s.editModeBtn, ...(editDraft.mode === "time" ? s.editModeBtnActive : {}) }}
+                    onClick={() => setEditDraft((d) => ({ ...d, mode: "time" }))}>
+                    Time
+                  </button>
+                </div>
+                <input
+                  value={editDraft.mode === "reps" ? editDraft.reps : editDraft.time}
+                  onChange={(e) => setEditDraft((d) => d.mode === "reps" ? { ...d, reps: e.target.value } : { ...d, time: e.target.value })}
+                  placeholder={editDraft.mode === "reps" ? "e.g. 8" : "e.g. 45s"}
+                  style={s.editInput}
+                />
+              </div>
+            </div>
+            <div style={s.editRow}>
+              <div style={{ flex: 1 }}>
+                <div style={s.editFieldLabel}>Rest</div>
+                <input
+                  value={editDraft.rest}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, rest: e.target.value }))}
+                  placeholder="90s"
+                  style={s.editInput}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={s.editFieldLabel}>Load</div>
+                <input
+                  value={editDraft.target_load}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, target_load: e.target.value }))}
+                  placeholder="e.g. 60kg"
+                  style={s.editInput}
+                />
+              </div>
+            </div>
+            <div style={s.noteBtns}>
+              <button style={s.noteCancelBtn} onClick={closeEditExercise}>Cancel</button>
+              <button
+                style={{ ...s.noteSaveBtn, opacity: !editDraft.name.trim() || savingEdit ? 0.6 : 1 }}
+                disabled={!editDraft.name.trim() || savingEdit}
+                onClick={saveEditExercise}
+              >
+                {savingEdit ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -893,4 +1030,10 @@ const s: Record<string, React.CSSProperties> = {
   noteBtns:     { display: "flex", gap: 8, justifyContent: "flex-end" },
   noteCancelBtn:{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   noteSaveBtn:  { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+  editFieldLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em", marginBottom: 4 },
+  editInput:    { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 12px", fontSize: 14, boxSizing: "border-box" as const },
+  editRow:      { display: "flex", gap: 10 },
+  editModeToggle: { display: "flex", gap: 4, background: "var(--ink)", borderRadius: 6, padding: 2, marginBottom: 4 },
+  editModeBtn:  { flex: 1, background: "transparent", border: "none", color: "var(--mute)", borderRadius: 5, padding: "3px 0", fontSize: 11, fontWeight: 600, cursor: "pointer" },
+  editModeBtnActive: { background: "var(--panel)", color: "var(--accent)" },
 };
