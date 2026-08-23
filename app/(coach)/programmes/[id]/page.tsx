@@ -38,8 +38,6 @@ export default function ProgrammeDetailPage() {
   const [flash, setFlash] = useState("");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
-  const [assignPickerOpen, setAssignPickerOpen] = useState(false);
-  const [assignSearch, setAssignSearch] = useState("");
   const [addFromTemplateOpen, setAddFromTemplateOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
 
@@ -147,20 +145,6 @@ export default function ProgrammeDetailPage() {
     }
   };
 
-  const handleAssign = async (athleteId: string) => {
-    try {
-      await assignProgrammeToAthlete(programmeId, athleteId);
-      setProgramme((prev) =>
-        prev ? { ...prev, assigned_to: [...(prev.assigned_to ?? []), athleteId] } : prev
-      );
-      const athlete = athletes.find((a) => a.id === athleteId);
-      showFlash(`Assigned to ${athlete?.name ?? "athlete"}`);
-      setAssignPickerOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not assign");
-    }
-  };
-
   const handleUnassign = async (athleteId: string) => {
     try {
       await unassignProgrammeFromAthlete(programmeId, athleteId);
@@ -196,6 +180,16 @@ export default function ProgrammeDetailPage() {
     setBulkLoadOpen(true);
   };
 
+  // "Load Programme" (the Assigned athletes section) always means the
+  // whole programme, regardless of whatever subset happens to be
+  // checked in the Sessions list for the separate scoped-load flow -
+  // forcing full selection here keeps the two entry points from
+  // stepping on each other.
+  const handleOpenLoadProgramme = () => {
+    setSelectedSessionIds(new Set((programme?.sessions ?? []).map((s) => s.id)));
+    handleOpenBulkLoad();
+  };
+
   const handleBuildPreview = () => {
     if (!programme || !bulkAthleteId) return;
     const selected = (programme.sessions ?? []).filter((s) => selectedSessionIds.has(s.id));
@@ -222,9 +216,15 @@ export default function ProgrammeDetailPage() {
     setBulkSaving(true);
     setError("");
     try {
+      await assignProgrammeToAthlete(programmeId, bulkAthleteId);
       for (const row of bulkScheduled) {
         await loadProgrammeSessionForAthlete(row.session, bulkAthleteId, row.date);
       }
+      setProgramme((prev) =>
+        prev && !prev.assigned_to?.includes(bulkAthleteId)
+          ? { ...prev, assigned_to: [...(prev.assigned_to ?? []), bulkAthleteId] }
+          : prev
+      );
       const athlete = athletes.find((a) => a.id === bulkAthleteId);
       showFlash(
         `Loaded ${bulkScheduled.length} session${bulkScheduled.length === 1 ? "" : "s"} for ${athlete?.name ?? "athlete"}`
@@ -242,7 +242,6 @@ export default function ProgrammeDetailPage() {
   if (!programme) return <div style={styles.empty}>Programme not found.</div>;
 
   const assignedAthletes = athletes.filter((a) => programme.assigned_to?.includes(a.id));
-  const unassignedAthletes = athletes.filter((a) => !programme.assigned_to?.includes(a.id));
   const activeSession = programme.sessions?.find((s) => s.id === activeSessionId) ?? null;
   const filteredTemplates = templates.filter((t) =>
     t.name.toLowerCase().includes(templateSearch.trim().toLowerCase())
@@ -346,48 +345,9 @@ export default function ProgrammeDetailPage() {
       <div style={styles.section}>
         <div style={styles.sectionHeadRow}>
           <div style={styles.sectionTitle}>Assigned athletes</div>
-          <div style={{ position: "relative" }}>
-            <button
-              style={styles.smallBtn}
-              onClick={() => {
-                setAssignPickerOpen((v) => !v);
-                setAssignSearch("");
-              }}
-            >
-              + Assign
-            </button>
-            {assignPickerOpen && (
-              <div style={styles.assignPopover}>
-                {unassignedAthletes.length > 0 && (
-                  <input
-                    autoFocus
-                    value={assignSearch}
-                    onChange={(e) => setAssignSearch(e.target.value)}
-                    placeholder="Search athletes…"
-                    style={styles.pickerSearchInput}
-                  />
-                )}
-                {unassignedAthletes.length ? (
-                  (() => {
-                    const filtered = unassignedAthletes.filter((a) =>
-                      a.name.toLowerCase().includes(assignSearch.trim().toLowerCase())
-                    );
-                    return filtered.length ? (
-                      filtered.map((a) => (
-                        <button key={a.id} style={styles.assignOption} onClick={() => handleAssign(a.id)}>
-                          {a.name}
-                        </button>
-                      ))
-                    ) : (
-                      <div style={styles.emptySmall}>No athletes match &quot;{assignSearch}&quot;.</div>
-                    );
-                  })()
-                ) : (
-                  <div style={styles.emptySmall}>All athletes already assigned.</div>
-                )}
-              </div>
-            )}
-          </div>
+          <button style={styles.smallBtn} onClick={handleOpenLoadProgramme}>
+            Load Programme
+          </button>
         </div>
         <div style={styles.assignedList}>
           {assignedAthletes.map((a) => (
@@ -594,9 +554,6 @@ const styles: Record<string, React.CSSProperties> = {
   addBtn: { width: "100%", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 0", fontSize: 13, cursor: "pointer" },
   editorCol: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
   editorToolbar: { display: "flex", justifyContent: "flex-end" },
-  assignPopover: { position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, minWidth: 200, maxHeight: 260, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
-  assignOption: { display: "block", width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  pickerSearchInput: { width: "100%", boxSizing: "border-box", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 7, padding: "7px 9px", fontSize: 13, marginBottom: 6 },
   athletePickList: { display: "flex", flexDirection: "column", gap: 2, maxHeight: 180, overflowY: "auto", background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: 4, marginBottom: 4 },
   athletePickOption: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 6, border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   templateOptionMeta: { fontSize: 11, color: "var(--mute)", fontWeight: 400, textTransform: "none" },
