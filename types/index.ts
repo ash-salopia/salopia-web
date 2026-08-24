@@ -161,8 +161,16 @@ export interface PrescribedExercise extends ExerciseBase {
 // ------------------------------------------------------------
 // Hyrox / Cardio config shapes (stored as JSONB)
 // ------------------------------------------------------------
+// tracked_metrics (MetricKey[], see lib/cardio-metrics.ts) lives on
+// every Hyrox/Cardio config below - which metric boxes actually show
+// up for logging, coach-toggled once per session and applied to every
+// step/round/rep in it. Structured `metrics`/`metrics[]` replaced the
+// old free-text actual/result/results[]/amrapResult fields (0070) -
+// existing sessions saved before that keep their old string data
+// untouched (never migrated), this only applies going forward.
 export interface HyroxFixedConfig {
-  steps: { exercise: string; target: string; actual: string }[];
+  steps: { exercise: string; target: string; metrics?: import("@/lib/cardio-metrics").MetricValues }[];
+  tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
 }
 export interface HyroxCyclingConfig {
   exercises: { exercise: string; reps: string }[];
@@ -171,10 +179,14 @@ export interface HyroxCyclingConfig {
   rounds: number;
   cycles: number;
   cyclRestSec: number;
+  metrics?: import("@/lib/cardio-metrics").MetricValues;
+  tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
 }
 export interface HyroxEMOMConfig {
   mins: number;
   slots: { minute: string; exercise: string; reps: string }[];
+  metrics?: import("@/lib/cardio-metrics").MetricValues;
+  tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
 }
 export interface HyroxIntervalConfig {
   exercise: string;
@@ -182,7 +194,8 @@ export interface HyroxIntervalConfig {
   sets: number;
   workSec: number;
   restSec: number;
-  results: string[];
+  metrics: import("@/lib/cardio-metrics").MetricValues[];
+  tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
 }
 export interface HyroxCircuitConfig {
   isAmrap: boolean;
@@ -191,7 +204,8 @@ export interface HyroxCircuitConfig {
   restSec: number;
   exercises: { exercise: string; reps: string }[];
   roundsDone: boolean[];
-  amrapResult: string;
+  metrics?: import("@/lib/cardio-metrics").MetricValues;
+  tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
 }
 export type HyroxConfig =
   | HyroxFixedConfig
@@ -204,6 +218,10 @@ export type HyroxConfig =
 export interface CardioConfig {
   // Mirrors the prototype's CardioConfig shape — kept loose/JSONB since
   // it's read and written as one unit, same reasoning as hyrox_config.
+  // metrics/tracked_metrics (see comment above HyroxFixedConfig) apply
+  // here too: continuous gets one whole-session `metrics`; threshold's
+  // `blocks[]` and cardioIntervals/overUnder's per-rep entries each get
+  // their own `metrics` object instead of the old free-text `result`.
   [key: string]: unknown;
 }
 

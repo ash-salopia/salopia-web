@@ -7,6 +7,7 @@ import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
 import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
 import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
+import { METRIC_META } from "@/lib/cardio-metrics";
 
 function fmtDate(iso: string): string {
   try {
@@ -72,6 +73,7 @@ export default function ReportModal({
     powerSpeedSessions = [],
     powerSpeedSummaries = [],
     velocitySummaries = [],
+    cardioMetricSummaries = [],
     rpeEntries = [],
     rpeWeekly = [],
     generated,
@@ -754,6 +756,33 @@ export default function ReportModal({
                 ))}
               </div>
             </>
+          )}
+
+          {options.cardioMetricsTrend && cardioMetricSummaries.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={styles.sectionTitle}>Cardio / Hyrox Metrics</div>
+              {cardioMetricSummaries.map((m) => {
+                const meta = METRIC_META[m.key];
+                return (
+                  <div key={m.key} style={{ marginBottom: 16 }}>
+                    <div style={styles.metricSubheading}>
+                      {meta.label}
+                      {m.overallPct != null && (
+                        <span style={{ color: m.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
+                          ({m.overallPct >= 0 ? "+" : ""}{m.overallPct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+                    <MultiTrendLineChart
+                      series={[{ name: meta.label, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
+                      unit={meta.unit}
+                      fmtDate={fmtDate}
+                      height={140}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {hasPowerSpeed && (

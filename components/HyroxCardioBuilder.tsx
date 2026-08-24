@@ -18,6 +18,8 @@ import type { Session, HyroxConfig, CardioConfig, LibraryEntry } from "@/types";
 import {
   unlockAudio, stopKeepAlive, playCountdownBeep, playDing, playDoneBeep, setSoundMuted,
 } from "@/lib/timer-audio";
+import { MetricToggles, MetricBoxes } from "@/components/MetricBoxes";
+import { DEFAULT_TRACKED_METRICS, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
 
 // ── Type maps (ported from original) ─────────────────────────────────────────
 
@@ -49,6 +51,24 @@ function Field({ label, children, grow }: { label: string; children: React.React
       <div style={s.fieldLabel}>{label}</div>
       {children}
     </div>
+  );
+}
+
+// Shared "which metrics does this session track" row, plus a helper
+// that gives every sub-type builder its tracked list with a sensible
+// default (tick nothing by hand, still get useful boxes) the first
+// time it renders.
+function TrackedMetricsRow({ cfg, upd, subType }: { cfg: any; upd: (p: any) => void; subType: string }) {
+  const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS[subType] ?? [];
+  useEffect(() => {
+    if (!cfg.tracked_metrics) upd({ tracked_metrics: tracked });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <>
+      <div style={s.dayLabelRow}>Metrics to track</div>
+      <MetricToggles tracked={tracked} onChange={(next) => upd({ tracked_metrics: next })} />
+    </>
   );
 }
 
@@ -186,30 +206,32 @@ export default function HyroxCardioBuilder({ session, color, library, onTypeChan
 // ── Hyrox: Fixed ──────────────────────────────────────────────────────────────
 
 function HyroxFixed({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
-  const steps = cfg.steps || [{ exercise: "", target: "", actual: "" }];
+  const steps = cfg.steps || [{ exercise: "", target: "", metrics: {} }];
   useEffect(() => { if (!cfg.steps) upd({ steps }); }, []);
   const updSteps = (s: any[]) => upd({ steps: s });
   const updStep = (i: number, patch: any) => updSteps(steps.map((x: any, j: number) => j === i ? { ...x, ...patch } : x));
+  const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.fixed;
 
   return (
     <div style={{ marginTop: 12 }}>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="fixed" />
       <div style={s.dayLabelRow}>Workout sequence</div>
       {steps.map((step: any, i: number) => (
-        <div key={i} style={s.hyroxStepRow}>
-          <div style={s.hyroxStepNum}>{i + 1}</div>
-          <LibraryAutocomplete value={step.exercise} onChange={v => updStep(i, { exercise: v })}
-            library={library} types={["hyrox"]} placeholder="Exercise" />
-          <input value={step.target} placeholder="Target" onChange={e => updStep(i, { target: e.target.value })}
-            style={{ ...s.miniInput, width: 90 }} />
-          <input value={step.actual || ""} placeholder="Actual result"
-            onChange={e => updStep(i, { actual: e.target.value })}
-            style={{ ...s.miniInput, width: 110, background: "#0F1418" }} />
-          {steps.length > 1 && (
-            <button style={s.iconBtn} onClick={() => updSteps(steps.filter((_: any, j: number) => j !== i))}>×</button>
-          )}
+        <div key={i} style={{ marginBottom: 10 }}>
+          <div style={s.hyroxStepRow}>
+            <div style={s.hyroxStepNum}>{i + 1}</div>
+            <LibraryAutocomplete value={step.exercise} onChange={v => updStep(i, { exercise: v })}
+              library={library} types={["hyrox"]} placeholder="Exercise" />
+            <input value={step.target} placeholder="Target" onChange={e => updStep(i, { target: e.target.value })}
+              style={{ ...s.miniInput, width: 90 }} />
+            {steps.length > 1 && (
+              <button style={s.iconBtn} onClick={() => updSteps(steps.filter((_: any, j: number) => j !== i))}>×</button>
+            )}
+          </div>
+          <MetricBoxes tracked={tracked} values={step.metrics ?? {}} onChange={(v) => updStep(i, { metrics: v })} size="compact" />
         </div>
       ))}
-      <button style={s.addSetBtn} onClick={() => updSteps([...steps, { exercise: "", target: "", actual: "" }])}>+ Step</button>
+      <button style={s.addSetBtn} onClick={() => updSteps([...steps, { exercise: "", target: "", metrics: {} }])}>+ Step</button>
     </div>
   );
 }
@@ -263,6 +285,12 @@ function HyroxCycling({ cfg, upd, library, color }: { cfg: any; upd: (p: any) =>
         <div style={{ fontSize: 13, color: "#E8EDF1" }}>×{rounds} rounds per cycle then {cyclRestSec}s rest ×{cycles} cycles</div>
         <div style={{ fontSize: 12, color: "#8593A0", marginTop: 4 }}>Total approx: {totalMin} min</div>
       </div>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="cycling" />
+      <MetricBoxes
+        tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.cycling}
+        values={cfg.metrics ?? {}}
+        onChange={(v) => upd({ metrics: v })}
+      />
     </div>
   );
 }
@@ -299,6 +327,12 @@ function HyroxEMOM({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
         </div>
       ))}
       <button style={s.addSetBtn} onClick={() => updSlots([...slots, { minute: String(slots.length + 1), exercise: "", reps: "" }])}>+ Slot</button>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="emom" />
+      <MetricBoxes
+        tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.emom}
+        values={cfg.metrics ?? {}}
+        onChange={(v) => upd({ metrics: v })}
+      />
     </div>
   );
 }
@@ -320,16 +354,27 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
         <Field label="Work (s)"><input inputMode="numeric" value={cfg.workSec ?? 120} onChange={e => upd({ workSec: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Rest (s)"><input inputMode="numeric" value={cfg.restSec ?? 90} onChange={e => upd({ restSec: e.target.value })} style={s.miniInput} /></Field>
       </div>
-      <div style={s.dayLabelRow}>Log your results</div>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="interval" />
+      <div style={s.dayLabelRow}>Log each set</div>
       {Array.from({ length: sets }, (_, i) => {
-        const result = (cfg.results || [])[i] || "";
+        const metricsArr: MetricValues[] = cfg.metrics || [];
+        const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.interval;
         return (
-          <div key={i} style={s.hyroxStepRow}>
-            <div style={s.hyroxStepNum}>{i + 1}</div>
-            <span style={{ color: "#8593A0", fontSize: 12, minWidth: 40 }}>Set {i + 1}</span>
-            <input value={result} placeholder="Time / distance / result"
-              onChange={e => { const r = [...(cfg.results || Array(sets).fill(""))]; r[i] = e.target.value; upd({ results: r }); }}
-              style={{ ...s.miniInput, flex: 1, background: "#0F1418" }} />
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={s.hyroxStepNum}>{i + 1}</div>
+              <span style={{ color: "#8593A0", fontSize: 12 }}>Set {i + 1}</span>
+            </div>
+            <MetricBoxes
+              tracked={tracked}
+              values={metricsArr[i] ?? {}}
+              onChange={(v) => {
+                const next = [...metricsArr];
+                next[i] = v;
+                upd({ metrics: next });
+              }}
+              size="compact"
+            />
           </div>
         );
       })}
@@ -395,12 +440,12 @@ function HyroxCircuit({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
           </div>
         </div>
       )}
-      {isAmrap && (
-        <Field label="Rounds completed">
-          <input value={cfg.amrapResult || ""} placeholder="e.g. 6 rounds + 2 exercises"
-            onChange={e => upd({ amrapResult: e.target.value })} style={{ ...s.miniInput, width: "100%", background: "#0F1418" }} />
-        </Field>
-      )}
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="circuit" />
+      <MetricBoxes
+        tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.circuit}
+        values={cfg.metrics ?? {}}
+        onChange={(v) => upd({ metrics: v })}
+      />
     </div>
   );
 }
@@ -424,13 +469,12 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
         <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 130–145 bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <Field label="Coaching notes"><input value={cfg.notes || ""} placeholder="e.g. Keep conversational, nasal breathing" onChange={e => upd({ notes: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
-      <div style={{ marginTop: 10 }}>
-        <div style={s.dayLabelRow}>Log your result</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Field label="Actual time / dist" grow><input value={cfg.actual || ""} placeholder="e.g. 62 min / 11.2 km" onChange={e => upd({ actual: e.target.value })} style={{ ...s.miniInput, background: "#0F1418", width: "100%" }} /></Field>
-          <Field label="Avg HR / pace"><input value={cfg.actualHR || ""} placeholder="e.g. 138 bpm / 5:33/km" onChange={e => upd({ actualHR: e.target.value })} style={{ ...s.miniInput, background: "#0F1418" }} /></Field>
-        </div>
-      </div>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="continuous" />
+      <MetricBoxes
+        tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.continuous}
+        values={cfg.metrics ?? {}}
+        onChange={(v) => upd({ metrics: v })}
+      />
     </div>
   );
 }
@@ -439,12 +483,13 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
 
 function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
   const blocks = cfg.blocks || [
-    { label: "Warm-up",   duration: "10 min", intensity: "Z1 / easy",      repeat: 1, result: "" },
-    { label: "Main set",  duration: "20 min", intensity: "threshold / LT",  repeat: 2, rest: "2 min easy", result: "" },
-    { label: "Cool-down", duration: "10 min", intensity: "Z1 / easy",       repeat: 1, result: "" },
+    { label: "Warm-up",   duration: "10 min", intensity: "Z1 / easy",      repeat: 1, metrics: {} },
+    { label: "Main set",  duration: "20 min", intensity: "threshold / LT",  repeat: 2, rest: "2 min easy", metrics: {} },
+    { label: "Cool-down", duration: "10 min", intensity: "Z1 / easy",       repeat: 1, metrics: {} },
   ];
   const updBlocks = (b: any[]) => upd({ blocks: b });
   const updBlock = (i: number, p: any) => updBlocks(blocks.map((b: any, j: number) => j === i ? { ...b, ...p } : b));
+  const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.threshold;
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -452,6 +497,7 @@ function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
         <LibraryAutocomplete value={cfg.modality || "Run"} onChange={v => upd({ modality: v })}
           library={library} types={["cardio", "hyrox"]} />
       </Field>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="threshold" />
       <div style={s.dayLabelRow}>Session blocks</div>
       {blocks.map((b: any, i: number) => (
         <div key={i} style={{ background: "#0F1418", borderRadius: 10, padding: "10px 12px", marginBottom: 8, border: "1px solid #2A343D" }}>
@@ -470,11 +516,11 @@ function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
             {(b.repeat || 1) > 1 && <Field label="Recovery"><input value={b.rest || ""} placeholder="e.g. 2 min easy" onChange={e => updBlock(i, { rest: e.target.value })} style={s.miniInput} /></Field>}
           </div>
           <div style={{ marginTop: 8 }}>
-            <Field label="Result"><input value={b.result || ""} placeholder="e.g. avg 4:12/km, HR 168" onChange={e => updBlock(i, { result: e.target.value })} style={{ ...s.miniInput, width: "100%", background: "#0F1418" }} /></Field>
+            <MetricBoxes tracked={tracked} values={b.metrics ?? {}} onChange={(v) => updBlock(i, { metrics: v })} size="compact" />
           </div>
         </div>
       ))}
-      <button style={s.addSetBtn} onClick={() => updBlocks([...blocks, { label: "Block", duration: "", intensity: "", repeat: 1, rest: "", result: "" }])}>+ Block</button>
+      <button style={s.addSetBtn} onClick={() => updBlocks([...blocks, { label: "Block", duration: "", intensity: "", repeat: 1, rest: "", metrics: {} }])}>+ Block</button>
     </div>
   );
 }
@@ -503,15 +549,26 @@ function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
         <Field label="Target pace"><input value={cfg.pace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ pace: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 175+ bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
       </div>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="cardioIntervals" />
       <div style={s.dayLabelRow}>Log each rep</div>
-      {Array.from({ length: reps }, (_, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <div style={{ ...s.hyroxStepNum, flexShrink: 0 }}>{i + 1}</div>
-          <input value={(cfg.results || [])[i] || ""} placeholder="Time / pace / HR"
-            onChange={e => { const r = [...(cfg.results || Array(reps).fill(""))]; r[i] = e.target.value; upd({ results: r }); }}
-            style={{ ...s.miniInput, flex: 1, background: "#0F1418" }} />
-        </div>
-      ))}
+      {Array.from({ length: reps }, (_, i) => {
+        const metricsArr: MetricValues[] = cfg.metrics || [];
+        const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.cardioIntervals;
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ ...s.hyroxStepNum, flexShrink: 0 }}>{i + 1}</div>
+              <span style={{ color: "#8593A0", fontSize: 12 }}>Rep {i + 1}</span>
+            </div>
+            <MetricBoxes
+              tracked={tracked}
+              values={metricsArr[i] ?? {}}
+              onChange={(v) => { const next = [...metricsArr]; next[i] = v; upd({ metrics: next }); }}
+              size="compact"
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -545,15 +602,26 @@ function CardioOverUnder({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
           <Field label="Pace"><input value={cfg.overPace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ overPace: e.target.value })} style={s.miniInput} /></Field>
         </div>
       </div>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="overUnder" />
       <div style={s.dayLabelRow}>Log each set</div>
-      {Array.from({ length: sets }, (_, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <div style={s.hyroxStepNum}>{i + 1}</div>
-          <input value={(cfg.results || [])[i] || ""} placeholder="e.g. avg 4:18 / 106% FTP"
-            onChange={e => { const r = [...(cfg.results || Array(sets).fill(""))]; r[i] = e.target.value; upd({ results: r }); }}
-            style={{ ...s.miniInput, flex: 1, background: "#0F1418" }} />
-        </div>
-      ))}
+      {Array.from({ length: sets }, (_, i) => {
+        const metricsArr: MetricValues[] = cfg.metrics || [];
+        const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.overUnder;
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={s.hyroxStepNum}>{i + 1}</div>
+              <span style={{ color: "#8593A0", fontSize: 12 }}>Set {i + 1}</span>
+            </div>
+            <MetricBoxes
+              tracked={tracked}
+              values={metricsArr[i] ?? {}}
+              onChange={(v) => { const next = [...metricsArr]; next[i] = v; upd({ metrics: next }); }}
+              size="compact"
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

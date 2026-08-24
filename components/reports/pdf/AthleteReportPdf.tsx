@@ -22,6 +22,7 @@ import { FORMULAS } from "@/lib/one-rm";
 import { LineChart, type LineSeries } from "@/components/reports/pdf/pdf-line-chart";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
+import { METRIC_META } from "@/lib/cardio-metrics";
 
 // ── Palette (print-mode, matches ReportModal.handlePrint) ─────────────────────
 
@@ -302,7 +303,7 @@ export default function AthleteReportPdf({
 }) {
   const {
     exMap, exerciseSummaries, weeklyExMap, topProgressed, toReview, notes,
-    hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], rpeEntries = [], rpeWeekly = [],
+    hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], cardioMetricSummaries = [], rpeEntries = [], rpeWeekly = [],
     generated, rangeStart, rangeEnd, strength, oneRmFormula, oneRmSource, bodyweightKg, oneRmReference,
   } = data;
 
@@ -626,6 +627,27 @@ export default function AthleteReportPdf({
                 />
               </View>
             ))}
+          </View>
+        )}
+
+        {options.cardioMetricsTrend && cardioMetricSummaries.length > 0 && (
+          <View>
+            <Text style={s.sectionTitle}>CARDIO / HYROX METRICS</Text>
+            {cardioMetricSummaries.map((m) => {
+              const meta = METRIC_META[m.key];
+              return (
+                <View key={m.key} style={{ marginBottom: 10 }}>
+                  <LineChart
+                    series={[{ name: meta.label, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
+                    unit={meta.unit}
+                    height={100}
+                    showLegend={false}
+                    title={`${meta.label}${m.overallPct != null ? `  (${m.overallPct >= 0 ? "+" : ""}${m.overallPct.toFixed(1)}%)` : ""}`}
+                    titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
+                  />
+                </View>
+              );
+            })}
           </View>
         )}
 

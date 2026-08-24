@@ -4,6 +4,7 @@
 // AI summary API route (server-side, RLS via the coach's cookie),
 // without either environment pulling in the other's client.
 import type { Session } from "@/types";
+import { METRIC_ORDER, parseMetricNumber, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
 
 export interface ReportRow {
   date: string;
@@ -136,6 +137,83 @@ function collectVelocity(strengthSessions: Session[]): { exMap: VelocityMap; sum
   return { exMap, summaries };
 }
 
+// ------------------------------------------------------------
+// Hyrox/Cardio structured metrics (0070) — one row per metric (not
+// per exercise, since a hyrox/cardio session's trackable unit is the
+// session itself, not a named exercise). Accumulative metrics
+// (distance/calories/duration/rounds/reps) sum across every logged
+// entry in a session (e.g. every rep of a cardioIntervals session);
+// rate/state metrics (pace/speed/avg_hr) average; max_hr takes the
+// max. A session with nothing logged for a given metric contributes
+// no data point for it at all, rather than a misleading zero.
+// ------------------------------------------------------------
+export interface CardioMetricRow {
+  date: string;
+  sessName: string;
+  value: number;
+}
+export type CardioMetricMap = Partial<Record<MetricKey, CardioMetricRow[]>>;
+export interface CardioMetricSummary {
+  key: MetricKey;
+  entries: CardioMetricRow[];
+  overallPct: number | null;
+}
+
+const SUM_METRICS: MetricKey[] = ["distance", "calories", "duration", "rounds", "reps"];
+const MAX_METRICS: MetricKey[] = ["max_hr"];
+
+// Normalises every hyrox/cardio sub-type's differently-shaped config
+// (single object, array, or nested in steps[]/blocks[]) down to a
+// flat list of logged entries, so the aggregation below doesn't need
+// to know which of the 9 sub-types it's looking at.
+function extractMetricEntries(session: Session): MetricValues[] {
+  const isHyrox = session.type === "hyrox";
+  const subType = isHyrox ? session.hyrox_type : (session as any).cardio_type;
+  const cfg: any = (isHyrox ? session.hyrox_config : (session as any).cardio_config) ?? {};
+  if (isHyrox && subType === "fixed") return (cfg.steps ?? []).map((s: any) => s.metrics ?? {});
+  if (!isHyrox && subType === "threshold") return (cfg.blocks ?? []).map((b: any) => b.metrics ?? {});
+  if ((isHyrox && subType === "interval") || (!isHyrox && (subType === "cardioIntervals" || subType === "overUnder"))) {
+    return cfg.metrics ?? [];
+  }
+  // cycling / emom / circuit / continuous — one whole-session result
+  return cfg.metrics ? [cfg.metrics] : [];
+}
+
+function collectCardioMetrics(sessions: Session[]): { exMap: CardioMetricMap; summaries: CardioMetricSummary[] } {
+  const exMap: CardioMetricMap = {};
+  for (const sess of sessions) {
+    if (sess.is_primer) continue;
+    const entries = extractMetricEntries(sess);
+    if (!entries.length) continue;
+    for (const key of METRIC_ORDER) {
+      const values = entries.map((e) => parseMetricNumber(e[key])).filter((v): v is number => v != null);
+      if (!values.length) continue;
+      const value = SUM_METRICS.includes(key)
+        ? values.reduce((a, b) => a + b, 0)
+        : MAX_METRICS.includes(key)
+        ? Math.max(...values)
+        : values.reduce((a, b) => a + b, 0) / values.length;
+      if (!exMap[key]) exMap[key] = [];
+      exMap[key]!.push({ date: sess.date, sessName: sess.name, value });
+    }
+  }
+
+  const summaries: CardioMetricSummary[] = (Object.keys(exMap) as MetricKey[])
+    .map((key) => {
+      const entries = exMap[key]!;
+      const first = entries[0];
+      const last = entries[entries.length - 1];
+      const overallPct =
+        entries.length >= 2 && first.value !== 0
+          ? ((last.value - first.value) / Math.abs(first.value)) * 100
+          : null;
+      return { key, entries, overallPct };
+    })
+    .sort((a, b) => METRIC_ORDER.indexOf(a.key) - METRIC_ORDER.indexOf(b.key));
+
+  return { exMap, summaries };
+}
+
 export interface ComputedReport {
   exMap: ExerciseMap;
   exerciseSummaries: ExerciseSummary[]; // alphabetical, for the Load Progression summary table
@@ -160,6 +238,8 @@ export interface ComputedReport {
   totalSets: number;
   velocityExMap: VelocityMap;
   velocitySummaries: VelocitySummary[]; // alphabetical, empty when no exercise in range tracked bar speed
+  cardioMetricExMap: CardioMetricMap;
+  cardioMetricSummaries: CardioMetricSummary[]; // metric-order, empty when no hyrox/cardio session in range logged anything
 }
 
 function weekStartISO(dateISO: string): string {
@@ -410,6 +490,10 @@ export function computeReport(allSessions: Session[]): ComputedReport {
   const { exMap: velocityExMap, summaries: velocitySummaries } = collectVelocity(
     allSessions.filter((s) => s.type === "strength")
   );
+  const { exMap: cardioMetricExMap, summaries: cardioMetricSummaries } = collectCardioMetrics([
+    ...hyroxSessions,
+    ...cardioSessions,
+  ]);
 
   return {
     exMap,
@@ -430,5 +514,7 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     totalSets,
     velocityExMap,
     velocitySummaries,
+    cardioMetricExMap,
+    cardioMetricSummaries,
   };
 }

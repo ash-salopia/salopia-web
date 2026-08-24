@@ -7,6 +7,7 @@ import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExerci
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import CheckInModal from "@/components/CheckInModal";
+import HyroxCardioLog from "@/components/HyroxCardioLog";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
 import { useIsMobile } from "@/lib/use-is-mobile";
@@ -830,7 +831,22 @@ export default function LiveGroupPage() {
                 </div>
               )}
 
-              {activeSess && activeSess.type !== "strength" && (
+              {activeSess && (activeSess.type === "hyrox" || activeSess.type === "cardio") && (
+                <HyroxCardioLog
+                  session={activeSess}
+                  onPatch={(patch) => {
+                    const field = activeSess.type === "hyrox" ? "hyrox_config" : "cardio_config";
+                    const currentCfg: any = (activeSess as any)[field] ?? {};
+                    const next = { ...currentCfg, ...patch };
+                    setSessions((prev) => prev.map((sess) => sess.id !== activeSess.id ? sess : { ...sess, [field]: next } as Session));
+                    updateSession(activeSess.id, { [field]: next } as Partial<Session>)
+                      .catch((e) => setError(e instanceof Error ? e.message : "Could not save"));
+                  }}
+                  compact
+                />
+              )}
+
+              {activeSess && activeSess.type !== "strength" && activeSess.type !== "hyrox" && activeSess.type !== "cardio" && (
                 <div style={s.noEx}>
                   {meta.label} session - use "Open full session" above for the timer &amp; log.
                 </div>

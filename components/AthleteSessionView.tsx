@@ -10,6 +10,7 @@ import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModa
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import PBCelebrationModal from "@/components/PBCelebrationModal";
 import RecoverySessionAthleteView from "@/components/recovery/RecoverySessionAthleteView";
+import HyroxCardioAthleteView from "@/components/HyroxCardioAthleteView";
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import type { Session, SessionExercise, SetLog } from "@/types";
 
@@ -397,6 +398,21 @@ export default function AthleteSessionView({
       <RecoverySessionAthleteView
         session={session}
         athleteName={athleteName}
+        token={token}
+        onUpdated={refetchSession}
+        onBack={() => router.push(`/a/${token}`)}
+      />
+    );
+  }
+
+  // Hyrox/cardio sessions store their prescription in
+  // hyrox_config/cardio_config, not session_exercises - same reasoning
+  // as the recovery branch above, delegate rather than threading type
+  // conditionals through the exercise-log layout below.
+  if (session.type === "hyrox" || session.type === "cardio") {
+    return (
+      <HyroxCardioAthleteView
+        session={session}
         token={token}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}

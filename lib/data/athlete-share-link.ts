@@ -4,7 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 import { todayISO } from "@/lib/date-utils";
 import { bestRollingOneRM, calculateSetTargets, type OneRMFormula } from "@/lib/one-rm";
 import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
-import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise, RecoveryConfig } from "@/types";
+import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise, RecoveryConfig, HyroxConfig, CardioConfig } from "@/types";
 
 // Service-role version of getOrgSettings, resolved via the athlete's
 // organisation rather than a coach login. Lives here (not in
@@ -436,6 +436,54 @@ export async function updateRecoveryConfig(
   const { error } = await supabase
     .from("sessions")
     .update({ recovery_config: recoveryConfig })
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
+// Same ownership-check pattern as updateRecoveryConfig above - hyrox_
+// config/cardio_config round-trip whole from the client.
+export async function updateHyroxConfig(
+  sessionId: string,
+  athleteId: string,
+  hyroxConfig: HyroxConfig
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) {
+    throw new Error("This session does not belong to you");
+  }
+
+  const { error } = await supabase
+    .from("sessions")
+    .update({ hyrox_config: hyroxConfig })
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
+export async function updateCardioConfig(
+  sessionId: string,
+  athleteId: string,
+  cardioConfig: CardioConfig
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) {
+    throw new Error("This session does not belong to you");
+  }
+
+  const { error } = await supabase
+    .from("sessions")
+    .update({ cardio_config: cardioConfig })
     .eq("id", sessionId);
   if (error) throw error;
 }
