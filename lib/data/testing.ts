@@ -229,7 +229,7 @@ export async function saveTrials(params: {
 // TestReportModal already uses to split IMTP abs/relative. Falls back to
 // "Other" (sorted last) for custom coach-created metrics that don't match
 // any keyword, so nothing silently disappears from the report.
-const METRIC_GROUP_ORDER = ["Jumps & RSI", "Sprint & Agility", "Strength", "Core", "Other"] as const;
+const METRIC_GROUP_ORDER = ["Jumps & RSI", "Sprint & Agility", "Strength", "Core", "Fitness & Conditioning", "Other"] as const;
 export type MetricGroup = (typeof METRIC_GROUP_ORDER)[number];
 
 export function metricGroup(name: string): MetricGroup {
@@ -238,6 +238,12 @@ export function metricGroup(name: string): MetricGroup {
   if (key.includes("sprint") || key.includes("agility") || key.includes("change of direction") || key.includes("505")) return "Sprint & Agility";
   if (key.includes("imtp") || key.includes("force") || key.includes("grip")) return "Strength";
   if (key.includes("plank") || key.includes("hold") || key.includes("core")) return "Core";
+  if (
+    key.includes("ftp") || key.includes("cooper") || key.includes("yo-yo") || key.includes("yoyo") ||
+    key.includes("beep test") || key.includes("bleep test") || key.includes("vo2") || key.includes("vo₂") ||
+    key.includes("aerobic") || key.includes("endurance") || key.includes("cardio") || key.includes("conditioning") ||
+    key.includes("mile") || key.includes("time trial") || key.includes("timed run")
+  ) return "Fitness & Conditioning";
   return "Other";
 }
 
