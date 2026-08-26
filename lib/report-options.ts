@@ -4,6 +4,7 @@
 // of duplicating it. ReportRangeModal re-exports these for backward compat.
 
 import { METRIC_ORDER, type MetricKey } from "@/lib/cardio-metrics";
+import type { SquadComparisonMetric } from "@/lib/squad-comparison";
 
 export interface ReportOptions {
   // Metrics - at least one required to generate.
@@ -45,6 +46,14 @@ export interface ReportOptions {
   trainingLoadTrend: boolean; // 0078 — sRPE (RPE × duration) weekly training load, hyrox+cardio combined
   trainingLoadShowAll: boolean; // 0086 — also list every individual session's training load, not just the graph/total (mirrors sessionRpeShowAll)
   sessionCompletion: boolean; // 0080 — sessions logged + % of prescribed sessions completed, per session type
+  // 0075 — "where does this athlete sit relative to their own squad" on
+  // their own report (rank/average for TTL and Completion, average-only
+  // for Training Load/Session RPE - see lib/squad-comparison.ts for why).
+  // Single-athlete flow only - not offered on the bulk Reporting tab,
+  // which has no one squad to resolve against.
+  squadComparison: boolean;
+  squadComparisonGroupId: string | null; // which of the athlete's group(s) to compare against - auto-picked if they're only in one
+  squadComparisonMetrics: SquadComparisonMetric[];
   // e1RM-only options - only meaningful (and only enabled in the UI) when e1rm is ticked.
   bodyweightRelative: boolean; // show e1RM ÷ bodyweight instead of raw kg
   exerciseLimit: number; // cap on exercises shown in radar/line chart
@@ -75,6 +84,9 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   trainingLoadTrend: false,
   trainingLoadShowAll: true, // preserves existing behaviour (full per-session list) until a coach opts into the narrower view
   sessionCompletion: false,
+  squadComparison: false,
+  squadComparisonGroupId: null,
+  squadComparisonMetrics: ["ttl", "completion"],
   bodyweightRelative: false,
   exerciseLimit: 8,
   lowConfidenceCap: 12,

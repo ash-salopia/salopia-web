@@ -12,25 +12,41 @@
 // (hyroxEnabled=false) since Hyrox can be turned off per athlete/org -
 // there's no point offering a report option for data that can't exist.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   METRIC_FIELDS, COMPONENT_FIELDS, SCOPE_FIELDS, FIELD_SESSION_TYPES, SESSION_TYPE_META,
   DEFAULT_REPORT_OPTIONS, type ReportOptions, type ReportSessionType,
 } from "@/lib/report-options";
 import { METRIC_ORDER, METRIC_META } from "@/lib/cardio-metrics";
+import { getAthleteGroups, type Group } from "@/lib/data/groups";
+import type { SquadComparisonMetric } from "@/lib/squad-comparison";
 
 const SESSION_TYPE_ORDER: ReportSessionType[] = ["strength", "power_speed", "cardio", "hyrox"];
+
+const SQUAD_COMPARISON_METRICS: { key: SquadComparisonMetric; label: string }[] = [
+  { key: "ttl", label: "Total Training Load" },
+  { key: "completion", label: "Session Completion" },
+  { key: "trainingLoad", label: "Training Load (sRPE)" },
+  { key: "sessionRpe", label: "Session RPE" },
+];
 
 export default function ReportOptionsForm({
   options,
   onChange,
   disableCharts = false,
   hyroxEnabled = true,
+  athleteId,
+  squadComparisonEnabled = false,
 }: {
   options: ReportOptions;
   onChange: (next: ReportOptions) => void;
   disableCharts?: boolean;
   hyroxEnabled?: boolean;
+  // 0075 — "Compare to squad" is only offered when there's one clear
+  // athlete to resolve a squad for (the single-athlete report flow) -
+  // absent on the bulk Reporting tab's multi-athlete form.
+  athleteId?: string;
+  squadComparisonEnabled?: boolean;
 }) {
   const hasMetric = options.ttl || options.e1rm;
   const set = <K extends keyof ReportOptions>(key: K, value: ReportOptions[K]) =>
@@ -88,6 +104,21 @@ export default function ReportOptionsForm({
     const types = FIELD_SESSION_TYPES[key];
     return types == null || types.some((t) => activeTypes.has(t)); // no type = universal, always shown
   };
+
+  // 0075 — the athlete's own squad(s), fetched once for the "Compare to
+  // squad" option below. Nothing to compare against with zero groups, so
+  // that option simply doesn't render in that case.
+  const [squadGroups, setSquadGroups] = useState<Group[]>([]);
+  useEffect(() => {
+    if (!athleteId || !squadComparisonEnabled) return;
+    getAthleteGroups(athleteId).then((groups) => {
+      setSquadGroups(groups);
+      if (groups.length === 1 && !options.squadComparisonGroupId) {
+        onChange({ ...options, squadComparisonGroupId: groups[0].id });
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteId, squadComparisonEnabled]);
 
   const visibleMetricFields = METRIC_FIELDS.filter((f) => showField(f.key));
   const visibleComponentFields = COMPONENT_FIELDS.filter((f) => showField(f.key));
@@ -383,6 +414,68 @@ export default function ReportOptionsForm({
               </span>
             </span>
           </label>
+        )}
+
+        {squadGroups.length > 0 && (
+          <>
+            <label style={s.checkOption}>
+              <input
+                type="checkbox"
+                checked={options.squadComparison}
+                onChange={(e) => set("squadComparison", e.target.checked)}
+                style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>Compare to squad</span>
+                <span style={{ fontSize: 11, color: "var(--mute)" }}>
+                  Shows where this athlete sits relative to their own squad for whichever metrics you tick below
+                </span>
+              </span>
+            </label>
+            {options.squadComparison && (
+              <div style={{ paddingLeft: 26, display: "flex", flexDirection: "column", gap: 8, marginBottom: 6 }}>
+                {squadGroups.length > 1 && (
+                  <select
+                    value={options.squadComparisonGroupId ?? ""}
+                    onChange={(e) => set("squadComparisonGroupId", e.target.value || null)}
+                    style={s.input}
+                  >
+                    <option value="">- Select a squad -</option>
+                    {squadGroups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                )}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {SQUAD_COMPARISON_METRICS.map(({ key, label }) => {
+                    const selected = options.squadComparisonMetrics.includes(key);
+                    return (
+                      <button
+                        type="button"
+                        key={key}
+                        onClick={() =>
+                          set(
+                            "squadComparisonMetrics",
+                            selected
+                              ? options.squadComparisonMetrics.filter((k) => k !== key)
+                              : [...options.squadComparisonMetrics, key]
+                          )
+                        }
+                        style={{
+                          background: selected ? "var(--accent-dim)" : "var(--ink)",
+                          border: `1px solid ${selected ? "var(--accent)" : "var(--line)"}`,
+                          color: selected ? "var(--accent)" : "var(--mute)",
+                          borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

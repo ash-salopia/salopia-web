@@ -9,6 +9,7 @@ import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
 import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
 import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
+import type { SquadComparisonContext, SquadComparisonMetric } from "@/lib/squad-comparison";
 
 function fmtDate(iso: string): string {
   try {
@@ -35,6 +36,17 @@ function pctColor(pct: number | null): string {
 const TYPE_LABEL: Record<string, string> = {
   strength: "Strength", hyrox: "Hyrox", cardio: "Cardio", power_speed: "Power/Speed", recovery: "Recovery",
 };
+
+const SQUAD_COMPARISON_LABEL: Record<SquadComparisonMetric, string> = {
+  ttl: "Total Training Load", completion: "Session Completion", trainingLoad: "Training Load (sRPE)", sessionRpe: "Session RPE",
+};
+
+function fmtSquadValue(metric: SquadComparisonMetric, value: number): string {
+  if (metric === "ttl") return `${Math.round(value).toLocaleString()} kg`;
+  if (metric === "completion") return `${value.toFixed(0)}%`;
+  if (metric === "sessionRpe") return `${value.toFixed(1)}/10`;
+  return Math.round(value).toLocaleString();
+}
 
 // Low RPE (light session) reads as good/expected, not a warning - only
 // climbs toward amber/red at the genuinely max-effort end of the scale.
@@ -129,6 +141,7 @@ export default function ReportModal({
   options,
   aiSummary,
   aiLoading,
+  squadComparison,
   onClose,
 }: {
   data: ReportData;
@@ -137,6 +150,7 @@ export default function ReportModal({
   options: ReportOptions;
   aiSummary?: { summary: string; themes: string } | null;
   aiLoading?: boolean;
+  squadComparison?: SquadComparisonContext[] | null;
   onClose: () => void;
 }) {
   const {
@@ -460,6 +474,27 @@ export default function ReportModal({
                 {(["strength", "power_speed", "cardio", "hyrox"] as const).every((t) => !sessionTypeStats[t] || sessionTypeStats[t].loggedCount === 0) && (
                   <div style={styles.highlightEmpty}>No sessions logged in this range.</div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {options.squadComparison && squadComparison && squadComparison.length > 0 && !dismissed.has("squad-comparison") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("squad-comparison")} />
+              <div style={styles.sectionTitle}>Squad Comparison</div>
+              <div style={styles.hyroxList}>
+                {squadComparison.map((c) => (
+                  <div key={c.metric} style={styles.hyroxRow}>
+                    <span>{SQUAD_COMPARISON_LABEL[c.metric]}</span>
+                    <span>
+                      <span style={{ fontWeight: 700 }}>{fmtSquadValue(c.metric, c.value)}</span>
+                      <span style={{ color: "var(--mute)", marginLeft: 8 }}>
+                        {c.rank != null ? `#${c.rank} of ${c.total} · ` : ""}
+                        squad avg {fmtSquadValue(c.metric, c.squadAverage)}
+                      </span>
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

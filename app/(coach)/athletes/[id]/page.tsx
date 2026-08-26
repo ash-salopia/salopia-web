@@ -18,6 +18,8 @@ import { createProgrammeFromSessions } from "@/lib/data/programmes";
 import { todayISO } from "@/lib/date-utils";
 import { listTemplates, loadTemplateForAthlete } from "@/lib/data/templates";
 import { generateReport, type ReportData } from "@/lib/data/reports";
+import { listGroupMembers } from "@/lib/data/groups";
+import { computeSquadComparison, type SquadComparisonContext } from "@/lib/squad-comparison";
 import { archiveAthlete, toggleLiveGroup } from "@/lib/data/athletes";
 import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
 import ReportModal from "@/components/ReportModal";
@@ -99,6 +101,7 @@ export default function AthleteDetailPage() {
   const [typePicker, setTypePicker] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [hyroxEnabled, setHyroxEnabled] = useState(true);
+  const [squadComparisonEnabled, setSquadComparisonEnabled] = useState(true);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   // Last-used copy-to-range dates, shared across CopySessionModal opens
   // for different sessions within this programme-editing visit - a
@@ -131,6 +134,7 @@ export default function AthleteDetailPage() {
   const [reportRangeOpen, setReportRangeOpen] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [reportOptions, setReportOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
+  const [squadComparison, setSquadComparison] = useState<SquadComparisonContext[] | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string } | null>(null);
   const [aiReportLoading, setAiReportLoading] = useState(false);
@@ -198,7 +202,10 @@ export default function AthleteDetailPage() {
 
   useEffect(() => {
     if (athleteId) load();
-    getOrgSettings().then((s) => setHyroxEnabled(s.hyrox_enabled !== false)).catch(() => {});
+    getOrgSettings().then((s) => {
+      setHyroxEnabled(s.hyrox_enabled !== false);
+      setSquadComparisonEnabled(s.squad_comparison_enabled !== false);
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
 
@@ -325,11 +332,24 @@ export default function AthleteDetailPage() {
     setGeneratingReport(true);
     setError("");
     setAiReportSummary(null);
+    setSquadComparison(null);
     try {
       const data = await generateReport(athleteId, start, end);
       setReportData(data);
       setReportOptions(options);
       setReportRangeOpen(false);
+
+      if (options.squadComparison && options.squadComparisonGroupId) {
+        try {
+          const members = await listGroupMembers(options.squadComparisonGroupId);
+          const memberReports = await Promise.all(
+            members.map(async (m) => ({ athleteId: m.athlete_id, data: await generateReport(m.athlete_id, start, end) }))
+          );
+          setSquadComparison(computeSquadComparison(athleteId, memberReports, options.squadComparisonMetrics));
+        } catch {
+          setSquadComparison(null); // squad context failing shouldn't block the report itself
+        }
+      }
       if (options.aiSummary) {
         setAiReportLoading(true);
         fetch("/api/training-report-ai", {
@@ -952,6 +972,8 @@ export default function AthleteDetailPage() {
         <ReportRangeModal
           athleteName={athlete.name}
           hyroxEnabled={hyroxEnabled && (athlete as any).hyrox_enabled !== false}
+          athleteId={athleteId}
+          squadComparisonEnabled={squadComparisonEnabled && (athlete as any).squad_comparison_enabled !== false}
           onGenerate={handleGenerateReport}
           onClose={() => setReportRangeOpen(false)}
         />
@@ -980,7 +1002,8 @@ export default function AthleteDetailPage() {
           options={reportOptions}
           aiSummary={aiReportSummary}
           aiLoading={aiReportLoading}
-          onClose={() => { setReportData(null); setAiReportSummary(null); }}
+          squadComparison={squadComparison}
+          onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); }}
         />
       )}
 

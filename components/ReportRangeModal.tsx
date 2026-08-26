@@ -13,11 +13,15 @@ export type { ReportOptions };
 export default function ReportRangeModal({
   athleteName,
   hyroxEnabled = true,
+  athleteId,
+  squadComparisonEnabled = false,
   onGenerate,
   onClose,
 }: {
   athleteName: string;
   hyroxEnabled?: boolean;
+  athleteId?: string;
+  squadComparisonEnabled?: boolean;
   onGenerate: (start: string | null, end: string | null, options: ReportOptions) => void;
   onClose: () => void;
 }) {
@@ -127,7 +131,13 @@ export default function ReportRangeModal({
             </div>
           )}
 
-          <ReportOptionsForm options={options} onChange={setOptions} hyroxEnabled={hyroxEnabled} />
+          <ReportOptionsForm
+            options={options}
+            onChange={setOptions}
+            hyroxEnabled={hyroxEnabled}
+            athleteId={athleteId}
+            squadComparisonEnabled={squadComparisonEnabled}
+          />
 
           <div style={{ marginTop: 4, marginBottom: 4 }}>
             <div style={styles.fieldLabel}>Save current metrics as a preset</div>
