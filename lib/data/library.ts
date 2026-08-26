@@ -48,6 +48,9 @@ export async function saveLibraryEntry(
         is_bodyweight: entry.is_bodyweight ?? existing.is_bodyweight,
         each_side: entry.each_side ?? existing.each_side,
         use_percent_1rm: entry.use_percent_1rm ?? existing.use_percent_1rm,
+        default_tracked_metrics: entry.default_tracked_metrics ?? existing.default_tracked_metrics ?? [],
+        equipment: entry.equipment !== undefined ? entry.equipment : existing.equipment,
+        default_distance_unit: entry.default_distance_unit !== undefined ? entry.default_distance_unit : existing.default_distance_unit,
       })
       .eq("id", existing.id)
       .select()
@@ -75,6 +78,9 @@ export async function saveLibraryEntry(
       is_bodyweight: entry.is_bodyweight ?? false,
       each_side: entry.each_side ?? false,
       use_percent_1rm: entry.use_percent_1rm ?? false,
+      default_tracked_metrics: entry.default_tracked_metrics ?? [],
+      equipment: entry.equipment ?? null,
+      default_distance_unit: entry.default_distance_unit ?? null,
     })
     .select()
     .single();

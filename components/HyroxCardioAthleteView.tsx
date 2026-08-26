@@ -11,6 +11,9 @@
 import { useState } from "react";
 import { saveWithRetry } from "@/lib/save-queue";
 import HyroxCardioLog, { HYROX_LABEL, CARDIO_LABEL } from "@/components/HyroxCardioLog";
+import { HyroxTimer } from "@/components/HyroxCardioBuilder";
+import SessionRPEBlock from "@/components/SessionRPEBlock";
+import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { Session } from "@/types";
 
 export default function HyroxCardioAthleteView({
@@ -31,6 +34,35 @@ export default function HyroxCardioAthleteView({
   const isHyrox = session.type === "hyrox";
   const subType = isHyrox ? (session.hyrox_type ?? "") : ((session as any).cardio_type ?? "");
   const cfg: any = (isHyrox ? session.hyrox_config : (session as any).cardio_config) ?? {};
+  const color = isHyrox ? "#B388FF" : "#4DC3FF";
+
+  const handleRPESave = async (rpe: number) => {
+    setSession((prev) => ({ ...prev, rpe, rpe_logged_at: new Date().toISOString() } as Session));
+    const result = await saveWithRetry(`rpe:${session.id}`, "/api/athlete-link/rpe", {
+      token, sessionId: session.id, rpe,
+    });
+    if (result.ok) {
+      setError("");
+    } else if (!result.queued) {
+      setError(result.error);
+      throw new Error(result.error);
+    }
+  };
+
+  const handleAthleteNotesChange = (athlete_notes: string) => {
+    setSession((prev) => ({ ...prev, athlete_notes } as Session));
+  };
+  // Fires once, when the athlete leaves the notes field, rather than on
+  // every keystroke - same reasoning as AthleteSessionView's
+  // saveAthleteNotes (a save fired per keystroke can race on a patchy
+  // gym connection and leave a truncated note).
+  const saveAthleteNotes = async () => {
+    const result = await saveWithRetry(`notes:${session.id}`, "/api/athlete-link/session-notes", {
+      token, sessionId: session.id, notes: session.athlete_notes ?? "",
+    });
+    if (result.ok) setError("");
+    else if (!result.queued) setError(result.error);
+  };
 
   // hyrox_config/cardio_config round-trip whole, same convention as
   // recovery_config - merge client-side, PATCH the full object.
@@ -58,7 +90,19 @@ export default function HyroxCardioAthleteView({
       </div>
       {error && <div style={styles.errorBox}>{error}</div>}
       {saving && <div style={styles.savingNote}>Saving…</div>}
+      <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly />
+      {subType && <HyroxTimer session={session} color={color} />}
       <HyroxCardioLog session={session} onPatch={patchConfig} />
+      <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
+      <SessionNotesBlock
+        value={session.athlete_notes ?? ""}
+        onChange={handleAthleteNotesChange}
+        onBlur={saveAthleteNotes}
+        label="Your Notes"
+        icon="📝"
+        placeholder="How did the session feel? Anything to flag for your coach…"
+        enableTemplates={false}
+      />
     </div>
   );
 }

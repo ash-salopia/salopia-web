@@ -18,8 +18,16 @@ import type { Session, HyroxConfig, CardioConfig, LibraryEntry } from "@/types";
 import {
   unlockAudio, stopKeepAlive, playCountdownBeep, playDing, playDoneBeep, setSoundMuted,
 } from "@/lib/timer-audio";
-import { MetricToggles, MetricBoxes } from "@/components/MetricBoxes";
-import { DEFAULT_TRACKED_METRICS, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
+import { MetricToggles, MetricBoxes, DistanceUnitPills } from "@/components/MetricBoxes";
+import { DEFAULT_TRACKED_METRICS, resolveTrackedMetrics, metricsForEquipment, type MetricKey, type MetricValues, type DistanceUnit } from "@/lib/cardio-metrics";
+import { saveLibraryEntry } from "@/lib/data/library";
+import LibraryEntryForm from "@/components/LibraryEntryForm";
+
+// LibraryEntry.types is stored capitalised ("Hyrox", "Cardio" - see
+// LibraryEntryForm's SESSION_TYPES), but every LibraryAutocomplete call
+// site here passes lowercase filter tags ("hyrox", "cardio") - compare
+// case-insensitively so the dropdown actually matches real entries.
+const TYPE_LABEL: Record<string, string> = { hyrox: "Hyrox", cardio: "Cardio" };
 
 // ── Type maps (ported from original) ─────────────────────────────────────────
 
@@ -54,11 +62,28 @@ function Field({ label, children, grow }: { label: string; children: React.React
   );
 }
 
+// Coach preset for which unit a fresh distance box should start on
+// (e.g. intervals default to metres, an LSD run defaults to km) - only
+// shown once "distance" is actually tracked. The athlete/coach can
+// still override it per box from there; this only sets what a
+// not-yet-touched box shows automatically (0074).
+function DistanceUnitPresetRow({ tracked, value, onChange }: {
+  tracked: MetricKey[]; value: DistanceUnit; onChange: (next: DistanceUnit) => void;
+}) {
+  if (!tracked.includes("distance")) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+      <span style={{ fontSize: 11, color: "#8593A0", fontWeight: 600 }}>Default distance unit:</span>
+      <DistanceUnitPills value={value} onChange={onChange} />
+    </div>
+  );
+}
+
 // Shared "which metrics does this session track" row, plus a helper
 // that gives every sub-type builder its tracked list with a sensible
 // default (tick nothing by hand, still get useful boxes) the first
 // time it renders.
-function TrackedMetricsRow({ cfg, upd, subType }: { cfg: any; upd: (p: any) => void; subType: string }) {
+function TrackedMetricsRow({ cfg, upd, subType, available }: { cfg: any; upd: (p: any) => void; subType: string; available?: MetricKey[] }) {
   const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS[subType] ?? [];
   useEffect(() => {
     if (!cfg.tracked_metrics) upd({ tracked_metrics: tracked });
@@ -66,9 +91,70 @@ function TrackedMetricsRow({ cfg, upd, subType }: { cfg: any; upd: (p: any) => v
   }, []);
   return (
     <>
-      <div style={s.dayLabelRow}>Metrics to track</div>
-      <MetricToggles tracked={tracked} onChange={(next) => upd({ tracked_metrics: next })} />
+      <div style={s.dayLabelRow}>Session avg/total</div>
+      <MetricToggles tracked={tracked} onChange={(next) => upd({ tracked_metrics: next })} available={available} />
+      <DistanceUnitPresetRow tracked={tracked} value={cfg.default_distance_unit ?? "km"} onChange={(next) => upd({ default_distance_unit: next })} />
     </>
+  );
+}
+
+// Per-exercise "which metrics does THIS exercise track" toggle + boxes -
+// defaults from the picked library exercise (LibraryEntry.default_tracked_metrics),
+// overridable per instance so a coach can e.g. untick distance on one
+// exercise without touching the others in the same cycle/circuit (0070).
+function ExerciseMetricsRow({ tracked, values, onTrackedChange, onValuesChange, available, defaultDistanceUnit, onDefaultDistanceUnitChange }: {
+  tracked: MetricKey[]; values: MetricValues;
+  onTrackedChange: (next: MetricKey[]) => void; onValuesChange: (next: MetricValues) => void;
+  available?: MetricKey[]; // restricts which metrics are selectable, e.g. by the exercise's equipment (0071)
+  defaultDistanceUnit: DistanceUnit; onDefaultDistanceUnitChange: (next: DistanceUnit) => void;
+}) {
+  return (
+    <div style={{ marginLeft: 32, marginBottom: 4 }}>
+      <MetricToggles tracked={tracked} onChange={onTrackedChange} available={available} />
+      <DistanceUnitPresetRow tracked={tracked} value={defaultDistanceUnit} onChange={onDefaultDistanceUnitChange} />
+      <MetricBoxes tracked={tracked} values={values} onChange={onValuesChange} size="compact" defaultDistanceUnit={defaultDistanceUnit} />
+    </div>
+  );
+}
+
+// Toggle-only version for exercises that cycle through multiple rounds
+// (Cycling, Circuit rounds mode) — which metrics to track is still
+// per-exercise config set here, but the actual round-by-round values
+// (Row round 1, Row round 2, ...) are entered where the workout is
+// actually performed, in HyroxCardioLog (0071).
+function ExerciseTrackToggle({ tracked, onTrackedChange, available, defaultDistanceUnit, onDefaultDistanceUnitChange }: {
+  tracked: MetricKey[]; onTrackedChange: (next: MetricKey[]) => void; available?: MetricKey[];
+  defaultDistanceUnit: DistanceUnit; onDefaultDistanceUnitChange: (next: DistanceUnit) => void;
+}) {
+  return (
+    <div style={{ marginLeft: 32, marginBottom: 4 }}>
+      <MetricToggles tracked={tracked} onChange={onTrackedChange} available={available} />
+      <DistanceUnitPresetRow tracked={tracked} value={defaultDistanceUnit} onChange={onDefaultDistanceUnitChange} />
+    </div>
+  );
+}
+
+// Round/Cycle recording-granularity checkboxes, one per Cycling session
+// (applies to every exercise in it) - independent of which metrics are
+// tracked, this decides whether a coach/athlete fills in one result per
+// round, per cycle, both, or (if they leave both off) relies purely on
+// the session-level "Session avg/total" box below (0071/0072).
+function RecordLevelToggle({ levels, onChange }: {
+  levels: ("round" | "cycle")[]; onChange: (next: ("round" | "cycle")[]) => void;
+}) {
+  const has = (l: "round" | "cycle") => levels.includes(l);
+  const toggle = (l: "round" | "cycle") => onChange(has(l) ? levels.filter((x) => x !== l) : [...levels, l]);
+  return (
+    <div style={{ marginBottom: 10, display: "flex", gap: 12 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+        <input type="checkbox" checked={has("round")} onChange={() => toggle("round")} style={{ accentColor: "var(--accent)" }} />
+        <span style={{ color: has("round") ? "var(--accent)" : "var(--mute)" }}>Record per round</span>
+      </label>
+      <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+        <input type="checkbox" checked={has("cycle")} onChange={() => toggle("cycle")} style={{ accentColor: "var(--accent)" }} />
+        <span style={{ color: has("cycle") ? "var(--accent)" : "var(--mute)" }}>Record per cycle</span>
+      </label>
+    </div>
   );
 }
 
@@ -88,16 +174,33 @@ function MiniInput({ value, onChange, placeholder, type = "text" }: {
 }
 
 function LibraryAutocomplete({ value, onChange, library, types, placeholder }: {
-  value: string; onChange: (v: string) => void;
+  value: string; onChange: (v: string, entry?: LibraryEntry) => void;
   library: LibraryEntry[]; types: string[]; placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addError, setAddError] = useState("");
   const timer = useRef<any>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const typesLower = types.map(t => t.toLowerCase());
   const filtered = library
-    .filter(e => !types.length || (e.types || []).some((t: string) => types.includes(t)))
+    .filter(e => !typesLower.length || (e.types || []).some((t: string) => typesLower.includes(t.toLowerCase())))
     .filter(e => !value.trim() || e.name.toLowerCase().includes(value.toLowerCase()))
     .slice(0, 8);
+  const trimmed = value.trim();
+  const hasExactMatch = trimmed && filtered.some(e => e.name.toLowerCase() === trimmed.toLowerCase());
+
+  const handleAddToLibrary = async (entry: Partial<LibraryEntry> & { name: string }) => {
+    setAddError("");
+    try {
+      const saved = await saveLibraryEntry(entry);
+      setAddOpen(false);
+      onChange(saved.name, saved);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Could not save to library");
+    }
+  };
+
   return (
     <div style={{ position: "relative", flex: 1 }}>
       <input
@@ -107,13 +210,33 @@ function LibraryAutocomplete({ value, onChange, library, types, placeholder }: {
         onBlur={() => { timer.current = setTimeout(() => setOpen(false), 150); }}
         style={{ ...s.miniInput, width: "100%" }}
       />
-      {open && filtered.length > 0 && (
+      {open && (filtered.length > 0 || (trimmed && !hasExactMatch)) && (
         <div style={s.acList}>
           {filtered.map((m, i) => (
-            <button key={i} style={s.acItem} onMouseDown={e => { e.preventDefault(); onChange(m.name); setOpen(false); }}>
+            <button key={i} style={s.acItem} onMouseDown={e => { e.preventDefault(); onChange(m.name, m); setOpen(false); }}>
               {m.name}
             </button>
           ))}
+          {trimmed && !hasExactMatch && (
+            <button style={s.acAddItem} onMouseDown={e => { e.preventDefault(); setAddOpen(true); }}>
+              + Add &quot;{trimmed}&quot; to library
+            </button>
+          )}
+        </div>
+      )}
+      {addOpen && (
+        <div style={s.overlay} onClick={() => setAddOpen(false)}>
+          <div onClick={e => e.stopPropagation()}>
+            {addError && <div style={s.addError}>{addError}</div>}
+            <LibraryEntryForm
+              entry={null}
+              initialName={trimmed}
+              initialTypes={typesLower.map(t => TYPE_LABEL[t]).filter(Boolean)}
+              title={`Add "${trimmed}" to library`}
+              onSave={handleAddToLibrary}
+              onClose={() => setAddOpen(false)}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -131,7 +254,6 @@ interface Props {
 }
 
 export default function HyroxCardioBuilder({ session, color, library, onTypeChange, onConfigChange }: Props) {
-  const [timerOpen, setTimerOpen] = useState(false);
   const isHyrox = session.type === "hyrox";
   const types = isHyrox ? HYROX_TYPES : CARDIO_TYPES;
   const currentType = isHyrox ? (session.hyrox_type || "") : ((session as any).cardio_type || "");
@@ -170,35 +292,22 @@ export default function HyroxCardioBuilder({ session, color, library, onTypeChan
         })}
       </div>
 
-      {/* Timer launch banner */}
-      {currentType && (
-        <div style={{ ...s.hyroxBanner, borderColor: color + "44" }}>
-          <span style={{ fontSize: 13, color: "#E8EDF1" }}>
-            {isHyrox ? "Configure then start the timer" : "Configure then start timer"}
-          </span>
-          <button style={{ ...s.timerLaunchBtn, background: color }} onClick={() => setTimerOpen(true)}>
-            ▶ Start Timer
-          </button>
-        </div>
-      )}
+      {/* Inline timer - always mounted once a type is picked so it keeps
+          running regardless of scroll position or collapse state (0073) */}
+      {currentType && <HyroxTimer session={session} color={color} />}
 
       {/* Hyrox builders */}
       {isHyrox && currentType === "fixed"    && <HyroxFixed    cfg={cfg} upd={upd} library={library} />}
       {isHyrox && currentType === "cycling"  && <HyroxCycling  cfg={cfg} upd={upd} library={library} color={color} />}
-      {isHyrox && currentType === "emom"     && <HyroxEMOM     cfg={cfg} upd={upd} />}
+      {isHyrox && currentType === "emom"     && <HyroxEMOM     cfg={cfg} upd={upd} library={library} />}
       {isHyrox && currentType === "interval" && <HyroxInterval cfg={cfg} upd={upd} library={library} />}
-      {isHyrox && currentType === "circuit"  && <HyroxCircuit  cfg={cfg} upd={upd} />}
+      {isHyrox && currentType === "circuit"  && <HyroxCircuit  cfg={cfg} upd={upd} library={library} />}
 
       {/* Cardio builders */}
       {!isHyrox && currentType === "continuous"      && <CardioContinuous  cfg={cfg} upd={upd} library={library} />}
       {!isHyrox && currentType === "threshold"       && <CardioThreshold   cfg={cfg} upd={upd} library={library} />}
       {!isHyrox && currentType === "cardioIntervals" && <CardioIntervals   cfg={cfg} upd={upd} library={library} />}
       {!isHyrox && currentType === "overUnder"       && <CardioOverUnder   cfg={cfg} upd={upd} library={library} />}
-
-      {/* Timer modal */}
-      {timerOpen && currentType && (
-        <HyroxTimer session={session} onClose={() => setTimerOpen(false)} color={color} />
-      )}
     </div>
   );
 }
@@ -210,28 +319,52 @@ function HyroxFixed({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; li
   useEffect(() => { if (!cfg.steps) upd({ steps }); }, []);
   const updSteps = (s: any[]) => upd({ steps: s });
   const updStep = (i: number, patch: any) => updSteps(steps.map((x: any, j: number) => j === i ? { ...x, ...patch } : x));
-  const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.fixed;
 
   return (
     <div style={{ marginTop: 12 }}>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="fixed" />
       <div style={s.dayLabelRow}>Workout sequence</div>
-      {steps.map((step: any, i: number) => (
-        <div key={i} style={{ marginBottom: 10 }}>
-          <div style={s.hyroxStepRow}>
-            <div style={s.hyroxStepNum}>{i + 1}</div>
-            <LibraryAutocomplete value={step.exercise} onChange={v => updStep(i, { exercise: v })}
-              library={library} types={["hyrox"]} placeholder="Exercise" />
-            <input value={step.target} placeholder="Target" onChange={e => updStep(i, { target: e.target.value })}
-              style={{ ...s.miniInput, width: 90 }} />
-            {steps.length > 1 && (
-              <button style={s.iconBtn} onClick={() => updSteps(steps.filter((_: any, j: number) => j !== i))}>×</button>
-            )}
+      {steps.map((step: any, i: number) => {
+        const tracked: MetricKey[] = step.tracked_metrics ?? DEFAULT_TRACKED_METRICS.fixed;
+        const available = metricsForEquipment(step.equipment);
+        return (
+          <div key={i} style={{ marginBottom: 10 }}>
+            <div style={s.hyroxStepRow}>
+              <div style={s.hyroxStepNum}>{i + 1}</div>
+              <LibraryAutocomplete value={step.exercise} library={library} types={["hyrox"]} placeholder="Exercise"
+                onChange={(v, entry) => updStep(i, {
+                  exercise: v,
+                  equipment: entry ? (entry.equipment ?? undefined) : step.equipment,
+                  default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : step.default_distance_unit,
+                  tracked_metrics: entry
+                    ? resolveTrackedMetrics(undefined, entry, DEFAULT_TRACKED_METRICS.fixed).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                    : step.tracked_metrics,
+                })} />
+              <input value={step.target} placeholder="Target" onChange={e => updStep(i, { target: e.target.value })}
+                style={{ ...s.miniInput, width: 90 }} />
+              {steps.length > 1 && (
+                <button style={s.iconBtn} onClick={() => updSteps(steps.filter((_: any, j: number) => j !== i))}>×</button>
+              )}
+            </div>
+            <ExerciseMetricsRow
+              tracked={tracked}
+              values={step.metrics ?? {}}
+              onTrackedChange={(next) => updStep(i, { tracked_metrics: next })}
+              onValuesChange={(next) => updStep(i, { metrics: next })}
+              available={available}
+              defaultDistanceUnit={step.default_distance_unit ?? "km"}
+              onDefaultDistanceUnitChange={(next) => updStep(i, { default_distance_unit: next })}
+            />
           </div>
-          <MetricBoxes tracked={tracked} values={step.metrics ?? {}} onChange={(v) => updStep(i, { metrics: v })} size="compact" />
-        </div>
-      ))}
+        );
+      })}
       <button style={s.addSetBtn} onClick={() => updSteps([...steps, { exercise: "", target: "", metrics: {} }])}>+ Step</button>
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="fixed" />
+      <MetricBoxes
+        tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.fixed}
+        values={cfg.metrics ?? {}}
+        onChange={(v) => upd({ metrics: v })}
+        defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
+      />
     </div>
   );
 }
@@ -268,16 +401,36 @@ function HyroxCycling({ cfg, upd, library, color }: { cfg: any; upd: (p: any) =>
         <Field label="Cycles"><input inputMode="numeric" value={cfg.cycles ?? 3} onChange={e => upd({ cycles: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <div style={s.dayLabelRow}>Exercises (cycle in order)</div>
-      {exercises.map((ex: any, i: number) => (
-        <div key={i} style={s.hyroxStepRow}>
-          <div style={s.hyroxStepNum}>{i + 1}</div>
-          <LibraryAutocomplete value={ex.exercise} onChange={v => updE(i, { exercise: v })}
-            library={library} types={["hyrox"]} />
-          <input value={ex.reps} placeholder="Reps / target" onChange={e => updE(i, { reps: e.target.value })}
-            style={{ ...s.miniInput, width: 100 }} />
-          {exercises.length > 1 && <button style={s.iconBtn} onClick={() => updEx(exercises.filter((_: any, j: number) => j !== i))}>×</button>}
-        </div>
-      ))}
+      {exercises.map((ex: any, i: number) => {
+        const tracked: MetricKey[] = ex.tracked_metrics ?? [];
+        const available = metricsForEquipment(ex.equipment);
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={s.hyroxStepRow}>
+              <div style={s.hyroxStepNum}>{i + 1}</div>
+              <LibraryAutocomplete value={ex.exercise} library={library} types={["hyrox"]}
+                onChange={(v, entry) => updE(i, {
+                  exercise: v,
+                  equipment: entry ? (entry.equipment ?? undefined) : ex.equipment,
+                  default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : ex.default_distance_unit,
+                  tracked_metrics: entry
+                    ? resolveTrackedMetrics(undefined, entry, ex.tracked_metrics ?? []).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                    : ex.tracked_metrics,
+                })} />
+              <input value={ex.reps} placeholder="Reps / target" onChange={e => updE(i, { reps: e.target.value })}
+                style={{ ...s.miniInput, width: 100 }} />
+              {exercises.length > 1 && <button style={s.iconBtn} onClick={() => updEx(exercises.filter((_: any, j: number) => j !== i))}>×</button>}
+            </div>
+            <ExerciseTrackToggle
+              tracked={tracked}
+              onTrackedChange={(next) => updE(i, { tracked_metrics: next })}
+              available={available}
+              defaultDistanceUnit={ex.default_distance_unit ?? "km"}
+              onDefaultDistanceUnitChange={(next) => updE(i, { default_distance_unit: next })}
+            />
+          </div>
+        );
+      })}
       <button style={s.addSetBtn} onClick={() => updEx([...exercises, { exercise: "", reps: "" }])}>+ Exercise</button>
       <div style={{ marginTop: 10, background: "#2a2240", borderRadius: 10, padding: "10px 14px", border: "1px solid #B388FF44" }}>
         <div style={{ fontSize: 12, color: "#B388FF", fontWeight: 600, marginBottom: 4 }}>Structure preview</div>
@@ -285,11 +438,14 @@ function HyroxCycling({ cfg, upd, library, color }: { cfg: any; upd: (p: any) =>
         <div style={{ fontSize: 13, color: "#E8EDF1" }}>×{rounds} rounds per cycle then {cyclRestSec}s rest ×{cycles} cycles</div>
         <div style={{ fontSize: 12, color: "#8593A0", marginTop: 4 }}>Total approx: {totalMin} min</div>
       </div>
+      <div style={s.dayLabelRow}>Round/Cycle Data Tracking</div>
+      <RecordLevelToggle levels={cfg.record_levels ?? ["round"]} onChange={(next) => upd({ record_levels: next })} />
       <TrackedMetricsRow cfg={cfg} upd={upd} subType="cycling" />
       <MetricBoxes
         tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.cycling}
         values={cfg.metrics ?? {}}
         onChange={(v) => upd({ metrics: v })}
+        defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
       />
     </div>
   );
@@ -297,7 +453,7 @@ function HyroxCycling({ cfg, upd, library, color }: { cfg: any; upd: (p: any) =>
 
 // ── Hyrox: EMOM ───────────────────────────────────────────────────────────────
 
-function HyroxEMOM({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
+function HyroxEMOM({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
   const mins = numOr(cfg.mins, 10);
   const slots = cfg.slots || [{ minute: "Odd", exercise: "", reps: "" }];
   useEffect(() => {
@@ -319,8 +475,12 @@ function HyroxEMOM({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
         <div key={i} style={s.hyroxStepRow}>
           <input value={slot.minute} placeholder="Odd / Even / 1,3,5…"
             onChange={e => updSlot(i, { minute: e.target.value })} style={{ ...s.miniInput, width: 90 }} />
-          <input value={slot.exercise} placeholder="Exercise"
-            onChange={e => updSlot(i, { exercise: e.target.value })} style={{ ...s.miniInput, flex: 2 }} />
+          <LibraryAutocomplete value={slot.exercise} library={library} types={["hyrox"]} placeholder="Exercise"
+            onChange={(v, entry) => updSlot(i, {
+              exercise: v,
+              equipment: entry ? (entry.equipment ?? undefined) : slot.equipment,
+              default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : slot.default_distance_unit,
+            })} />
           <input value={slot.reps} placeholder="Reps/dist"
             onChange={e => updSlot(i, { reps: e.target.value })} style={{ ...s.miniInput, width: 80 }} />
           {slots.length > 1 && <button style={s.iconBtn} onClick={() => updSlots(slots.filter((_: any, j: number) => j !== i))}>×</button>}
@@ -332,6 +492,7 @@ function HyroxEMOM({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
         tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.emom}
         values={cfg.metrics ?? {}}
         onChange={(v) => upd({ metrics: v })}
+        defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
       />
     </div>
   );
@@ -346,15 +507,22 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <Field label="Exercise" grow>
-          <LibraryAutocomplete value={cfg.exercise || ""} onChange={v => upd({ exercise: v })}
-            library={library} types={["hyrox"]} placeholder="e.g. SkiErg 500m" />
+          <LibraryAutocomplete value={cfg.exercise || ""} library={library} types={["hyrox"]} placeholder="e.g. SkiErg 500m"
+            onChange={(v, entry) => upd({
+              exercise: v,
+              equipment: entry ? (entry.equipment ?? undefined) : cfg.equipment,
+              default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : cfg.default_distance_unit,
+              tracked_metrics: entry
+                ? resolveTrackedMetrics(undefined, entry, DEFAULT_TRACKED_METRICS.interval).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                : cfg.tracked_metrics,
+            })} />
         </Field>
         <Field label="Load"><input value={cfg.load || ""} placeholder="e.g. BW / 80kg" onChange={e => upd({ load: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Sets"><input inputMode="numeric" value={cfg.sets ?? 6} onChange={e => upd({ sets: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Work (s)"><input inputMode="numeric" value={cfg.workSec ?? 120} onChange={e => upd({ workSec: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Rest (s)"><input inputMode="numeric" value={cfg.restSec ?? 90} onChange={e => upd({ restSec: e.target.value })} style={s.miniInput} /></Field>
       </div>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="interval" />
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="interval" available={metricsForEquipment(cfg.equipment)} />
       <div style={s.dayLabelRow}>Log each set</div>
       {Array.from({ length: sets }, (_, i) => {
         const metricsArr: MetricValues[] = cfg.metrics || [];
@@ -374,6 +542,7 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
                 upd({ metrics: next });
               }}
               size="compact"
+              defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
             />
           </div>
         );
@@ -384,7 +553,7 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
 
 // ── Hyrox: Circuit / AMRAP ───────────────────────────────────────────────────
 
-function HyroxCircuit({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
+function HyroxCircuit({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
   const rounds = numOr(cfg.rounds, 4); const restSec = numOr(cfg.restSec, 120);
   const isAmrap = cfg.isAmrap || false;
   const exercises = cfg.exercises || [{ exercise: "", reps: "" }];
@@ -413,16 +582,36 @@ function HyroxCircuit({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
         <Field label="Rest between rounds (s)"><input inputMode="numeric" value={cfg.restSec ?? restSec} onChange={e => upd({ restSec: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <div style={s.dayLabelRow}>Circuit exercises</div>
-      {exercises.map((ex: any, i: number) => (
-        <div key={i} style={s.hyroxStepRow}>
-          <div style={s.hyroxStepNum}>{i + 1}</div>
-          <input value={ex.exercise} placeholder="Exercise" onChange={e => updE(i, { exercise: e.target.value })}
-            style={{ ...s.miniInput, flex: 2 }} />
-          <input value={ex.reps} placeholder="Reps/dist" onChange={e => updE(i, { reps: e.target.value })}
-            style={{ ...s.miniInput, width: 80 }} />
-          {exercises.length > 1 && <button style={s.iconBtn} onClick={() => updEx(exercises.filter((_: any, j: number) => j !== i))}>×</button>}
-        </div>
-      ))}
+      {exercises.map((ex: any, i: number) => {
+        const tracked: MetricKey[] = ex.tracked_metrics ?? [];
+        const available = metricsForEquipment(ex.equipment);
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={s.hyroxStepRow}>
+              <div style={s.hyroxStepNum}>{i + 1}</div>
+              <LibraryAutocomplete value={ex.exercise} library={library} types={["hyrox"]} placeholder="Exercise"
+                onChange={(v, entry) => updE(i, {
+                  exercise: v,
+                  equipment: entry ? (entry.equipment ?? undefined) : ex.equipment,
+                  default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : ex.default_distance_unit,
+                  tracked_metrics: entry
+                    ? resolveTrackedMetrics(undefined, entry, ex.tracked_metrics ?? []).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                    : ex.tracked_metrics,
+                })} />
+              <input value={ex.reps} placeholder="Reps/dist" onChange={e => updE(i, { reps: e.target.value })}
+                style={{ ...s.miniInput, width: 80 }} />
+              {exercises.length > 1 && <button style={s.iconBtn} onClick={() => updEx(exercises.filter((_: any, j: number) => j !== i))}>×</button>}
+            </div>
+            <ExerciseTrackToggle
+              tracked={tracked}
+              onTrackedChange={(next) => updE(i, { tracked_metrics: next })}
+              available={available}
+              defaultDistanceUnit={ex.default_distance_unit ?? "km"}
+              onDefaultDistanceUnitChange={(next) => updE(i, { default_distance_unit: next })}
+            />
+          </div>
+        );
+      })}
       <button style={s.addSetBtn} onClick={() => updEx([...exercises, { exercise: "", reps: "" }])}>+ Exercise</button>
       {!isAmrap && (
         <div style={{ marginTop: 10 }}>
@@ -445,6 +634,7 @@ function HyroxCircuit({ cfg, upd }: { cfg: any; upd: (p: any) => void }) {
         tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.circuit}
         values={cfg.metrics ?? {}}
         onChange={(v) => upd({ metrics: v })}
+        defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
       />
     </div>
   );
@@ -457,10 +647,17 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <Field label="Activity" grow>
-          <LibraryAutocomplete value={cfg.modality || "Run"} onChange={v => upd({ modality: v })}
-            library={library} types={["cardio", "hyrox"]} placeholder="Run, Bike…" />
+          <LibraryAutocomplete value={cfg.modality || "Run"} library={library} types={["cardio", "hyrox"]} placeholder="Run, Bike…"
+            onChange={(v, entry) => upd({
+              modality: v,
+              equipment: entry ? (entry.equipment ?? undefined) : cfg.equipment,
+              default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : cfg.default_distance_unit,
+              tracked_metrics: entry && cfg.tracked_metrics
+                ? cfg.tracked_metrics.filter((k: MetricKey) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                : cfg.tracked_metrics,
+            })} />
         </Field>
-        <Field label="Duration"><input value={cfg.duration || ""} placeholder="e.g. 60 min" onChange={e => upd({ duration: e.target.value })} style={s.miniInput} /></Field>
+        <Field label="Duration (mins)"><input inputMode="numeric" value={cfg.duration || ""} placeholder="60" onChange={e => upd({ duration: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Distance"><input value={cfg.distance || ""} placeholder="e.g. 10 km" onChange={e => upd({ distance: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -469,11 +666,12 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
         <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 130–145 bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <Field label="Coaching notes"><input value={cfg.notes || ""} placeholder="e.g. Keep conversational, nasal breathing" onChange={e => upd({ notes: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="continuous" />
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="continuous" available={metricsForEquipment(cfg.equipment)} />
       <MetricBoxes
         tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.continuous}
         values={cfg.metrics ?? {}}
         onChange={(v) => upd({ metrics: v })}
+        defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
       />
     </div>
   );
@@ -483,9 +681,9 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
 
 function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
   const blocks = cfg.blocks || [
-    { label: "Warm-up",   duration: "10 min", intensity: "Z1 / easy",      repeat: 1, metrics: {} },
-    { label: "Main set",  duration: "20 min", intensity: "threshold / LT",  repeat: 2, rest: "2 min easy", metrics: {} },
-    { label: "Cool-down", duration: "10 min", intensity: "Z1 / easy",       repeat: 1, metrics: {} },
+    { label: "Warm-up",   duration: "10", intensity: "Z1 / easy",      repeat: 1, metrics: {} },
+    { label: "Main set",  duration: "20", intensity: "threshold / LT",  repeat: 2, rest: "2 min easy", metrics: {} },
+    { label: "Cool-down", duration: "10", intensity: "Z1 / easy",       repeat: 1, metrics: {} },
   ];
   const updBlocks = (b: any[]) => upd({ blocks: b });
   const updBlock = (i: number, p: any) => updBlocks(blocks.map((b: any, j: number) => j === i ? { ...b, ...p } : b));
@@ -494,32 +692,61 @@ function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
   return (
     <div style={{ marginTop: 12 }}>
       <Field label="Activity">
-        <LibraryAutocomplete value={cfg.modality || "Run"} onChange={v => upd({ modality: v })}
-          library={library} types={["cardio", "hyrox"]} />
+        <LibraryAutocomplete value={cfg.modality || "Run"} library={library} types={["cardio", "hyrox"]}
+          onChange={(v, entry) => upd({
+            modality: v,
+            equipment: entry ? (entry.equipment ?? undefined) : cfg.equipment,
+            default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : cfg.default_distance_unit,
+            tracked_metrics: entry && cfg.tracked_metrics
+              ? cfg.tracked_metrics.filter((k: MetricKey) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+              : cfg.tracked_metrics,
+          })} />
       </Field>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="threshold" />
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="threshold" available={metricsForEquipment(cfg.equipment)} />
       <div style={s.dayLabelRow}>Session blocks</div>
-      {blocks.map((b: any, i: number) => (
-        <div key={i} style={{ background: "#0F1418", borderRadius: 10, padding: "10px 12px", marginBottom: 8, border: "1px solid #2A343D" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-            <input value={b.label} onChange={e => updBlock(i, { label: e.target.value })} style={{ ...s.miniInput, fontWeight: 700, width: 100 }} />
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <button style={s.iconBtn} onClick={() => updBlock(i, { repeat: Math.max(1, (b.repeat || 1) - 1) })}>-</button>
-              <span style={{ fontSize: 12, color: "#8593A0", minWidth: 60, textAlign: "center" }}>{b.repeat || 1}× {b.duration || "-"}</span>
-              <button style={s.iconBtn} onClick={() => updBlock(i, { repeat: (b.repeat || 1) + 1 })}>+</button>
+      {blocks.map((b: any, i: number) => {
+        // Each block can override the session's Activity/equipment (e.g.
+        // bike warm-up into a run main set) - blank means "same as
+        // above". Falling back to the session-level tracked/equipment
+        // keeps every existing threshold session working unchanged (0076).
+        const blockEquipment = b.equipment ?? cfg.equipment;
+        const blockTracked: MetricKey[] = b.tracked_metrics ?? tracked;
+        const blockDistanceUnit: DistanceUnit = b.default_distance_unit ?? cfg.default_distance_unit ?? "km";
+        return (
+          <div key={i} style={{ background: "#0F1418", borderRadius: 10, padding: "10px 12px", marginBottom: 8, border: "1px solid #2A343D" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+              <input value={b.label} onChange={e => updBlock(i, { label: e.target.value })} style={{ ...s.miniInput, fontWeight: 700, width: 100 }} />
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <button style={s.iconBtn} onClick={() => updBlock(i, { repeat: Math.max(1, (b.repeat || 1) - 1) })}>-</button>
+                <span style={{ fontSize: 12, color: "#8593A0", minWidth: 60, textAlign: "center" }}>{b.repeat || 1}× {b.duration || "-"}min</span>
+                <button style={s.iconBtn} onClick={() => updBlock(i, { repeat: (b.repeat || 1) + 1 })}>+</button>
+              </div>
+              {blocks.length > 1 && <button style={{ ...s.iconBtn, color: "#ff7d7d", marginLeft: "auto" }} onClick={() => updBlocks(blocks.filter((_: any, j: number) => j !== i))}>×</button>}
             </div>
-            {blocks.length > 1 && <button style={{ ...s.iconBtn, color: "#ff7d7d", marginLeft: "auto" }} onClick={() => updBlocks(blocks.filter((_: any, j: number) => j !== i))}>×</button>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Field label="Duration (mins)"><input inputMode="numeric" value={b.duration} placeholder="20" onChange={e => updBlock(i, { duration: e.target.value })} style={s.miniInput} /></Field>
+              <Field label="Zone / Intensity" grow><input value={b.intensity} placeholder="e.g. threshold / Z4" onChange={e => updBlock(i, { intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
+              {(b.repeat || 1) > 1 && <Field label="Recovery"><input value={b.rest || ""} placeholder="e.g. 2 min easy" onChange={e => updBlock(i, { rest: e.target.value })} style={s.miniInput} /></Field>}
+            </div>
+            <Field label="Activity (blank = same as above)">
+              <LibraryAutocomplete value={b.modality || ""} library={library} types={["cardio", "hyrox"]} placeholder={cfg.modality || "Run"}
+                onChange={(v, entry) => updBlock(i, {
+                  modality: v,
+                  equipment: entry ? (entry.equipment ?? undefined) : b.equipment,
+                  default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : b.default_distance_unit,
+                  tracked_metrics: entry
+                    ? blockTracked.filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                    : b.tracked_metrics,
+                })} />
+            </Field>
+            <div style={{ marginTop: 8 }}>
+              <MetricToggles tracked={blockTracked} onChange={(next) => updBlock(i, { tracked_metrics: next })} available={metricsForEquipment(blockEquipment)} />
+              <DistanceUnitPresetRow tracked={blockTracked} value={blockDistanceUnit} onChange={(next) => updBlock(i, { default_distance_unit: next })} />
+              <MetricBoxes tracked={blockTracked} values={b.metrics ?? {}} onChange={(v) => updBlock(i, { metrics: v })} size="compact" defaultDistanceUnit={blockDistanceUnit} />
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Field label="Duration"><input value={b.duration} placeholder="e.g. 20 min" onChange={e => updBlock(i, { duration: e.target.value })} style={s.miniInput} /></Field>
-            <Field label="Zone / Intensity" grow><input value={b.intensity} placeholder="e.g. threshold / Z4" onChange={e => updBlock(i, { intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
-            {(b.repeat || 1) > 1 && <Field label="Recovery"><input value={b.rest || ""} placeholder="e.g. 2 min easy" onChange={e => updBlock(i, { rest: e.target.value })} style={s.miniInput} /></Field>}
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <MetricBoxes tracked={tracked} values={b.metrics ?? {}} onChange={(v) => updBlock(i, { metrics: v })} size="compact" />
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <button style={s.addSetBtn} onClick={() => updBlocks([...blocks, { label: "Block", duration: "", intensity: "", repeat: 1, rest: "", metrics: {} }])}>+ Block</button>
     </div>
   );
@@ -533,15 +760,22 @@ function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <Field label="Activity" grow>
-          <LibraryAutocomplete value={cfg.modality || "Run"} onChange={v => upd({ modality: v })}
-            library={library} types={["cardio", "hyrox"]} />
+          <LibraryAutocomplete value={cfg.modality || "Run"} library={library} types={["cardio", "hyrox"]}
+            onChange={(v, entry) => upd({
+              modality: v,
+              equipment: entry ? (entry.equipment ?? undefined) : cfg.equipment,
+              default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : cfg.default_distance_unit,
+              tracked_metrics: entry && cfg.tracked_metrics
+                ? cfg.tracked_metrics.filter((k: MetricKey) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                : cfg.tracked_metrics,
+            })} />
         </Field>
         <Field label="Reps"><input inputMode="numeric" value={cfg.reps ?? 6} onChange={e => upd({ reps: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <Field label="Work duration"><input value={cfg.workDur || ""} placeholder="e.g. 3 min" onChange={e => upd({ workDur: e.target.value })} style={s.miniInput} /></Field>
+        <Field label="Work (s)"><input inputMode="numeric" value={cfg.workDur || ""} placeholder="180" onChange={e => upd({ workDur: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Work distance"><input value={cfg.workDist || ""} placeholder="e.g. 400m" onChange={e => upd({ workDist: e.target.value })} style={s.miniInput} /></Field>
-        <Field label="Rest"><input value={cfg.restDur || ""} placeholder="e.g. 90s / 2 min" onChange={e => upd({ restDur: e.target.value })} style={s.miniInput} /></Field>
+        <Field label="Rest (s)"><input inputMode="numeric" value={cfg.restDur || ""} placeholder="90" onChange={e => upd({ restDur: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Rest type"><input value={cfg.restType || ""} placeholder="easy jog / walk" onChange={e => upd({ restType: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -549,7 +783,7 @@ function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
         <Field label="Target pace"><input value={cfg.pace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ pace: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 175+ bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
       </div>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="cardioIntervals" />
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="cardioIntervals" available={metricsForEquipment(cfg.equipment)} />
       <div style={s.dayLabelRow}>Log each rep</div>
       {Array.from({ length: reps }, (_, i) => {
         const metricsArr: MetricValues[] = cfg.metrics || [];
@@ -565,6 +799,7 @@ function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
               values={metricsArr[i] ?? {}}
               onChange={(v) => { const next = [...metricsArr]; next[i] = v; upd({ metrics: next }); }}
               size="compact"
+              defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
             />
           </div>
         );
@@ -581,28 +816,35 @@ function CardioOverUnder({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <Field label="Activity" grow>
-          <LibraryAutocomplete value={cfg.modality || "Bike Erg"} onChange={v => upd({ modality: v })}
-            library={library} types={["cardio", "hyrox"]} />
+          <LibraryAutocomplete value={cfg.modality || "Bike Erg"} library={library} types={["cardio", "hyrox"]}
+            onChange={(v, entry) => upd({
+              modality: v,
+              equipment: entry ? (entry.equipment ?? undefined) : cfg.equipment,
+              default_distance_unit: entry ? (entry.default_distance_unit ?? undefined) : cfg.default_distance_unit,
+              tracked_metrics: entry && cfg.tracked_metrics
+                ? cfg.tracked_metrics.filter((k: MetricKey) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
+                : cfg.tracked_metrics,
+            })} />
         </Field>
         <Field label="Sets"><input inputMode="numeric" value={cfg.sets ?? 3} onChange={e => upd({ sets: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Reps / set"><input inputMode="numeric" value={cfg.reps ?? 6} onChange={e => upd({ reps: e.target.value })} style={s.miniInput} /></Field>
-        <Field label="Rest between sets"><input value={cfg.restDur || "5 min"} onChange={e => upd({ restDur: e.target.value })} style={s.miniInput} /></Field>
+        <Field label="Rest between sets (mins)"><input inputMode="numeric" value={cfg.restDur || "5"} onChange={e => upd({ restDur: e.target.value })} style={s.miniInput} /></Field>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
         <div style={{ background: "#152530", border: "1px solid #4DC3FF44", borderRadius: 10, padding: "10px 12px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#4DC3FF", letterSpacing: 1, marginBottom: 8 }}>UNDER (below threshold)</div>
-          <Field label="Duration"><input value={cfg.underDur || "3 min"} onChange={e => upd({ underDur: e.target.value })} style={s.miniInput} /></Field>
+          <Field label="Duration (s)"><input inputMode="numeric" value={cfg.underDur || "180"} onChange={e => upd({ underDur: e.target.value })} style={s.miniInput} /></Field>
           <Field label="Zone / %"><input value={cfg.underInt || ""} placeholder="e.g. 93–95% FTP / Z3" onChange={e => upd({ underInt: e.target.value })} style={s.miniInput} /></Field>
           <Field label="Pace"><input value={cfg.underPace || ""} placeholder="e.g. 4:20/km" onChange={e => upd({ underPace: e.target.value })} style={s.miniInput} /></Field>
         </div>
         <div style={{ background: "#162743", border: "1px solid #3B8BEB44", borderRadius: 10, padding: "10px 12px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#3B8BEB", letterSpacing: 1, marginBottom: 8 }}>OVER (above threshold)</div>
-          <Field label="Duration"><input value={cfg.overDur || "2 min"} onChange={e => upd({ overDur: e.target.value })} style={s.miniInput} /></Field>
+          <Field label="Duration (s)"><input inputMode="numeric" value={cfg.overDur || "120"} onChange={e => upd({ overDur: e.target.value })} style={s.miniInput} /></Field>
           <Field label="Zone / %"><input value={cfg.overInt || ""} placeholder="e.g. 105–110% FTP / Z5" onChange={e => upd({ overInt: e.target.value })} style={s.miniInput} /></Field>
           <Field label="Pace"><input value={cfg.overPace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ overPace: e.target.value })} style={s.miniInput} /></Field>
         </div>
       </div>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="overUnder" />
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="overUnder" available={metricsForEquipment(cfg.equipment)} />
       <div style={s.dayLabelRow}>Log each set</div>
       {Array.from({ length: sets }, (_, i) => {
         const metricsArr: MetricValues[] = cfg.metrics || [];
@@ -618,6 +860,7 @@ function CardioOverUnder({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
               values={metricsArr[i] ?? {}}
               onChange={(v) => { const next = [...metricsArr]; next[i] = v; upd({ metrics: next }); }}
               size="compact"
+              defaultDistanceUnit={cfg.default_distance_unit ?? "km"}
             />
           </div>
         );
@@ -636,7 +879,16 @@ interface TimerState {
   prevPhase?: string;
 }
 
-function HyroxTimer({ session, onClose, color }: { session: Session; onClose: () => void; color: string }) {
+// Inline, non-blocking timer - previously a full-screen modal overlay
+// that made it impossible to type into the recording boxes while it
+// ran, and lost all its state (interval, elapsed time) the moment it
+// was closed to free up the screen. Now it's always mounted (so the
+// interval keeps running regardless of UI state) and renders as part
+// of the normal page flow: an idle "Start Timer" bar before starting,
+// then a `position: sticky` bar once running so it stays visible while
+// scrolling down to fill in boxes, collapsible to a compact row without
+// stopping it (0073).
+export function HyroxTimer({ session, color }: { session: Session; color: string }) {
   useEffect(() => () => { stopKeepAlive(); }, []);
 
   const sessType = session.type;
@@ -650,14 +902,14 @@ function HyroxTimer({ session, onClose, color }: { session: Session; onClose: ()
   const cyclingRoundsPerCycle = htype === "cycling" ? numOr(cfg.rounds, 2) : 1;
 
   const workSec = isCardioIntervals
-    ? (cfg.workDur ? numOr(cfg.workDur, 3) * 60 : 180)
+    ? numOr(cfg.workDur, 180)
     : htype === "interval" ? numOr(cfg.workSec, 120)
     : htype === "emom" ? 60
     : htype === "cycling" ? numOr(cfg.workSec, 40)
     : numOr(cfg.workSec, 40);
 
   const restSec = isCardioIntervals
-    ? (cfg.restDur ? numOr(cfg.restDur, 1) * 60 : 90)
+    ? numOr(cfg.restDur, 90)
     : htype === "cycling" ? numOr(cfg.restSec, 20)
     : (htype === "interval" || htype === "circuit") ? numOr(cfg.restSec, 90)
     : numOr(cfg.restSec, 20);
@@ -676,6 +928,7 @@ function HyroxTimer({ session, onClose, color }: { session: Session; onClose: ()
 
   const [display, setDisplay] = useState<TimerState>({ phase: "idle", timeLeft: workSec || 60, round: 1, cycle: 1 });
   const [muted, setMuted] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   useEffect(() => { setSoundMuted(muted); }, [muted]);
 
   const stateRef = useRef<TimerState>({ phase: "idle", timeLeft: workSec || 60, round: 1, cycle: 1 });
@@ -774,46 +1027,75 @@ function HyroxTimer({ session, onClose, color }: { session: Session; onClose: ()
       ? "Step " + Math.min(round, fixedSteps.length) + ": " + (fixedSteps[Math.min(round - 1, fixedSteps.length - 1)]?.exercise || "")
     : "";
 
-  return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.timerBox} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 2 }}>{session.name}</div>
-          <button onClick={() => setMuted(m => !m)}
-            style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: muted ? "#8593A0" : "#E8EDF1" }}>
-            {muted ? "🔇" : "🔊"}
-          </button>
-        </div>
-        <div style={{ fontSize: 12, color: "#4DC3FF", fontWeight: 600, marginBottom: 8, textAlign: "center" }}>{typeLabel[htype] || ""}</div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 21, fontWeight: 700, letterSpacing: 2, color: paused ? "#8593A0" : phaseColor }}>{phaseLabel}</span>
-          <span style={{ fontSize: 12, color: "#8593A0" }}>
-            {htype === "emom" ? `Min ${round}/${totalRounds}`
-              : htype === "interval" ? `Set ${round}/${totalRounds}`
-              : htype === "cycling" ? `Cycle ${cycle}/${cycles} · Round ${cyclingRoundNum}/${cyclingRoundsPerCycle}`
-              : htype === "circuit" ? `Round ${round}/${totalRounds}`
-              : `Cycle ${cycle}/${cycles} · Round ${round}/${totalRounds}`}
-          </span>
-        </div>
-        {currentExercise && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#E8EDF1", marginBottom: 4, textAlign: "center", padding: "4px 8px", background: "#1F272E", borderRadius: 8 }}>
-            {currentExercise}
-          </div>
-        )}
-        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 86, fontWeight: 700, lineHeight: 1, letterSpacing: 2, margin: "8px 0", textAlign: "center", color: paused ? "#8593A0" : phaseColor }}>
-          {mm}:{ss}
-        </div>
-        {phase === "done" && (
-          <div style={{ background: "#15302a", color: "#3FCF8E", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 15, marginBottom: 7, textAlign: "center" }}>
-            Session complete! Great work. 🎉
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 14 }}>
-          {phase === "idle" || phase === "done"
-            ? <><button style={s.ghostBtn} onClick={onClose}>Close</button><button style={{ ...s.primaryBtn, background: color }} onClick={start}>{phase === "done" ? "Restart" : "Start"}</button></>
-            : <><button style={s.dangerBtn} onClick={stop}>Stop</button><button style={s.ghostBtn} onClick={pause}>{paused ? "▶ Resume" : "⏸ Pause"}</button></>}
-        </div>
+  const roundCycleText = htype === "emom" ? `Min ${round}/${totalRounds}`
+    : htype === "interval" ? `Set ${round}/${totalRounds}`
+    : htype === "cycling" ? `Cycle ${cycle}/${cycles} · Round ${cyclingRoundNum}/${cyclingRoundsPerCycle}`
+    : htype === "circuit" ? `Round ${round}/${totalRounds}`
+    : `Cycle ${cycle}/${cycles} · Round ${round}/${totalRounds}`;
+
+  if (phase === "idle") {
+    return (
+      <div style={{ ...s.timerIdleBar, borderColor: color + "44" }}>
+        <span style={{ fontSize: 12, color: "#4DC3FF", fontWeight: 600 }}>{typeLabel[htype] || ""}</span>
+        <button style={{ ...s.primaryBtn, background: color }} onClick={start}>▶ Start Timer</button>
       </div>
+    );
+  }
+
+  return (
+    <div style={{ ...s.timerSticky, borderColor: color + "44" }}>
+      <div style={s.timerTopRow}>
+        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 1, color: paused ? "#8593A0" : phaseColor }}>
+          {phaseLabel}
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={pause}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") pause(); }}
+          style={s.timerIconBtn}
+        >
+          {phase === "done" ? "🎉" : paused ? "▶" : "⏸"}
+        </span>
+      </div>
+      {/* The one clock - always shown at full size, never shrunk to a
+          smaller "collapsed" version (0075) */}
+      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 72, fontWeight: 700, lineHeight: 1, letterSpacing: 2, margin: "2px 0 8px", textAlign: "center", color: paused ? "#8593A0" : phaseColor }}>
+        {mm}:{ss}
+      </div>
+      <button style={s.timerExpandToggle} onClick={() => setExpanded(e => !e)}>
+        {expanded ? "Less ▴" : "Details ▾"}
+      </button>
+      {expanded && (
+        <div style={s.timerExpandedBody}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "#8593A0" }}>{typeLabel[htype] || ""} · {roundCycleText}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => setMuted(m => !m)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") setMuted(m => !m); }}
+              style={{ ...s.timerIconBtn, fontSize: 16 }}
+            >
+              {muted ? "🔇" : "🔊"}
+            </span>
+          </div>
+          {currentExercise && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#E8EDF1", marginBottom: 8, textAlign: "center", padding: "4px 8px", background: "#1F272E", borderRadius: 8 }}>
+              {currentExercise}
+            </div>
+          )}
+          {phase === "done" && (
+            <div style={{ background: "#15302a", color: "#3FCF8E", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 14, marginBottom: 8, textAlign: "center" }}>
+              Session complete! Great work. 🎉
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 9 }}>
+            <button style={s.dangerBtn} onClick={stop}>Stop</button>
+            <button style={s.ghostBtn} onClick={pause}>{paused ? "▶ Resume" : "⏸ Pause"}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -827,11 +1109,6 @@ const s: Record<string, React.CSSProperties> = {
   // React footgun (triggers its own dev warning) that can leave a stale
   // border colour when toggling selection state.
   hyroxCfg: { borderWidth: 1, borderStyle: "solid", borderRadius: 12, padding: 16, marginBottom: 16 },
-  hyroxBanner: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    background: "#1a2030", borderWidth: 1, borderStyle: "solid", borderRadius: 10, padding: "10px 14px", marginBottom: 12,
-  },
-  timerLaunchBtn: { border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, fontSize: 14, color: "#0a1420", cursor: "pointer" },
   dayLabelRow: { fontSize: 10, fontWeight: 700, color: "#8593A0", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8, marginTop: 10 },
   hyroxTypeGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 },
   hyroxTypeCard: { display: "flex", flexDirection: "column", gap: 4, padding: "12px 10px", borderRadius: 10, borderWidth: 1, borderStyle: "solid", borderColor: "#2A343D", background: "#1F272E", cursor: "pointer", textAlign: "left", color: "#E8EDF1" },
@@ -846,9 +1123,31 @@ const s: Record<string, React.CSSProperties> = {
   acWrap: { position: "relative", flex: 1 },
   acList: { position: "absolute", top: "100%", left: 0, right: 0, background: "#171D23", border: "1px solid #2A343D", borderRadius: 8, zIndex: 10, overflow: "hidden", maxHeight: 200, overflowY: "auto" },
   acItem: { width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "#E8EDF1", fontSize: 13, cursor: "pointer", textAlign: "left" },
+  acAddItem: { width: "100%", padding: "8px 12px", background: "transparent", border: "none", borderTop: "1px solid #2A343D", color: "#3FCF8E", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" },
+  addError: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 8 },
   overlay: { position: "fixed", inset: 0, background: "rgba(6,9,12,.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 },
-  timerBox: { background: "#171D23", border: "1px solid #2A343D", borderRadius: 15, padding: 26, width: "100%", maxWidth: 380, boxShadow: "0 24px 60px rgba(0,0,0,.6)", textAlign: "center" },
   ghostBtn: { background: "#1F272E", color: "#E8EDF1", border: "1px solid #2A343D", borderRadius: 9, padding: "9px 13px", fontWeight: 600, fontSize: 13, cursor: "pointer" },
   primaryBtn: { border: "none", borderRadius: 9, padding: "9px 15px", fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#0a1420" },
   dangerBtn: { background: "transparent", color: "#ff7d7d", border: "1px solid #ff7d7d44", borderRadius: 9, padding: "9px 13px", fontWeight: 600, fontSize: 13, cursor: "pointer" },
+  // Inline, non-modal timer (0073) - idle bar before starting, then a
+  // sticky bar (position: sticky keeps it pinned to the top of the
+  // viewport while scrolling the rest of the page, without a blocking
+  // backdrop like the old overlay had) once running.
+  timerIdleBar: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    background: "#171D23", borderWidth: 1, borderStyle: "solid", borderRadius: 10, padding: "10px 14px", marginBottom: 16,
+  },
+  timerSticky: {
+    position: "sticky" as const, top: 0, zIndex: 50,
+    background: "#171D23", borderWidth: 1, borderStyle: "solid", borderRadius: 10, marginBottom: 16,
+    boxShadow: "0 8px 20px rgba(0,0,0,.35)",
+  },
+  timerTopRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px 0" },
+  timerIconBtn: { fontSize: 18, lineHeight: 1, cursor: "pointer", padding: 4 },
+  timerExpandToggle: {
+    display: "block", width: "100%", background: "transparent", border: "none", borderTop: "1px solid #2A343D",
+    color: "#8593A0", fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em",
+    padding: "6px 0", cursor: "pointer",
+  },
+  timerExpandedBody: { padding: "10px 14px 14px" },
 };

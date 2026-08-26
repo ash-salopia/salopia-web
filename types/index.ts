@@ -44,6 +44,8 @@ export interface Athlete {
   avatar_url: string | null; // 0042
   hide_pbs_from_feed: boolean; // 0047 — athlete privacy pref, feed-only
   feed_first_name_only: boolean; // 0047 — athlete privacy pref, feed-only
+  hyrox_enabled: boolean; // 0025 — per-athlete override of the org-level Hyrox toggle (lib/data/settings.ts); org setting still wins if it's off
+  pb_enabled: boolean; // 0073 — per-athlete override of the org-level Personal Bests toggle (lib/data/settings.ts); org setting still wins if it's off. Distinct from hide_pbs_from_feed (0047), which only hides an already-tracked PB from the community feed — this instead turns detection/tracking off entirely.
   created_at: string;
 }
 
@@ -67,6 +69,9 @@ export interface LibraryEntry {
   is_bodyweight: boolean; // 0048 — default applied when this entry is loaded into a session
   each_side: boolean; // 0048 — default applied when this entry is loaded into a session
   use_percent_1rm: boolean; // 0048 — default applied when this entry is loaded into a session
+  default_tracked_metrics: import("@/lib/cardio-metrics").MetricKey[]; // 0070 — Cardio/Hyrox only: default applied when this entry is loaded into a hyrox_config/cardio_config exercise
+  equipment: import("@/lib/cardio-metrics").EquipmentType | null; // 0071 — Cardio/Hyrox only: restricts which metrics this exercise can track (see EQUIPMENT_META); null = unrestricted
+  default_distance_unit: import("@/lib/cardio-metrics").DistanceUnit | null; // 0075 — Cardio/Hyrox only: starting unit for this exercise's distance box(es) when loaded into a session, e.g. an Erg defaults to metres, a Treadmill to km
 }
 
 // ------------------------------------------------------------
@@ -169,24 +174,60 @@ export interface PrescribedExercise extends ExerciseBase {
 // existing sessions saved before that keep their old string data
 // untouched (never migrated), this only applies going forward.
 export interface HyroxFixedConfig {
-  steps: { exercise: string; target: string; metrics?: import("@/lib/cardio-metrics").MetricValues }[];
+  steps: {
+    exercise: string; target: string;
+    metrics?: import("@/lib/cardio-metrics").MetricValues;
+    tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_tracked_metrics when picked from the library (0070)
+    equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked - restricts tracked_metrics to that equipment's set (0071)
+    default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for this step's distance box (0074)
+  }[];
+  metrics?: import("@/lib/cardio-metrics").MetricValues; // whole-session result (e.g. avg HR, calories), separate from each step's own metrics (0070)
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
+  default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for the session-level distance box (0074)
 }
 export interface HyroxCyclingConfig {
-  exercises: { exercise: string; reps: string }[];
+  exercises: {
+    exercise: string; reps: string;
+    // Indexed by (cycle * rounds + round) - exercises cycle in order for
+    // `rounds` reps, then the whole rounds block repeats for `cycles`
+    // (separated by cyclRestSec), so a round's true position needs both -
+    // e.g. with 2 rounds/cycle, metrics[0] = cycle 1 round 1, metrics[1]
+    // = cycle 1 round 2, metrics[2] = cycle 2 round 1... Only populated
+    // when "round" is in the session's `record_levels` below (0071/0072).
+    metrics?: import("@/lib/cardio-metrics").MetricValues[];
+    // Indexed by cycle - one rolled-up result per cycle instead of/as
+    // well as per round, e.g. cycleMetrics[0] = Row's total across all
+    // of cycle 1's rounds. Only populated when "cycle" is in
+    // `record_levels` below (0071).
+    cycleMetrics?: import("@/lib/cardio-metrics").MetricValues[];
+    tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_tracked_metrics when picked from the library (0070)
+    equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked - restricts tracked_metrics to that equipment's set (0071)
+    default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for this exercise's distance box(es) (0074)
+  }[];
   workSec: number;
   restSec: number;
   rounds: number;
   cycles: number;
   cyclRestSec: number;
-  metrics?: import("@/lib/cardio-metrics").MetricValues;
+  metrics?: import("@/lib/cardio-metrics").MetricValues; // whole-session result (e.g. avg HR, calories) - "Session avg/total" (0071)
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
+  default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for the session-level distance box (0074)
+  // Which granularity(s) get recording boxes for every exercise in this
+  // session - "Round/Cycle Data Tracking" in the builder, one tickbox
+  // pair per session rather than per exercise. Defaults to ["round"]
+  // when unset (0072).
+  record_levels?: ("round" | "cycle")[];
 }
 export interface HyroxEMOMConfig {
   mins: number;
-  slots: { minute: string; exercise: string; reps: string }[];
+  slots: {
+    minute: string; exercise: string; reps: string;
+    equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked (0076)
+    default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // (0076)
+  }[];
   metrics?: import("@/lib/cardio-metrics").MetricValues;
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
+  default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // (0074)
 }
 export interface HyroxIntervalConfig {
   exercise: string;
@@ -195,17 +236,33 @@ export interface HyroxIntervalConfig {
   workSec: number;
   restSec: number;
   metrics: import("@/lib/cardio-metrics").MetricValues[];
+  // Single-exercise sub-type, so tracked_metrics (defaulted from
+  // LibraryEntry.default_tracked_metrics when `exercise` is picked from the
+  // library, 0070) already covers the whole config — no per-exercise nesting needed.
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
+  equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked (0071)
+  default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for each set's distance box (0074)
 }
 export interface HyroxCircuitConfig {
   isAmrap: boolean;
   rounds: number;
   timeCap: number;
   restSec: number;
-  exercises: { exercise: string; reps: string }[];
+  exercises: {
+    exercise: string; reps: string;
+    // Rounds mode: indexed by round, same convention as Cycling (0071).
+    // AMRAP has no fixed round count, so it keeps one whole-AMRAP total
+    // instead - e.g. Wall Balls: 17 reps total across the AMRAP. No
+    // cycles concept here (unlike Cycling), so no cycleMetrics.
+    metrics?: import("@/lib/cardio-metrics").MetricValues | import("@/lib/cardio-metrics").MetricValues[];
+    tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_tracked_metrics when picked from the library (0070)
+    equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked - restricts tracked_metrics to that equipment's set (0071)
+    default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for this exercise's distance box(es) (0074)
+  }[];
   roundsDone: boolean[];
-  metrics?: import("@/lib/cardio-metrics").MetricValues;
+  metrics?: import("@/lib/cardio-metrics").MetricValues; // whole-session result (e.g. avg HR, calories) - "Session avg/total" (0071)
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
+  default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for the session-level distance box (0074)
 }
 export type HyroxConfig =
   | HyroxFixedConfig
