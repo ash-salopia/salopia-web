@@ -279,6 +279,64 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      {/* ── Challenges ── */}
+      <CollapsibleSection title="Challenges">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable Challenges</div>
+              <div style={s.cardDesc}>
+                Gym challenges you set up (e.g. "furthest on the SkiErg in 30 seconds") with squad
+                leaderboards, launchable from Live Group or the Challenges page. Turn this off if it's
+                not something you want to run. Can also be switched off for one athlete at a time from
+                their profile.
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.challenges_enabled ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, challenges_enabled: !prev.challenges_enabled }))}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.challenges_enabled ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Squad comparison ── */}
+      <CollapsibleSection title="Squad Comparison">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable squad comparison in reports</div>
+              <div style={s.cardDesc}>
+                Lets a coach tick "Compare to squad" on an individual athlete's Training Load Report to
+                show their rank/average against their own squad (Total Training Load, Session Completion,
+                Training Load, and Session RPE). Turn this off if you don't want that comparison offered.
+                Can also be switched off for one athlete at a time from their profile.
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.squad_comparison_enabled ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, squad_comparison_enabled: !prev.squad_comparison_enabled }))}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.squad_comparison_enabled ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
       {/* ── Check-in ── */}
       <CollapsibleSection title="Check-in">
         <div style={s.card}>

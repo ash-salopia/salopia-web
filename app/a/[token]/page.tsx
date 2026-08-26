@@ -45,6 +45,7 @@ export default async function AthleteLinkPage({
   const orgHyroxEnabled = s.hyrox_enabled !== false;
   const hyroxEnabled = orgHyroxEnabled && (athlete as any).hyrox_enabled !== false;
   const reflectionEnabled = s.reflection_enabled !== false;
+  const challengesEnabled = s.challenges_enabled !== false && (athlete as any).challenges_enabled !== false;
 
-  return <AthleteLinkShell athlete={athlete} sessions={sessions} token={token} branding={branding} hyroxEnabled={hyroxEnabled} reflectionEnabled={reflectionEnabled} />;
+  return <AthleteLinkShell athlete={athlete} sessions={sessions} token={token} branding={branding} hyroxEnabled={hyroxEnabled} reflectionEnabled={reflectionEnabled} challengesEnabled={challengesEnabled} />;
 }

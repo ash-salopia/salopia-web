@@ -7,6 +7,7 @@ import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExerci
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import CheckInModal from "@/components/CheckInModal";
+import LiveChallengePanel from "@/components/LiveChallengePanel";
 import HyroxCardioLog from "@/components/HyroxCardioLog";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
@@ -136,6 +137,8 @@ export default function LiveGroupPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [checkinEnabled, setCheckinEnabled] = useState(true);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [challengesEnabled, setChallengesEnabled] = useState(true);
+  const [challengePanelOpen, setChallengePanelOpen] = useState(false);
   const [editModal, setEditModal] = useState<{ sessionId: string; exercise: SessionExercise } | null>(null);
   const [editDraft, setEditDraft] = useState<{ name: string; sets: string; mode: "reps" | "time"; reps: string; time: string; rest: string; target_load: string }>({
     name: "", sets: "", mode: "reps", reps: "", time: "", rest: "", target_load: "",
@@ -182,6 +185,7 @@ export default function LiveGroupPage() {
   useEffect(() => {
     getOrgSettings().then((s) => {
       if (!s.checkin_enabled) setCheckinEnabled(false);
+      if (s.challenges_enabled === false) setChallengesEnabled(false);
     }).catch(() => {});
   }, []);
 
@@ -504,6 +508,9 @@ export default function LiveGroupPage() {
           )}
           {mode === "group" && groups.length === 0 && (
             <span style={{ fontSize: 12, color: "var(--mute)" }}>No groups set on athletes</span>
+          )}
+          {mode === "group" && challengesEnabled && (
+            <button style={s.refreshBtn} onClick={() => setChallengePanelOpen(true)} title="Launch a challenge">🏆</button>
           )}
           <button style={s.refreshBtn} onClick={load} title="Refresh">↻</button>
         </div>
@@ -867,6 +874,10 @@ export default function LiveGroupPage() {
       )}
 
       {checkInOpen && <CheckInModal onClose={() => setCheckInOpen(false)} />}
+
+      {challengePanelOpen && (
+        <LiveChallengePanel matchGroupName={selGroup || groups[0]} onClose={() => setChallengePanelOpen(false)} />
+      )}
 
       {noteModal && (
         <div style={s.noteOverlay} onClick={closeNoteModal}>

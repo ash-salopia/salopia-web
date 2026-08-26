@@ -46,6 +46,8 @@ export interface Athlete {
   feed_first_name_only: boolean; // 0047 — athlete privacy pref, feed-only
   hyrox_enabled: boolean; // 0025 — per-athlete override of the org-level Hyrox toggle (lib/data/settings.ts); org setting still wins if it's off
   pb_enabled: boolean; // 0073 — per-athlete override of the org-level Personal Bests toggle (lib/data/settings.ts); org setting still wins if it's off. Distinct from hide_pbs_from_feed (0047), which only hides an already-tracked PB from the community feed — this instead turns detection/tracking off entirely.
+  challenges_enabled: boolean; // 0074 — per-athlete override of the org-level Challenges toggle (lib/data/settings.ts); org setting still wins if it's off
+  squad_comparison_enabled: boolean; // 0075 — per-athlete override of the org-level "Compare to squad" report toggle (lib/data/settings.ts); org setting still wins if it's off
   created_at: string;
 }
 

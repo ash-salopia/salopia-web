@@ -153,3 +153,11 @@ export function resolveTrackedMetrics(
 export function metricsForEquipment(equipment: EquipmentType | undefined): MetricKey[] {
   return EQUIPMENT_META[equipment ?? "other"].metrics;
 }
+
+// Lower is genuinely the win for these - pace/duration on a task means
+// "finished faster", HR means "same output for less strain". Everything
+// else (distance, watts, reps, rounds, calories, load...) defaults to
+// higher-is-better. Shared between the Squad Report's Cardio/Hyrox
+// exercise board (lib/squad-report.ts) and the Challenges feature
+// (lib/challenges.ts) rather than each keeping its own copy (0074).
+export const LOWER_IS_BETTER_METRICS: MetricKey[] = ["duration", "pace", "avg_hr", "max_hr"];

@@ -46,7 +46,7 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions: initialSessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true,
+  athlete, sessions: initialSessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true, challengesEnabled = true,
 }: {
   athlete: Athlete;
   sessions: Session[];
@@ -54,6 +54,7 @@ export default function AthleteLinkShell({
   branding?: ResolvedBranding;
   hyroxEnabled?: boolean;
   reflectionEnabled?: boolean;
+  challengesEnabled?: boolean;
 }) {
   const router = useRouter();
 
@@ -298,6 +299,11 @@ export default function AthleteLinkShell({
         <button style={st.tab} onClick={() => router.push(`/a/${token}/goals`)}>
           🎯 Goals
         </button>
+        {challengesEnabled && (
+          <button style={st.tab} onClick={() => router.push(`/a/${token}/challenges`)}>
+            🏆 Challenges
+          </button>
+        )}
         <button style={st.tab} onClick={() => router.push(`/a/${token}/documents`)}>
           📁 Docs
         </button>

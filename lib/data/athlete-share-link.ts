@@ -663,3 +663,32 @@ export async function updateAthleteNotificationSettings(
   const { error } = await supabase.from("athletes").update(patch).eq("id", athleteId);
   if (error) throw error;
 }
+
+// 0074 — athlete self-logging a Challenges result. Verifies the challenge
+// actually belongs to this athlete's own organisation before writing -
+// same "never trust a client-supplied id without checking ownership"
+// rule as everywhere else in this file.
+export async function submitChallengeResult(
+  challengeId: string,
+  athleteId: string,
+  organisationId: string,
+  value: number
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { data: challenge, error: lookupError } = await supabase
+    .from("challenges")
+    .select("id, organisation_id")
+    .eq("id", challengeId)
+    .maybeSingle();
+  if (lookupError || !challenge || challenge.organisation_id !== organisationId) {
+    throw new Error("Challenge not found");
+  }
+  const { error } = await supabase.from("challenge_results").insert({
+    challenge_id: challengeId,
+    athlete_id: athleteId,
+    organisation_id: organisationId,
+    value,
+    logged_by: "athlete",
+  });
+  if (error) throw error;
+}

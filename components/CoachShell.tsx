@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { getOrgSettings } from "@/lib/data/settings";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import Avatar from "@/components/Avatar";
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/athletes",    label: "Athletes",    icon: "👤" },
   { href: "/live",        label: "Live group",  icon: "⭐" },
   { href: "/community",   label: "Community",   icon: "💬" },
+  { href: "/challenges",  label: "Challenges",  icon: "🏆" },
   { href: "/documents",   label: "Documents",   icon: "📁" },
   { href: "/testing",     label: "Testing",     icon: "🧪" },
   { href: "/templates",   label: "Templates",   icon: "▦"  },
@@ -60,6 +62,13 @@ export default function CoachShell({
   // otherwise, matching the pre-existing always-visible sidebar.
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [challengesEnabled, setChallengesEnabled] = useState(true);
+
+  useEffect(() => {
+    getOrgSettings().then((s) => setChallengesEnabled(s.challenges_enabled !== false)).catch(() => {});
+  }, []);
+
+  const navItems = NAV_ITEMS.filter((item) => item.href !== "/challenges" || challengesEnabled);
 
   // Closing on navigation means the drawer never lingers open over the
   // next page — matches how a mobile nav drawer is expected to behave
@@ -135,7 +144,7 @@ export default function CoachShell({
               : {}),
           }}
         >
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active = pathname?.startsWith(item.href);
             return (
               <Link

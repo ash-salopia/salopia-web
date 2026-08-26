@@ -34,7 +34,7 @@
 // a coach-chosen exercise name picked interactively after the squad
 // report has already loaded - see availableExercises().
 import type { ReportData } from "@/lib/data/reports";
-import { METRIC_META, type MetricKey } from "@/lib/cardio-metrics";
+import { METRIC_META, LOWER_IS_BETTER_METRICS, type MetricKey } from "@/lib/cardio-metrics";
 
 const TOP_N = 5;
 function topN<T>(rows: T[]): T[] {
@@ -73,7 +73,7 @@ export interface SquadCompletionRow {
 // (0080) has counted those types correctly for a while. Sums sessions
 // logged vs prescribed across all 4 types via the same per-type stats
 // that section already computes.
-function combinedCompletion(data: ReportData): { pct: number | null; completed: number; total: number } {
+export function combinedCompletion(data: ReportData): { pct: number | null; completed: number; total: number } {
   const stats = Object.values(data.sessionTypeStats);
   const completed = stats.reduce((sum, s) => sum + s.completedCount, 0);
   const total = stats.reduce((sum, s) => sum + s.prescribedCount, 0);
@@ -265,12 +265,6 @@ export function cardioMetricOptionId(o: SquadCardioMetricOption): string {
   return `${o.sessionType}::${o.key}::${o.group}`;
 }
 
-// Lower is genuinely the win for these - pace/duration on a task means
-// "finished faster", HR means "same output for less strain". Everything
-// else (distance, watts, reps, rounds, calories, load...) defaults to
-// higher-is-better.
-const LOWER_IS_BETTER: MetricKey[] = ["duration", "pace", "avg_hr", "max_hr"];
-
 export interface SquadCardioBoard {
   rows: SquadStandingRow[];
   unit: string;
@@ -296,7 +290,7 @@ export function computeCardioExerciseBoard(
     rows.push({ athleteId, athleteName, value: latest.value, exerciseCount: 1 });
   }
   if (!rows.length) return null;
-  const direction: "lower" | "higher" = LOWER_IS_BETTER.includes(option.key) ? "lower" : "higher";
+  const direction: "lower" | "higher" = LOWER_IS_BETTER_METRICS.includes(option.key) ? "lower" : "higher";
   rows.sort((a, b) => (direction === "lower" ? a.value - b.value : b.value - a.value));
   return { rows: topN(rows), unit: METRIC_META[option.key].unit, direction };
 }
