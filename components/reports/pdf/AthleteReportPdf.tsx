@@ -23,6 +23,7 @@ import { LineChart, type LineSeries } from "@/components/reports/pdf/pdf-line-ch
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { METRIC_META } from "@/lib/cardio-metrics";
+import { SESSION_TYPE_META } from "@/lib/report-options";
 
 // ── Palette (print-mode, matches ReportModal.handlePrint) ─────────────────────
 
@@ -304,6 +305,7 @@ export default function AthleteReportPdf({
   const {
     exMap, exerciseSummaries, weeklyExMap, topProgressed, toReview, notes,
     hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], cardioMetricSummaries = [], rpeEntries = [], rpeWeekly = [],
+    trainingLoadEntries = [], trainingLoadWeekly = [], sessionTypeStats = {},
     generated, rangeStart, rangeEnd, strength, oneRmFormula, oneRmSource, bodyweightKg, oneRmReference,
   } = data;
 
@@ -331,6 +333,8 @@ export default function AthleteReportPdf({
       : [...strength.exerciseSummaries].sort((a, b) => b.entries.length - a.entries.length).slice(0, options.exerciseLimit)
   ).map((e) => ({ name: e.name, points: (strength.weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: e1rmValue(w.e1rm) })) }));
   const rpeLineSeries: LineSeries[] = [{ name: "Avg RPE", points: rpeWeekly.map((w) => ({ date: w.weekStart, value: w.avgRpe })) }];
+  const hasTrainingLoad = trainingLoadEntries.length > 0;
+  const trainingLoadLineSeries: LineSeries[] = [{ name: "Weekly training load", points: trainingLoadWeekly.map((w) => ({ date: w.weekStart, value: w.totalLoad })) }];
 
   const isEmpty = !hasStrength && !hasE1rm && !hasHyrox && !hasCardio && !hasPowerSpeed && !hasRpe && !notes.length;
 
@@ -383,6 +387,27 @@ export default function AthleteReportPdf({
                   <Highlight title="Worth a review" items={strength.toReview} />
                 </View>
               </View>
+            )}
+          </View>
+        )}
+
+        {options.sessionCompletion && (
+          <View>
+            <Text style={s.sectionTitle}>SESSIONS LOGGED & COMPLETION</Text>
+            {(["strength", "power_speed", "cardio", "hyrox"] as const)
+              .map((t) => sessionTypeStats[t])
+              .filter((stat) => stat && stat.loggedCount > 0)
+              .map((stat) => (
+                <View key={stat.type} style={s.listRow}>
+                  <Text>
+                    {SESSION_TYPE_META[stat.type].label} · {stat.loggedCount} session{stat.loggedCount !== 1 ? "s" : ""} logged
+                    {stat.prescribedCount > 0 ? ` · ${stat.completedCount}/${stat.prescribedCount} assigned completed` : ""}
+                  </Text>
+                  {stat.completionPct != null && <Text style={s.bold}>{stat.completionPct}%</Text>}
+                </View>
+              ))}
+            {(["strength", "power_speed", "cardio", "hyrox"] as const).every((t) => !sessionTypeStats[t] || sessionTypeStats[t].loggedCount === 0) && (
+              <Text style={s.emptyNote}>No sessions logged in this range.</Text>
             )}
           </View>
         )}
@@ -564,7 +589,7 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {hasHyrox && (
+        {options.hyroxSessionsList && hasHyrox && (
           <View>
             <Text style={s.sectionTitle}>HYROX SESSIONS</Text>
             {hyroxSessions.map((sess) => (
@@ -573,7 +598,7 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {hasCardio && (
+        {options.cardioSessionsList && hasCardio && (
           <View>
             <Text style={s.sectionTitle}>CARDIO SESSIONS</Text>
             {cardioSessions.map((sess) => (
@@ -582,7 +607,7 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {hasPowerSpeed && (
+        {options.powerSpeedTrend && hasPowerSpeed && (
           <View>
             <Text style={s.sectionTitle}>POWER / SPEED SESSIONS</Text>
             {powerSpeedSessions.map((sess) => (
@@ -591,13 +616,14 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {options.powerSpeedTrend && powerSpeedSummaries.length > 0 && (
+        {options.powerSpeedTrend && powerSpeedSummaries.some((ex) => ex.entries.length >= 2) && (
           <View>
             <Text style={s.sectionTitle}>POWER / SPEED TRENDS</Text>
+            {/* single-entry summaries have nothing to chart - LineChart itself returns null below 2 points */}
             {(powerSpeedSelection?.length
               ? powerSpeedSummaries.filter((ex) => powerSpeedSelection.includes(ex.name))
               : powerSpeedSummaries
-            ).map((ex) => (
+            ).filter((ex) => ex.entries.length >= 2).map((ex) => (
               <View key={ex.name} style={{ marginBottom: 10 }}>
                 <LineChart
                   series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.value })) }]}
@@ -612,10 +638,10 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {options.barSpeedTrend && velocitySummaries.length > 0 && (
+        {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && (
           <View>
             <Text style={s.sectionTitle}>BAR SPEED TRENDS</Text>
-            {velocitySummaries.map((ex) => (
+            {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
               <View key={ex.name} style={{ marginBottom: 10 }}>
                 <LineChart
                   series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.avgVelocity })) }]}
@@ -630,24 +656,56 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {options.cardioMetricsTrend && cardioMetricSummaries.length > 0 && (
+        {options.cardioMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "cardio" && options.cardioMetricKeys.includes(m.key) && m.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>CARDIO / HYROX METRICS</Text>
-            {cardioMetricSummaries.map((m) => {
-              const meta = METRIC_META[m.key];
-              return (
-                <View key={m.key} style={{ marginBottom: 10 }}>
-                  <LineChart
-                    series={[{ name: meta.label, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
-                    unit={meta.unit}
-                    height={100}
-                    showLegend={false}
-                    title={`${meta.label}${m.overallPct != null ? `  (${m.overallPct >= 0 ? "+" : ""}${m.overallPct.toFixed(1)}%)` : ""}`}
-                    titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
-                  />
-                </View>
-              );
-            })}
+            <Text style={s.sectionTitle}>CARDIO METRICS</Text>
+            {/* 0084 — 2-column grid instead of one long stacked column, same
+                reasoning as the on-screen report's metricGrid: a range with
+                many tracked exercises otherwise produces a very long page.
+                0085 — single-entry rows filtered out too, same reasoning
+                as Power/Speed and Bar Speed above. */}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
+              {cardioMetricSummaries.filter((m) => m.sessionType === "cardio" && options.cardioMetricKeys.includes(m.key) && m.entries.length >= 2).map((m) => {
+                const meta = METRIC_META[m.key];
+                return (
+                  <View key={`${m.key}-${m.group}`} style={{ width: "48%", marginBottom: 10 }}>
+                    <LineChart
+                      series={[{ name: m.group, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
+                      unit={meta.unit}
+                      width={250}
+                      height={90}
+                      showLegend={false}
+                      title={`${meta.label} — ${m.group}${m.overallPct != null ? `  (${m.overallPct >= 0 ? "+" : ""}${m.overallPct.toFixed(1)}%)` : ""}`}
+                      titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {options.hyroxMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2) && (
+          <View>
+            <Text style={s.sectionTitle}>HYROX METRICS</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
+              {cardioMetricSummaries.filter((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2).map((m) => {
+                const meta = METRIC_META[m.key];
+                return (
+                  <View key={`${m.key}-${m.group}`} style={{ width: "48%", marginBottom: 10 }}>
+                    <LineChart
+                      series={[{ name: m.group, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
+                      unit={meta.unit}
+                      width={250}
+                      height={90}
+                      showLegend={false}
+                      title={`${meta.label} — ${m.group}${m.overallPct != null ? `  (${m.overallPct >= 0 ? "+" : ""}${m.overallPct.toFixed(1)}%)` : ""}`}
+                      titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
+                    />
+                  </View>
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -662,10 +720,29 @@ export default function AthleteReportPdf({
             ) : (
               <View>
                 {rpeWeekly.length >= 2 && <LineChart series={rpeLineSeries} unit="" height={100} yDomain={[0, 10]} />}
-                {rpeEntries.map((e, i) => (
+                {options.sessionRpeShowAll && rpeEntries.map((e, i) => (
                   <View key={i} style={s.listRow}>
                     <Text>{fmtDate(e.date)} · {e.sessName} ({TYPE_LABEL[e.type] ?? e.type})</Text>
                     <Text style={[s.bold, { color: rpeColor(e.rpe) }]}>{e.rpe}/10</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {options.trainingLoadTrend && (
+          <View>
+            <Text style={s.sectionTitle}>TRAINING LOAD (sRPE)</Text>
+            {!hasTrainingLoad ? (
+              <Text style={s.emptyNote}>No training load to show — needs RPE plus a clear duration.</Text>
+            ) : (
+              <View>
+                {trainingLoadWeekly.length >= 2 && <LineChart series={trainingLoadLineSeries} unit="" height={100} />}
+                {options.trainingLoadShowAll && trainingLoadEntries.map((e, i) => (
+                  <View key={i} style={s.listRow}>
+                    <Text>{fmtDate(e.date)} · {e.sessName}</Text>
+                    <Text style={s.bold}>{e.value}</Text>
                   </View>
                 ))}
               </View>

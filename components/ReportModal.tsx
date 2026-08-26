@@ -8,6 +8,7 @@ import Sparkline from "@/components/reports/Sparkline";
 import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
 import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
 import { METRIC_META } from "@/lib/cardio-metrics";
+import { SESSION_TYPE_META } from "@/lib/report-options";
 
 function fmtDate(iso: string): string {
   try {
@@ -44,6 +45,83 @@ function rpeColor(rpe: number): string {
   return "#ff7d7d";
 }
 
+// 0085 — small round "×" button used to dismiss a section/chart from
+// this report view. Absolutely positioned over its parent, which must
+// set position:"relative". Excluded from print/PDF for the same reason
+// as GroupFilterRow below - no React state exists in the cloned print
+// document to click, and it would just be inert clutter on the page.
+function DismissBtn({ onClick, title = "Remove from this report" }: { onClick: () => void; title?: string }) {
+  return (
+    <button
+      type="button"
+      data-no-print="true"
+      onClick={onClick}
+      title={title}
+      style={{
+        position: "absolute",
+        top: -8,
+        right: -8,
+        width: 20,
+        height: 20,
+        borderRadius: "50%",
+        background: "#c2548a",
+        color: "#fff",
+        border: "2px solid var(--panel)",
+        fontSize: 12,
+        lineHeight: "14px",
+        textAlign: "center",
+        padding: 0,
+        cursor: "pointer",
+        zIndex: 5,
+      }}
+    >
+      ×
+    </button>
+  );
+}
+
+// 0084 — group-level chart filter for the Cardio/Hyrox Metrics
+// sections. Excluded from print (the cloned document has no React state
+// to interact with) - whatever's already hidden here stays hidden since
+// print clones the live DOM as-is.
+function GroupFilterRow({
+  allGroups,
+  hidden,
+  onChange,
+}: {
+  allGroups: string[];
+  hidden: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  return (
+    <div data-no-print="true" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+      {allGroups.map((g) => {
+        const on = !hidden.has(g);
+        return (
+          <button
+            key={g}
+            type="button"
+            onClick={() => {
+              const next = new Set(hidden);
+              if (on) next.add(g);
+              else next.delete(g);
+              onChange(next);
+            }}
+            style={{
+              background: on ? "var(--accent-dim)" : "var(--ink)",
+              border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+              color: on ? "var(--accent)" : "var(--mute)",
+              borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            {g}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ReportModal({
   data,
   athleteName,
@@ -76,6 +154,9 @@ export default function ReportModal({
     cardioMetricSummaries = [],
     rpeEntries = [],
     rpeWeekly = [],
+    trainingLoadEntries = [],
+    trainingLoadWeekly = [],
+    sessionTypeStats = {},
     generated,
     rangeStart,
     rangeEnd,
@@ -90,6 +171,25 @@ export default function ReportModal({
   // present, rather than each metric having its own.
   const [detailMode, setDetailMode] = useState<"all" | "weekly">("all");
 
+  // 0084 — which exercise/modality groups to actually chart in the
+  // Cardio/Hyrox Metrics sections, live in the report view (not a
+  // report option - the groups are only known once the data itself has
+  // loaded, unlike the fixed metric-key list). All shown by default;
+  // unticking one here hides every chart for that group across every
+  // ticked metric, since a coach who doesn't care about "Sled Push"
+  // doesn't want a Sled Push chart per metric either. Print clones this
+  // view's live DOM, so whatever's hidden here stays hidden on paper.
+  const [hiddenCardioGroups, setHiddenCardioGroups] = useState<Set<string>>(new Set());
+  const [hiddenHyroxGroups, setHiddenHyroxGroups] = useState<Set<string>>(new Set());
+
+  // 0085 — per-section/per-chart dismiss, live in this view only. Resets
+  // every time the report is (re)generated (this is local component
+  // state, not persisted anywhere) - lets a coach strip out sections
+  // they don't want to show an athlete, or that turned out empty,
+  // without it affecting what the next report generation includes.
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const dismiss = (id: string) => setDismissed((prev) => new Set(prev).add(id));
+
   const hasStrength = Object.keys(exMap).length > 0;
   const hasE1rm = Object.keys(strength.exMap).length > 0;
   const hasHyrox = hyroxSessions.length > 0;
@@ -99,6 +199,7 @@ export default function ReportModal({
   const avgRpe = hasRpe
     ? Math.round((rpeEntries.reduce((sum, e) => sum + e.rpe, 0) / rpeEntries.length) * 10) / 10
     : null;
+  const hasTrainingLoad = trainingLoadEntries.length > 0;
   const formulaName = FORMULAS.find((f) => f.id === oneRmFormula)?.name ?? oneRmFormula;
   const bwUnit = options.bodyweightRelative && bodyweightKg ? "×BW" : "kg";
   const e1rmDisplay = (kg: number) =>
@@ -126,6 +227,9 @@ export default function ReportModal({
     }));
   const rpeLineSeries = [
     { name: "Avg RPE", points: rpeWeekly.map((w) => ({ date: w.weekStart, value: w.avgRpe })) },
+  ];
+  const trainingLoadLineSeries = [
+    { name: "Weekly training load", points: trainingLoadWeekly.map((w) => ({ date: w.weekStart, value: w.totalLoad })) },
   ];
 
   const handleCopy = () => {
@@ -242,8 +346,9 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.aiSummary && (
-            <div style={styles.aiBox}>
+          {options.aiSummary && !dismissed.has("ai-summary") && (
+            <div style={{ ...styles.aiBox, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("ai-summary")} />
               <div style={styles.aiLabel}>✨ AI Summary</div>
               {aiLoading ? (
                 <div style={styles.aiLoading}>Generating summary…</div>
@@ -264,9 +369,11 @@ export default function ReportModal({
           )}
 
           {options.highlights &&
+            !dismissed.has("highlights") &&
             ((options.ttl && (topProgressed.length > 0 || toReview.length > 0)) ||
               (options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0))) && (
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 24, position: "relative" }}>
+                <DismissBtn onClick={() => dismiss("highlights")} />
                 <div style={styles.sectionTitle}>Highlights</div>
                 {options.ttl && (topProgressed.length > 0 || toReview.length > 0) && (
                   <div style={{ marginBottom: options.e1rm ? 14 : 0 }}>
@@ -329,8 +436,37 @@ export default function ReportModal({
               </div>
             )}
 
-          {options.radar && (
-            <div style={{ marginBottom: 24 }}>
+          {options.sessionCompletion && !dismissed.has("sessions-completion") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("sessions-completion")} />
+              <div style={styles.sectionTitle}>Sessions Logged & Completion</div>
+              <div style={styles.hyroxList}>
+                {(["strength", "power_speed", "cardio", "hyrox"] as const)
+                  .map((t) => sessionTypeStats[t])
+                  .filter((stat) => stat && stat.loggedCount > 0)
+                  .map((stat) => (
+                    <div key={stat.type} style={styles.hyroxRow}>
+                      <span>
+                        {SESSION_TYPE_META[stat.type].label} · {stat.loggedCount} session{stat.loggedCount !== 1 ? "s" : ""} logged
+                        {stat.prescribedCount > 0 && ` · ${stat.completedCount}/${stat.prescribedCount} assigned completed`}
+                      </span>
+                      {stat.completionPct != null && (
+                        <span style={{ fontWeight: 700, color: stat.completionPct >= 70 ? "#1baf7a" : "#c2548a" }}>
+                          {stat.completionPct}%
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                {(["strength", "power_speed", "cardio", "hyrox"] as const).every((t) => !sessionTypeStats[t] || sessionTypeStats[t].loggedCount === 0) && (
+                  <div style={styles.highlightEmpty}>No sessions logged in this range.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {options.radar && !dismissed.has("radar") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("radar")} />
               <div style={styles.sectionTitle}>Radar Snapshot</div>
               {options.ttl && hasStrength && (
                 <div style={{ marginBottom: options.e1rm ? 16 : 0 }}>
@@ -367,8 +503,9 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.lineChart && (
-            <div style={{ marginBottom: 24 }}>
+          {options.lineChart && !dismissed.has("line-chart") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("line-chart")} />
               <div style={styles.sectionTitle}>Trend Over Time</div>
               {options.ttl && hasStrength && ttlLineSeries.length > 0 && (
                 <div style={{ marginBottom: options.e1rm ? 16 : 0 }}>
@@ -385,8 +522,9 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.loadProgression && options.ttl && hasStrength && (
-            <div style={{ marginBottom: 24 }}>
+          {options.loadProgression && options.ttl && hasStrength && !dismissed.has("load-progression-ttl") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("load-progression-ttl")} />
               <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " - TTL" : ""}</div>
               <div style={{ overflowX: "auto" }}>
                 <table style={styles.table}>
@@ -442,8 +580,9 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.loadProgression && options.e1rm && hasE1rm && (
-            <div style={{ marginBottom: 24 }}>
+          {options.loadProgression && options.e1rm && hasE1rm && !dismissed.has("load-progression-e1rm") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("load-progression-e1rm")} />
               <div style={styles.sectionTitle}>Load Progression - e1RM</div>
               <div style={{ overflowX: "auto" }}>
                 <table style={styles.table}>
@@ -503,8 +642,9 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.ttl && hasStrength && (
-            <>
+          {options.ttl && hasStrength && !dismissed.has("ttl-detail") && (
+            <div style={{ position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("ttl-detail")} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
                   Strength - Total Training Load
@@ -611,11 +751,12 @@ export default function ReportModal({
                       </div>
                     </div>
                   ))}
-            </>
+            </div>
           )}
 
-          {options.e1rm && hasE1rm && (
-            <>
+          {options.e1rm && hasE1rm && !dismissed.has("e1rm-detail") && (
+            <div style={{ position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("e1rm-detail")} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, marginTop: options.ttl ? 24 : 0 }}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
                   Strength - Estimated 1RM
@@ -727,11 +868,12 @@ export default function ReportModal({
                       </div>
                     </div>
                   ))}
-            </>
+            </div>
           )}
 
-          {hasHyrox && (
-            <>
+          {options.hyroxSessionsList && hasHyrox && !dismissed.has("hyrox-sessions-list") && (
+            <div style={{ position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("hyrox-sessions-list")} />
               <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Hyrox Sessions</div>
               <div style={styles.hyroxList}>
                 {hyroxSessions.map((s) => (
@@ -741,11 +883,12 @@ export default function ReportModal({
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
-          {hasCardio && (
-            <>
+          {options.cardioSessionsList && hasCardio && !dismissed.has("cardio-sessions-list") && (
+            <div style={{ position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("cardio-sessions-list")} />
               <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Cardio Sessions</div>
               <div style={styles.hyroxList}>
                 {cardioSessions.map((s) => (
@@ -755,38 +898,99 @@ export default function ReportModal({
                   </div>
                 ))}
               </div>
-            </>
-          )}
-
-          {options.cardioMetricsTrend && cardioMetricSummaries.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <div style={styles.sectionTitle}>Cardio / Hyrox Metrics</div>
-              {cardioMetricSummaries.map((m) => {
-                const meta = METRIC_META[m.key];
-                return (
-                  <div key={m.key} style={{ marginBottom: 16 }}>
-                    <div style={styles.metricSubheading}>
-                      {meta.label}
-                      {m.overallPct != null && (
-                        <span style={{ color: m.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
-                          ({m.overallPct >= 0 ? "+" : ""}{m.overallPct.toFixed(1)}%)
-                        </span>
-                      )}
-                    </div>
-                    <MultiTrendLineChart
-                      series={[{ name: meta.label, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
-                      unit={meta.unit}
-                      fmtDate={fmtDate}
-                      height={140}
-                    />
-                  </div>
-                );
-              })}
             </div>
           )}
 
-          {hasPowerSpeed && (
-            <>
+          {options.cardioMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "cardio" && options.cardioMetricKeys.includes(m.key) && m.entries.length >= 2) && (() => {
+            // 0084/0085 — a summary row with a single data point has
+            // nothing to draw a trend line from (MultiTrendLineChart
+            // itself returns null below 2 points), so it was rendering
+            // as an empty labelled box with no chart underneath it -
+            // filtered out here instead of just at the chart component,
+            // so the group-filter pills and this section's own
+            // presence-check agree on what's actually showable.
+            const rows = cardioMetricSummaries.filter((m) => m.sessionType === "cardio" && options.cardioMetricKeys.includes(m.key) && m.entries.length >= 2);
+            const allGroups = [...new Set(rows.map((m) => m.group))];
+            const visible = rows.filter((m) => !hiddenCardioGroups.has(m.group) && !dismissed.has(`cardio-metric:${m.key}:${m.group}`));
+            if (!visible.length) return null;
+            return (
+              <div style={{ marginTop: 24 }}>
+                <div style={styles.sectionTitle}>Cardio Metrics</div>
+                {allGroups.length > 1 && (
+                  <GroupFilterRow allGroups={allGroups} hidden={hiddenCardioGroups} onChange={setHiddenCardioGroups} />
+                )}
+                <div style={styles.metricGrid}>
+                  {visible.map((m) => {
+                    const meta = METRIC_META[m.key];
+                    const id = `cardio-metric:${m.key}:${m.group}`;
+                    return (
+                      <div key={id} style={{ ...styles.metricGridCell, position: "relative" }}>
+                        <DismissBtn onClick={() => dismiss(id)} />
+                        <div style={styles.metricSubheading}>
+                          {meta.label} — {m.group}
+                          {m.overallPct != null && (
+                            <span style={{ color: m.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
+                              ({m.overallPct >= 0 ? "+" : ""}{m.overallPct.toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+                        <MultiTrendLineChart
+                          series={[{ name: m.group, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
+                          unit={meta.unit}
+                          fmtDate={fmtDate}
+                          height={120}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {options.hyroxMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2) && (() => {
+            const rows = cardioMetricSummaries.filter((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2);
+            const allGroups = [...new Set(rows.map((m) => m.group))];
+            const visible = rows.filter((m) => !hiddenHyroxGroups.has(m.group) && !dismissed.has(`hyrox-metric:${m.key}:${m.group}`));
+            if (!visible.length) return null;
+            return (
+              <div style={{ marginTop: 24 }}>
+                <div style={styles.sectionTitle}>Hyrox Metrics</div>
+                {allGroups.length > 1 && (
+                  <GroupFilterRow allGroups={allGroups} hidden={hiddenHyroxGroups} onChange={setHiddenHyroxGroups} />
+                )}
+                <div style={styles.metricGrid}>
+                  {visible.map((m) => {
+                    const meta = METRIC_META[m.key];
+                    const id = `hyrox-metric:${m.key}:${m.group}`;
+                    return (
+                      <div key={id} style={{ ...styles.metricGridCell, position: "relative" }}>
+                        <DismissBtn onClick={() => dismiss(id)} />
+                        <div style={styles.metricSubheading}>
+                          {meta.label} — {m.group}
+                          {m.overallPct != null && (
+                            <span style={{ color: m.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
+                              ({m.overallPct >= 0 ? "+" : ""}{m.overallPct.toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+                        <MultiTrendLineChart
+                          series={[{ name: m.group, points: m.entries.map((e) => ({ date: e.date, value: e.value })) }]}
+                          unit={meta.unit}
+                          fmtDate={fmtDate}
+                          height={120}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {options.powerSpeedTrend && hasPowerSpeed && !dismissed.has("powerspeed-sessions-list") && (
+            <div style={{ position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("powerspeed-sessions-list")} />
               <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Power / Speed Sessions</div>
               <div style={styles.hyroxList}>
                 {powerSpeedSessions.map((s) => (
@@ -796,13 +1000,15 @@ export default function ReportModal({
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
-          {options.powerSpeedTrend && powerSpeedSummaries.length > 0 && (
-            <div style={{ marginTop: 24 }}>
+          {options.powerSpeedTrend && powerSpeedSummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("powerspeed-trends") && (
+            <div style={{ marginTop: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("powerspeed-trends")} />
               <div style={styles.sectionTitle}>Power / Speed Trends</div>
-              {powerSpeedSummaries.map((ex) => (
+              {/* single-entry summaries have nothing to chart - MultiTrendLineChart returns null below 2 points, leaving a label with no chart under it */}
+              {powerSpeedSummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
                 <div key={ex.name} style={{ marginBottom: 16 }}>
                   <div style={styles.metricSubheading}>
                     {ex.name}
@@ -823,10 +1029,11 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.barSpeedTrend && velocitySummaries.length > 0 && (
-            <div style={{ marginTop: 24 }}>
+          {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("barspeed-trends") && (
+            <div style={{ marginTop: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("barspeed-trends")} />
               <div style={styles.sectionTitle}>Bar Speed Trends</div>
-              {velocitySummaries.map((ex) => (
+              {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
                 <div key={ex.name} style={{ marginBottom: 16 }}>
                   <div style={styles.metricSubheading}>
                     {ex.name}
@@ -847,8 +1054,9 @@ export default function ReportModal({
             </div>
           )}
 
-          {options.sessionRpe && (
-            <div style={{ marginTop: 24 }}>
+          {options.sessionRpe && !dismissed.has("session-rpe") && (
+            <div style={{ marginTop: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("session-rpe")} />
               <div style={{ ...styles.sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span>Session RPE</span>
                 {avgRpe != null && (
@@ -866,21 +1074,55 @@ export default function ReportModal({
                       <MultiTrendLineChart series={rpeLineSeries} unit="" fmtDate={fmtDate} height={200} yDomain={[0, 10]} />
                     </div>
                   )}
-                  <div style={styles.hyroxList}>
-                    {rpeEntries.map((e, i) => (
-                      <div key={i} style={styles.hyroxRow}>
-                        <span>{fmtDate(e.date)} · {e.sessName} <span style={{ color: "var(--mute)" }}>({TYPE_LABEL[e.type] ?? e.type})</span></span>
-                        <span style={{ fontWeight: 700, color: rpeColor(e.rpe) }}>{e.rpe}/10</span>
-                      </div>
-                    ))}
-                  </div>
+                  {options.sessionRpeShowAll && (
+                    <div style={styles.hyroxList}>
+                      {rpeEntries.map((e, i) => (
+                        <div key={i} style={styles.hyroxRow}>
+                          <span>{fmtDate(e.date)} · {e.sessName} <span style={{ color: "var(--mute)" }}>({TYPE_LABEL[e.type] ?? e.type})</span></span>
+                          <span style={{ fontWeight: 700, color: rpeColor(e.rpe) }}>{e.rpe}/10</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
           )}
 
-          {options.athleteNotes && (
-            <div style={{ marginTop: 24 }}>
+          {options.trainingLoadTrend && !dismissed.has("training-load") && (
+            <div style={{ marginTop: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("training-load")} />
+              <div style={styles.sectionTitle}>Training Load (sRPE)</div>
+              {!hasTrainingLoad ? (
+                <div style={styles.highlightEmpty}>
+                  No training load to show — needs a session with both RPE logged and a clear duration (Fixed Workout and
+                  Circuit/AMRAP rounds mode don't have one to estimate from).
+                </div>
+              ) : (
+                <>
+                  {trainingLoadWeekly.length >= 2 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <MultiTrendLineChart series={trainingLoadLineSeries} unit="" fmtDate={fmtDate} height={200} />
+                    </div>
+                  )}
+                  {options.trainingLoadShowAll && (
+                    <div style={styles.hyroxList}>
+                      {trainingLoadEntries.map((e, i) => (
+                        <div key={i} style={styles.hyroxRow}>
+                          <span>{fmtDate(e.date)} · {e.sessName}</span>
+                          <span style={{ fontWeight: 700 }}>{e.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {options.athleteNotes && !dismissed.has("athlete-notes") && (
+            <div style={{ marginTop: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("athlete-notes")} />
               <div style={styles.sectionTitle}>Athlete Notes</div>
               {notes.length === 0 ? (
                 <div style={styles.highlightEmpty}>No notes logged in this range.</div>
@@ -1011,6 +1253,11 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.04em",
     marginBottom: 8,
   },
+  // 0084 — compact grid for Cardio/Hyrox Metrics so a range with many
+  // tracked exercises doesn't turn into one long column of full-width
+  // charts. auto-fit/minmax keeps it responsive without a breakpoint.
+  metricGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 },
+  metricGridCell: { minWidth: 0 },
   // Amber for "manual" (a coach-entered value worth noting) and red
   // for "low-confidence" (a data-quality caution) - matches the
   // prototype's tag semantics (athletiq-strength-report-prototype.html).

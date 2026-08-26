@@ -4,7 +4,7 @@
 // AI summary API route (server-side, RLS via the coach's cookie),
 // without either environment pulling in the other's client.
 import type { Session } from "@/types";
-import { METRIC_ORDER, parseMetricNumber, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
+import { METRIC_ORDER, METRIC_META, parseMetricNumber, distanceToKm, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
 
 export interface ReportRow {
   date: string;
@@ -61,6 +61,20 @@ export interface RPEEntry {
 export interface RPEWeeklyPoint {
   weekStart: string; // Monday of that week, ISO date
   avgRpe: number;
+  sessionCount: number;
+}
+
+// sRPE training load (0078) — cardio/hyrox equivalent of strength's TTL:
+// session RPE × estimated session duration, so intensity and volume
+// combine into one "how much work was actually asked for" number.
+export interface TrainingLoadEntry {
+  date: string;
+  sessName: string;
+  value: number; // rpe × duration(min), rounded
+}
+export interface TrainingLoadWeeklyPoint {
+  weekStart: string;
+  totalLoad: number; // summed, not averaged — represents total weekly work
   sessionCount: number;
 }
 
@@ -155,61 +169,178 @@ export interface CardioMetricRow {
 export type CardioMetricMap = Partial<Record<MetricKey, CardioMetricRow[]>>;
 export interface CardioMetricSummary {
   key: MetricKey;
+  // Which report toggle this belongs to ("Hyrox metric trends" vs
+  // "Cardio metric trends") - the two are picked independently now
+  // since Hyrox can be disabled per athlete/org (0077).
+  sessionType: "hyrox" | "cardio";
+  // What this trend line is actually of - a named exercise (Row, Wall
+  // Balls) for Hyrox sub-types, the modality (Run, Bike Erg) for Cardio
+  // sub-types, or the sub-type's own label (e.g. "Cycling Intervals")
+  // for whole-session totals with no single exercise identity. Without
+  // this, every sub-type's distance/avg_hr/etc got flattened into one
+  // combined line - a Row split sitting in the same trend as an 8km LSD
+  // run (0076).
+  group: string;
   entries: CardioMetricRow[];
   overallPct: number | null;
 }
 
 const SUM_METRICS: MetricKey[] = ["distance", "calories", "duration", "rounds", "reps"];
-const MAX_METRICS: MetricKey[] = ["max_hr"];
+// Load (Weighted/Loaded equipment) is a "how heavy" value like max_hr,
+// not an accumulating one - summing kg carried across sets/rounds isn't
+// meaningful, the best single load is (0073).
+const MAX_METRICS: MetricKey[] = ["max_hr", "load"];
+
+// Same sub-type labels HyroxCardioLog shows - duplicated rather than
+// imported since that's a "use client" component and this module is
+// deliberately client/server-agnostic (see file header).
+const HYROX_GROUP_LABEL: Record<string, string> = {
+  fixed: "Fixed Workout", cycling: "Cycling Intervals", emom: "EMOM",
+  interval: "Intervals", circuit: "Circuit / AMRAP",
+};
+const CARDIO_GROUP_LABEL: Record<string, string> = {
+  continuous: "Continuous / LSD", threshold: "Threshold / Tempo",
+  cardioIntervals: "Intervals / VO2max", overUnder: "Over-Unders",
+};
+
+interface GroupedMetricEntry {
+  group: string;
+  values: MetricValues;
+}
 
 // Normalises every hyrox/cardio sub-type's differently-shaped config
-// (single object, array, or nested in steps[]/blocks[]) down to a
-// flat list of logged entries, so the aggregation below doesn't need
-// to know which of the 9 sub-types it's looking at.
-function extractMetricEntries(session: Session): MetricValues[] {
+// (single object, array, or nested in steps[]/blocks[]) down to a flat
+// list of {group, values} entries, so the aggregation below doesn't
+// need to know which of the 9 sub-types it's looking at - it just
+// groups whatever comes back.
+function extractMetricEntries(session: Session): GroupedMetricEntry[] {
   const isHyrox = session.type === "hyrox";
-  const subType = isHyrox ? session.hyrox_type : (session as any).cardio_type;
+  const subType = (isHyrox ? session.hyrox_type : (session as any).cardio_type) as string;
   const cfg: any = (isHyrox ? session.hyrox_config : (session as any).cardio_config) ?? {};
-  if (isHyrox && subType === "fixed") return (cfg.steps ?? []).map((s: any) => s.metrics ?? {});
-  if (!isHyrox && subType === "threshold") return (cfg.blocks ?? []).map((b: any) => b.metrics ?? {});
-  if ((isHyrox && subType === "interval") || (!isHyrox && (subType === "cardioIntervals" || subType === "overUnder"))) {
-    return cfg.metrics ?? [];
+  const sessionLabel = isHyrox ? (HYROX_GROUP_LABEL[subType] ?? "Hyrox") : (CARDIO_GROUP_LABEL[subType] ?? "Cardio");
+
+  // fixed/cycling/circuit: each exercise's own result(s) (e.g. Row: 560m,
+  // grouped under "Row") plus the one whole-session result (e.g. avg HR,
+  // calories, grouped under the sub-type label since it isn't any one
+  // exercise) - see per-exercise tracked_metrics in HyroxCardioBuilder
+  // (0070). An exercise's own metrics is one object for Fixed/AMRAP
+  // Circuit, or one object per round/cycle for Cycling/rounds-mode
+  // Circuit (0071/0072). Cycling's `record_levels` (session-level: which
+  // of round/cycle actually got recorded) decides which array to read -
+  // prefer round-level (the finer-grained true total) when both are on,
+  // so ticking both doesn't double-count the same work into the sum.
+  if (isHyrox && (subType === "fixed" || subType === "cycling" || subType === "circuit")) {
+    const items = subType === "fixed" ? (cfg.steps ?? []) : (cfg.exercises ?? []);
+    const levels: string[] = cfg.record_levels ?? ["round"];
+    const exerciseEntries: GroupedMetricEntry[] = items.flatMap((it: any) => {
+      const group = it.exercise || sessionLabel;
+      let values: MetricValues[];
+      if (levels.includes("round") && Array.isArray(it.metrics)) values = it.metrics;
+      else if (levels.includes("cycle") && Array.isArray(it.cycleMetrics)) values = it.cycleMetrics;
+      else if (!Array.isArray(it.metrics)) values = it.metrics ? [it.metrics] : [];
+      else values = [];
+      return values.map((v) => ({ group, values: v }));
+    });
+    return [...exerciseEntries, { group: sessionLabel, values: cfg.metrics ?? {} }];
   }
-  // cycling / emom / circuit / continuous — one whole-session result
-  return cfg.metrics ? [cfg.metrics] : [];
+  if (!isHyrox && subType === "threshold") {
+    const sessionModality = cfg.modality || sessionLabel;
+    // A block's own Activity override (0076) gets its own group, e.g. a
+    // bike warm-up block reports separately from a running main set.
+    return (cfg.blocks ?? []).map((b: any) => ({ group: b.modality || sessionModality, values: b.metrics ?? {} }));
+  }
+  if (isHyrox && subType === "interval") {
+    const group = cfg.exercise || sessionLabel;
+    return ((cfg.metrics ?? []) as MetricValues[]).map((v) => ({ group, values: v }));
+  }
+  if (!isHyrox && (subType === "cardioIntervals" || subType === "overUnder")) {
+    const group = cfg.modality || sessionLabel;
+    return ((cfg.metrics ?? []) as MetricValues[]).map((v) => ({ group, values: v }));
+  }
+  if (!isHyrox && subType === "continuous") {
+    const group = cfg.modality || sessionLabel;
+    return cfg.metrics ? [{ group, values: cfg.metrics }] : [];
+  }
+  // emom — no per-exercise identity to group by, session total only
+  return cfg.metrics ? [{ group: sessionLabel, values: cfg.metrics }] : [];
 }
 
 function collectCardioMetrics(sessions: Session[]): { exMap: CardioMetricMap; summaries: CardioMetricSummary[] } {
   const exMap: CardioMetricMap = {};
+  // One row per (metric, sessionType, subType, group) per session, e.g.
+  // "distance"+hyrox+"Row" and "distance"+cardio+"Run" from the same
+  // range end up as separate trend lines instead of one combined
+  // "distance" number - sessionType is included (not just group) since
+  // a Hyrox exercise and a Cardio modality could otherwise share a name
+  // (e.g. both called "Run") and wrongly merge (0076/0077). subType is
+  // included too (0084) - the same exercise name can appear in more
+  // than one Hyrox/Cardio sub-type (e.g. "Row" as a Fixed-Workout time
+  // trial vs. as 40-second Cycling-Interval reps), and those are
+  // different protocols with incomparable numbers; merging them
+  // produced a misleading combined trend line and % change. The
+  // display label only gets the sub-type suffix when it actually adds
+  // information - a whole-session total's group is already the
+  // sub-type's own label, so it doesn't need "(Cycling Intervals)"
+  // appended to itself.
+  const byKeyAndGroup = new Map<MetricKey, Map<string, CardioMetricSummary>>();
+
   for (const sess of sessions) {
     if (sess.is_primer) continue;
+    const sessionType = sess.type as "hyrox" | "cardio";
+    const subType = ((sessionType === "hyrox" ? sess.hyrox_type : (sess as any).cardio_type) as string) ?? "";
+    const sessionLabel = sessionType === "hyrox" ? (HYROX_GROUP_LABEL[subType] ?? "Hyrox") : (CARDIO_GROUP_LABEL[subType] ?? "Cardio");
     const entries = extractMetricEntries(sess);
     if (!entries.length) continue;
     for (const key of METRIC_ORDER) {
-      const values = entries.map((e) => parseMetricNumber(e[key])).filter((v): v is number => v != null);
-      if (!values.length) continue;
-      const value = SUM_METRICS.includes(key)
-        ? values.reduce((a, b) => a + b, 0)
-        : MAX_METRICS.includes(key)
-        ? Math.max(...values)
-        : values.reduce((a, b) => a + b, 0) / values.length;
-      if (!exMap[key]) exMap[key] = [];
-      exMap[key]!.push({ date: sess.date, sessName: sess.name, value });
+      const valuesByGroup = new Map<string, number[]>();
+      for (const e of entries) {
+        // Distance can be logged in m/km/mi per entry (an interval box
+        // in metres alongside a session-level box in km) - normalise to
+        // km using each entry's own distance_unit before combining,
+        // rather than summing raw numbers across different units (0074).
+        const v = key === "distance"
+          ? distanceToKm(e.values.distance, e.values.distance_unit)
+          : parseMetricNumber(e.values[key]);
+        if (v == null) continue;
+        if (!valuesByGroup.has(e.group)) valuesByGroup.set(e.group, []);
+        valuesByGroup.get(e.group)!.push(v);
+      }
+      if (!valuesByGroup.size) continue;
+      for (const [group, values] of valuesByGroup) {
+        const value = SUM_METRICS.includes(key)
+          ? values.reduce((a, b) => a + b, 0)
+          : MAX_METRICS.includes(key)
+          ? Math.max(...values)
+          : values.reduce((a, b) => a + b, 0) / values.length;
+        const row = { date: sess.date, sessName: sess.name, value };
+
+        if (!exMap[key]) exMap[key] = [];
+        exMap[key]!.push(row);
+
+        if (!byKeyAndGroup.has(key)) byKeyAndGroup.set(key, new Map());
+        const groups = byKeyAndGroup.get(key)!;
+        const groupKey = `${sessionType}::${subType}::${group}`;
+        const displayGroup = group === sessionLabel ? group : `${group} (${sessionLabel})`;
+        if (!groups.has(groupKey)) groups.set(groupKey, { key, sessionType, group: displayGroup, entries: [], overallPct: null });
+        groups.get(groupKey)!.entries.push(row);
+      }
     }
   }
 
-  const summaries: CardioMetricSummary[] = (Object.keys(exMap) as MetricKey[])
-    .map((key) => {
-      const entries = exMap[key]!;
+  const summaries: CardioMetricSummary[] = [];
+  for (const [, groups] of byKeyAndGroup) {
+    for (const summary of groups.values()) {
+      const { entries } = summary;
       const first = entries[0];
       const last = entries[entries.length - 1];
-      const overallPct =
+      summary.overallPct =
         entries.length >= 2 && first.value !== 0
           ? ((last.value - first.value) / Math.abs(first.value)) * 100
           : null;
-      return { key, entries, overallPct };
-    })
-    .sort((a, b) => METRIC_ORDER.indexOf(a.key) - METRIC_ORDER.indexOf(b.key));
+      summaries.push(summary);
+    }
+  }
+  summaries.sort((a, b) => METRIC_ORDER.indexOf(a.key) - METRIC_ORDER.indexOf(b.key) || a.group.localeCompare(b.group));
 
   return { exMap, summaries };
 }
@@ -228,6 +359,8 @@ export interface ComputedReport {
   powerSpeedSummaries: PowerSpeedSummary[]; // alphabetical
   rpeEntries: RPEEntry[]; // chronological
   rpeWeekly: RPEWeeklyPoint[]; // chronological
+  trainingLoadEntries: TrainingLoadEntry[]; // chronological, hyrox/cardio only (0078)
+  trainingLoadWeekly: TrainingLoadWeeklyPoint[]; // chronological
   // Session-completion, for the Squad Report's completion boards - % of
   // prescribed sets marked done across every coach-assigned ("programme"
   // source, not athlete-started "library") session in range. Null (not
@@ -236,6 +369,7 @@ export interface ComputedReport {
   completionPct: number | null;
   completedSets: number;
   totalSets: number;
+  sessionTypeStats: Record<string, SessionTypeStats>; // 0080 — per-type session counts + completion, keyed by type
   velocityExMap: VelocityMap;
   velocitySummaries: VelocitySummary[]; // alphabetical, empty when no exercise in range tracked bar speed
   cardioMetricExMap: CardioMetricMap;
@@ -310,6 +444,99 @@ function collectRPE(allSessions: Session[]): { entries: RPEEntry[]; weekly: RPEW
   return { entries, weekly };
 }
 
+function numOrNull(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return isFinite(n) ? n : null;
+}
+
+// Estimates a hyrox/cardio session's total length, preferring what the
+// athlete actually logged over a guess from the PRESCRIPTION. If
+// "Duration" is one of the session's tracked metrics and the athlete
+// filled it in, that real figure wins outright - it reflects what
+// actually happened (a session that overran, or one with no reliable
+// structural formula at all, like Fixed and Circuit in Rounds mode).
+// Only when nothing was logged do we fall back to the structural
+// estimate (work/rest/rounds/etc.), which mirrors the exact formulas
+// already used for each builder's own structure preview/timer - and for
+// Fixed/Circuit-Rounds specifically, there is no structural formula, so
+// those two return null unless a duration was actually logged.
+function estimateSessionDurationMinutes(session: Session): number | null {
+  if (session.type === "hyrox") {
+    const subType = session.hyrox_type;
+    const cfg: any = session.hyrox_config ?? {};
+    const logged = numOrNull(cfg.metrics?.duration);
+    if (logged != null && logged > 0) return logged;
+    if (subType === "emom") return numOrNull(cfg.mins);
+    if (subType === "interval") {
+      const workSec = numOrNull(cfg.workSec) ?? 120, restSec = numOrNull(cfg.restSec) ?? 90, sets = numOrNull(cfg.sets) ?? 6;
+      return ((workSec + restSec) * sets) / 60;
+    }
+    if (subType === "cycling") {
+      const exN = (cfg.exercises ?? []).length || 1;
+      const workSec = numOrNull(cfg.workSec) ?? 40, restSec = numOrNull(cfg.restSec) ?? 20;
+      const rounds = numOrNull(cfg.rounds) ?? 2, cycles = numOrNull(cfg.cycles) ?? 3, cyclRestSec = numOrNull(cfg.cyclRestSec) ?? 120;
+      return (exN * (workSec + restSec) * rounds * cycles + (cycles - 1) * cyclRestSec) / 60;
+    }
+    if (subType === "circuit" && cfg.isAmrap && cfg.timeCap != null) return (numOrNull(cfg.timeCap) ?? 0) / 60;
+    return null; // fixed, circuit (rounds mode) — no reliable structural estimate
+  }
+  if (session.type === "cardio") {
+    const subType = (session as any).cardio_type;
+    const cfg: any = (session as any).cardio_config ?? {};
+    const logged = numOrNull(cfg.metrics?.duration);
+    if (logged != null && logged > 0) return logged;
+    if (subType === "continuous") return numOrNull(cfg.duration);
+    if (subType === "threshold") {
+      const total = (cfg.blocks ?? []).reduce((sum: number, b: any) => sum + (numOrNull(b.duration) ?? 0) * (numOrNull(b.repeat) ?? 1), 0);
+      return total || null;
+    }
+    if (subType === "cardioIntervals") {
+      const workDur = numOrNull(cfg.workDur) ?? 180, restDur = numOrNull(cfg.restDur) ?? 90, reps = numOrNull(cfg.reps) ?? 6;
+      return ((workDur + restDur) * reps) / 60;
+    }
+    if (subType === "overUnder") {
+      const underDur = numOrNull(cfg.underDur) ?? 180, overDur = numOrNull(cfg.overDur) ?? 120;
+      const sets = numOrNull(cfg.sets) ?? 3, reps = numOrNull(cfg.reps) ?? 6, restBetweenSetsMin = numOrNull(cfg.restDur) ?? 5;
+      return ((underDur + overDur) * reps * sets) / 60 + restBetweenSetsMin * Math.max(0, sets - 1);
+    }
+  }
+  return null;
+}
+
+// sRPE training load (Foster's method: session RPE × session duration
+// in minutes) - the cardio/hyrox equivalent of strength's Total
+// Training Load, using RPE (already logged) and a structural duration
+// estimate (above) rather than requiring anything extra to be tracked.
+// Weekly total (not average) - training load is meant to represent how
+// much work was asked for in a week, not a per-session intensity.
+function collectTrainingLoad(sessions: Session[]): { entries: TrainingLoadEntry[]; weekly: TrainingLoadWeeklyPoint[] } {
+  const entries: TrainingLoadEntry[] = [];
+  for (const s of sessions) {
+    if (s.is_primer || s.rpe == null) continue;
+    const minutes = estimateSessionDurationMinutes(s);
+    if (minutes == null || minutes <= 0) continue;
+    entries.push({ date: s.date, sessName: s.name, value: Math.round(s.rpe * minutes) });
+  }
+  entries.sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  const byWeek = new Map<string, number[]>();
+  for (const e of entries) {
+    const wk = weekStartISO(e.date);
+    if (!byWeek.has(wk)) byWeek.set(wk, []);
+    byWeek.get(wk)!.push(e.value);
+  }
+  const weekly = Array.from(byWeek.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([weekStart, values]) => ({
+      weekStart,
+      totalLoad: values.reduce((a, b) => a + b, 0),
+      sessionCount: values.length,
+    }));
+
+  return { entries, weekly };
+}
+
 function collectCompletion(allSessions: Session[]): { completionPct: number | null; completedSets: number; totalSets: number } {
   let completedSets = 0;
   let totalSets = 0;
@@ -329,6 +556,60 @@ function collectCompletion(allSessions: Session[]): { completionPct: number | nu
   }
   const completionPct = totalSets > 0 ? Math.round((completedSets / totalSets) * 1000) / 10 : null;
   return { completionPct, completedSets, totalSets };
+}
+
+// ------------------------------------------------------------
+// Per-type session counts + completion (0080) - "how many sessions did
+// I actually assign vs. how many did the athlete engage with", broken
+// out by type since a coach might assign 5 Strength + 2 Hyrox sessions
+// and wants to know those separately, not blended into one number like
+// collectCompletion's set-level %. "Engaged with" is session-level, not
+// set-level: any set ticked done for Strength/Power-Speed, or an RPE /
+// any logged metric value for Hyrox/Cardio (which have no discrete
+// "sets" to count).
+// ------------------------------------------------------------
+export interface SessionTypeStats {
+  type: "strength" | "power_speed" | "cardio" | "hyrox";
+  loggedCount: number; // sessions of this type in range, any source
+  prescribedCount: number; // session_source === "programme" — what the coach actually assigned
+  completedCount: number; // of prescribedCount, how many the athlete engaged with
+  completionPct: number | null; // null when nothing was prescribed, not 0
+}
+
+function sessionHasCompletion(s: Session): boolean {
+  if (s.type === "strength" || s.type === "power_speed") {
+    return (s.exercises ?? []).some((ex) => !ex.is_primer && (ex.log ?? []).some((l) => l.done));
+  }
+  if (s.type === "hyrox" || s.type === "cardio") {
+    if (s.rpe != null) return true;
+    // Reuses the same config-flattening extractMetricEntries already
+    // uses for trend lines - any non-empty logged value anywhere in the
+    // session (a step, an exercise, a round, the session-level box)
+    // counts as engagement, without needing to know which of the 9
+    // sub-types it's looking at.
+    return extractMetricEntries(s).some((e) =>
+      Object.entries(e.values).some(([k, v]) => k !== "distance_unit" && typeof v === "string" && v.trim() !== "")
+    );
+  }
+  return false;
+}
+
+function collectSessionTypeStats(allSessions: Session[]): Record<string, SessionTypeStats> {
+  const types: SessionTypeStats["type"][] = ["strength", "power_speed", "cardio", "hyrox"];
+  const stats: Record<string, SessionTypeStats> = {};
+  for (const type of types) {
+    const sessions = allSessions.filter((s) => s.type === type && !s.is_primer);
+    const prescribed = sessions.filter((s) => s.session_source === "programme");
+    const completed = prescribed.filter(sessionHasCompletion);
+    stats[type] = {
+      type,
+      loggedCount: sessions.length,
+      prescribedCount: prescribed.length,
+      completedCount: completed.length,
+      completionPct: prescribed.length > 0 ? Math.round((completed.length / prescribed.length) * 1000) / 10 : null,
+    };
+  }
+  return stats;
 }
 
 // Power/speed logs don't use the generic {weight,reps,done,time} SetLog
@@ -481,7 +762,12 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     .filter((s) => (s.exercises ?? []).some((e) => (e.log ?? []).some((l) => l.done)));
 
   const { entries: rpeEntries, weekly: rpeWeekly } = collectRPE(allSessions);
+  const { entries: trainingLoadEntries, weekly: trainingLoadWeekly } = collectTrainingLoad([
+    ...hyroxSessions,
+    ...cardioSessions,
+  ]);
   const { completionPct, completedSets, totalSets } = collectCompletion(allSessions);
+  const sessionTypeStats = collectSessionTypeStats(allSessions);
   const { exMap: powerSpeedExMap, summaries: powerSpeedSummaries } = collectPowerSpeed(powerSpeedSessions);
   // Bar speed can be tracked on any strength exercise regardless of
   // whether it also has loggable weight (e.g. a bodyweight jump
@@ -509,12 +795,137 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     powerSpeedSummaries,
     rpeEntries,
     rpeWeekly,
+    trainingLoadEntries,
+    trainingLoadWeekly,
     completionPct,
     completedSets,
     totalSets,
+    sessionTypeStats,
     velocityExMap,
     velocitySummaries,
     cardioMetricExMap,
     cardioMetricSummaries,
   };
+}
+
+// ------------------------------------------------------------
+// Repeated-session comparison (0079) - a coach re-programming the same
+// benchmark workout wants results side by side across attempts.
+// Grouped by exact name match (case/whitespace-insensitive) within the
+// same athlete + session type + sub-type, rather than by
+// source_session_id (only covers sessions literally copied via "copy
+// to dates"/"update future occurrences") - a session reloaded from a
+// template gets no link back to it at all (see the source_session_id
+// note in CLAUDE.md), and a coach rebuilding the same workout from
+// scratch has no link either. Name is the one signal that survives
+// every path a repeat can come from.
+// ------------------------------------------------------------
+export interface RepeatSessionGroup {
+  name: string;
+  type: Session["type"];
+  subType: string | null;
+  sessions: { id: string; date: string }[]; // chronological
+}
+
+export function findRepeatedSessionGroups(sessions: Session[]): RepeatSessionGroup[] {
+  const byKey = new Map<string, RepeatSessionGroup>();
+  for (const s of sessions) {
+    if (s.is_primer) continue;
+    const name = (s.name ?? "").trim();
+    if (!name) continue;
+    const subType = s.type === "hyrox" ? s.hyrox_type : s.type === "cardio" ? (s as any).cardio_type : null;
+    const key = `${s.type}::${subType ?? ""}::${name.toLowerCase()}`;
+    if (!byKey.has(key)) byKey.set(key, { name, type: s.type, subType: subType ?? null, sessions: [] });
+    byKey.get(key)!.sessions.push({ id: s.id, date: s.date });
+  }
+  const groups = [...byKey.values()].filter((g) => g.sessions.length >= 2);
+  for (const g of groups) g.sessions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  groups.sort((a, b) => b.sessions.length - a.sessions.length || a.name.localeCompare(b.name));
+  return groups;
+}
+
+export interface SessionCompareCell {
+  sessionId: string;
+  date: string;
+  value: number;
+  display?: string; // pre-formatted text when the raw number alone isn't the full picture (e.g. "80kg × 5")
+}
+export interface SessionCompareRow {
+  group: string; // exercise/modality name (hyrox/cardio), or the exercise name (strength)
+  label: string; // metric label with unit, e.g. "Distance (km)" or "Max weight (kg)"
+}
+export interface SessionCompareRowWithCells extends SessionCompareRow {
+  cells: SessionCompareCell[];
+}
+export interface SessionCompareResult {
+  name: string;
+  type: Session["type"];
+  sessions: { id: string; date: string }[]; // chronological, the comparison's columns
+  rows: SessionCompareRowWithCells[];
+}
+
+// Builds the comparison table for one repeat group - pass it exactly
+// the sessions in that group (RepeatSessionGroup.sessions ids), not the
+// athlete's whole history.
+export function compareSessionGroup(groupSessions: Session[]): SessionCompareResult {
+  const sorted = [...groupSessions].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const sessionsMeta = sorted.map((s) => ({ id: s.id, date: s.date }));
+  const name = sorted[0]?.name ?? "";
+  const type = sorted[0]?.type ?? "strength";
+
+  if (type === "hyrox" || type === "cardio") {
+    // Reuses the exact same per-exercise/modality grouping and
+    // unit-normalising aggregation the Training Load Report's trend
+    // lines use (0076) - scoped to just this small set of sessions
+    // instead of the athlete's whole range, so date collisions (the
+    // only risk of matching a row back to a session by date rather
+    // than a carried id) would need two same-named sessions on the
+    // exact same date, which can't happen for one athlete in practice.
+    const { summaries } = collectCardioMetrics(sorted);
+    const dateToId = new Map(sorted.map((s) => [s.date, s.id]));
+    const rows: SessionCompareRowWithCells[] = summaries.map((sum) => ({
+      group: sum.group,
+      label: `${METRIC_META[sum.key].label}${METRIC_META[sum.key].unit ? ` (${METRIC_META[sum.key].unit})` : ""}`,
+      cells: sum.entries.map((e) => ({ sessionId: dateToId.get(e.date) ?? "", date: e.date, value: e.value })),
+    }));
+    return { name, type, sessions: sessionsMeta, rows };
+  }
+
+  // Strength/Power-Speed - same tonnage/max-weight logic as the main
+  // exMap build above (each-side doubling, per-set logged reps over
+  // the exercise's prescribed reps), just scoped to this group and
+  // split into two rows per exercise instead of one.
+  const maxRows = new Map<string, SessionCompareRowWithCells>();
+  const ttlRows = new Map<string, SessionCompareRowWithCells>();
+  for (const s of sorted) {
+    for (const ex of s.exercises ?? []) {
+      if (!ex.name || ex.is_primer) continue;
+      const done = (ex.log ?? []).filter((l) => parseFloat(l.weight) > 0);
+      if (!done.length) continue;
+      const prescribedReps = parseInt(ex.reps) || 0;
+      const perSetReps = done.map((l) => parseInt(l.reps) || prescribedReps);
+      const weights = done.map((l) => parseFloat(l.weight));
+      const sideMultiplier = ex.each_side ? 2 : 1;
+      const ttl = done.reduce((sum, l, i) => sum + (parseFloat(l.weight) || 0) * (perSetReps[i] || 0), 0) * sideMultiplier;
+      const maxWeight = Math.max(...weights);
+      const bestSetIdx = weights.indexOf(maxWeight);
+
+      if (!maxRows.has(ex.name)) maxRows.set(ex.name, { group: ex.name, label: "Best set", cells: [] });
+      maxRows.get(ex.name)!.cells.push({
+        sessionId: s.id, date: s.date, value: maxWeight,
+        display: `${maxWeight}kg × ${perSetReps[bestSetIdx] || "?"}`,
+      });
+
+      if (!ttlRows.has(ex.name)) ttlRows.set(ex.name, { group: ex.name, label: "Total Training Load (kg)", cells: [] });
+      ttlRows.get(ex.name)!.cells.push({ sessionId: s.id, date: s.date, value: Math.round(ttl) });
+    }
+  }
+  // Interleave so each exercise's two rows sit together rather than all
+  // "Best set" rows then all "TTL" rows.
+  const rows: SessionCompareRowWithCells[] = [];
+  for (const name of maxRows.keys()) {
+    rows.push(maxRows.get(name)!);
+    if (ttlRows.has(name)) rows.push(ttlRows.get(name)!);
+  }
+  return { name, type, sessions: sessionsMeta, rows };
 }

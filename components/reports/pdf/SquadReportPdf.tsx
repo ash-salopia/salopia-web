@@ -280,7 +280,7 @@ function CompletionBoard({ title, rows }: { title: string; rows: SquadCompletion
             <Text style={s.rank}>{i + 1}</Text>
             <Text style={s.name}>
               {r.athleteName}
-              <Text style={s.sub}>{`\n${r.completedSets}/${r.totalSets} sets`}</Text>
+              <Text style={s.sub}>{`\n${r.completedSessions}/${r.totalSessions} sessions`}</Text>
             </Text>
             <Text style={s.value}>{r.pct.toFixed(0)}%</Text>
           </View>
@@ -382,9 +382,11 @@ export default function SquadReportPdf({
   ttl,
   e1rm,
   powerSpeed,
+  cardioHyrox,
   completion,
   exerciseBoards,
   powerSpeedBoards,
+  cardioHyroxBoards,
   matrixRows,
   trendAthletes,
   trendExerciseOverride,
@@ -402,9 +404,11 @@ export default function SquadReportPdf({
   ttl: boolean;
   e1rm: boolean;
   powerSpeed: boolean;
+  cardioHyrox: boolean;
   completion: boolean;
   exerciseBoards: { name: string; rows: SquadStandingRow[] }[];
   powerSpeedBoards: { name: string; rows: SquadStandingRow[]; unit: string; direction: "lower" | "higher" }[];
+  cardioHyroxBoards: { id: string; title: string; rows: SquadStandingRow[]; unit: string; direction: "lower" | "higher"; decimals: number }[];
   matrixRows: SquadMatrixRow[];
   trendAthletes: SquadAthleteInput[];
   trendExerciseOverride: string[];
@@ -463,6 +467,20 @@ export default function SquadReportPdf({
                 rows={rows}
                 unit={unit}
                 decimals={unit === "s" ? 2 : 1}
+              />
+            ))}
+          </View>
+        )}
+
+        {cardioHyrox && cardioHyroxBoards.length > 0 && (
+          <View style={s.metricRow}>
+            {cardioHyroxBoards.map(({ id, title, rows, unit, direction, decimals }) => (
+              <StandingBoard
+                key={id}
+                title={`${title} (${direction === "lower" ? "lower better" : "higher better"})`}
+                rows={rows}
+                unit={unit ? ` ${unit}` : ""}
+                decimals={decimals}
               />
             ))}
           </View>

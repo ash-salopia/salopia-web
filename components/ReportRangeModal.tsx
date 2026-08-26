@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { todayISO, resolveDateRange, type ReportRangeMode } from "@/lib/date-utils";
-import { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/lib/report-options";
+import { DEFAULT_REPORT_OPTIONS, hasAnyContentSelected, type ReportOptions } from "@/lib/report-options";
+import { listReportPresets, saveReportPreset, deleteReportPreset, type ReportPreset } from "@/lib/data/report-presets";
 import DateRangePicker from "@/components/reports/DateRangePicker";
 import ReportOptionsForm from "@/components/reports/ReportOptionsForm";
 
@@ -11,10 +12,12 @@ export type { ReportOptions };
 
 export default function ReportRangeModal({
   athleteName,
+  hyroxEnabled = true,
   onGenerate,
   onClose,
 }: {
   athleteName: string;
+  hyroxEnabled?: boolean;
   onGenerate: (start: string | null, end: string | null, options: ReportOptions) => void;
   onClose: () => void;
 }) {
@@ -23,8 +26,60 @@ export default function ReportRangeModal({
   const [customEnd, setCustomEnd] = useState(todayISO());
   const [options, setOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
 
-  const hasMetric = options.ttl || options.e1rm;
-  const canGenerate = hasMetric && (mode !== "custom" || (customStart && customEnd && customEnd >= customStart));
+  // 0087 — presets ("athlete" kind) are shared, org-scoped rows in
+  // report_presets - the exact same table/list the bulk Reporting tab
+  // already saves to, so a preset saved from either place shows up in
+  // both. Previously only the bulk tab had this UI at all, which read
+  // as "presets don't work" when tried from an individual athlete's
+  // page - there was nowhere here to load or save one.
+  const [presets, setPresets] = useState<ReportPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [presetSaving, setPresetSaving] = useState(false);
+  const [presetError, setPresetError] = useState("");
+
+  useEffect(() => {
+    listReportPresets<ReportOptions>("athlete").then(setPresets).catch(() => {});
+  }, []);
+
+  const handleLoadPreset = (id: string) => {
+    setSelectedPresetId(id);
+    const preset = presets.find((p) => p.id === id);
+    // Merge over the current defaults rather than trusting the saved
+    // JSONB wholesale - a preset saved before a newer ReportOptions
+    // field existed would otherwise load with that field undefined.
+    if (preset) setOptions({ ...DEFAULT_REPORT_OPTIONS, ...preset.options });
+  };
+
+  const handleSavePreset = async () => {
+    const name = presetName.trim();
+    if (!name) return;
+    setPresetError("");
+    setPresetSaving(true);
+    try {
+      const saved = await saveReportPreset<ReportOptions>("athlete", name, options);
+      setPresets((prev) => [...prev.filter((p) => p.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setPresetName("");
+      setSelectedPresetId(saved.id);
+    } catch (e) {
+      setPresetError(e instanceof Error ? e.message : "Could not save preset");
+    } finally {
+      setPresetSaving(false);
+    }
+  };
+
+  const handleDeletePreset = async (id: string) => {
+    setPresetError("");
+    try {
+      await deleteReportPreset(id);
+      setPresets((prev) => prev.filter((p) => p.id !== id));
+      if (selectedPresetId === id) setSelectedPresetId("");
+    } catch (e) {
+      setPresetError(e instanceof Error ? e.message : "Could not delete preset");
+    }
+  };
+
+  const canGenerate = hasAnyContentSelected(options) && (mode !== "custom" || (customStart && customEnd && customEnd >= customStart));
 
   const handleGenerate = () => {
     if (!canGenerate) return;
@@ -53,7 +108,46 @@ export default function ReportRangeModal({
             onCustomEndChange={setCustomEnd}
           />
 
-          <ReportOptionsForm options={options} onChange={setOptions} />
+          {presets.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={styles.fieldLabel}>Load preset</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select value={selectedPresetId} onChange={(e) => handleLoadPreset(e.target.value)} style={{ ...styles.input, flex: 1 }}>
+                  <option value="">- Select a saved preset -</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {selectedPresetId && (
+                  <button style={styles.smallGhostBtn} onClick={() => handleDeletePreset(selectedPresetId)} title="Delete this preset">
+                    🗑
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <ReportOptionsForm options={options} onChange={setOptions} hyroxEnabled={hyroxEnabled} />
+
+          <div style={{ marginTop: 4, marginBottom: 4 }}>
+            <div style={styles.fieldLabel}>Save current metrics as a preset</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="Preset name, e.g. Monthly check-in"
+                style={{ ...styles.input, flex: 1 }}
+              />
+              <button
+                style={{ ...styles.smallGhostBtn, padding: "9px 14px", opacity: presetName.trim() && !presetSaving ? 1 : 0.5 }}
+                disabled={!presetName.trim() || presetSaving}
+                onClick={handleSavePreset}
+              >
+                {presetSaving ? "Saving…" : "💾 Save"}
+              </button>
+            </div>
+            {presetError && <div style={styles.errorHint}>{presetError}</div>}
+          </div>
         </div>
 
         <div style={styles.footer}>
@@ -118,5 +212,27 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 700,
     cursor: "pointer",
+  },
+  fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4 },
+  errorHint: { fontSize: 12, color: "#ff7d7d", marginTop: 8 },
+  input: {
+    width: "100%",
+    background: "var(--ink)",
+    border: "1px solid var(--line)",
+    color: "var(--text)",
+    borderRadius: 8,
+    padding: "9px 12px",
+    fontSize: 14,
+    boxSizing: "border-box" as const,
+  },
+  smallGhostBtn: {
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--mute)",
+    borderRadius: 8,
+    padding: "0 10px",
+    fontSize: 13,
+    cursor: "pointer",
+    flexShrink: 0,
   },
 };

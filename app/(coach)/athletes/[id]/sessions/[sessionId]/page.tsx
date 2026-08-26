@@ -31,6 +31,7 @@ import RecoverySessionEditor from "@/components/recovery/RecoverySessionEditor";
 import { saveRecoveryPreset } from "@/lib/data/recovery";
 import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import SessionCompareModal from "@/components/SessionCompareModal";
 import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
 
 type SessionStub = { id: string; name: string; date: string; type: string };
@@ -52,6 +53,7 @@ export default function SessionDetailPage() {
   // the log until the coach explicitly ticks a set done.
   const [oneRmTargets, setOneRmTargets] = useState<Record<string, (number | null)[]>>({});
   const [showOtherSessions, setShowOtherSessions] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -574,19 +576,32 @@ export default function SessionDetailPage() {
 
   return (
     <div style={styles.page}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 8, flexWrap: "wrap" as const }}>
         <button style={styles.backLink} onClick={() => router.push(`/athletes/${athleteId}`)}>
           Back to sessions
         </button>
-        {otherSessions.length > 1 && (
-          <button
-            style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            onClick={() => setShowOtherSessions((v) => !v)}
-          >
-            {showOtherSessions ? "Hide" : "All sessions"} ({otherSessions.length})
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          {otherSessions.some((s) => s.id !== sessionId && s.name.trim().toLowerCase() === session.name.trim().toLowerCase()) && (
+            <button
+              style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              onClick={() => setCompareOpen(true)}
+            >
+              Compare with previous attempts
+            </button>
+          )}
+          {otherSessions.length > 1 && (
+            <button
+              style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              onClick={() => setShowOtherSessions((v) => !v)}
+            >
+              {showOtherSessions ? "Hide" : "All sessions"} ({otherSessions.length})
+            </button>
+          )}
+        </div>
       </div>
+      {compareOpen && session && (
+        <SessionCompareModal athleteId={athleteId} session={session} onClose={() => setCompareOpen(false)} />
+      )}
 
       {showOtherSessions && (
         <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 10, marginBottom: 12, maxHeight: 220, overflowY: "auto" as const }}>

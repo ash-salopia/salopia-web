@@ -335,7 +335,23 @@ export default function AthleteDetailPage() {
         fetch("/api/training-report-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ athleteId, rangeStart: start, rangeEnd: end, includeE1rm: options.e1rm, coachContext: options.coachContext }),
+          body: JSON.stringify({
+            athleteId,
+            rangeStart: start,
+            rangeEnd: end,
+            includeTtl: options.ttl,
+            includeE1rm: options.e1rm,
+            includeNotes: options.athleteNotes,
+            includeRpe: options.sessionRpe,
+            includeTrainingLoad: options.trainingLoadTrend,
+            includeCardio: options.cardioMetricsTrend,
+            includeHyrox: options.hyroxMetricsTrend,
+            includePowerSpeed: options.powerSpeedTrend,
+            includeBarSpeed: options.barSpeedTrend,
+            cardioMetricKeys: options.cardioMetricKeys,
+            hyroxMetricKeys: options.hyroxMetricKeys,
+            coachContext: options.coachContext,
+          }),
         })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
           .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes }))
@@ -935,6 +951,7 @@ export default function AthleteDetailPage() {
       {reportRangeOpen && (
         <ReportRangeModal
           athleteName={athlete.name}
+          hyroxEnabled={hyroxEnabled && (athlete as any).hyrox_enabled !== false}
           onGenerate={handleGenerateReport}
           onClose={() => setReportRangeOpen(false)}
         />

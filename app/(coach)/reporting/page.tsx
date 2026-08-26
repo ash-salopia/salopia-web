@@ -24,12 +24,17 @@ import {
   computeSquadMatrix,
   availablePowerSpeedExercises,
   computePowerSpeedBoard,
+  availableCardioHyroxMetrics,
+  computeCardioExerciseBoard,
+  cardioMetricOptionId,
   type SquadReport,
   type SquadAthleteInput,
   type SquadStandingRow,
   type SquadImprovedRow,
   type SquadCompletionRow,
+  type SquadCardioMetricOption,
 } from "@/lib/squad-report";
+import { METRIC_META } from "@/lib/cardio-metrics";
 
 type Tab = "athletes" | "squad";
 
@@ -44,6 +49,12 @@ interface SquadPresetOptions {
   bodyweightRelative: boolean;
   exercises: string[];
   powerSpeedExercises: string[];
+  // 0089 — Cardio/Hyrox exercise board, stored as cardioMetricOptionId()
+  // strings ("hyrox::distance::Row (Cycling Intervals)") rather than
+  // SquadCardioMetricOption objects, matching how exercises/
+  // powerSpeedExercises are already stored as plain name strings.
+  cardioHyrox: boolean;
+  cardioHyroxOptionIds: string[];
   trendTonnage: boolean;
   trendE1rm: boolean;
   limitTo8: boolean;
@@ -105,7 +116,7 @@ function Leaderboard({
               <span style={s.boardRank}>{i + 1}</span>
               <span style={s.boardName}>
                 {r.athleteName}
-                <span style={s.boardSub}> · {r.completedSets}/{r.totalSets} sets</span>
+                <span style={s.boardSub}> · {r.completedSessions}/{r.totalSessions} sessions</span>
               </span>
               <span style={s.boardValue}>{r.pct.toFixed(0)}%</span>
             </div>
@@ -122,13 +133,28 @@ async function fetchAiSummary(
   athleteId: string,
   rangeStart: string | null,
   rangeEnd: string | null,
-  includeE1rm: boolean,
-  coachContext: string
+  options: ReportOptions
 ): Promise<AiSummary> {
   const res = await fetch("/api/training-report-ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ athleteId, rangeStart, rangeEnd, includeE1rm, coachContext }),
+    body: JSON.stringify({
+      athleteId,
+      rangeStart,
+      rangeEnd,
+      includeTtl: options.ttl,
+      includeE1rm: options.e1rm,
+      includeNotes: options.athleteNotes,
+      includeRpe: options.sessionRpe,
+      includeTrainingLoad: options.trainingLoadTrend,
+      includeCardio: options.cardioMetricsTrend,
+      includeHyrox: options.hyroxMetricsTrend,
+      includePowerSpeed: options.powerSpeedTrend,
+      includeBarSpeed: options.barSpeedTrend,
+      cardioMetricKeys: options.cardioMetricKeys,
+      hyroxMetricKeys: options.hyroxMetricKeys,
+      coachContext: options.coachContext,
+    }),
   });
   if (!res.ok) return null;
   return res.json();
@@ -212,6 +238,14 @@ export default function ReportingPage() {
   // since it's a different exercise pool (sprints/jumps, not lifts).
   const [squadPowerSpeedExercises, setSquadPowerSpeedExercises] = useState<string[]>([]);
   const [squadPowerSpeedSearch, setSquadPowerSpeedSearch] = useState("");
+  // 0089 — Cardio/Hyrox exercise board, same "search + tick, one board
+  // per tick" pattern as Power/Speed above. Ticked values are option
+  // ids (cardioMetricOptionId), not just an exercise name, since the
+  // same exercise name can legitimately appear under more than one
+  // sub-type (see squad-report.ts's header comment on this board).
+  const [squadCardioHyrox, setSquadCardioHyrox] = useState(false);
+  const [squadCardioHyroxOptionIds, setSquadCardioHyroxOptionIds] = useState<string[]>([]);
+  const [squadCardioHyroxSearch, setSquadCardioHyroxSearch] = useState("");
   // PDF-only options (see SquadReportPdf) - which trend metric(s) to
   // chart per exercise, and whether the Squad Overview sheets + trend
   // pages cap at 8 exercises or paginate through all of them.
@@ -263,7 +297,11 @@ export default function ReportingPage() {
   const handleLoadPreset = (id: string) => {
     setSelectedPresetId(id);
     const preset = presets.find((p) => p.id === id);
-    if (preset) setOptions(preset.options);
+    // Merge over the current defaults rather than trusting the saved
+    // JSONB wholesale - a preset saved before a newer ReportOptions
+    // field existed (e.g. cardioMetricKeys) would otherwise load with
+    // that field undefined, and .includes() on it crashes the render.
+    if (preset) setOptions({ ...DEFAULT_REPORT_OPTIONS, ...preset.options });
   };
 
   const handleDeletePreset = async (id: string) => {
@@ -291,6 +329,8 @@ export default function ReportingPage() {
         bodyweightRelative: squadBodyweightRelative,
         exercises: squadExercises,
         powerSpeedExercises: squadPowerSpeedExercises,
+        cardioHyrox: squadCardioHyrox,
+        cardioHyroxOptionIds: squadCardioHyroxOptionIds,
         trendTonnage: squadTrendTonnage,
         trendE1rm: squadTrendE1rm,
         limitTo8: squadLimitTo8,
@@ -318,6 +358,8 @@ export default function ReportingPage() {
     setSquadBodyweightRelative(o.bodyweightRelative);
     setSquadExercises(o.exercises);
     setSquadPowerSpeedExercises(o.powerSpeedExercises ?? []);
+    setSquadCardioHyrox(o.cardioHyrox ?? false);
+    setSquadCardioHyroxOptionIds(o.cardioHyroxOptionIds ?? []);
     setSquadTrendTonnage(o.trendTonnage);
     setSquadTrendE1rm(o.trendE1rm);
     setSquadLimitTo8(o.limitTo8);
@@ -367,6 +409,52 @@ export default function ReportingPage() {
 
   const toggleSquadPowerSpeedExercise = (name: string) => {
     setSquadPowerSpeedExercises((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  };
+
+  const cardioHyroxOptions = useMemo(
+    () => (squadAthleteReports ? availableCardioHyroxMetrics(squadAthleteReports) : []),
+    [squadAthleteReports]
+  );
+  const filteredCardioHyroxOptions = useMemo(() => {
+    const q = squadCardioHyroxSearch.trim().toLowerCase();
+    if (!q) return cardioHyroxOptions;
+    return cardioHyroxOptions.filter((o) => `${o.sessionType} ${METRIC_META[o.key].label} ${o.group}`.toLowerCase().includes(q));
+  }, [cardioHyroxOptions, squadCardioHyroxSearch]);
+  const cardioHyroxBoards = useMemo(() => {
+    if (!squadAthleteReports) return [];
+    return squadCardioHyroxOptionIds
+      .map((id) => {
+        const option = cardioHyroxOptions.find((o) => cardioMetricOptionId(o) === id);
+        if (!option) return null;
+        const board = computeCardioExerciseBoard(squadAthleteReports, option);
+        if (!board) return null;
+        return {
+          id,
+          option,
+          title: `${METRIC_META[option.key].label} — ${option.group}`,
+          rows: board.rows,
+          unit: board.unit,
+          direction: board.direction,
+          decimals: option.key === "reps" || option.key === "rounds" ? 0 : 1,
+        };
+      })
+      .filter(
+        (
+          b
+        ): b is {
+          id: string;
+          option: SquadCardioMetricOption;
+          title: string;
+          rows: SquadStandingRow[];
+          unit: string;
+          direction: "lower" | "higher";
+          decimals: number;
+        } => b != null
+      );
+  }, [squadAthleteReports, squadCardioHyroxOptionIds, cardioHyroxOptions]);
+
+  const toggleSquadCardioHyroxOption = (id: string) => {
+    setSquadCardioHyroxOptionIds((prev) => (prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id]));
   };
 
   const toggleSquadExercise = (name: string) => {
@@ -424,7 +512,7 @@ export default function ReportingPage() {
   };
 
   const handleGenerateSquad = async () => {
-    if (!squadTargetIds.length || (!squadTtl && !squadE1rm && !squadPowerSpeed && !squadCompletion)) return;
+    if (!squadTargetIds.length || (!squadTtl && !squadE1rm && !squadPowerSpeed && !squadCompletion && !squadCardioHyrox)) return;
     setSquadError("");
     setSquadLoading(true);
     setSquadReport(null);
@@ -434,8 +522,10 @@ export default function ReportingPage() {
     // preset's exercise list.
     const hadPresetExercises = squadExercises.length > 0;
     const hadPresetPowerSpeedExercises = squadPowerSpeedExercises.length > 0;
+    const hadPresetCardioHyroxOptions = squadCardioHyroxOptionIds.length > 0;
     if (!hadPresetExercises) setSquadExercises([]);
     if (!hadPresetPowerSpeedExercises) setSquadPowerSpeedExercises([]);
+    if (!hadPresetCardioHyroxOptions) setSquadCardioHyroxOptionIds([]);
     try {
       const { start, end } = resolveDateRange(mode, customStart, customEnd);
       const results: SquadAthleteInput[] = [];
@@ -466,6 +556,19 @@ export default function ReportingPage() {
             for (const name of Object.keys(data.powerSpeedExMap)) counts.set(name, (counts.get(name) ?? 0) + 1);
           }
           setSquadPowerSpeedExercises([[...options].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))[0]]);
+        }
+      }
+      if (squadCardioHyrox && !hadPresetCardioHyroxOptions) {
+        const options = availableCardioHyroxMetrics(results);
+        if (options.length) {
+          const counts = new Map<string, number>();
+          for (const { data } of results) {
+            for (const m of data.cardioMetricSummaries) {
+              const id = cardioMetricOptionId({ sessionType: m.sessionType, key: m.key, group: m.group });
+              counts.set(id, (counts.get(id) ?? 0) + 1);
+            }
+          }
+          setSquadCardioHyroxOptionIds([[...options].map(cardioMetricOptionId).sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))[0]]);
         }
       }
       setSquadReport(
@@ -500,9 +603,11 @@ export default function ReportingPage() {
           ttl={squadTtl}
           e1rm={squadE1rm}
           powerSpeed={squadPowerSpeed}
+          cardioHyrox={squadCardioHyrox}
           completion={squadCompletion}
           exerciseBoards={exerciseBoards}
           powerSpeedBoards={powerSpeedBoards}
+          cardioHyroxBoards={cardioHyroxBoards}
           matrixRows={squadAthleteReports ? computeSquadMatrix(squadAthleteReports, squadExercises, squadBodyweightRelative) : []}
           trendAthletes={squadAthleteReports ?? []}
           trendExerciseOverride={squadExercises}
@@ -544,7 +649,7 @@ export default function ReportingPage() {
       const data = await generateReport(id, start, end);
       const aiSummary =
         options.aiSummary && includeBulkAi
-          ? await fetchAiSummary(id, start, end, options.e1rm, options.coachContext)
+          ? await fetchAiSummary(id, start, end, options)
           : null;
       const blob = await pdf(
         <AthleteReportPdf
@@ -584,7 +689,7 @@ export default function ReportingPage() {
         const data = await generateReport(id, start, end);
         const aiSummary =
           options.aiSummary && includeBulkAi
-            ? await fetchAiSummary(id, start, end, options.e1rm, options.coachContext)
+            ? await fetchAiSummary(id, start, end, options)
             : null;
         const blob = await pdf(
           <AthleteReportPdf
@@ -677,7 +782,11 @@ export default function ReportingPage() {
                 </div>
               )}
 
-              <ReportOptionsForm options={options} onChange={setOptions} />
+              <ReportOptionsForm
+                options={options}
+                onChange={setOptions}
+                hyroxEnabled={targetIds.length === 0 || athletes.some((a) => targetIds.includes(a.id) && a.hyrox_enabled)}
+              />
 
               {(options.lineChart || options.powerSpeedTrend) && (
                 <div style={{ marginTop: 4, marginBottom: 14 }}>
@@ -895,11 +1004,15 @@ export default function ReportingPage() {
                   Power / Speed
                 </label>
                 <label style={s.checkboxRow}>
+                  <input type="checkbox" checked={squadCardioHyrox} onChange={(e) => setSquadCardioHyrox(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+                  Cardio / Hyrox exercise board
+                </label>
+                <label style={s.checkboxRow}>
                   <input type="checkbox" checked={squadCompletion} onChange={(e) => setSquadCompletion(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
                   Session completion
                 </label>
               </div>
-              {!squadTtl && !squadE1rm && !squadPowerSpeed && !squadCompletion && <div style={s.hint}>Pick at least one metric to rank on.</div>}
+              {!squadTtl && !squadE1rm && !squadPowerSpeed && !squadCompletion && !squadCardioHyrox && <div style={s.hint}>Pick at least one metric to rank on.</div>}
 
               <div style={s.fieldLabel}>PDF · per-athlete exercise trend charts</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
@@ -962,8 +1075,8 @@ export default function ReportingPage() {
               </div>
 
               <button
-                style={{ ...s.actionBtn, opacity: squadTargetIds.length && (squadTtl || squadE1rm || squadPowerSpeed || squadCompletion) && !squadLoading ? 1 : 0.5 }}
-                disabled={!squadTargetIds.length || (!squadTtl && !squadE1rm && !squadPowerSpeed && !squadCompletion) || squadLoading}
+                style={{ ...s.actionBtn, opacity: squadTargetIds.length && (squadTtl || squadE1rm || squadPowerSpeed || squadCompletion || squadCardioHyrox) && !squadLoading ? 1 : 0.5 }}
+                disabled={!squadTargetIds.length || (!squadTtl && !squadE1rm && !squadPowerSpeed && !squadCompletion && !squadCardioHyrox) || squadLoading}
                 onClick={handleGenerateSquad}
               >
                 {squadLoading ? "Generating…" : "🏆 Generate squad report"}
@@ -1124,6 +1237,80 @@ export default function ReportingPage() {
                                     <span style={s.boardValue}>
                                       {r.value.toFixed(unit === "s" && r.value < 10 ? 2 : 1)}
                                       {unit}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                {squadCardioHyrox && (
+                  <>
+                    <div style={s.boardRow}>
+                      <div style={s.card}>
+                        <div style={s.cardTitle}>Cardio / Hyrox · Current standing</div>
+                        {cardioHyroxOptions.length === 0 ? (
+                          <div style={s.emptyNote}>No cardio/hyrox metric data in this range.</div>
+                        ) : (
+                          <>
+                            <div style={s.fieldLabel}>
+                              Tick a metric + exercise to rank the squad on (e.g. Distance — Row (Cycling Intervals)) — one board per tick. Deliberately no "total distance" style board across everything - different sub-types aren&apos;t comparable, so each board is one exact exercise + protocol. Leave untouched to auto-pick whichever the squad has the most data for.
+                            </div>
+                            <input
+                              value={squadCardioHyroxSearch}
+                              onChange={(e) => setSquadCardioHyroxSearch(e.target.value)}
+                              placeholder="Search metrics/exercises…"
+                              style={{ ...s.input, marginBottom: 8 }}
+                            />
+                            <div style={s.exerciseCheckList}>
+                              {filteredCardioHyroxOptions.length === 0 ? (
+                                <div style={s.emptySmall}>No metrics match &quot;{squadCardioHyroxSearch}&quot;.</div>
+                              ) : (
+                                filteredCardioHyroxOptions.map((o) => {
+                                  const id = cardioMetricOptionId(o);
+                                  return (
+                                    <label key={id} style={s.exerciseCheckRow}>
+                                      <input
+                                        type="checkbox"
+                                        checked={squadCardioHyroxOptionIds.includes(id)}
+                                        onChange={() => toggleSquadCardioHyroxOption(id)}
+                                        style={{ accentColor: "var(--accent)" }}
+                                      />
+                                      {METRIC_META[o.key].label} — {o.group}
+                                      <span style={{ color: "var(--mute)" }}> ({o.sessionType})</span>
+                                    </label>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {cardioHyroxBoards.length > 0 && (
+                      <div style={s.boardRow}>
+                        {cardioHyroxBoards.map(({ id, title, rows, unit, direction, decimals }) => (
+                          <div key={id} style={s.card}>
+                            <div style={s.cardTitle}>
+                              {title}{" "}
+                              <span style={{ fontWeight: 400, color: "var(--mute)" }}>({direction === "lower" ? "lower is better" : "higher is better"})</span>
+                            </div>
+                            {rows.length === 0 ? (
+                              <div style={s.emptyNote}>Nobody in this group has logged this.</div>
+                            ) : (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                {rows.map((r, i) => (
+                                  <div key={r.athleteId} style={s.boardRowItem}>
+                                    <span style={s.boardRank}>{i + 1}</span>
+                                    <span style={s.boardName}>{r.athleteName}</span>
+                                    <span style={s.boardValue}>
+                                      {r.value.toFixed(decimals)}
+                                      {unit ? ` ${unit}` : ""}
                                     </span>
                                   </div>
                                 ))}

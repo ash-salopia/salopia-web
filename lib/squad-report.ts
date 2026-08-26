@@ -34,6 +34,7 @@
 // a coach-chosen exercise name picked interactively after the squad
 // report has already loaded - see availableExercises().
 import type { ReportData } from "@/lib/data/reports";
+import { METRIC_META, type MetricKey } from "@/lib/cardio-metrics";
 
 const TOP_N = 5;
 function topN<T>(rows: T[]): T[] {
@@ -59,8 +60,24 @@ export interface SquadCompletionRow {
   athleteId: string;
   athleteName: string;
   pct: number;
-  completedSets: number;
-  totalSets: number;
+  completedSessions: number;
+  totalSessions: number;
+}
+
+// 0088 — completion across every session type, not just strength. This
+// board (and the matrix's Completion column) previously read
+// ReportData.completionPct directly, which only ever counts strength
+// SetLog entries (report-calc.ts's collectCompletion) - a Hyrox/Cardio-
+// focused squad always showed "no data" here even though the
+// individual report's own "Sessions Logged & Completion" section
+// (0080) has counted those types correctly for a while. Sums sessions
+// logged vs prescribed across all 4 types via the same per-type stats
+// that section already computes.
+function combinedCompletion(data: ReportData): { pct: number | null; completed: number; total: number } {
+  const stats = Object.values(data.sessionTypeStats);
+  const completed = stats.reduce((sum, s) => sum + s.completedCount, 0);
+  const total = stats.reduce((sum, s) => sum + s.prescribedCount, 0);
+  return { pct: total > 0 ? Math.round((completed / total) * 1000) / 10 : null, completed, total };
 }
 
 export interface SquadReport {
@@ -107,8 +124,9 @@ export function computeSquadReport(
       if (top) e1rmImproved.push({ athleteId, athleteName, exerciseName: top.name, pct: top.overallPct ?? 0 });
     }
 
-    if (includeCompletion && data.completionPct != null) {
-      completion.push({ athleteId, athleteName, pct: data.completionPct, completedSets: data.completedSets, totalSets: data.totalSets });
+    if (includeCompletion) {
+      const c = combinedCompletion(data);
+      if (c.pct != null) completion.push({ athleteId, athleteName, pct: c.pct, completedSessions: c.completed, totalSessions: c.total });
     }
   }
 
@@ -209,6 +227,80 @@ export function computePowerSpeedBoard(athletes: SquadAthleteInput[], exerciseNa
   return { rows: topN(rows), unit, direction };
 }
 
+// 0089 — Cardio/Hyrox exercise board: same "coach picks one, squad gets
+// ranked on it" pattern as the e1RM/Power-Speed boards above, but
+// deliberately NOT a blanket "total cardio distance" or "total hyrox
+// output" standing board - Row done as a Fixed-Workout time trial and
+// Row done as 40s Cycling-Interval reps aren't the same protocol and
+// summing across them the way TTL sums across exercises would produce
+// the exact misleading number report-calc.ts's collectCardioMetrics
+// grouping fix (0084) corrected for the individual report. Instead the
+// coach picks one specific (session type, metric, exercise/modality)
+// triple and only that gets ranked - reusing the already sub-type-
+// disambiguated cardioMetricSummaries groups (0084) as the option list,
+// so this can never reintroduce that bug.
+export interface SquadCardioMetricOption {
+  sessionType: "hyrox" | "cardio";
+  key: MetricKey;
+  group: string; // already carries the sub-type suffix where relevant, e.g. "Row (Cycling Intervals)"
+}
+
+// Union of every (sessionType, metric key, group) combo logged anywhere
+// in the squad - populates the Cardio/Hyrox exercise board's picker.
+export function availableCardioHyroxMetrics(athletes: SquadAthleteInput[]): SquadCardioMetricOption[] {
+  const seen = new Map<string, SquadCardioMetricOption>();
+  for (const { data } of athletes) {
+    for (const m of data.cardioMetricSummaries) {
+      const id = `${m.sessionType}::${m.key}::${m.group}`;
+      if (!seen.has(id)) seen.set(id, { sessionType: m.sessionType, key: m.key, group: m.group });
+    }
+  }
+  return Array.from(seen.values()).sort(
+    (a, b) => a.sessionType.localeCompare(b.sessionType) || a.group.localeCompare(b.group) || a.key.localeCompare(b.key)
+  );
+}
+
+// Stable, searchable id for one option - "hyrox::distance::Row (Cycling Intervals)".
+export function cardioMetricOptionId(o: SquadCardioMetricOption): string {
+  return `${o.sessionType}::${o.key}::${o.group}`;
+}
+
+// Lower is genuinely the win for these - pace/duration on a task means
+// "finished faster", HR means "same output for less strain". Everything
+// else (distance, watts, reps, rounds, calories, load...) defaults to
+// higher-is-better.
+const LOWER_IS_BETTER: MetricKey[] = ["duration", "pace", "avg_hr", "max_hr"];
+
+export interface SquadCardioBoard {
+  rows: SquadStandingRow[];
+  unit: string;
+  direction: "lower" | "higher";
+}
+
+// Current standing (latest logged value, not an average) for one exact
+// (sessionType, key, group) triple, squad-wide. Exact match only -
+// group names here are machine-generated, already-disambiguated labels
+// (not coach-typed free text), so fuzzy matching would risk silently
+// merging two different protocols back together.
+export function computeCardioExerciseBoard(
+  athletes: SquadAthleteInput[],
+  option: SquadCardioMetricOption
+): SquadCardioBoard | null {
+  const rows: SquadStandingRow[] = [];
+  for (const { athleteId, athleteName, data } of athletes) {
+    const match = data.cardioMetricSummaries.find(
+      (m) => m.sessionType === option.sessionType && m.key === option.key && m.group === option.group
+    );
+    if (!match || !match.entries.length) continue;
+    const latest = match.entries[match.entries.length - 1];
+    rows.push({ athleteId, athleteName, value: latest.value, exerciseCount: 1 });
+  }
+  if (!rows.length) return null;
+  const direction: "lower" | "higher" = LOWER_IS_BETTER.includes(option.key) ? "lower" : "higher";
+  rows.sort((a, b) => (direction === "lower" ? a.value - b.value : b.value - a.value));
+  return { rows: topN(rows), unit: METRIC_META[option.key].unit, direction };
+}
+
 // One row per athlete, every ticked exercise as a value+%-change column
 // pair - the "full squad" matrix view (landscape PDF pages), as
 // opposed to the Top-5 leaderboards above. Deliberately NOT capped to
@@ -275,7 +367,7 @@ export function computeSquadMatrix(
         );
       }
 
-      return { athleteId, athleteName, ttlTotal, ttlByExercise, e1rmByExercise, completionPct: data.completionPct };
+      return { athleteId, athleteName, ttlTotal, ttlByExercise, e1rmByExercise, completionPct: combinedCompletion(data).pct };
     });
 }
 
