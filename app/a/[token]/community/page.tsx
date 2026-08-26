@@ -33,6 +33,7 @@ export default function AthleteCommunityPage() {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [pbs, setPbs] = useState<any[]>([]);
+  const [pbEnabled, setPbEnabled] = useState(true);
   const [groups, setGroups] = useState<any[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -68,6 +69,8 @@ export default function AthleteCommunityPage() {
         }
         setAnnouncements(annData.announcements ?? []);
         setPbs(pbData.pbs ?? []);
+        setPbEnabled(pbData.pbEnabled !== false);
+        if (pbData.pbEnabled === false && tab === "pbs") setTab("announcements");
         setGroups(chatData.groups ?? []);
         setAthleteId(chatData.athleteId ?? "");
         setAthleteName(chatData.athleteName ?? "");
@@ -171,10 +174,12 @@ export default function AthleteCommunityPage() {
           onClick={() => setTab("announcements")}>
           Announcements ({announcements.length})
         </button>
-        <button style={{ ...s.tab, ...(tab === "pbs" ? s.tabActive : {}) }}
-          onClick={() => setTab("pbs")}>
-          PB Feed ({pbs.length})
-        </button>
+        {pbEnabled && (
+          <button style={{ ...s.tab, ...(tab === "pbs" ? s.tabActive : {}) }}
+            onClick={() => setTab("pbs")}>
+            PB Feed ({pbs.length})
+          </button>
+        )}
         {groups.length > 0 && (
           <button style={{ ...s.tab, ...(tab === "chat" ? s.tabActive : {}) }}
             onClick={() => setTab("chat")}>

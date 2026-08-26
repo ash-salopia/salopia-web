@@ -251,6 +251,34 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      {/* ── Personal Bests ── */}
+      <CollapsibleSection title="Personal Bests">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable Personal Bests</div>
+              <div style={s.cardDesc}>
+                Detect and celebrate PBs across your organisation - the PB feed, celebration popup, and
+                per-athlete PB history. Turn this off if PB tracking isn&apos;t something you want to run.
+                Can also be switched off for one athlete at a time from their profile.
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.pb_enabled ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, pb_enabled: !prev.pb_enabled }))}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.pb_enabled ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
       {/* ── Check-in ── */}
       <CollapsibleSection title="Check-in">
         <div style={s.card}>

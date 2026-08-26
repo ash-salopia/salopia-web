@@ -38,6 +38,13 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceRoleClient();
 
+  // 0073 — feature's off org-wide, this is just a dead UI path once the
+  // entry point is hidden; no-op rather than error.
+  const { data: org } = await service.from("organisations").select("settings").eq("id", coach.organisation_id).single();
+  if ((org?.settings as any)?.pb_enabled === false) {
+    return NextResponse.json({ error: "Personal Bests are disabled" }, { status: 403 });
+  }
+
   // Verify the PB belongs to an athlete in THIS coach's organisation
   // before allowing the comment - stops cross-organisation writes.
   const { data: pb } = await service

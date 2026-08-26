@@ -144,6 +144,7 @@ export interface OrgSettings {
   checkin_enabled: boolean;
   checkin_rules: CheckInRules;
   hyrox_enabled: boolean;
+  pb_enabled: boolean; // 0090 — org-wide default for Personal Bests tracking/display, per-athlete override on athletes.pb_enabled (same pattern as hyrox_enabled)
   report_frequency_weeks: ReportFrequency;
   reflection_enabled: boolean;
   reflection_metrics: ReflectionMetric[];
@@ -162,6 +163,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   checkin_enabled: true,
   checkin_rules: DEFAULT_CHECKIN_RULES,
   hyrox_enabled: true,
+  pb_enabled: true,
   report_frequency_weeks: 4,
   reflection_enabled: true,
   reflection_metrics: DEFAULT_REFLECTION_METRICS,

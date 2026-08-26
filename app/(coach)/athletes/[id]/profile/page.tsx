@@ -8,6 +8,7 @@ import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete } from "@/lib/data/athletes";
 import { updateAthleteAvatar } from "@/lib/data/avatars";
 import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
+import { getOrgSettings } from "@/lib/data/settings";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
@@ -183,6 +184,8 @@ export default function AthleteProfilePage() {
   const [oneRMs, setOneRMs] = useState<AthleteOneRM[]>([]);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
+  const [orgPbEnabled, setOrgPbEnabled] = useState(true);
+  const pbEnabled = orgPbEnabled && (athlete as any)?.pb_enabled !== false;
 
   const handleAvatarUpload = async (file: File) => {
     setAvatarUploading(true);
@@ -210,6 +213,7 @@ export default function AthleteProfilePage() {
     load();
     listLibrary().then((entries) => setLibrary(entries)).catch(() => {});
     listAthleteOneRMs(athleteId).then(setOneRMs).catch(() => {});
+    getOrgSettings().then((s) => setOrgPbEnabled(s.pb_enabled !== false)).catch(() => {});
   }, [athleteId]);
 
   const load = async () => {
@@ -496,6 +500,41 @@ export default function AthleteProfilePage() {
           </button>
         </div>
 
+        <div style={{ ...p.checkinCard, marginTop: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Personal Bests</div>
+            <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
+              {(athlete as any).pb_enabled !== false
+                ? "PB tracking is enabled for this athlete."
+                : "PB tracking is disabled for this athlete - no new PBs will be detected, celebrated, or shown for them."}
+            </div>
+          </div>
+          <button
+            style={{
+              width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
+              background: (athlete as any).pb_enabled !== false ? "var(--accent)" : "var(--panel2)",
+              position: "relative" as const, flexShrink: 0, transition: "background 0.2s",
+            }}
+            onClick={async () => {
+              const current = (athlete as any).pb_enabled;
+              const next = current === false ? true : false;
+              setAthlete((prev) => prev ? { ...prev, pb_enabled: next } as any : prev);
+              const supabase = createClient();
+              const { error: upErr } = await supabase.from("athletes").update({ pb_enabled: next }).eq("id", athleteId);
+              if (upErr) {
+                setAthlete((prev) => prev ? { ...prev, pb_enabled: current } as any : prev);
+                setError("Could not update Personal Bests setting: " + upErr.message);
+              }
+            }}
+          >
+            <div style={{
+              position: "absolute" as const, top: 3, left: 3, width: 18, height: 18,
+              borderRadius: "50%", background: "#fff", transition: "transform 0.2s",
+              transform: (athlete as any).pb_enabled !== false ? "translateX(20px)" : "translateX(0)",
+            }} />
+          </button>
+        </div>
+
         {/* Date of birth + sex - used for testing age calculation */}
         <div style={{ ...p.checkinCard, marginTop: 8, flexDirection: "column" as const, alignItems: "flex-start", gap: 10 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Athlete details</div>
@@ -679,7 +718,8 @@ export default function AthleteProfilePage() {
         )}
       </div>
 
-      {/* PBs */}
+      {/* PBs - hidden entirely when PB tracking is off for this athlete (org setting AND athlete override) */}
+      {pbEnabled && (
       <div style={p.section}>
         <div style={p.sectionTitle}>🏆 Personal bests</div>
         <p style={p.sectionHint}>Click any exercise to see weight progression over time.</p>
@@ -922,6 +962,7 @@ export default function AthleteProfilePage() {
           </div>
         )}
       </div>
+      )}
 
       {exportOpen && (
         <ExportModal

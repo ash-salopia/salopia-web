@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken, getOrgSettingsForAthlete } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { feedDisplayName } from "@/lib/feed-name";
 
@@ -10,6 +10,12 @@ export async function GET(request: Request) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+
+  // 0073 — the PB Feed is a shared, org-wide view, so it's gated on the
+  // org-level toggle alone (a per-athlete override governs that
+  // athlete's own PB tracking/display, not a multi-athlete feed).
+  const orgSettings = await getOrgSettingsForAthlete(athlete.id);
+  if (orgSettings.pb_enabled === false) return NextResponse.json({ pbs: [], pbEnabled: false });
 
   const supabase = createServiceRoleClient();
 
@@ -41,7 +47,7 @@ export async function GET(request: Request) {
       return { ...pb, athlete: a ? { id: a.id, name: feedDisplayName(a.name, a.feed_first_name_only) } : a };
     });
 
-  return NextResponse.json({ pbs: visible });
+  return NextResponse.json({ pbs: visible, pbEnabled: true });
 }
 
 export async function DELETE(req: NextRequest) {

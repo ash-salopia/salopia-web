@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken, getOrgSettingsForAthlete } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 
 // GET /api/athlete-link/exercise-history?token=...&exercise_name=...
@@ -43,20 +43,28 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // 0073 — skip the PB fetch entirely when PB tracking is off for this
+  // athlete (org setting or their own override).
+  const orgSettings = await getOrgSettingsForAthlete(athlete.id);
+  const pbEnabled = orgSettings.pb_enabled !== false && (athlete as any).pb_enabled !== false;
+
   // Current PB — could be weighted, bodyweight+reps, or bodyweight+time
   // (see detectPB's docstring in log/route.ts for the three shapes).
   // This endpoint only knows the exercise NAME, not whether it's
   // currently flagged bodyweight, so check all three shapes and use
   // whichever one this exercise actually has data in.
-  const pbSelect = "weight_kg, reps, time_seconds, date";
-  const pbBase = () =>
-    supabase.from("personal_bests").select(pbSelect).eq("athlete_id", athlete.id).ilike("exercise_name", exerciseName);
-  const [{ data: weightedPb }, { data: repsPb }, { data: timePb }] = await Promise.all([
-    pbBase().not("weight_kg", "is", null).order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
-    pbBase().is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false }).limit(1).maybeSingle(),
-    pbBase().not("time_seconds", "is", null).order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
-  ]);
-  const pbRow = weightedPb ?? repsPb ?? timePb ?? null;
+  let pbRow: { weight_kg: number | null; reps: number | null; time_seconds: number | null; date: string } | null = null;
+  if (pbEnabled) {
+    const pbSelect = "weight_kg, reps, time_seconds, date";
+    const pbBase = () =>
+      supabase.from("personal_bests").select(pbSelect).eq("athlete_id", athlete.id).ilike("exercise_name", exerciseName);
+    const [{ data: weightedPb }, { data: repsPb }, { data: timePb }] = await Promise.all([
+      pbBase().not("weight_kg", "is", null).order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
+      pbBase().is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false }).limit(1).maybeSingle(),
+      pbBase().not("time_seconds", "is", null).order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    pbRow = weightedPb ?? repsPb ?? timePb ?? null;
+  }
 
   // Build a per-session summary (best set each session). Shape-agnostic
   // heuristic — compare by weight if any set has one, else by time, else

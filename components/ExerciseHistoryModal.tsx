@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatPBValue } from "@/lib/data/personal-bests";
+import { getOrgSettings } from "@/lib/data/settings";
 
 interface HistorySet {
   weight: string;
@@ -111,6 +112,15 @@ export default function ExerciseHistoryModal({ athleteId, exerciseName, currentS
       }
 
       setHistory(entries);
+
+      // 0073 — skip the PB fetch (and the banner it feeds) entirely when
+      // PB tracking is off for this athlete, org setting or override.
+      const [orgSettings, { data: athleteRow }] = await Promise.all([
+        getOrgSettings().catch(() => null),
+        supabase.from("athletes").select("pb_enabled").eq("id", athleteId).maybeSingle(),
+      ]);
+      const pbEnabled = orgSettings?.pb_enabled !== false && (athleteRow as any)?.pb_enabled !== false;
+      if (!pbEnabled) { setPb(null); return; }
 
       // Fetch PB — could be weighted, bodyweight+reps, or bodyweight+time
       // (see detectPB's docstring in app/api/athlete-link/log/route.ts).

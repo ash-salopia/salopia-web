@@ -196,8 +196,12 @@ export default function DashboardPage() {
         }
 
         // ── Recent PBs (last 7 days) ──────────────────────────────────────────
-        const pbs = await listRecentOrgPBs(7).catch(() => [] as PersonalBest[]);
-        setRecentPBs(pbs);
+        if (orgSettings?.pb_enabled !== false) {
+          const pbs = await listRecentOrgPBs(7).catch(() => [] as PersonalBest[]);
+          setRecentPBs(pbs);
+        } else {
+          setRecentPBs([]);
+        }
 
         // ── Unread session comments ───────────────────────────────────────────
         const notes = await listUnacknowledgedSessionNotes().catch(() => [] as SessionNoteAlert[]);

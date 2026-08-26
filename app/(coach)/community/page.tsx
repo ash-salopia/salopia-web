@@ -13,6 +13,7 @@ import {
   listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, formatPBValue, type PersonalBest,
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
+import { getOrgSettings } from "@/lib/data/settings";
 import GroupChat from "@/components/GroupChat";
 
 type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
@@ -52,6 +53,7 @@ export default function CommunityPage() {
   const [error, setError] = useState("");
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
+  const [pbEnabled, setPbEnabled] = useState(true);
   const [orgAthletes, setOrgAthletes] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
@@ -67,6 +69,10 @@ export default function CommunityPage() {
       });
     });
     loadAll();
+    getOrgSettings().then((s) => {
+      setPbEnabled(s.pb_enabled !== false);
+      if (s.pb_enabled === false) setTab((t) => (t === "feed" ? "groups" : t));
+    }).catch(() => {});
   }, []);
 
   const loadAll = async () => {
@@ -103,7 +109,7 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).map((t) => (
+        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).filter((t) => t !== "feed" || pbEnabled).map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}

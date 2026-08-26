@@ -35,11 +35,17 @@ export async function POST(request: NextRequest) {
 
   const { data: athlete } = await supabase
     .from("athletes")
-    .select("id, organisation_id")
+    .select("id, organisation_id, pb_enabled")
     .eq("id", athleteId)
     .eq("organisation_id", coach.organisation_id)
     .maybeSingle();
   if (!athlete) return NextResponse.json({ error: "Athlete not found in your organisation" }, { status: 404 });
+
+  // 0073 — PB tracking off (org setting or this athlete's override)
+  // skips detection entirely, mirroring the athlete-app log route.
+  const { data: org } = await supabase.from("organisations").select("settings").eq("id", coach.organisation_id).single();
+  const pbEnabled = (org?.settings as any)?.pb_enabled !== false && (athlete as any).pb_enabled !== false;
+  if (!pbEnabled) return NextResponse.json({ ok: true, skipped: true });
 
   // 3. Verify the exercise/session actually belong to this athlete —
   //    stops a coach's own compromised session from writing a PB

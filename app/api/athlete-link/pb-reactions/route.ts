@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken, getOrgSettingsForAthlete } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { feedDisplayName } from "@/lib/feed-name";
 
@@ -17,6 +17,11 @@ export async function POST(req: NextRequest) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+
+  // 0073 — feature's off, this is just a dead UI path once the entry
+  // point is hidden; no-op rather than error.
+  const orgSettings = await getOrgSettingsForAthlete(athlete.id);
+  if (orgSettings.pb_enabled === false) return NextResponse.json({ error: "Personal Bests are disabled" }, { status: 403 });
 
   const supabase = createServiceRoleClient();
 
