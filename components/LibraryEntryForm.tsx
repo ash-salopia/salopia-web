@@ -7,7 +7,51 @@
 import { useState } from "react";
 import type { LibraryEntry } from "@/types";
 import { MetricToggles, DistanceUnitPills } from "@/components/MetricBoxes";
-import { EQUIPMENT_ORDER, EQUIPMENT_META, metricsForEquipment, type MetricKey, type EquipmentType, type DistanceUnit } from "@/lib/cardio-metrics";
+import { METRIC_META, EQUIPMENT_ORDER, EQUIPMENT_META, metricsForEquipment, type MetricKey, type EquipmentType, type DistanceUnit } from "@/lib/cardio-metrics";
+
+const MAX_KEY_METRICS = 5;
+
+// Which metrics show as ticked-visible checkboxes by default everywhere
+// this exercise is used (the rest tucked behind "More") - independent
+// of default_tracked_metrics above (a metric can be key without being
+// pre-ticked, and vice versa). A flat capped picker rather than
+// MetricToggles itself, since MetricToggles' own "key metrics" collapse
+// behaviour doesn't make sense applied recursively to the control that
+// picks what "key" even means (0076).
+function KeyMetricsPicker({ selected, onChange, available }: {
+  selected: MetricKey[]; onChange: (next: MetricKey[]) => void; available: MetricKey[];
+}) {
+  const toggle = (key: MetricKey) => {
+    if (selected.includes(key)) { onChange(selected.filter((k) => k !== key)); return; }
+    if (selected.length >= MAX_KEY_METRICS) return;
+    onChange([...selected, key]);
+  };
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {available.map((key) => {
+        const on = selected.includes(key);
+        const disabled = !on && selected.length >= MAX_KEY_METRICS;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => toggle(key)}
+            disabled={disabled}
+            style={{
+              background: on ? "var(--accent-dim)" : "var(--ink)",
+              border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+              color: on ? "var(--accent)" : disabled ? "var(--line)" : "var(--mute)",
+              borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600,
+              cursor: disabled ? "not-allowed" : "pointer",
+            }}
+          >
+            {METRIC_META[key].label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // Sensible starting distance unit per equipment, applied when a coach
 // picks that equipment (still freely overridable) - an Erg is
@@ -17,7 +61,17 @@ const EQUIPMENT_DISTANCE_UNIT: Partial<Record<EquipmentType, DistanceUnit>> = {
   erg: "m", treadmill: "km", bike: "km",
 };
 
-const SESSION_TYPES = ["Strength", "Power/Speed", "Cardio", "Hyrox"];
+// `value` is the string actually persisted into library_entries.types
+// (and checked everywhere else in the app, e.g. cardioFields below) -
+// kept as "Hyrox" so every existing library entry's stored data still
+// matches. `label` is display-only ("Hybrid") - the rename to Hybrid is
+// cosmetic, not a data migration (see the wider Hyrox->Hybrid rename).
+const SESSION_TYPES: { value: string; label: string }[] = [
+  { value: "Strength", label: "Strength" },
+  { value: "Power/Speed", label: "Power/Speed" },
+  { value: "Cardio", label: "Cardio" },
+  { value: "Hyrox", label: "Hybrid" },
+];
 
 export default function LibraryEntryForm({
   entry,
@@ -47,6 +101,7 @@ export default function LibraryEntryForm({
   const [eachSide, setEachSide] = useState(entry?.each_side ?? false);
   const [usePercent1rm, setUsePercent1rm] = useState(entry?.use_percent_1rm ?? false);
   const [defaultTrackedMetrics, setDefaultTrackedMetrics] = useState<MetricKey[]>(entry?.default_tracked_metrics ?? []);
+  const [defaultKeyMetrics, setDefaultKeyMetrics] = useState<MetricKey[]>(entry?.default_key_metrics ?? []);
   const [equipment, setEquipment] = useState<EquipmentType | null>(entry?.equipment ?? null);
   const [defaultDistanceUnit, setDefaultDistanceUnit] = useState<DistanceUnit>(entry?.default_distance_unit ?? "km");
 
@@ -60,6 +115,7 @@ export default function LibraryEntryForm({
     // (nothing to prune - None allows everything).
     if (next) {
       setDefaultTrackedMetrics(metricsForEquipment(next));
+      setDefaultKeyMetrics(metricsForEquipment(next).slice(0, MAX_KEY_METRICS));
       const suggestedUnit = EQUIPMENT_DISTANCE_UNIT[next];
       if (suggestedUnit) setDefaultDistanceUnit(suggestedUnit);
     }
@@ -88,6 +144,7 @@ export default function LibraryEntryForm({
       each_side: eachSide,
       use_percent_1rm: isBodyweight ? false : usePercent1rm,
       default_tracked_metrics: cardioFields ? defaultTrackedMetrics : [],
+      default_key_metrics: cardioFields ? defaultKeyMetrics : [],
       equipment: cardioFields ? equipment : null,
       default_distance_unit: cardioFields && defaultTrackedMetrics.includes("distance") ? defaultDistanceUnit : null,
     } as Partial<LibraryEntry> & { name: string });
@@ -108,13 +165,13 @@ export default function LibraryEntryForm({
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {SESSION_TYPES.map((t) => (
             <button
-              key={t}
+              key={t.value}
               type="button"
-              onClick={() => toggleType(t)}
+              onClick={() => toggleType(t.value)}
               style={{
-                background: types.includes(t) ? "var(--accent-dim)" : "var(--ink)",
-                border: `1px solid ${types.includes(t) ? "var(--accent)" : "var(--line)"}`,
-                color: types.includes(t) ? "var(--accent)" : "var(--mute)",
+                background: types.includes(t.value) ? "var(--accent-dim)" : "var(--ink)",
+                border: `1px solid ${types.includes(t.value) ? "var(--accent)" : "var(--line)"}`,
+                color: types.includes(t.value) ? "var(--accent)" : "var(--mute)",
                 borderRadius: 6,
                 padding: "5px 10px",
                 fontSize: 12,
@@ -122,12 +179,12 @@ export default function LibraryEntryForm({
                 cursor: "pointer",
               }}
             >
-              {t}
+              {t.label}
             </button>
           ))}
         </div>
         <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
-          Determines which fields below apply - e.g. Cardio/Hyrox hide the strength-only fields
+          Determines which fields below apply - e.g. Cardio/Hybrid hide the strength-only fields
         </div>
       </FieldRow>
       <FieldRow label="Video URL">
@@ -229,10 +286,18 @@ export default function LibraryEntryForm({
               Picking equipment auto-ticks the metrics it supports below - restricts what can be ticked to just those. Leave as "None" for no restriction.
             </div>
           </FieldRow>
-          <FieldRow label="Tracking metrics">
-            <MetricToggles tracked={defaultTrackedMetrics} onChange={setDefaultTrackedMetrics} available={metricsForEquipment(equipment ?? undefined)} />
+          <FieldRow label="Key metrics (shown by default, up to 5)">
+            <KeyMetricsPicker selected={defaultKeyMetrics} onChange={setDefaultKeyMetrics} available={metricsForEquipment(equipment ?? undefined)} />
             <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
-              Pre-ticked whenever this exercise is added to a Hyrox/Cardio session — a
+              These show as checkboxes straight away wherever this exercise is used — everything
+              else sits behind a &quot;More&quot; toggle to keep the session builder uncluttered.
+              Doesn&apos;t need to match what&apos;s pre-ticked below.
+            </div>
+          </FieldRow>
+          <FieldRow label="Tracking metrics">
+            <MetricToggles tracked={defaultTrackedMetrics} onChange={setDefaultTrackedMetrics} available={metricsForEquipment(equipment ?? undefined)} keyMetrics={defaultKeyMetrics} />
+            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+              Pre-ticked whenever this exercise is added to a Hybrid/Cardio session — a
               coach can still adjust it for an individual exercise from there
             </div>
           </FieldRow>

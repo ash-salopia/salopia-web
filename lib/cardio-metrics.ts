@@ -147,6 +147,27 @@ export function resolveTrackedMetrics(
   return fallback;
 }
 
+// Resolves which metrics should show as "key" (visible by default,
+// rest tucked behind MetricToggles' "More") for an exercise instance:
+// an explicit per-instance override wins, else the picked library
+// exercise's own default_key_metrics (coach-configured in Settings →
+// Library), else - if the entry has an equipment type but was never
+// given explicit key metrics - the first 5 metrics that equipment
+// supports. Falls back to an empty list, which tells MetricToggles to
+// use its own generic "first 5 of whatever's available" default.
+// Independent of resolveTrackedMetrics - a metric can be key without
+// being tracked by default, and vice versa (0076).
+export function resolveKeyMetrics(
+  existing: MetricKey[] | undefined,
+  libraryEntry: { default_key_metrics?: MetricKey[]; equipment?: EquipmentType | null } | undefined,
+  fallback: MetricKey[]
+): MetricKey[] {
+  if (existing) return existing;
+  if (libraryEntry?.default_key_metrics?.length) return libraryEntry.default_key_metrics;
+  if (libraryEntry?.equipment) return metricsForEquipment(libraryEntry.equipment).slice(0, 5);
+  return fallback;
+}
+
 // Which metrics an exercise with this equipment is allowed to track -
 // "other"/unset means unrestricted (today's full list), so an exercise
 // with no equipment set keeps working exactly as before (0071).

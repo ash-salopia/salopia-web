@@ -51,6 +51,7 @@ export async function saveLibraryEntry(
         default_tracked_metrics: entry.default_tracked_metrics ?? existing.default_tracked_metrics ?? [],
         equipment: entry.equipment !== undefined ? entry.equipment : existing.equipment,
         default_distance_unit: entry.default_distance_unit !== undefined ? entry.default_distance_unit : existing.default_distance_unit,
+        default_key_metrics: entry.default_key_metrics ?? existing.default_key_metrics ?? [],
       })
       .eq("id", existing.id)
       .select()
@@ -81,6 +82,7 @@ export async function saveLibraryEntry(
       default_tracked_metrics: entry.default_tracked_metrics ?? [],
       equipment: entry.equipment ?? null,
       default_distance_unit: entry.default_distance_unit ?? null,
+      default_key_metrics: entry.default_key_metrics ?? [],
     })
     .select()
     .single();

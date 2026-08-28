@@ -19,7 +19,7 @@ import {
   unlockAudio, stopKeepAlive, playCountdownBeep, playDing, playDoneBeep, setSoundMuted,
 } from "@/lib/timer-audio";
 import { MetricToggles, MetricBoxes, DistanceUnitPills } from "@/components/MetricBoxes";
-import { DEFAULT_TRACKED_METRICS, resolveTrackedMetrics, metricsForEquipment, type MetricKey, type MetricValues, type DistanceUnit } from "@/lib/cardio-metrics";
+import { DEFAULT_TRACKED_METRICS, resolveTrackedMetrics, resolveKeyMetrics, metricsForEquipment, type MetricKey, type MetricValues, type DistanceUnit } from "@/lib/cardio-metrics";
 import { saveLibraryEntry } from "@/lib/data/library";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
 
@@ -83,7 +83,7 @@ function DistanceUnitPresetRow({ tracked, value, onChange }: {
 // that gives every sub-type builder its tracked list with a sensible
 // default (tick nothing by hand, still get useful boxes) the first
 // time it renders.
-function TrackedMetricsRow({ cfg, upd, subType, available }: { cfg: any; upd: (p: any) => void; subType: string; available?: MetricKey[] }) {
+function TrackedMetricsRow({ cfg, upd, subType, available, keyMetrics }: { cfg: any; upd: (p: any) => void; subType: string; available?: MetricKey[]; keyMetrics?: MetricKey[] }) {
   const tracked: MetricKey[] = cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS[subType] ?? [];
   useEffect(() => {
     if (!cfg.tracked_metrics) upd({ tracked_metrics: tracked });
@@ -92,7 +92,7 @@ function TrackedMetricsRow({ cfg, upd, subType, available }: { cfg: any; upd: (p
   return (
     <>
       <div style={s.dayLabelRow}>Session avg/total</div>
-      <MetricToggles tracked={tracked} onChange={(next) => upd({ tracked_metrics: next })} available={available} />
+      <MetricToggles tracked={tracked} onChange={(next) => upd({ tracked_metrics: next })} available={available} keyMetrics={keyMetrics ?? cfg.key_metrics} />
       <DistanceUnitPresetRow tracked={tracked} value={cfg.default_distance_unit ?? "km"} onChange={(next) => upd({ default_distance_unit: next })} />
     </>
   );
@@ -102,15 +102,16 @@ function TrackedMetricsRow({ cfg, upd, subType, available }: { cfg: any; upd: (p
 // defaults from the picked library exercise (LibraryEntry.default_tracked_metrics),
 // overridable per instance so a coach can e.g. untick distance on one
 // exercise without touching the others in the same cycle/circuit (0070).
-function ExerciseMetricsRow({ tracked, values, onTrackedChange, onValuesChange, available, defaultDistanceUnit, onDefaultDistanceUnitChange }: {
+function ExerciseMetricsRow({ tracked, values, onTrackedChange, onValuesChange, available, keyMetrics, defaultDistanceUnit, onDefaultDistanceUnitChange }: {
   tracked: MetricKey[]; values: MetricValues;
   onTrackedChange: (next: MetricKey[]) => void; onValuesChange: (next: MetricValues) => void;
   available?: MetricKey[]; // restricts which metrics are selectable, e.g. by the exercise's equipment (0071)
+  keyMetrics?: MetricKey[]; // shown by default before "More" - from LibraryEntry.default_key_metrics (0076)
   defaultDistanceUnit: DistanceUnit; onDefaultDistanceUnitChange: (next: DistanceUnit) => void;
 }) {
   return (
     <div style={{ marginLeft: 32, marginBottom: 4 }}>
-      <MetricToggles tracked={tracked} onChange={onTrackedChange} available={available} />
+      <MetricToggles tracked={tracked} onChange={onTrackedChange} available={available} keyMetrics={keyMetrics} />
       <DistanceUnitPresetRow tracked={tracked} value={defaultDistanceUnit} onChange={onDefaultDistanceUnitChange} />
       <MetricBoxes tracked={tracked} values={values} onChange={onValuesChange} size="compact" defaultDistanceUnit={defaultDistanceUnit} />
     </div>
@@ -122,13 +123,14 @@ function ExerciseMetricsRow({ tracked, values, onTrackedChange, onValuesChange, 
 // per-exercise config set here, but the actual round-by-round values
 // (Row round 1, Row round 2, ...) are entered where the workout is
 // actually performed, in HyroxCardioLog (0071).
-function ExerciseTrackToggle({ tracked, onTrackedChange, available, defaultDistanceUnit, onDefaultDistanceUnitChange }: {
+function ExerciseTrackToggle({ tracked, onTrackedChange, available, keyMetrics, defaultDistanceUnit, onDefaultDistanceUnitChange }: {
   tracked: MetricKey[]; onTrackedChange: (next: MetricKey[]) => void; available?: MetricKey[];
+  keyMetrics?: MetricKey[]; // shown by default before "More" - from LibraryEntry.default_key_metrics (0076)
   defaultDistanceUnit: DistanceUnit; onDefaultDistanceUnitChange: (next: DistanceUnit) => void;
 }) {
   return (
     <div style={{ marginLeft: 32, marginBottom: 4 }}>
-      <MetricToggles tracked={tracked} onChange={onTrackedChange} available={available} />
+      <MetricToggles tracked={tracked} onChange={onTrackedChange} available={available} keyMetrics={keyMetrics} />
       <DistanceUnitPresetRow tracked={tracked} value={defaultDistanceUnit} onChange={onDefaultDistanceUnitChange} />
     </div>
   );
@@ -338,6 +340,7 @@ function HyroxFixed({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; li
                   tracked_metrics: entry
                     ? resolveTrackedMetrics(undefined, entry, DEFAULT_TRACKED_METRICS.fixed).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
                     : step.tracked_metrics,
+                  key_metrics: entry ? resolveKeyMetrics(undefined, entry, []) : step.key_metrics,
                 })} />
               <input value={step.target} placeholder="Target" onChange={e => updStep(i, { target: e.target.value })}
                 style={{ ...s.miniInput, width: 90 }} />
@@ -351,6 +354,7 @@ function HyroxFixed({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; li
               onTrackedChange={(next) => updStep(i, { tracked_metrics: next })}
               onValuesChange={(next) => updStep(i, { metrics: next })}
               available={available}
+              keyMetrics={step.key_metrics}
               defaultDistanceUnit={step.default_distance_unit ?? "km"}
               onDefaultDistanceUnitChange={(next) => updStep(i, { default_distance_unit: next })}
             />
@@ -416,6 +420,7 @@ function HyroxCycling({ cfg, upd, library, color }: { cfg: any; upd: (p: any) =>
                   tracked_metrics: entry
                     ? resolveTrackedMetrics(undefined, entry, ex.tracked_metrics ?? []).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
                     : ex.tracked_metrics,
+                  key_metrics: entry ? resolveKeyMetrics(undefined, entry, []) : ex.key_metrics,
                 })} />
               <input value={ex.reps} placeholder="Reps / target" onChange={e => updE(i, { reps: e.target.value })}
                 style={{ ...s.miniInput, width: 100 }} />
@@ -425,6 +430,7 @@ function HyroxCycling({ cfg, upd, library, color }: { cfg: any; upd: (p: any) =>
               tracked={tracked}
               onTrackedChange={(next) => updE(i, { tracked_metrics: next })}
               available={available}
+              keyMetrics={ex.key_metrics}
               defaultDistanceUnit={ex.default_distance_unit ?? "km"}
               onDefaultDistanceUnitChange={(next) => updE(i, { default_distance_unit: next })}
             />
@@ -515,6 +521,7 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
               tracked_metrics: entry
                 ? resolveTrackedMetrics(undefined, entry, DEFAULT_TRACKED_METRICS.interval).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
                 : cfg.tracked_metrics,
+              key_metrics: entry ? resolveKeyMetrics(undefined, entry, []) : cfg.key_metrics,
             })} />
         </Field>
         <Field label="Load"><input value={cfg.load || ""} placeholder="e.g. BW / 80kg" onChange={e => upd({ load: e.target.value })} style={s.miniInput} /></Field>
@@ -522,7 +529,7 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
         <Field label="Work (s)"><input inputMode="numeric" value={cfg.workSec ?? 120} onChange={e => upd({ workSec: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Rest (s)"><input inputMode="numeric" value={cfg.restSec ?? 90} onChange={e => upd({ restSec: e.target.value })} style={s.miniInput} /></Field>
       </div>
-      <TrackedMetricsRow cfg={cfg} upd={upd} subType="interval" available={metricsForEquipment(cfg.equipment)} />
+      <TrackedMetricsRow cfg={cfg} upd={upd} subType="interval" available={metricsForEquipment(cfg.equipment)} keyMetrics={cfg.key_metrics} />
       <div style={s.dayLabelRow}>Log each set</div>
       {Array.from({ length: sets }, (_, i) => {
         const metricsArr: MetricValues[] = cfg.metrics || [];
@@ -597,6 +604,7 @@ function HyroxCircuit({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; 
                   tracked_metrics: entry
                     ? resolveTrackedMetrics(undefined, entry, ex.tracked_metrics ?? []).filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
                     : ex.tracked_metrics,
+                  key_metrics: entry ? resolveKeyMetrics(undefined, entry, []) : ex.key_metrics,
                 })} />
               <input value={ex.reps} placeholder="Reps/dist" onChange={e => updE(i, { reps: e.target.value })}
                 style={{ ...s.miniInput, width: 80 }} />
@@ -606,6 +614,7 @@ function HyroxCircuit({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; 
               tracked={tracked}
               onTrackedChange={(next) => updE(i, { tracked_metrics: next })}
               available={available}
+              keyMetrics={ex.key_metrics}
               defaultDistanceUnit={ex.default_distance_unit ?? "km"}
               onDefaultDistanceUnitChange={(next) => updE(i, { default_distance_unit: next })}
             />
@@ -737,10 +746,11 @@ function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
                   tracked_metrics: entry
                     ? blockTracked.filter((k) => metricsForEquipment(entry.equipment ?? undefined).includes(k))
                     : b.tracked_metrics,
+                  key_metrics: entry ? resolveKeyMetrics(undefined, entry, []) : b.key_metrics,
                 })} />
             </Field>
             <div style={{ marginTop: 8 }}>
-              <MetricToggles tracked={blockTracked} onChange={(next) => updBlock(i, { tracked_metrics: next })} available={metricsForEquipment(blockEquipment)} />
+              <MetricToggles tracked={blockTracked} onChange={(next) => updBlock(i, { tracked_metrics: next })} available={metricsForEquipment(blockEquipment)} keyMetrics={b.key_metrics} />
               <DistanceUnitPresetRow tracked={blockTracked} value={blockDistanceUnit} onChange={(next) => updBlock(i, { default_distance_unit: next })} />
               <MetricBoxes tracked={blockTracked} values={b.metrics ?? {}} onChange={(v) => updBlock(i, { metrics: v })} size="compact" defaultDistanceUnit={blockDistanceUnit} />
             </div>

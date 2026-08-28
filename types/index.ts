@@ -74,6 +74,7 @@ export interface LibraryEntry {
   default_tracked_metrics: import("@/lib/cardio-metrics").MetricKey[]; // 0070 — Cardio/Hyrox only: default applied when this entry is loaded into a hyrox_config/cardio_config exercise
   equipment: import("@/lib/cardio-metrics").EquipmentType | null; // 0071 — Cardio/Hyrox only: restricts which metrics this exercise can track (see EQUIPMENT_META); null = unrestricted
   default_distance_unit: import("@/lib/cardio-metrics").DistanceUnit | null; // 0075 — Cardio/Hyrox only: starting unit for this exercise's distance box(es) when loaded into a session, e.g. an Erg defaults to metres, a Treadmill to km
+  default_key_metrics: import("@/lib/cardio-metrics").MetricKey[]; // 0076 — Cardio/Hyrox only: up to 5 metrics shown by default (rest behind "More") when this entry is loaded into a session; independent of default_tracked_metrics
 }
 
 // ------------------------------------------------------------
@@ -182,6 +183,7 @@ export interface HyroxFixedConfig {
     tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_tracked_metrics when picked from the library (0070)
     equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked - restricts tracked_metrics to that equipment's set (0071)
     default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for this step's distance box (0074)
+    key_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_key_metrics when picked from the library (0076)
   }[];
   metrics?: import("@/lib/cardio-metrics").MetricValues; // whole-session result (e.g. avg HR, calories), separate from each step's own metrics (0070)
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
@@ -205,6 +207,7 @@ export interface HyroxCyclingConfig {
     tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_tracked_metrics when picked from the library (0070)
     equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked - restricts tracked_metrics to that equipment's set (0071)
     default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for this exercise's distance box(es) (0074)
+    key_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_key_metrics when picked from the library (0076)
   }[];
   workSec: number;
   restSec: number;
@@ -244,6 +247,7 @@ export interface HyroxIntervalConfig {
   tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[];
   equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked (0071)
   default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for each set's distance box (0074)
+  key_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // defaults from LibraryEntry.default_key_metrics when `exercise` is picked from the library (0076)
 }
 export interface HyroxCircuitConfig {
   isAmrap: boolean;
@@ -260,6 +264,7 @@ export interface HyroxCircuitConfig {
     tracked_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_tracked_metrics when picked from the library (0070)
     equipment?: import("@/lib/cardio-metrics").EquipmentType; // copied from LibraryEntry.equipment when picked - restricts tracked_metrics to that equipment's set (0071)
     default_distance_unit?: import("@/lib/cardio-metrics").DistanceUnit; // coach-set starting unit for this exercise's distance box(es) (0074)
+    key_metrics?: import("@/lib/cardio-metrics").MetricKey[]; // per-exercise override, defaults from LibraryEntry.default_key_metrics when picked from the library (0076)
   }[];
   roundsDone: boolean[];
   metrics?: import("@/lib/cardio-metrics").MetricValues; // whole-session result (e.g. avg HR, calories) - "Session avg/total" (0071)
