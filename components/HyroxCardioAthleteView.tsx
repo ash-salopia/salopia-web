@@ -86,7 +86,7 @@ export default function HyroxCardioAthleteView({
       <button style={styles.backLink} onClick={onBack}>← Back to sessions</button>
       <div style={styles.header}>
         <div style={styles.title}>{session.name}</div>
-        <div style={styles.typeTag}>{isHyrox ? (HYROX_LABEL[subType] ?? "Hyrox") : (CARDIO_LABEL[subType] ?? "Cardio")}</div>
+        <div style={styles.typeTag}>{isHyrox ? (HYROX_LABEL[subType] ?? "Hybrid") : (CARDIO_LABEL[subType] ?? "Cardio")}</div>
       </div>
       {error && <div style={styles.errorBox}>{error}</div>}
       {saving && <div style={styles.savingNote}>Saving…</div>}

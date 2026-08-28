@@ -12,7 +12,7 @@ import { isPushSupported, currentPushSubscription, subscribeToPush } from "@/lib
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
   strength: { label: "Strength", color: "#3B8BEB", short: "Str" },
-  hyrox:    { label: "Hyrox",    color: "#B388FF", short: "Hyr" },
+  hyrox:    { label: "Hybrid",   color: "#B388FF", short: "Hyb" },
   cardio:   { label: "Cardio",   color: "#4DC3FF", short: "Car" },
   power_speed: { label: "Power/Speed", color: "#A855F7", short: "P/S" },
   recovery: { label: "Recovery", color: "#2DD4BF", short: "Rec" },

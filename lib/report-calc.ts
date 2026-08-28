@@ -217,7 +217,7 @@ function extractMetricEntries(session: Session): GroupedMetricEntry[] {
   const isHyrox = session.type === "hyrox";
   const subType = (isHyrox ? session.hyrox_type : (session as any).cardio_type) as string;
   const cfg: any = (isHyrox ? session.hyrox_config : (session as any).cardio_config) ?? {};
-  const sessionLabel = isHyrox ? (HYROX_GROUP_LABEL[subType] ?? "Hyrox") : (CARDIO_GROUP_LABEL[subType] ?? "Cardio");
+  const sessionLabel = isHyrox ? (HYROX_GROUP_LABEL[subType] ?? "Hybrid") : (CARDIO_GROUP_LABEL[subType] ?? "Cardio");
 
   // fixed/cycling/circuit: each exercise's own result(s) (e.g. Row: 560m,
   // grouped under "Row") plus the one whole-session result (e.g. avg HR,
@@ -288,7 +288,7 @@ function collectCardioMetrics(sessions: Session[]): { exMap: CardioMetricMap; su
     if (sess.is_primer) continue;
     const sessionType = sess.type as "hyrox" | "cardio";
     const subType = ((sessionType === "hyrox" ? sess.hyrox_type : (sess as any).cardio_type) as string) ?? "";
-    const sessionLabel = sessionType === "hyrox" ? (HYROX_GROUP_LABEL[subType] ?? "Hyrox") : (CARDIO_GROUP_LABEL[subType] ?? "Cardio");
+    const sessionLabel = sessionType === "hyrox" ? (HYROX_GROUP_LABEL[subType] ?? "Hybrid") : (CARDIO_GROUP_LABEL[subType] ?? "Cardio");
     const entries = extractMetricEntries(sess);
     if (!entries.length) continue;
     for (const key of METRIC_ORDER) {

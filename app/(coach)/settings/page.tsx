@@ -229,10 +229,10 @@ export default function SettingsPage() {
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={s.cardLabel}>Enable Hyrox sessions</div>
+              <div style={s.cardLabel}>Enable Hybrid sessions</div>
               <div style={s.cardDesc}>
-                Show the Hyrox session type when creating sessions for athletes.
-                Turn this off if your coaching business doesn&apos;t programme Hyrox training.
+                Show the Hybrid session type when creating sessions for athletes.
+                Turn this off if your coaching business doesn&apos;t programme Hybrid training.
               </div>
             </div>
             <button

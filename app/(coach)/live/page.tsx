@@ -16,7 +16,7 @@ import type { Athlete, Session, SessionType, SetLog, SessionExercise } from "@/t
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
-  hyrox:       { label: "Hyrox",       color: "#B388FF", dim: "#2a2240" },
+  hyrox:       { label: "Hybrid",      color: "#B388FF", dim: "#2a2240" },
   cardio:      { label: "Cardio",      color: "#4DC3FF", dim: "#1a2c38" },
   power_speed: { label: "Power/Speed", color: "#A855F7", dim: "#2a1a4a" },
   recovery:    { label: "Recovery",    color: "#2DD4BF", dim: "#123832" },

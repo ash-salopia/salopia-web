@@ -38,7 +38,7 @@ import { getOrgSettings } from "@/lib/data/settings";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
-  hyrox: { label: "Hyrox", color: "#B388FF" },
+  hyrox: { label: "Hybrid", color: "#B388FF" },
   cardio: { label: "Cardio", color: "#4DC3FF" },
   power_speed: { label: "Power/Speed", color: "#A855F7" },
   recovery: { label: "Recovery", color: "#2DD4BF" },

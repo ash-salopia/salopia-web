@@ -9,7 +9,7 @@ import type { Session, SessionExercise } from "@/types";
 const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks - only the data sections the coach actually selected for this report, plus optionally the coach's own context for this report. Only discuss what's actually present in the sections below; never reference a metric or session type that isn't included, even if you'd normally expect it. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
 
 SUMMARY:
-<2-3 sentences on the overall training trend across the range, covering only the sections provided below - standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it. If session RPE and/or training load (sRPE) data is included, read it alongside whatever load/metric trend is also included rather than in isolation: rising load with stable or falling RPE reads as adapting well; rising RPE alongside flat or falling load is worth flagging as possible fatigue or overreaching; RPE isn't logged for recovery sessions and shouldn't be discussed as if it should be. If cardio and/or hyrox metric trends are included, comment on the genuinely notable movement (e.g. pace improving, distance climbing, HR drifting for the same effort) rather than restating every number. If only one section is included, write the summary about that section alone — don't apologise for or mention the absence of sections that weren't selected.>
+<2-3 sentences on the overall training trend across the range, covering only the sections provided below - standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it. If session RPE and/or training load (sRPE) data is included, read it alongside whatever load/metric trend is also included rather than in isolation: rising load with stable or falling RPE reads as adapting well; rising RPE alongside flat or falling load is worth flagging as possible fatigue or overreaching; RPE isn't logged for recovery sessions and shouldn't be discussed as if it should be. If cardio and/or hybrid metric trends are included, comment on the genuinely notable movement (e.g. pace improving, distance climbing, HR drifting for the same effort) rather than restating every number. If only one section is included, write the summary about that section alone — don't apologise for or mention the absence of sections that weren't selected.>
 
 THEMES:
 <1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If athlete notes were not included below, or there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>`;
@@ -105,7 +105,7 @@ ${notesLines || "No notes logged in this range."}` : "";
     const rpeLines = report.rpeEntries.map((e) => `${e.date} (${e.sessName}, ${e.type}): RPE ${e.rpe}/10`).join("\n");
     rpeBlock = `
 
-SESSION RPE (athlete-rated perceived exertion for the whole session, 1-10, logged after strength/hyrox/cardio/power-speed sessions — not recovery). Average across this range: ${avgRpe}/10.
+SESSION RPE (athlete-rated perceived exertion for the whole session, 1-10, logged after strength/hybrid/cardio/power-speed sessions — not recovery). Average across this range: ${avgRpe}/10.
 ${rpeLines}`;
   }
 
@@ -114,7 +114,7 @@ ${rpeLines}`;
     const lines = report.trainingLoadEntries.map((e) => `${e.date} (${e.sessName}): ${e.value}`).join("\n");
     trainingLoadBlock = `
 
-TRAINING LOAD (sRPE — session RPE × estimated session length in minutes, hyrox/cardio only):
+TRAINING LOAD (sRPE — session RPE × estimated session length in minutes, hybrid/cardio only):
 ${lines}`;
   }
 
@@ -149,7 +149,7 @@ ${lines}`;
       }).join("\n");
       hyroxBlock = `
 
-HYROX METRIC TRENDS:
+HYBRID METRIC TRENDS:
 ${lines}`;
     }
   }

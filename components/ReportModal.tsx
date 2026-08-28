@@ -34,7 +34,7 @@ function pctColor(pct: number | null): string {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  strength: "Strength", hyrox: "Hyrox", cardio: "Cardio", power_speed: "Power/Speed", recovery: "Recovery",
+  strength: "Strength", hyrox: "Hybrid", cardio: "Cardio", power_speed: "Power/Speed", recovery: "Recovery",
 };
 
 const SQUAD_COMPARISON_LABEL: Record<SquadComparisonMetric, string> = {
@@ -909,7 +909,7 @@ export default function ReportModal({
           {options.hyroxSessionsList && hasHyrox && !dismissed.has("hyrox-sessions-list") && (
             <div style={{ position: "relative" }}>
               <DismissBtn onClick={() => dismiss("hyrox-sessions-list")} />
-              <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Hyrox Sessions</div>
+              <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Hybrid Sessions</div>
               <div style={styles.hyroxList}>
                 {hyroxSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -990,7 +990,7 @@ export default function ReportModal({
             if (!visible.length) return null;
             return (
               <div style={{ marginTop: 24 }}>
-                <div style={styles.sectionTitle}>Hyrox Metrics</div>
+                <div style={styles.sectionTitle}>Hybrid Metrics</div>
                 {allGroups.length > 1 && (
                   <GroupFilterRow allGroups={allGroups} hidden={hiddenHyroxGroups} onChange={setHiddenHyroxGroups} />
                 )}

@@ -65,7 +65,7 @@ function rpeColor(rpe: number): string {
   return C.bad;
 }
 const TYPE_LABEL: Record<string, string> = {
-  strength: "Strength", hyrox: "Hyrox", cardio: "Cardio", power_speed: "Power/Speed", recovery: "Recovery",
+  strength: "Strength", hyrox: "Hybrid", cardio: "Cardio", power_speed: "Power/Speed", recovery: "Recovery",
 };
 
 // ── Chart geometry (pure math, no JSX) ─────────────────────────────────────
@@ -591,7 +591,7 @@ export default function AthleteReportPdf({
 
         {options.hyroxSessionsList && hasHyrox && (
           <View>
-            <Text style={s.sectionTitle}>HYROX SESSIONS</Text>
+            <Text style={s.sectionTitle}>HYBRID SESSIONS</Text>
             {hyroxSessions.map((sess) => (
               <View key={sess.id} style={s.listRow}><Text>{fmtDate(sess.date)}</Text><Text>{sess.name}</Text></View>
             ))}
@@ -687,7 +687,7 @@ export default function AthleteReportPdf({
 
         {options.hyroxMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>HYROX METRICS</Text>
+            <Text style={s.sectionTitle}>HYBRID METRICS</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
               {cardioMetricSummaries.filter((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2).map((m) => {
                 const meta = METRIC_META[m.key];

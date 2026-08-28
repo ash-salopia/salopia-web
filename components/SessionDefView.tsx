@@ -14,7 +14,7 @@ const DOW = [
 ];
 
 const TYPE_LABEL: Record<string, string> = {
-  strength: "Strength", hyrox: "Hyrox", cardio: "Cardio", power_speed: "Power / Speed", recovery: "Recovery",
+  strength: "Strength", hyrox: "Hybrid", cardio: "Cardio", power_speed: "Power / Speed", recovery: "Recovery",
 };
 
 // Mirrors the label sets in HyroxCardioBuilder — kept local since
@@ -120,7 +120,7 @@ export default function SessionDefView({ def }: { def: SessionDefLike }) {
 
       {def.type === "hyrox" && (
         <div style={styles.summaryLine}>
-          {HYROX_TYPE_LABEL[def.hyrox_type ?? ""] ?? "Hyrox"}
+          {HYROX_TYPE_LABEL[def.hyrox_type ?? ""] ?? "Hybrid"}
           {hyroxStepCount(def.hyrox_config) != null ? ` · ${hyroxStepCount(def.hyrox_config)} exercises` : ""}
         </div>
       )}

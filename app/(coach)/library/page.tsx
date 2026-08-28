@@ -8,6 +8,11 @@ import VideoModal from "@/components/VideoModal";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
 import type { LibraryEntry } from "@/types";
 
+// entry.types stores "Hyrox" (see LibraryEntryForm's SESSION_TYPES) so
+// every existing library entry's data keeps matching - this only
+// relabels it for display, same as the rest of the Hyrox->Hybrid rename.
+const TYPE_DISPLAY_LABEL: Record<string, string> = { Hyrox: "Hybrid" };
+
 export default function LibraryPage() {
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +186,7 @@ export default function LibraryPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={styles.rowName}>{entry.name || "Untitled"}</div>
                     {entry.types && entry.types.length > 0 && (
-                      <div style={styles.rowTypes}>{entry.types.join(", ")}</div>
+                      <div style={styles.rowTypes}>{entry.types.map((t) => TYPE_DISPLAY_LABEL[t] ?? t).join(", ")}</div>
                     )}
                   </div>
                   <button

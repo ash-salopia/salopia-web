@@ -1005,7 +1005,7 @@ export default function ReportingPage() {
                 </label>
                 <label style={s.checkboxRow}>
                   <input type="checkbox" checked={squadCardioHyrox} onChange={(e) => setSquadCardioHyrox(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
-                  Cardio / Hyrox exercise board
+                  Cardio / Hybrid exercise board
                 </label>
                 <label style={s.checkboxRow}>
                   <input type="checkbox" checked={squadCompletion} onChange={(e) => setSquadCompletion(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
@@ -1252,9 +1252,9 @@ export default function ReportingPage() {
                   <>
                     <div style={s.boardRow}>
                       <div style={s.card}>
-                        <div style={s.cardTitle}>Cardio / Hyrox · Current standing</div>
+                        <div style={s.cardTitle}>Cardio / Hybrid · Current standing</div>
                         {cardioHyroxOptions.length === 0 ? (
-                          <div style={s.emptyNote}>No cardio/hyrox metric data in this range.</div>
+                          <div style={s.emptyNote}>No cardio/hybrid metric data in this range.</div>
                         ) : (
                           <>
                             <div style={s.fieldLabel}>

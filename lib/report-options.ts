@@ -103,7 +103,7 @@ export const SESSION_TYPE_META: Record<ReportSessionType, { label: string }> = {
   strength: { label: "Strength" },
   power_speed: { label: "Power/Speed" },
   cardio: { label: "Cardio" },
-  hyrox: { label: "Hyrox" },
+  hyrox: { label: "Hybrid" },
 };
 
 // Every boolean field on ReportOptions that's scoped to one or more session
@@ -154,10 +154,10 @@ export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: stri
   { key: "powerSpeedTrend", label: "Power/Speed trend charts", hint: "Per-exercise time/distance progress from power & speed sessions" },
   { key: "barSpeedTrend", label: "Bar speed trend charts", hint: "Per-exercise velocity (m/s) progress, for exercises tracking bar speed" },
   { key: "cardioMetricsTrend", label: "Cardio metric trends", hint: "Distance, HR, pace and other tracked metrics from cardio sessions" },
-  { key: "hyroxMetricsTrend", label: "Hyrox metric trends", hint: "Distance, HR, pace and other tracked metrics from hyrox sessions" },
+  { key: "hyroxMetricsTrend", label: "Hybrid metric trends", hint: "Distance, HR, pace and other tracked metrics from hybrid sessions" },
   { key: "cardioSessionsList", label: "Cardio session list", hint: "Plain date + session name list, separate from the metric trend charts" },
-  { key: "hyroxSessionsList", label: "Hyrox session list", hint: "Plain date + session name list, separate from the metric trend charts" },
-  { key: "trainingLoadTrend", label: "Training load (sRPE)", hint: "Weekly RPE × session length, for Hyrox/Cardio sessions with a clear duration" },
+  { key: "hyroxSessionsList", label: "Hybrid session list", hint: "Plain date + session name list, separate from the metric trend charts" },
+  { key: "trainingLoadTrend", label: "Training load (sRPE)", hint: "Weekly RPE × session length, for Hybrid/Cardio sessions with a clear duration" },
 ];
 
 // 0081 — every boolean field that actually adds content to the report,

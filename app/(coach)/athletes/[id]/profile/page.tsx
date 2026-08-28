@@ -467,11 +467,11 @@ export default function AthleteProfilePage() {
 
         <div style={{ ...p.checkinCard, marginTop: 8 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Hyrox sessions</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Hybrid sessions</div>
             <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
               {(athlete as any).hyrox_enabled !== false
-                ? "Hyrox sessions are enabled for this athlete."
-                : "Hyrox sessions are hidden for this athlete - they won’t see the Hyrox type when sessions are created."}
+                ? "Hybrid sessions are enabled for this athlete."
+                : "Hybrid sessions are hidden for this athlete - they won’t see the Hybrid type when sessions are created."}
             </div>
           </div>
           <button
@@ -488,7 +488,7 @@ export default function AthleteProfilePage() {
               const { error: upErr } = await supabase.from("athletes").update({ hyrox_enabled: next }).eq("id", athleteId);
               if (upErr) {
                 setAthlete((prev) => prev ? { ...prev, hyrox_enabled: current } as any : prev);
-                setError("Could not update Hyrox setting: " + upErr.message);
+                setError("Could not update Hybrid setting: " + upErr.message);
               }
             }}
           >
