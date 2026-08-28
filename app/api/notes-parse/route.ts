@@ -125,9 +125,12 @@ Exercise field rules:
 - notes: any other instruction that doesn't fit above
 
 Exercise ordering rules:
-- order: string label for the exercise position. Use "1", "2", "3" for sequential exercises.
-- For supersets use "1A", "1B", "2A", "2B" etc. If notes say "1A/1B" that means a superset pair - use "1A" and "1B"
-- Always assign order based on the notation in the notes
+- order: string label for the exercise position. A session is a sequence of numbered "blocks" (1, 2, 3…); a block that groups multiple exercises together (superset/tri-set/giant-set/circuit) letters them A, B, C… within that block instead of just using the plain number. A standalone exercise that isn't grouped with anything keeps a plain number ("1", "2", "3") - do NOT letter-suffix it.
+- Grouping trigger words - all of these mean "group these exercises into one lettered block": "superset"/"super set"/"super", "tri set"/"triset", "giant set", "circuit". Also treat "trust" as "tri set" - it's a common voice-transcription mishearing of "tri set", not the coach actually saying "trust".
+- If the notes name the exercises explicitly for a group (e.g. "super these exercises: back squat and bench press" or "tri set these exercises: dead bug, side plank and pallof press"), group exactly those named exercises together, in the order given - back squat/bench press becomes "1A"/"1B"; dead bug/side plank/pallof press becomes the NEXT block, e.g. "2A"/"2B"/"2C".
+- If the trigger word appears with no explicit exercise list, apply it to the next exercises in the list in order: 2 exercises for "superset"/"super set", 3 for "tri set"/"triset"/"trust", or however many the phrasing implies (e.g. "giant set of 4" = 4).
+- The block NUMBER increments by one for every block (grouped or standalone) as you move down the session - it does not reset or skip. E.g. a tri-set of 3 exercises followed by a superset of 2 followed by one standalone exercise becomes: 1A, 1B, 1C, 2A, 2B, 3.
+- Always assign order based on the notation/wording in the notes, using the rules above when notation is absent.
 - Exercises within the same session must be in order (1A before 1B, 2A before 2B etc.)
 
 When handling a correction: update only what was mentioned, return the COMPLETE updated sessions array.
