@@ -139,6 +139,18 @@ export async function deleteTemplateDef(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Re-inserts a full TemplateDef snapshot verbatim (same id, every
+// field intact including its exercises JSONB) - the undo path for
+// deleteTemplateDef. The row is fully self-contained (a flat table, no
+// other table has a foreign key into it), so this is a complete
+// restore with no follow-up cleanup needed.
+export async function restoreTemplateDef(def: TemplateDef): Promise<TemplateDef> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("template_defs").insert(def).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // ------------------------------------------------------------
 // Save an existing real session as a reusable template — the
 // "Save as Template" entry point, alongside building one from

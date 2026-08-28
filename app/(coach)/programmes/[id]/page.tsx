@@ -7,6 +7,7 @@ import {
   updateProgramme,
   deleteProgramme,
   deleteProgrammeSession,
+  restoreProgrammeSession,
   addTemplateDefsToProgramme,
   assignProgrammeToAthlete,
   unassignProgrammeFromAthlete,
@@ -17,6 +18,8 @@ import { listTemplates } from "@/lib/data/templates";
 import { listAthletes } from "@/lib/data/athletes";
 import { todayISO } from "@/lib/date-utils";
 import SessionDefView from "@/components/SessionDefView";
+import { usePendingUndo } from "@/lib/use-pending-undo";
+import UndoBanner from "@/components/UndoBanner";
 import type { Programme, ProgrammeSession, Athlete, Template } from "@/types";
 
 function formatScheduleDate(iso: string): string {
@@ -36,6 +39,7 @@ export default function ProgrammeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
+  const undo = usePendingUndo();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
   const [addFromTemplateOpen, setAddFromTemplateOpen] = useState(false);
@@ -105,6 +109,7 @@ export default function ProgrammeDetailPage() {
 
   const handleDeleteSession = async (sessionId: string) => {
     if (!confirm("Remove this session from the programme?")) return;
+    const snapshot = programme?.sessions?.find((s) => s.id === sessionId) ?? null;
     try {
       await deleteProgrammeSession(sessionId);
       setProgramme((prev) =>
@@ -118,7 +123,16 @@ export default function ProgrammeDetailPage() {
       if (activeSessionId === sessionId) setActiveSessionId(programme?.sessions?.[0]?.id ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not remove session");
+      return;
     }
+
+    if (!snapshot) return;
+    undo.push(`Removed "${snapshot.name || "session"}"`, async () => {
+      const restored = await restoreProgrammeSession(snapshot);
+      setProgramme((prev) =>
+        prev ? { ...prev, sessions: [...(prev.sessions ?? []), restored].sort((a, b) => a.sort_order - b.sort_order) } : prev
+      );
+    });
   };
 
   const handleAddFromTemplate = async (template: Template) => {
@@ -254,6 +268,15 @@ export default function ProgrammeDetailPage() {
       </button>
 
       {flash && <div style={styles.flashBox}>{flash}</div>}
+      {undo.pending && (
+        <UndoBanner
+          label={undo.pending.label}
+          onUndo={undo.runUndo}
+          onDismiss={undo.clear}
+          restoring={undo.restoring}
+          error={undo.error}
+        />
+      )}
       {error && <div style={styles.errorBox}>{error}</div>}
 
       <input

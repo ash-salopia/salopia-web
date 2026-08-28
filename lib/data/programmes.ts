@@ -244,6 +244,18 @@ export async function deleteProgrammeSession(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Re-inserts a full ProgrammeSession snapshot verbatim (same id, every
+// field intact including its exercises JSONB) - the undo path for
+// deleteProgrammeSession. The row is fully self-contained (a flat
+// table, no other table has a foreign key into it), so this is a
+// complete restore with no follow-up cleanup needed.
+export async function restoreProgrammeSession(session: ProgrammeSession): Promise<ProgrammeSession> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("programme_sessions").insert(session).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // Imports every def from an existing Template into an already-existing
 // Programme, appended after its current sessions - the counterpart to
 // createProgrammeFromTemplate above, for when the programme isn't brand

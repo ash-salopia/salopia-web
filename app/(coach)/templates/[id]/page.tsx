@@ -7,6 +7,7 @@ import {
   updateTemplate,
   deleteTemplate,
   deleteTemplateDef,
+  restoreTemplateDef,
   loadTemplateForAthlete,
 } from "@/lib/data/templates";
 import { createProgrammeFromTemplate } from "@/lib/data/programmes";
@@ -14,6 +15,8 @@ import { listAthletes } from "@/lib/data/athletes";
 import { todayISO } from "@/lib/date-utils";
 import SessionDefView from "@/components/SessionDefView";
 import HomeProgrammePanel from "@/components/HomeProgrammePanel";
+import { usePendingUndo } from "@/lib/use-pending-undo";
+import UndoBanner from "@/components/UndoBanner";
 import type { Template, Athlete } from "@/types";
 
 export default function TemplateDetailPage() {
@@ -26,6 +29,7 @@ export default function TemplateDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
+  const undo = usePendingUndo();
   const [activeDefId, setActiveDefId] = useState<string | null>(null);
   const [loadOpen, setLoadOpen] = useState(false);
   const [loadAthleteId, setLoadAthleteId] = useState("");
@@ -70,6 +74,7 @@ export default function TemplateDetailPage() {
 
   const handleDeleteDef = async (defId: string) => {
     if (!confirm("Remove this session from the template?")) return;
+    const snapshot = template?.defs?.find((d) => d.id === defId) ?? null;
     try {
       await deleteTemplateDef(defId);
       setTemplate((prev) =>
@@ -78,7 +83,16 @@ export default function TemplateDetailPage() {
       if (activeDefId === defId) setActiveDefId(template?.defs?.[0]?.id ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not remove session");
+      return;
     }
+
+    if (!snapshot) return;
+    undo.push(`Removed "${snapshot.name || "session"}"`, async () => {
+      const restored = await restoreTemplateDef(snapshot);
+      setTemplate((prev) =>
+        prev ? { ...prev, defs: [...(prev.defs ?? []), restored].sort((a, b) => a.sort_order - b.sort_order) } : prev
+      );
+    });
   };
 
   const handleDeleteTemplate = async () => {
@@ -135,6 +149,15 @@ export default function TemplateDetailPage() {
       </button>
 
       {flash && <div style={styles.flashBox}>{flash}</div>}
+      {undo.pending && (
+        <UndoBanner
+          label={undo.pending.label}
+          onUndo={undo.runUndo}
+          onDismiss={undo.clear}
+          restoring={undo.restoring}
+          error={undo.error}
+        />
+      )}
       {error && <div style={styles.errorBox}>{error}</div>}
 
       <div style={styles.metaRow}>

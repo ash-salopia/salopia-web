@@ -10,6 +10,7 @@ import {
   updateSession,
   updateExercise,
   deleteExercise,
+  restoreExercise,
   moveExerciseToSession,
   deleteSession,
   applyToFutureSessions,
@@ -21,6 +22,8 @@ import { createClient } from "@/lib/supabase-browser";
 import { importCsv } from "@/lib/csv-import";
 import { listLibrary } from "@/lib/data/library";
 import { saveSessionAsTemplate } from "@/lib/data/templates";
+import { usePendingUndo } from "@/lib/use-pending-undo";
+import UndoBanner from "@/components/UndoBanner";
 import ExerciseCard from "@/components/ExerciseCard";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
@@ -47,6 +50,13 @@ export default function SessionDetailPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [session, setSession] = useState<Session | null>(null);
+  // Mirrors `session` for the undo restore closure below - by the time
+  // a coach clicks Undo, other edits may have happened since the
+  // delete, so the restore needs to read the *current* exercise list
+  // (to reopen a sort_order gap correctly) rather than whatever was
+  // captured in a stale closure from when the delete happened.
+  const sessionRef = useRef<Session | null>(null);
+  useEffect(() => { sessionRef.current = session; }, [session]);
   const [otherSessions, setOtherSessions] = useState<SessionStub[]>([]);
   // Per-set calculated %1RM targets (kg), keyed by exercise id — shown
   // as a preview in the load box while prescribing, never saved to
@@ -58,6 +68,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
+  const undo = usePendingUndo();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
@@ -415,14 +426,46 @@ export default function SessionDetailPage() {
   };
 
   const handleRemoveExercise = async (exerciseId: string) => {
+    const sorted = [...(session?.exercises ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const removedIdx = sorted.findIndex((e) => e.id === exerciseId);
+    const snapshot = removedIdx !== -1 ? sorted[removedIdx] : null;
+
     setSession((prev) =>
       prev ? { ...prev, exercises: prev.exercises?.filter((e) => e.id !== exerciseId) } : prev
     );
     try {
       await deleteExercise(exerciseId);
     } catch (e) {
+      // It was never actually deleted - undo the optimistic removal
+      // rather than leaving the UI showing it gone.
+      setSession((prev) =>
+        prev && snapshot ? { ...prev, exercises: [...(prev.exercises ?? []), snapshot] } : prev
+      );
       setError(e instanceof Error ? e.message : "Could not remove exercise");
+      return;
     }
+
+    if (!snapshot) return;
+    undo.push(`Removed "${snapshot.name || "exercise"}"`, async () => {
+      // Reopen a gap at the original position among whatever the
+      // exercise list looks like *now* (it may have changed since the
+      // delete), then re-insert the snapshot there.
+      const now = [...(sessionRef.current?.exercises ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+      const insertAt = Math.min(removedIdx, now.length);
+      const shifted = now.map((e, i) => (i >= insertAt ? { ...e, sort_order: e.sort_order + 1 } : e));
+      await Promise.all(
+        shifted
+          .filter((e, i) => e.sort_order !== now[i].sort_order)
+          .map((e) => updateExercise(e.id, { sort_order: e.sort_order }))
+      );
+      const restored = await restoreExercise({ ...snapshot, sort_order: insertAt });
+      setSession((prev) => {
+        if (!prev) return prev;
+        const merged = [...shifted];
+        merged.splice(insertAt, 0, restored);
+        return { ...prev, exercises: merged };
+      });
+    });
   };
 
   const handleMoveExercise = async (exerciseId: string, targetSessionId: string) => {
@@ -630,6 +673,15 @@ export default function SessionDetailPage() {
       )}
 
       {flash && <div style={styles.flashBox}>{flash}</div>}
+      {undo.pending && (
+        <UndoBanner
+          label={undo.pending.label}
+          onUndo={undo.runUndo}
+          onDismiss={undo.clear}
+          restoring={undo.restoring}
+          error={undo.error}
+        />
+      )}
       {error && <div style={styles.errorBox}>{error}</div>}
 
       <div style={styles.metaRow}>

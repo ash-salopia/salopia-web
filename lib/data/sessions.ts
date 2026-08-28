@@ -292,6 +292,21 @@ export async function deleteExercise(exerciseId: string): Promise<void> {
   if (error) throw error;
 }
 
+// Re-inserts a full exercise snapshot verbatim (same id, same
+// created_at, every logged set intact) - the undo path for
+// deleteExercise. Nothing else has a foreign key into
+// session_exercises, so this is a complete, self-contained restore;
+// the caller is responsible for re-opening a gap in sort_order first
+// if it wants the exercise back at its original position rather than
+// wherever this insert's sort_order value happens to land it.
+export async function restoreExercise(exercise: SessionExercise): Promise<SessionExercise> {
+  const supabase = createClient();
+  const { computed_targets, ...row } = exercise;
+  const { data, error } = await supabase.from("session_exercises").insert(row).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // Relocates an exercise to a different session (e.g. Tuesday's session
 // to Monday's) instead of the delete-and-recreate a coach previously
 // had to do — a true move, in place, so the athlete's logged sets/
