@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { feedDisplayName } from "@/lib/feed-name";
+import { notifyCoachesOfMessage } from "@/lib/push/send";
 
 // GET — returns athlete's groups + messages for a given group
 export async function GET(req: NextRequest) {
@@ -87,13 +88,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not a member of this group" }, { status: 403 });
   }
 
+  const senderName = feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only);
+
   const { data, error } = await supabase
     .from("group_messages")
     .insert({
       group_id,
       sender_type: "athlete",
       sender_id: athlete.id,
-      sender_name: feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only),
+      sender_name: senderName,
       body: text,
       audio_path: audio_path || null,
       audio_duration_seconds: audio_duration_seconds ?? null,
@@ -102,5 +105,12 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  notifyCoachesOfMessage((athlete as any).organisation_id, {
+    title: `${senderName} sent a group message`,
+    body: text || "🎤 Voice note",
+    url: `/community`,
+  }).catch(() => {});
+
   return NextResponse.json({ message: data });
 }

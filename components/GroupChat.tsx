@@ -148,6 +148,15 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
 
       if (sendErr) throw sendErr;
       setMessages((prev) => prev.map((m) => (m.id === optimisticId ? (data as Message) : m)));
+      // Push is server-only code - this insert went straight through
+      // the browser client (RLS), so a separate call notifies the
+      // group's athletes. Fire-and-forget: a failed push should never
+      // surface as a failed send.
+      fetch("/api/group-messages/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, groupName, text: patch.body }),
+      }).catch(() => {});
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setError("Could not send message - please try again");
