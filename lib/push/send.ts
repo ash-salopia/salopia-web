@@ -107,3 +107,30 @@ export async function sendPushToAthlete(athleteId: string, payload: PushPayload)
     .eq("athlete_id", athleteId);
   await sendToRows(data ?? [], payload);
 }
+
+// New direct message from an athlete - every coach in the org who
+// hasn't turned this off, same "org-wide, no per-athlete assignment"
+// reasoning as notifyCoachesOfPB above.
+export async function notifyCoachesOfMessage(organisationId: string, payload: PushPayload) {
+  const service = createServiceRoleClient();
+  const { data: coaches } = await service
+    .from("coaches")
+    .select("id")
+    .eq("organisation_id", organisationId)
+    .eq("archived", false)
+    .eq("notify_message", true);
+  await sendPushToCoaches((coaches ?? []).map((c) => c.id), payload);
+}
+
+// New direct message from a coach - single athlete, only if they
+// haven't turned this off.
+export async function notifyAthleteOfMessage(athleteId: string, payload: PushPayload) {
+  const service = createServiceRoleClient();
+  const { data: athlete } = await service
+    .from("athletes")
+    .select("notify_message")
+    .eq("id", athleteId)
+    .single();
+  if (athlete?.notify_message === false) return;
+  await sendPushToAthlete(athleteId, payload);
+}

@@ -1,13 +1,16 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GroupChat
+// DirectMessageThread
 //
-// Real-time chat for a group using Supabase Realtime (postgres_changes).
-// Coaches send messages immediately. Renders into the Community page's
-// Chat tab when a group is selected.
+// Real-time 1:1 chat with a single athlete, structurally identical to
+// GroupChat.tsx (same Realtime/optimistic-insert pattern) but keyed by
+// athlete_id instead of group_id, against the direct_messages table
+// (0077). One shared thread per athlete, visible to every coach in the
+// org - any coach's browser client can read/write it, same as
+// group_messages.
 //
-// Requires: group_messages table from 0011_group_chat.sql migration
+// Requires: direct_messages table from 0077_direct_messages.sql
 //           + Realtime enabled for the table in Supabase dashboard
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -15,17 +18,22 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
+import type { DirectMessage } from "@/types";
 
-interface Message {
-  id: string;
-  group_id: string;
-  sender_type: "coach" | "athlete";
-  sender_id: string;
-  sender_name: string;
-  body: string;
-  audio_path?: string | null;
-  audio_duration_seconds?: number | null;
-  created_at: string;
+interface Props {
+  athleteId: string;
+  athleteName: string;
+  coachId: string;
+  coachName: string;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) +
+    " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
 async function uploadCoachAudio(blob: Blob): Promise<{ path: string }> {
@@ -37,26 +45,8 @@ async function uploadCoachAudio(blob: Blob): Promise<{ path: string }> {
   return data;
 }
 
-interface Props {
-  groupId: string;
-  groupName: string;
-  coachId: string;
-  coachName: string;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  if (isToday) {
-    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) +
-    " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
-
-export default function GroupChat({ groupId, groupName, coachId, coachName }: Props) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function DirectMessageThread({ athleteId, athleteName, coachId, coachName }: Props) {
+  const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -64,17 +54,16 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
   const bottomRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
-  // Load initial messages and subscribe to new ones
   useEffect(() => {
     let mounted = true;
 
     const loadMessages = async () => {
       const { data, error: err } = await supabase
-        .from("group_messages")
+        .from("direct_messages")
         .select("*")
-        .eq("group_id", groupId)
+        .eq("athlete_id", athleteId)
         .order("created_at", { ascending: true })
-        .limit(100);
+        .limit(200);
 
       if (mounted) {
         if (err) setError("Could not load messages");
@@ -85,59 +74,50 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
 
     loadMessages();
 
-    // Subscribe to new messages via Realtime
     const channel = supabase
-      .channel(`group-chat-${groupId}`)
+      .channel(`direct-messages-${athleteId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "group_messages",
-          filter: `group_id=eq.${groupId}`,
-        },
+        { event: "INSERT", schema: "public", table: "direct_messages", filter: `athlete_id=eq.${athleteId}` },
         (payload) => {
           if (mounted) {
             setMessages((prev) => {
-              // Avoid duplicates (our own optimistic message)
               if (prev.some((m) => m.id === payload.new.id)) return prev;
-              return [...prev, payload.new as Message];
+              return [...prev, payload.new as DirectMessage];
             });
           }
         }
       )
       .subscribe();
 
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [groupId]);
+    return () => { mounted = false; supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteId]);
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const insertMessage = async (patch: { body: string; audio_path: string | null; audio_duration_seconds: number | null }) => {
     setSending(true);
     const optimisticId = crypto.randomUUID();
-    const optimistic: Message = {
+    const optimistic: DirectMessage = {
       id: optimisticId,
-      group_id: groupId,
+      organisation_id: "",
+      athlete_id: athleteId,
       sender_type: "coach",
       sender_id: coachId,
       sender_name: coachName,
-      ...patch,
+      body: patch.body,
+      audio_path: patch.audio_path,
+      audio_duration_seconds: patch.audio_duration_seconds,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
 
     try {
       const { data, error: sendErr } = await supabase
-        .from("group_messages")
+        .from("direct_messages")
         .insert({
-          group_id: groupId,
+          athlete_id: athleteId,
           sender_type: "coach",
           sender_id: coachId,
           sender_name: coachName,
@@ -145,9 +125,17 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
         })
         .select()
         .single();
-
       if (sendErr) throw sendErr;
-      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? (data as Message) : m)));
+      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? (data as DirectMessage) : m)));
+      // Push is server-only code - this insert went straight through
+      // the browser client (RLS), so a separate call triggers the
+      // notification side effect. Fire-and-forget: a failed push
+      // should never surface as a failed send.
+      fetch("/api/direct-messages/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId, text: patch.body }),
+      }).catch(() => {});
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setError("Could not send message - please try again");
@@ -157,7 +145,7 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
     }
   };
 
-  const sendMessage = async () => {
+  const sendText = async () => {
     const body = input.trim();
     if (!body || sending) return;
     setInput("");
@@ -179,23 +167,18 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
         </div>
       )}
 
-      {/* Message list */}
       <div style={s.messageList}>
         {messages.length === 0 && (
-          <div style={s.empty}>
-            No messages yet - start the conversation with your {groupName} group.
-          </div>
+          <div style={s.empty}>No messages yet - start the conversation with {athleteName}.</div>
         )}
         {messages.map((msg) => {
           const isMe = msg.sender_id === coachId && msg.sender_type === "coach";
           return (
             <div key={msg.id} style={{ ...s.messageRow, justifyContent: isMe ? "flex-end" : "flex-start" }}>
               <div style={{ ...s.bubble, ...(isMe ? s.bubbleMe : s.bubbleThem) }}>
-                {!isMe && (
-                  <div style={s.senderName}>{msg.sender_name}</div>
-                )}
+                {!isMe && <div style={s.senderName}>{msg.sender_name}</div>}
                 {msg.audio_path ? (
-                  <VoiceNotePlayer audioPath={msg.audio_path} durationSeconds={msg.audio_duration_seconds ?? null} isMe={isMe} />
+                  <VoiceNotePlayer audioPath={msg.audio_path} durationSeconds={msg.audio_duration_seconds} isMe={isMe} />
                 ) : (
                   <div style={s.body}>{msg.body}</div>
                 )}
@@ -207,18 +190,12 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div style={s.inputRow}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-          placeholder={`Message ${groupName}…`}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
+          placeholder={`Message ${athleteName}…`}
           style={s.input}
           disabled={sending}
         />
@@ -226,7 +203,7 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
         <button
           style={{ ...s.sendBtn, opacity: !input.trim() || sending ? 0.5 : 1 }}
           disabled={!input.trim() || sending}
-          onClick={sendMessage}
+          onClick={sendText}
         >
           ↑
         </button>

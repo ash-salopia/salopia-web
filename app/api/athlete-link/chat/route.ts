@@ -64,8 +64,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const { token, group_id, message } = body;
-  if (!token || !group_id || !message?.trim()) {
+  const { token, group_id, message, audio_path, audio_duration_seconds } = body;
+  const text = typeof message === "string" ? message.trim() : "";
+  if (!token || !group_id || (!text && !audio_path)) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
@@ -93,7 +94,9 @@ export async function POST(req: NextRequest) {
       sender_type: "athlete",
       sender_id: athlete.id,
       sender_name: feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only),
-      body: message.trim(),
+      body: text,
+      audio_path: audio_path || null,
+      audio_duration_seconds: audio_duration_seconds ?? null,
     })
     .select()
     .single();

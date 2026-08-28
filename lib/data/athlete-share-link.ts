@@ -656,6 +656,7 @@ export async function updateAthleteNotificationSettings(
     notify_missed_session?: boolean;
     notify_rpe_reminder?: boolean;
     notify_morning_reminder?: boolean;
+    notify_message?: boolean;
     morning_reminder_time?: string;
   }
 ): Promise<void> {

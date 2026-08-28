@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     notify_missed_session: (athlete as any).notify_missed_session ?? true,
     notify_rpe_reminder: (athlete as any).notify_rpe_reminder ?? true,
     notify_morning_reminder: (athlete as any).notify_morning_reminder ?? true,
+    notify_message: (athlete as any).notify_message ?? true,
     // "HH:MM:SS" from Postgres time - trimmed to "HH:MM" to match
     // <input type="time">'s value format.
     morning_reminder_time: ((athlete as any).morning_reminder_time ?? "07:00:00").slice(0, 5),
@@ -27,23 +28,26 @@ export async function POST(request: Request) {
     notify_missed_session?: boolean;
     notify_rpe_reminder?: boolean;
     notify_morning_reminder?: boolean;
+    notify_message?: boolean;
     morning_reminder_time?: string;
   };
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: "Invalid request body" }, { status: 400 }); }
 
-  const { token, notify_missed_session, notify_rpe_reminder, notify_morning_reminder, morning_reminder_time } = body;
+  const { token, notify_missed_session, notify_rpe_reminder, notify_morning_reminder, notify_message, morning_reminder_time } = body;
   if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
 
   const patch: {
     notify_missed_session?: boolean;
     notify_rpe_reminder?: boolean;
     notify_morning_reminder?: boolean;
+    notify_message?: boolean;
     morning_reminder_time?: string;
   } = {};
   if (typeof notify_missed_session === "boolean") patch.notify_missed_session = notify_missed_session;
   if (typeof notify_rpe_reminder === "boolean") patch.notify_rpe_reminder = notify_rpe_reminder;
   if (typeof notify_morning_reminder === "boolean") patch.notify_morning_reminder = notify_morning_reminder;
+  if (typeof notify_message === "boolean") patch.notify_message = notify_message;
   if (typeof morning_reminder_time === "string" && /^\d{2}:\d{2}$/.test(morning_reminder_time)) {
     patch.morning_reminder_time = `${morning_reminder_time}:00`;
   }

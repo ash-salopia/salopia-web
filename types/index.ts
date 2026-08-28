@@ -633,3 +633,19 @@ export interface SessionFeedback {
   notes: string;
   created_at: string;
 }
+
+// 0077 — one shared thread per athlete, visible to every coach in the
+// org (not private per coach) - same visibility model as everything
+// else in this app (sessions/PBs/notes aren't locked to one coach).
+export interface DirectMessage {
+  id: string;
+  organisation_id: string;
+  athlete_id: string;
+  sender_type: "coach" | "athlete";
+  sender_id: string;
+  sender_name: string;
+  body: string;
+  audio_path: string | null;
+  audio_duration_seconds: number | null;
+  created_at: string;
+}

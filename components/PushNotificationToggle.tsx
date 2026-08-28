@@ -30,11 +30,15 @@ interface PrefItem {
   timeKey?: string; // this pref has an associated time-of-day (native <input type="time"> - a scrollable wheel on mobile)
 }
 
-const COACH_PREFS: PrefItem[] = [{ key: "notify_pb", label: "An athlete hits a PB" }];
+const COACH_PREFS: PrefItem[] = [
+  { key: "notify_pb", label: "An athlete hits a PB" },
+  { key: "notify_message", label: "An athlete sends a message" },
+];
 const ATHLETE_PREFS: PrefItem[] = [
   { key: "notify_morning_reminder", label: "I have a session today", timeKey: "morning_reminder_time" },
   { key: "notify_missed_session", label: "I haven't started today's session (evening)" },
   { key: "notify_rpe_reminder", label: "I finished a session but haven't rated it (evening)" },
+  { key: "notify_message", label: "My coach sends me a message" },
 ];
 const DEFAULT_MORNING_TIME = "07:00";
 
@@ -72,8 +76,11 @@ export default function PushNotificationToggle({ mode, token, label }: Props) {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase.from("coaches").select("notify_pb").eq("id", user.id).single();
-        setPrefs({ notify_pb: (data as any)?.notify_pb ?? true });
+        const { data } = await supabase.from("coaches").select("notify_pb, notify_message").eq("id", user.id).single();
+        setPrefs({
+          notify_pb: (data as any)?.notify_pb ?? true,
+          notify_message: (data as any)?.notify_message ?? true,
+        });
       } else {
         const res = await fetch(`/api/athlete-link/notification-settings?token=${token}`);
         const data = await res.json();
@@ -81,6 +88,7 @@ export default function PushNotificationToggle({ mode, token, label }: Props) {
           notify_missed_session: data.notify_missed_session ?? true,
           notify_rpe_reminder: data.notify_rpe_reminder ?? true,
           notify_morning_reminder: data.notify_morning_reminder ?? true,
+          notify_message: data.notify_message ?? true,
         });
         setTimes({ morning_reminder_time: data.morning_reminder_time ?? DEFAULT_MORNING_TIME });
       }

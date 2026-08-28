@@ -4,6 +4,18 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
 import { formatPBValue } from "@/lib/data/personal-bests";
+import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
+import VoiceNotePlayer from "@/components/VoiceNotePlayer";
+
+async function uploadAthleteAudio(token: string, blob: Blob): Promise<{ path: string }> {
+  const form = new FormData();
+  form.append("token", token);
+  form.append("audio", blob, "voice-note.webm");
+  const res = await fetch("/api/athlete-link/chat-audio", { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not upload voice note");
+  return data;
+}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -29,7 +41,13 @@ export default function AthleteCommunityPage() {
   const router = useRouter();
   const token = params?.token as string;
 
-  const [tab, setTab] = useState<"announcements" | "pbs" | "chat" | "comps">("announcements");
+  const [tab, setTab] = useState<"announcements" | "pbs" | "chat" | "coach" | "comps">("announcements");
+  const [dmMessages, setDmMessages] = useState<any[]>([]);
+  const [dmInput, setDmInput] = useState("");
+  const [dmSending, setDmSending] = useState(false);
+  const [dmLoading, setDmLoading] = useState(true);
+  const dmBottomRef = useRef<HTMLDivElement>(null);
+  const dmPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [pbs, setPbs] = useState<any[]>([]);
@@ -102,6 +120,81 @@ export default function AthleteCommunityPage() {
     return () => { pollRef.current && clearInterval(pollRef.current); };
   }, [tab, selectedGroupId, token]);
 
+  // Direct-message thread with the coach team - loaded once on mount
+  // (independent of which tab is active, since coaches can message
+  // any time) then polled every 3s only while that tab is open, same
+  // reasoning as the group chat poll above (athletes have no Realtime
+  // auth, unlike the coach side which uses Supabase Realtime directly).
+  useEffect(() => {
+    if (!token) return;
+    fetch(`/api/athlete-link/direct-messages?token=${token}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.messages) setDmMessages(data.messages); })
+      .catch(() => {})
+      .finally(() => setDmLoading(false));
+  }, [token]);
+
+  useEffect(() => {
+    if (tab !== "coach") {
+      dmPollRef.current && clearInterval(dmPollRef.current);
+      return;
+    }
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/athlete-link/direct-messages?token=${token}`);
+        const data = await res.json();
+        if (data.messages) setDmMessages(data.messages);
+      } catch {}
+    };
+    dmPollRef.current = setInterval(poll, 3000);
+    return () => { dmPollRef.current && clearInterval(dmPollRef.current); };
+  }, [tab, token]);
+
+  useEffect(() => { dmBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [dmMessages]);
+
+  const sendDirectMessage = async (patch: { message?: string; audio_path?: string; audio_duration_seconds?: number }) => {
+    setDmSending(true);
+    const optimistic = {
+      id: `optimistic-${Date.now()}`,
+      athlete_id: athleteId,
+      sender_type: "athlete",
+      sender_id: athleteId,
+      sender_name: athleteName,
+      body: patch.message ?? "",
+      audio_path: patch.audio_path ?? null,
+      audio_duration_seconds: patch.audio_duration_seconds ?? null,
+      created_at: new Date().toISOString(),
+    };
+    setDmMessages((prev) => [...prev, optimistic]);
+    try {
+      const res = await fetch("/api/athlete-link/direct-messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, ...patch }),
+      });
+      const data = await res.json();
+      if (data.message) setDmMessages((prev) => prev.map((m) => (m.id === optimistic.id ? data.message : m)));
+      else throw new Error(data.error || "Could not send");
+    } catch {
+      setDmMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      throw new Error("send failed");
+    } finally {
+      setDmSending(false);
+    }
+  };
+
+  const handleSendDM = async () => {
+    const text = dmInput.trim();
+    if (!text || dmSending) return;
+    setDmInput("");
+    try { await sendDirectMessage({ message: text }); }
+    catch { setDmInput(text); }
+  };
+
+  const sendDMVoiceNote = async (audioPath: string, durationSeconds: number) => {
+    await sendDirectMessage({ audio_path: audioPath, audio_duration_seconds: Math.round(durationSeconds) });
+  };
+
   // Scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -158,6 +251,37 @@ export default function AthleteCommunityPage() {
     }
   };
 
+  const sendGroupVoiceNote = async (audioPath: string, durationSeconds: number) => {
+    if (!selectedGroupId || sending) return;
+    setSending(true);
+    const optimistic = {
+      id: `optimistic-${Date.now()}`,
+      group_id: selectedGroupId,
+      sender_type: "athlete",
+      sender_id: athleteId,
+      sender_name: athleteName,
+      body: "",
+      audio_path: audioPath,
+      audio_duration_seconds: Math.round(durationSeconds),
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    try {
+      const res = await fetch("/api/athlete-link/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, group_id: selectedGroupId, audio_path: audioPath, audio_duration_seconds: Math.round(durationSeconds) }),
+      });
+      const data = await res.json();
+      if (data.message) setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? data.message : m)));
+      else throw new Error(data.error || "Could not send");
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+    } finally {
+      setSending(false);
+    }
+  };
+
   const selectedGroup = groups.find((g) => g.id === selectedGroupId);
 
   return (
@@ -186,6 +310,10 @@ export default function AthleteCommunityPage() {
             Chat
           </button>
         )}
+        <button style={{ ...s.tab, ...(tab === "coach" ? s.tabActive : {}) }}
+          onClick={() => setTab("coach")}>
+          💬 Coach
+        </button>
         <button style={{ ...s.tab, ...(tab === "comps" ? s.tabActive : {}) }}
           onClick={() => setTab("comps")}>
           🏆 Comps
@@ -295,7 +423,11 @@ export default function AthleteCommunityPage() {
                                 <div style={s.senderName}>{msg.sender_name}</div>
                               )}
                               <div style={{ ...s.bubble, ...(isMe ? s.bubbleMe : s.bubbleThem) }}>
-                                {msg.body}
+                                {msg.audio_path ? (
+                                  <VoiceNotePlayer audioPath={msg.audio_path} durationSeconds={msg.audio_duration_seconds ?? null} token={token} isMe={isMe} />
+                                ) : (
+                                  msg.body
+                                )}
                               </div>
                               <div style={{ ...s.msgTime, textAlign: isMe ? "right" : "left" }}>
                                 {formatTime(msg.created_at)}
@@ -318,6 +450,7 @@ export default function AthleteCommunityPage() {
                       style={s.chatInput}
                       disabled={sending}
                     />
+                    <VoiceNoteRecorder upload={(blob) => uploadAthleteAudio(token, blob)} onSend={sendGroupVoiceNote} disabled={sending} />
                     <button
                       style={{ ...s.sendBtn, opacity: !chatInput.trim() || sending ? 0.5 : 1 }}
                       disabled={!chatInput.trim() || sending}
@@ -328,6 +461,60 @@ export default function AthleteCommunityPage() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Direct thread with the coach team */}
+          {tab === "coach" && (
+            <div style={s.chatPage}>
+              <div style={s.messageList}>
+                {dmLoading ? (
+                  <div style={s.loading}>Loading messages...</div>
+                ) : dmMessages.length === 0 ? (
+                  <div style={s.empty}>No messages yet. Say hello to your coach!</div>
+                ) : (
+                  dmMessages.map((msg) => {
+                    const isMe = msg.sender_id === athleteId && msg.sender_type === "athlete";
+                    return (
+                      <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 8 }}>
+                        <div style={{ maxWidth: "75%" }}>
+                          {!isMe && <div style={s.senderName}>{msg.sender_name}</div>}
+                          <div style={{ ...s.bubble, ...(isMe ? s.bubbleMe : s.bubbleThem) }}>
+                            {msg.audio_path ? (
+                              <VoiceNotePlayer audioPath={msg.audio_path} durationSeconds={msg.audio_duration_seconds ?? null} token={token} isMe={isMe} />
+                            ) : (
+                              msg.body
+                            )}
+                          </div>
+                          <div style={{ ...s.msgTime, textAlign: isMe ? "right" : "left" }}>
+                            {formatTime(msg.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={dmBottomRef} />
+              </div>
+
+              <div style={s.inputRow}>
+                <input
+                  value={dmInput}
+                  onChange={(e) => setDmInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendDM(); } }}
+                  placeholder="Message your coach..."
+                  style={s.chatInput}
+                  disabled={dmSending}
+                />
+                <VoiceNoteRecorder upload={(blob) => uploadAthleteAudio(token, blob)} onSend={sendDMVoiceNote} disabled={dmSending} />
+                <button
+                  style={{ ...s.sendBtn, opacity: !dmInput.trim() || dmSending ? 0.5 : 1 }}
+                  disabled={!dmInput.trim() || dmSending}
+                  onClick={handleSendDM}
+                >
+                  {dmSending ? "..." : "Send"}
+                </button>
+              </div>
             </div>
           )}
         </>

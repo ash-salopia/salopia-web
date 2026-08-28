@@ -26,6 +26,7 @@ import ReportModal from "@/components/ReportModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
 import ModifySessionsModal from "@/components/ModifySessionsModal";
+import DirectMessageThread from "@/components/DirectMessageThread";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
 import AssignProgrammeModal from "@/components/AssignProgrammeModal";
 import SessionLibraryAccessModal from "@/components/SessionLibraryAccessModal";
@@ -146,6 +147,9 @@ export default function AthleteDetailPage() {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [coachId, setCoachId] = useState("");
+  const [coachName, setCoachName] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [lastTestDate, setLastTestDate] = useState("");
@@ -208,6 +212,21 @@ export default function AthleteDetailPage() {
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    // Coaches RLS returns every colleague in the org, not just this one
+    // - .single() with no filter silently breaks for any org with more
+    // than one coach, so this has to resolve auth.uid() first (same
+    // pattern as the Community page's GroupChat identity resolution).
+    supabase.auth.getUser().then(({ data: auth }) => {
+      const uid = auth.user?.id;
+      if (!uid) return;
+      supabase.from("coaches").select("id, name").eq("id", uid).single().then(({ data }) => {
+        if (data) { setCoachId(data.id); setCoachName(data.name); }
+      });
+    });
+  }, []);
 
   const handleAddSession = async (type: SessionType) => {
     setTypePicker(false);
@@ -583,6 +602,7 @@ export default function AthleteDetailPage() {
               { key: "voice", label: "Build · Voice", onClick: () => setVoiceOpen(true) },
               { key: "notes", label: "Build · Notes", onClick: () => setNotesOpen(true) },
               { key: "modify", label: "Modify", onClick: () => setModifyOpen(true) },
+              { key: "message", label: "💬 Message", onClick: () => setMessageOpen(true) },
 
               // Bulk calendar operations
               {
@@ -1222,6 +1242,21 @@ export default function AthleteDetailPage() {
           }}
           onClose={() => setNotesOpen(false)}
         />
+      )}
+
+      {messageOpen && athlete && (
+        <div style={styles.overlay} onClick={() => setMessageOpen(false)}>
+          <div style={{ ...styles.modal, maxWidth: 480, padding: 0, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...styles.modalTitle, padding: "16px 16px 0" }}>Message {athlete.name}</div>
+            <div style={{ padding: 16 }}>
+              {coachId ? (
+                <DirectMessageThread athleteId={athleteId} athleteName={athlete.name} coachId={coachId} coachName={coachName} />
+              ) : (
+                <p style={styles.modalNote}>Loading…</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
