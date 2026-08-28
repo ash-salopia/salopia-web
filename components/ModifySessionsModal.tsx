@@ -11,7 +11,9 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { listLibrary, saveLibraryEntry } from "@/lib/data/library";
+import { deleteSession } from "@/lib/data/sessions";
 import { normalizeExerciseName } from "@/lib/exercise-name-match";
+import { todayISO } from "@/lib/date-utils";
 import type { Session, LibraryEntry } from "@/types";
 
 interface NewExercise {
@@ -31,7 +33,7 @@ interface SessionChange {
   session_name: string;
   exercise_id: string;
   exercise_name: string;
-  action: "update" | "delete" | "add";
+  action: "update" | "delete" | "add" | "delete_session";
   field: string;
   old_value: string;
   new_value: string;
@@ -60,6 +62,14 @@ const FIELD_LABELS: Record<string, string> = {
   name: "Exercise", sets: "Sets", reps: "Reps", target_load: "Load",
   rest: "Rest", tempo: "Tempo", notes: "Notes",
 };
+
+// A session already has logged data if any set on any exercise is marked
+// done - worth surfacing on a delete_session card since deleting the
+// session cascades to delete that logged data too, not just the plan.
+function sessionHasLoggedData(session: Session | undefined): boolean {
+  if (!session) return false;
+  return (session.exercises ?? []).some((ex) => (ex.log ?? []).some((l) => l.done));
+}
 
 export default function ModifySessionsModal({ upcomingSessions, onApplied, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("input");
@@ -252,15 +262,34 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
   // ── Save accepted changes ───────────────────────────────────────────────────
 
   const handleSave = async () => {
-    const toApply = changes.filter((_, i) => accepted.has(i));
+    // delete_session first - a session slated for whole-session removal
+    // shouldn't also have a stray exercise-level update attempted against
+    // a row that's about to stop existing.
+    const toApply = changes
+      .filter((_, i) => accepted.has(i))
+      .sort((a, b) => (a.action === "delete_session" ? -1 : 0) - (b.action === "delete_session" ? -1 : 0));
     if (!toApply.length) { onClose(); return; }
 
     setPhase("saving");
     setError("");
     const supabase = createClient();
+    const today = todayISO();
 
     try {
       for (const change of toApply) {
+        if (change.action === "delete_session") {
+          // Layer 3 defense-in-depth: re-check against upcomingSessions
+          // right before deleting, in case this review screen sat open
+          // long enough for the session to age into the past since the
+          // server proposed it.
+          const targetSession = upcomingSessions.find((sess) => sess.id === change.session_id);
+          if (!targetSession || targetSession.date < today) {
+            throw new Error(`${change.session_name}: this session is no longer upcoming - refusing to delete it. Start over to get a fresh review.`);
+          }
+          await deleteSession(change.session_id);
+          continue;
+        }
+
         if (change.action === "add") {
           const ne = change.new_exercise;
           if (!ne) continue;
@@ -358,6 +387,22 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
 
   const acceptedCount = accepted.size;
 
+  // Extra confirm gate specifically for whole-session deletes, on top of
+  // the accept/skip review every change already gets - deleting a whole
+  // session (and its logged data) is a bigger action than tweaking a
+  // field, so it gets one more explicit "are you sure" before Apply runs.
+  const handleApplyClick = () => {
+    const acceptedDeletes = changes.filter((c, i) => accepted.has(i) && c.action === "delete_session");
+    if (acceptedDeletes.length > 0) {
+      const list = acceptedDeletes.map((c) => `- ${c.session_name}`).join("\n");
+      const ok = confirm(
+        `Delete ${acceptedDeletes.length} whole session${acceptedDeletes.length !== 1 ? "s" : ""}? This can't be undone and deletes any logged data in them too:\n${list}`
+      );
+      if (!ok) return;
+    }
+    handleSave();
+  };
+
   return (
     <>
       <style>{`
@@ -381,7 +426,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                 Claude will propose specific changes for you to review before anything is saved.
               </p>
               <p style={s.example}>
-                e.g. <em>"Reduce squat volume by 20% this week"</em> · <em>"Add 5kg to all pressing movements"</em> · <em>"Cut rest periods to 90 seconds"</em>
+                e.g. <em>"Reduce squat volume by 20% this week"</em> · <em>"Add 5kg to all pressing movements"</em> · <em>"Cut rest periods to 90 seconds"</em> · <em>"Delete all lower body sessions this month"</em>
               </p>
 
               <div style={s.modeToggle}>
@@ -458,6 +503,30 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                     const checkName = libraryCheckName(change);
                     const matched = checkName ? isInLibrary(checkName) : false;
                     const displayName = change.action === "add" ? (change.new_exercise?.name ?? change.exercise_name) : change.exercise_name;
+                    if (change.action === "delete_session") {
+                      const targetSession = upcomingSessions.find((sess) => sess.id === change.session_id);
+                      const hasLoggedData = sessionHasLoggedData(targetSession);
+                      return (
+                        <div key={i} style={{ ...s.changeCard, ...s.deleteSessionCard, ...(accepted.has(i) ? {} : s.changeCardSkipped) }}>
+                          <div style={s.changeTop}>
+                            <div style={s.changeInfo}>
+                              <div style={s.changeExercise}>🗑 Delete entire session: {change.session_name}</div>
+                              {targetSession?.date && <div style={s.changeSession}>{targetSession.date}</div>}
+                              {hasLoggedData && (
+                                <div style={s.deleteWarning}>⚠ This session already has logged data - deleting it deletes that too.</div>
+                              )}
+                              <div style={s.changeReason}>{change.reason}</div>
+                            </div>
+                            <button
+                              style={{ ...s.toggleBtn, ...(accepted.has(i) ? s.toggleBtnAccepted : s.toggleBtnSkipped) }}
+                              onClick={() => toggleAccepted(i)}
+                            >
+                              {accepted.has(i) ? "✓ Accept" : "✗ Skip"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={i} style={{ ...s.changeCard, ...(accepted.has(i) ? s.changeCardAccepted : s.changeCardSkipped) }}>
                         <div style={s.changeTop}>
@@ -545,7 +614,7 @@ export default function ModifySessionsModal({ upcomingSessions, onApplied, onClo
                 <button
                   style={{ ...s.saveBtn, opacity: acceptedCount === 0 ? 0.45 : 1, cursor: acceptedCount === 0 ? "not-allowed" : "pointer" }}
                   disabled={acceptedCount === 0}
-                  onClick={handleSave}
+                  onClick={handleApplyClick}
                 >
                   ✓ Apply {acceptedCount} change{acceptedCount !== 1 ? "s" : ""}
                 </button>
@@ -594,6 +663,8 @@ const s: Record<string, React.CSSProperties> = {
   changeCard: { borderRadius: 10, padding: "10px 12px", border: "1px solid var(--line)" },
   changeCardAccepted: { background: "#0a1a0a", borderColor: "#1a4a1a" },
   changeCardSkipped: { background: "var(--ink)", opacity: 0.5 },
+  deleteSessionCard: { background: "#2a0c0c", borderColor: "#FF6B6B66" },
+  deleteWarning: { fontSize: 11, color: "#f5a623", marginTop: 4, fontWeight: 600 },
   changeTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
   changeInfo: { flex: 1 },
   changeExercise: { fontSize: 14, fontWeight: 700, color: "var(--text)" },

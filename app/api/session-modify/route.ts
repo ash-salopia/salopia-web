@@ -17,9 +17,9 @@ export interface NewExercise {
 export interface SessionChange {
   session_id: string;
   session_name: string;
-  exercise_id: string; // "" when action is "add"
+  exercise_id: string; // "" when action is "add" or "delete_session"
   exercise_name: string;
-  action: "update" | "delete" | "add";
+  action: "update" | "delete" | "add" | "delete_session";
   field: "name" | "sets" | "reps" | "target_load" | "rest" | "tempo" | "notes" | "";
   old_value: string;
   new_value: string;
@@ -53,6 +53,7 @@ Action options:
 - "update": change one field on an existing exercise
 - "delete": remove an existing exercise from its session entirely
 - "add": add a brand new exercise to a session that doesn't currently have it
+- "delete_session": remove an ENTIRE session, not just one exercise in it - use this for instructions like "delete all lower body sessions", "cancel Friday's session", "remove every recovery session next week". Set exercise_id/exercise_name/field/old_value/new_value all to "". "reason" MUST explain specifically what matched (e.g. which session name or exercises indicated "lower body") so the coach can verify the match before deleting. If the coach's instruction is really about removing one exercise rather than the whole session, use "delete" instead - never over-delete a whole session for what's actually a single-exercise removal.
 
 Field options (only used when action is "update"): name, sets, reps, target_load, rest, tempo, notes
 All values are strings (e.g. sets: "4" not 4, reps: "8-10")
@@ -145,7 +146,15 @@ export async function POST(req: NextRequest) {
   });
 
   if (!res.ok) {
-    return NextResponse.json({ error: "AI request failed" }, { status: 500 });
+    // Was just `{ error: "AI request failed" }` with no detail - made it
+    // impossible to tell an auth/billing/model issue from a rate limit
+    // or an overloaded upstream from the client error alone. Matches the
+    // detail level notes-parse's route already surfaces.
+    const detail = await res.text().catch(() => "");
+    return NextResponse.json(
+      { error: `AI request failed (${res.status}): ${detail}` },
+      { status: 500 }
+    );
   }
 
   const data = await res.json();
@@ -166,10 +175,29 @@ export async function POST(req: NextRequest) {
   // Defensive default in case the model (or stale conversation history)
   // omits the new "action" field — treat anything unrecognized as a plain
   // field update rather than letting the client crash on an unknown value.
-  const changes = (parsed.changes ?? []).map((c) => ({
+  const normalized = (parsed.changes ?? []).map((c) => ({
     ...c,
-    action: c.action === "delete" ? "delete" : c.action === "add" ? "add" : "update",
+    action:
+      c.action === "delete" ? "delete" :
+      c.action === "add" ? "add" :
+      c.action === "delete_session" ? "delete_session" :
+      "update",
   }));
+
+  // Hard server-side guard (layer 2, defense in depth alongside the
+  // caller's own future-only session list and handleSave's re-check
+  // before it deletes): only ever return changes against a session_id
+  // that was actually present in THIS request's `sessions` array, and
+  // whose date isn't in the past — a whole-session delete is
+  // destructive, so this can't rely solely on the client having sent a
+  // clean candidate list. Applies to every action type, not just
+  // delete_session, for consistency.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const sessionById = new Map(sessions.map((s: any) => [s.id, s]));
+  const changes = normalized.filter((c) => {
+    const session = sessionById.get(c.session_id);
+    return !!session && typeof session.date === "string" && session.date >= todayISO;
+  });
 
   return NextResponse.json({
     changes,
