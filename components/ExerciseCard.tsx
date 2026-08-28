@@ -30,6 +30,21 @@ interface Props {
   // move, not a copy, so any logged sets/weights on it carry over.
   otherStrengthSessions?: { id: string; name: string; date: string }[];
   onMoveToSession?: (targetSessionId: string) => void;
+  // Collapsed ("zoomed out") vs expanded card state, owned by the
+  // parent (session page) rather than local - lets the page decide a
+  // sensible default (collapsed for existing exercises, expanded for
+  // one just added) and keep multiple cards open independently.
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  // Native HTML5 drag-and-drop (same pattern already used elsewhere in
+  // this app, e.g. settings/page.tsx's reflection-metrics reorder) -
+  // the parent owns the exercises array and the actual reorder logic
+  // (handleReorderExercise), this card only needs to forward the drag
+  // events for whichever index it represents.
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
 export default function ExerciseCard({
@@ -46,6 +61,12 @@ export default function ExerciseCard({
   onMoveDown,
   otherStrengthSessions = [],
   onMoveToSession,
+  expanded = true,
+  onToggleExpand,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: Props) {
   const [applyFutureOn, setApplyFutureOn] = useState(false);
   const [eachSideInfoOpen, setEachSideInfoOpen] = useState(false);
@@ -142,10 +163,60 @@ export default function ExerciseCard({
   // apply to a timed hold like a side plank, so it hides in time mode.
   const timeMode = (exercise.time ?? "").trim().length > 0;
 
+  // Same computed summary Live Group's collapsed exercise row already
+  // builds (e.g. "3× 8 60kg") - reused for consistency rather than a
+  // different format invented just for this card.
+  const prescSummary = [exercise.sets ? `${exercise.sets}×` : "", exercise.time || exercise.reps, exercise.target_load]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div style={styles.card}>
-      <div style={styles.cardHead}>
-        <div style={styles.moveBtnCol}>
+    <div
+      style={styles.card}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {!expanded && (
+        <div style={styles.collapsedRow} onClick={onToggleExpand}>
+          <span
+            draggable
+            onDragStart={onDragStart}
+            onClick={(e) => e.stopPropagation()}
+            style={styles.dragHandle}
+            title="Drag to reorder"
+          >
+            ⠿
+          </span>
+          <span style={styles.orderBadge}>{exercise.order || "—"}</span>
+          <span style={styles.collapsedName}>{exercise.name || "Untitled exercise"}</span>
+          {prescSummary && <span style={styles.collapsedPresc}>{prescSummary}</span>}
+          <button
+            style={styles.removeBtn}
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            title="Remove exercise"
+          >
+            ×
+          </button>
+          <span style={styles.expandChevron}>▾</span>
+        </div>
+      )}
+
+      {expanded && (
+      <>
+      <div style={styles.cardHead} onClick={onToggleExpand}>
+        <span
+          draggable
+          onDragStart={onDragStart}
+          style={styles.dragHandle}
+          title="Drag to reorder"
+        >
+          ⠿
+        </span>
+        <button style={styles.expandChevronBtn} onClick={(e) => { e.stopPropagation(); onToggleExpand?.(); }} title="Collapse">
+          ▴
+        </button>
+        <div style={styles.moveBtnCol} onClick={(e) => e.stopPropagation()}>
           <button
             style={{ ...styles.moveBtn, opacity: onMoveUp ? 1 : 0.25 }}
             onClick={onMoveUp}
@@ -166,11 +237,12 @@ export default function ExerciseCard({
         <input
           value={exercise.order}
           onChange={(e) => onEdit({ order: e.target.value })}
+          onClick={(e) => e.stopPropagation()}
           placeholder="#"
           title="e.g. 1, or 1A/1B for a superset - a plain number moves this exercise to that position"
           style={styles.orderInput}
         />
-        <div style={styles.nameFieldWrap}>
+        <div style={styles.nameFieldWrap} onClick={(e) => e.stopPropagation()}>
           <input
             value={exercise.name}
             onChange={(e) => {
@@ -212,14 +284,14 @@ export default function ExerciseCard({
           )}
         </div>
         {exercise.video_url && (
-          <button style={styles.videoBtn} onClick={() => setVideoOpen(true)} title="Watch demo video">
+          <button style={styles.videoBtn} onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }} title="Watch demo video">
             ▶
           </button>
         )}
         {athleteId && exercise.name.trim() && (
           <button
             style={styles.historyBtn}
-            onClick={() => setHistoryOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setHistoryOpen(true); }}
             title="View history & PB"
           >
             📈
@@ -228,7 +300,7 @@ export default function ExerciseCard({
         {athleteId && exercise.name.trim() && (
           <button
             style={styles.historyBtn}
-            onClick={() => setAltPickerOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setAltPickerOpen(true); }}
             title="Set approved alternative exercises the athlete can swap to"
           >
             🔀{exercise.alternative_names?.length ? ` ${exercise.alternative_names.length}` : ""}
@@ -257,13 +329,13 @@ export default function ExerciseCard({
         {onMoveToSession && otherStrengthSessions.length > 0 && (
           <button
             style={styles.historyBtn}
-            onClick={() => setMovePickerOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setMovePickerOpen(true); }}
             title="Move this exercise to another session"
           >
             ↪
           </button>
         )}
-        <button style={styles.removeBtn} onClick={onRemove}>
+        <button style={styles.removeBtn} onClick={(e) => { e.stopPropagation(); onRemove(); }}>
           ×
         </button>
       </div>
@@ -665,6 +737,8 @@ export default function ExerciseCard({
           );
         })}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -695,7 +769,56 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     padding: 14,
   },
-  cardHead: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const },
+  cardHead: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const, cursor: "pointer" },
+  collapsedRow: { display: "flex", alignItems: "center", gap: 10, cursor: "pointer" },
+  dragHandle: {
+    cursor: "grab",
+    color: "var(--mute)",
+    fontSize: 16,
+    lineHeight: 1,
+    flexShrink: 0,
+    padding: "4px 2px",
+    userSelect: "none" as const,
+  },
+  orderBadge: {
+    minWidth: 24,
+    textAlign: "center" as const,
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: 800,
+    color: "var(--accent)",
+    background: "var(--accent-dim)",
+    borderRadius: 6,
+    padding: "3px 6px",
+  },
+  collapsedName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    fontWeight: 700,
+    color: "var(--text)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
+  },
+  collapsedPresc: {
+    fontSize: 12,
+    color: "var(--mute)",
+    flexShrink: 0,
+    whiteSpace: "nowrap" as const,
+  },
+  expandChevron: { color: "var(--accent)", fontSize: 12, flexShrink: 0 },
+  expandChevronBtn: {
+    background: "transparent",
+    border: "1px solid var(--accent)",
+    color: "var(--accent)",
+    borderRadius: 6,
+    width: 26,
+    height: 26,
+    fontSize: 13,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
   orderInput: {
     width: 36,
     flexShrink: 0,

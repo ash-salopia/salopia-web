@@ -58,6 +58,26 @@ export default function SessionDetailPage() {
   const sessionRef = useRef<Session | null>(null);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const [otherSessions, setOtherSessions] = useState<SessionStub[]>([]);
+  // Which strength exercise cards are expanded ("zoomed in") - existing
+  // exercises load collapsed (the actual decluttering), a freshly-added
+  // one is added to this set so it opens ready to fill in immediately.
+  const [expandedExerciseIds, setExpandedExerciseIds] = useState<Set<string>>(new Set());
+  const toggleExerciseExpanded = (id: string) => {
+    setExpandedExerciseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  // Drag-and-drop reorder state - just the dragged exercise's current
+  // sorted index, read back out on drop to feed the existing
+  // handleReorderExercise (same function the ▴/▾ buttons already use -
+  // dragging is just a new way to call it, not a new reorder
+  // implementation). The drop-target highlight itself is set directly
+  // on the DOM node in the handlers below, not through React state,
+  // same imperative approach already used in settings/page.tsx's
+  // reflection-metrics reorder.
+  const draggedExerciseIndexRef = useRef<number | null>(null);
   // Per-set calculated %1RM targets (kg), keyed by exercise id — shown
   // as a preview in the load box while prescribing, never saved to
   // the log until the coach explicitly ticks a set done.
@@ -289,6 +309,7 @@ export default function SessionDetailPage() {
     setSession((prev) =>
       prev ? { ...prev, exercises: [...(prev.exercises ?? []), data] } : prev
     );
+    setExpandedExerciseIds((prev) => new Set(prev).add(data.id));
   };
 
   const handleEditExercise = async (exerciseId: string, patch: Partial<SessionExercise>) => {
@@ -937,6 +958,35 @@ export default function SessionDetailPage() {
                 onMoveDown={i < exercises.length - 1 ? () => handleReorderExercise(ex.id, i + 2) : undefined}
                 otherStrengthSessions={otherSessions.filter((s) => s.type === "strength" && s.id !== sessionId)}
                 onMoveToSession={(targetSessionId) => handleMoveExercise(ex.id, targetSessionId)}
+                expanded={expandedExerciseIds.has(ex.id)}
+                onToggleExpand={() => toggleExerciseExpanded(ex.id)}
+                onDragStart={(e) => {
+                  draggedExerciseIndexRef.current = i;
+                  e.dataTransfer.setData("text/plain", String(i));
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  (e.currentTarget as HTMLElement).style.outline = "1px solid var(--accent)";
+                }}
+                onDragLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.outline = "none";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLElement).style.outline = "none";
+                  const fromIdx = draggedExerciseIndexRef.current;
+                  draggedExerciseIndexRef.current = null;
+                  if (fromIdx == null || fromIdx === i) return;
+                  const draggedId = exercises[fromIdx]?.id;
+                  if (!draggedId) return;
+                  // handleReorderExercise's targetPos is 1-based and
+                  // already handles the sort_order/order-label
+                  // persistence for everyone shifted - dragging is just
+                  // a new way to call the same reorder used by ▴/▾.
+                  handleReorderExercise(draggedId, i + 1);
+                }}
               />
             ))}
           </div>
