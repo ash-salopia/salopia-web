@@ -6,13 +6,14 @@ import { listLiveGroupAthletes } from "@/lib/data/athletes";
 import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise, updateSession } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
+import { listLibrary } from "@/lib/data/library";
 import CheckInModal from "@/components/CheckInModal";
 import LiveChallengePanel from "@/components/LiveChallengePanel";
 import HyroxCardioLog from "@/components/HyroxCardioLog";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
 import { useIsMobile } from "@/lib/use-is-mobile";
-import type { Athlete, Session, SessionType, SetLog, SessionExercise } from "@/types";
+import type { Athlete, Session, SessionType, SetLog, SessionExercise, LibraryEntry } from "@/types";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -91,6 +92,106 @@ function formatPrevSets(ex: SessionExercise | null): string | null {
   return parts.length ? parts.join(", ") : null;
 }
 
+// The single best completed set this session (heaviest weight, longest
+// time, or most reps depending on how the exercise is prescribed) - the
+// one number worth comparing against last time to say "progressing or
+// not" without drowning the coach in every individual set.
+function bestCompletedValue(ex: SessionExercise | null): { weight: number | null; reps: number | null; time: number | null } | null {
+  if (!ex) return null;
+  const done = (ex.log ?? []).filter((l) => l.done);
+  if (!done.length) return null;
+  const timeMode = (ex.time ?? "").trim().length > 0;
+  if (timeMode) {
+    const times = done.map((l) => parseFloat(l.time ?? "")).filter((n) => isFinite(n));
+    return times.length ? { weight: null, reps: null, time: Math.max(...times) } : null;
+  }
+  const weights = done.map((l) => parseFloat(l.weight ?? "")).filter((n) => isFinite(n));
+  const reps = done.map((l) => parseInt(l.reps ?? "", 10)).filter((n) => isFinite(n));
+  const weight = weights.length ? Math.max(...weights) : null;
+  const repsMax = reps.length ? Math.max(...reps) : null;
+  if (weight == null && repsMax == null) return null;
+  return { weight, reps: repsMax, time: null };
+}
+
+type ProgressionSignal = { direction: "up" | "down" | "same"; label: string };
+
+// Compares this session's best completed set so far against the same
+// exercise's best set last time - a data-driven complement to the
+// coach's own 👍/👎 judgement call, not a replacement for it. Weight is
+// compared first since it's the primary progression axis for a loaded
+// exercise; if the load is unchanged, reps at that load is the
+// tie-breaker (more reps at the same weight is still progress).
+// Returns null whenever there's nothing yet to compare - no prior
+// session, or nothing logged done yet this session.
+function computeBestSetSignal(currentEx: SessionExercise, prevEx: SessionExercise | null): ProgressionSignal | null {
+  if (!prevEx) return null;
+  const cur = bestCompletedValue(currentEx);
+  const prev = bestCompletedValue(prevEx);
+  if (!cur || !prev) return null;
+
+  if (cur.time != null && prev.time != null) {
+    const diff = Math.round((cur.time - prev.time) * 10) / 10;
+    if (diff === 0) return { direction: "same", label: "same" };
+    return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff}s` };
+  }
+
+  if (cur.weight != null && prev.weight != null) {
+    const wDiff = Math.round((cur.weight - prev.weight) * 10) / 10;
+    if (wDiff !== 0) return { direction: wDiff > 0 ? "up" : "down", label: `${wDiff > 0 ? "+" : ""}${wDiff}kg` };
+    if (cur.reps != null && prev.reps != null && cur.reps !== prev.reps) {
+      const rDiff = cur.reps - prev.reps;
+      return { direction: rDiff > 0 ? "up" : "down", label: `same weight, ${rDiff > 0 ? "+" : ""}${rDiff} reps` };
+    }
+    return { direction: "same", label: "same" };
+  }
+
+  if (cur.reps != null && prev.reps != null) {
+    const rDiff = cur.reps - prev.reps;
+    if (rDiff === 0) return { direction: "same", label: "same" };
+    return { direction: rDiff > 0 ? "up" : "down", label: `${rDiff > 0 ? "+" : ""}${rDiff} reps` };
+  }
+
+  return null;
+}
+
+// Total tonnage (Σ weight×reps across every completed set) this session
+// so far vs last time - a separate axis from the single best set above:
+// a coach could add a 4th working set at the same weight, which the
+// best-set comparison alone would read as "same" even though the
+// session's real total work done went up. Only meaningful for a
+// weighted, rep-based exercise - stays null for bodyweight/time-mode
+// ones, where there's no weight to sum.
+function totalLoadValue(ex: SessionExercise | null): number | null {
+  if (!ex) return null;
+  const done = (ex.log ?? []).filter((l) => l.done);
+  if (!done.length) return null;
+  let total = 0;
+  let counted = false;
+  for (const l of done) {
+    const w = parseFloat(l.weight ?? "");
+    const r = parseInt(l.reps ?? "", 10);
+    if (isFinite(w) && isFinite(r)) { total += w * r; counted = true; }
+  }
+  return counted ? total : null;
+}
+
+function computeTotalLoadSignal(currentEx: SessionExercise, prevEx: SessionExercise | null): ProgressionSignal | null {
+  if (!prevEx) return null;
+  const cur = totalLoadValue(currentEx);
+  const prev = totalLoadValue(prevEx);
+  if (cur == null || prev == null) return null;
+  const diff = Math.round((cur - prev) * 10) / 10;
+  if (diff === 0) return { direction: "same", label: "same" };
+  return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff}kg` };
+}
+
+function progressionArrow(direction: "up" | "down" | "same"): string {
+  return direction === "up" ? "▲" : direction === "down" ? "▼" : "＝";
+}
+function progressionDirStyle(direction: "up" | "down" | "same"): React.CSSProperties {
+  return direction === "up" ? s.exProgressionUp : direction === "down" ? s.exProgressionDown : s.exProgressionSame;
+}
+
 function lsGet(k: string): string { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } }
 function lsSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch {} }
 function lsGetObj(k: string): Record<string, string> { try { return JSON.parse(localStorage.getItem(k) ?? "{}"); } catch { return {}; } }
@@ -140,6 +241,8 @@ export default function LiveGroupPage() {
   const [challengesEnabled, setChallengesEnabled] = useState(true);
   const [challengePanelOpen, setChallengePanelOpen] = useState(false);
   const [editModal, setEditModal] = useState<{ sessionId: string; exercise: SessionExercise } | null>(null);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [editNameDropdownOpen, setEditNameDropdownOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<{ name: string; sets: string; mode: "reps" | "time"; reps: string; time: string; rest: string; target_load: string }>({
     name: "", sets: "", mode: "reps", reps: "", time: "", rest: "", target_load: "",
   });
@@ -161,6 +264,8 @@ export default function LiveGroupPage() {
 
       const sessionData = await listSessionsForAthletes(all.map((a) => a.id));
       setSessions(sessionData);
+
+      listLibrary().then(setLibrary).catch(() => {});
 
       const savedMode  = (lsGet(LS_MODE) as "starred" | "group") || "starred";
       const savedGroup = lsGet(LS_GROUP) || uniqueGroups[0] || "";
@@ -399,9 +504,31 @@ export default function LiveGroupPage() {
       target_load: ex.target_load ?? "",
     });
     setEditModal({ sessionId, exercise: ex });
+    setEditNameDropdownOpen(false);
   };
 
-  const closeEditExercise = () => setEditModal(null);
+  const closeEditExercise = () => { setEditModal(null); setEditNameDropdownOpen(false); };
+
+  // Picking a library match copies its preset fields onto the draft -
+  // only fields that are genuinely non-empty on the library entry, so
+  // picking a sparse preset never blanks out something the coach
+  // already typed. Mirrors ExerciseCard's applyLibraryPreset, scoped
+  // to the fields this quick-edit popup actually has.
+  const applyEditLibraryPreset = (entry: LibraryEntry) => {
+    setEditDraft((d) => {
+      const timeMode = entry.time ? true : entry.reps ? false : d.mode;
+      return {
+        name: entry.name,
+        sets: entry.sets ? entry.sets : d.sets,
+        mode: timeMode ? "time" : "reps",
+        reps: entry.reps || d.reps,
+        time: entry.time || d.time,
+        rest: entry.rest || d.rest,
+        target_load: entry.target_load || d.target_load,
+      };
+    });
+    setEditNameDropdownOpen(false);
+  };
 
   const saveEditExercise = async () => {
     if (!editModal) return;
@@ -487,6 +614,15 @@ export default function LiveGroupPage() {
   const activeSess    = activeAthlete ? getActiveSession(activeAthlete.id) : null;
   const sessChoices   = activeAthlete ? athleteSessions(activeAthlete.id) : [];
   const meta          = TYPE_META[activeSess?.type ?? "strength"];
+
+  // Library search for the quick exercise-edit popup's name field -
+  // same substring-match-anywhere convention as ExerciseCard's own
+  // autocomplete, so a coach swapping an exercise mid-session can find
+  // it by typing instead of only ever typing a fresh free-text name.
+  const editNameQuery = editDraft.name.trim().toLowerCase();
+  const editNameMatches = editNameQuery
+    ? library.filter((l) => l.name.toLowerCase().includes(editNameQuery)).slice(0, 8)
+    : [];
 
   return (
     <div style={s.page}>
@@ -624,9 +760,25 @@ export default function LiveGroupPage() {
                     // exercise, so the coach doesn't have to leave
                     // Live Group and dig through past sessions to see
                     // what to load the bar with.
-                    const prevLabel = formatPrevSets(
-                      findPreviousExercise(sessions, activeAthlete.id, ex.name, activeSess.date)
-                    );
+                    const prevEx = findPreviousExercise(sessions, activeAthlete.id, ex.name, activeSess.date);
+                    const prevLabel = formatPrevSets(prevEx);
+                    // Two independent, data-driven complements to the
+                    // coach's own 👍/👎 call below: the single best set
+                    // (heaviest load, or reps/time when there's no load)
+                    // and total tonnage across every completed set - a
+                    // coach adding an extra working set at the same
+                    // weight raises total load even though the best-set
+                    // comparison alone would read "same". Total stays
+                    // null (and hidden) for bodyweight/time-mode
+                    // exercises, where there's no weight to sum.
+                    const bestSignal = computeBestSetSignal(ex, prevEx);
+                    const totalSignal = computeTotalLoadSignal(ex, prevEx);
+                    // Before any set is ticked done this session there's
+                    // nothing yet to compare - fall back to what the
+                    // coach recorded last time instead of showing
+                    // nothing, in the same line slot the real signal
+                    // will take over once data comes in.
+                    const expectedProgress = !bestSignal && !totalSignal ? (prevEx?.progress || null) : null;
                     return (
                       <div key={ex.id} style={s.exBlock}>
                         {/* Clickable exercise header row */}
@@ -642,6 +794,22 @@ export default function LiveGroupPage() {
                             )}
                             {prevLabel && (
                               <span style={s.exPrevLine}>Last: {prevLabel}</span>
+                            )}
+                            {expectedProgress === "yes" && (
+                              <span style={{ ...s.exProgression, ...s.exProgressionUp }}>💡 Marked ready to progress last time</span>
+                            )}
+                            {expectedProgress === "no" && (
+                              <span style={{ ...s.exProgression, ...s.exProgressionSame }}>💡 Marked not ready to progress last time</span>
+                            )}
+                            {bestSignal && (
+                              <span style={{ ...s.exProgression, ...progressionDirStyle(bestSignal.direction) }}>
+                                {progressionArrow(bestSignal.direction)} Best: {bestSignal.label}
+                              </span>
+                            )}
+                            {totalSignal && (
+                              <span style={{ ...s.exProgression, ...progressionDirStyle(totalSignal.direction) }}>
+                                {progressionArrow(totalSignal.direction)} Total: {totalSignal.label}
+                              </span>
                             )}
                           </div>
                           <div style={{ ...s.exRight, ...(isMobile ? s.exRightMobile : {}) }}>
@@ -907,15 +1075,34 @@ export default function LiveGroupPage() {
           <div style={s.notePanel} onClick={(e) => e.stopPropagation()}>
             <div style={s.noteTitle}>Edit exercise</div>
             <div style={s.editFieldLabel}>Name</div>
-            <input
-              autoFocus
-              value={editDraft.name}
-              onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-              style={s.editInput}
-            />
+            <div style={s.editNameWrap}>
+              <input
+                autoFocus
+                value={editDraft.name}
+                onChange={(e) => { setEditDraft((d) => ({ ...d, name: e.target.value })); setEditNameDropdownOpen(true); }}
+                onFocus={() => setEditNameDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setEditNameDropdownOpen(false), 150)}
+                style={s.editInput}
+              />
+              {editNameDropdownOpen && editNameQuery && editNameMatches.length > 0 && (
+                <div style={s.editNameDropdown}>
+                  {editNameMatches.map((entry) => (
+                    <button
+                      key={entry.id}
+                      style={s.editNameDropdownItem}
+                      onMouseDown={(e) => { e.preventDefault(); applyEditLibraryPreset(entry); }}
+                    >
+                      {entry.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div style={s.editRow}>
               <div style={{ flex: 1 }}>
-                <div style={s.editFieldLabel}>Sets</div>
+                <div style={s.editFieldLabelRow}>
+                  <div style={s.editFieldLabel}>Sets</div>
+                </div>
                 <input
                   value={editDraft.sets}
                   onChange={(e) => setEditDraft((d) => ({ ...d, sets: e.target.value }))}
@@ -924,17 +1111,20 @@ export default function LiveGroupPage() {
                 />
               </div>
               <div style={{ flex: 2 }}>
-                <div style={s.editModeToggle}>
-                  <button
-                    style={{ ...s.editModeBtn, ...(editDraft.mode === "reps" ? s.editModeBtnActive : {}) }}
-                    onClick={() => setEditDraft((d) => ({ ...d, mode: "reps" }))}>
-                    Reps
-                  </button>
-                  <button
-                    style={{ ...s.editModeBtn, ...(editDraft.mode === "time" ? s.editModeBtnActive : {}) }}
-                    onClick={() => setEditDraft((d) => ({ ...d, mode: "time" }))}>
-                    Time
-                  </button>
+                <div style={s.editFieldLabelRow}>
+                  <div style={s.editFieldLabel}>Reps / Time</div>
+                  <div style={s.editModeToggle}>
+                    <button
+                      style={{ ...s.editModeBtn, ...(editDraft.mode === "reps" ? s.editModeBtnActive : {}) }}
+                      onClick={() => setEditDraft((d) => ({ ...d, mode: "reps" }))}>
+                      Reps
+                    </button>
+                    <button
+                      style={{ ...s.editModeBtn, ...(editDraft.mode === "time" ? s.editModeBtnActive : {}) }}
+                      onClick={() => setEditDraft((d) => ({ ...d, mode: "time" }))}>
+                      Time
+                    </button>
+                  </div>
                 </div>
                 <input
                   value={editDraft.mode === "reps" ? editDraft.reps : editDraft.time}
@@ -1018,6 +1208,10 @@ const s: Record<string, React.CSSProperties> = {
   exName:       { fontSize: 14, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
   exPrescription:{ fontSize: 11, color: "var(--mute)", marginTop: 1 },
   exPrevLine:   { fontSize: 11, color: "var(--accent)", marginTop: 1 },
+  exProgression:     { fontSize: 11, fontWeight: 700, marginTop: 1, display: "block" },
+  exProgressionUp:   { color: "var(--good)" },
+  exProgressionDown: { color: "#ff7d7d" },
+  exProgressionSame: { color: "var(--mute)" },
   exRight:      { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
   // Stacks dots+count above thumbs instead of one long row, so exMeta
   // (the exercise name, flex:1 minWidth:0) gets more of the row's
@@ -1057,10 +1251,26 @@ const s: Record<string, React.CSSProperties> = {
   noteBtns:     { display: "flex", gap: 8, justifyContent: "flex-end" },
   noteCancelBtn:{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   noteSaveBtn:  { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
-  editFieldLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em", marginBottom: 4 },
+  editFieldLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em" },
+  // Label sits on its own row, height-matched across every field in a
+  // given editRow (with or without a mode toggle alongside it) so the
+  // inputs below always start at the same y position - previously the
+  // Reps/Time column had an extra toggle row between its label and
+  // input that Sets didn't, pushing its input down out of alignment.
+  editFieldLabelRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4, minHeight: 20 },
   editInput:    { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 12px", fontSize: 14, boxSizing: "border-box" as const },
   editRow:      { display: "flex", gap: 10 },
-  editModeToggle: { display: "flex", gap: 4, background: "var(--ink)", borderRadius: 6, padding: 2, marginBottom: 4 },
-  editModeBtn:  { flex: 1, background: "transparent", border: "none", color: "var(--mute)", borderRadius: 5, padding: "3px 0", fontSize: 11, fontWeight: 600, cursor: "pointer" },
+  editNameWrap: { position: "relative" as const },
+  editNameDropdown: {
+    position: "absolute" as const, top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4,
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8,
+    maxHeight: 200, overflowY: "auto" as const, boxShadow: "0 4px 16px rgba(0,0,0,.3)",
+  },
+  editNameDropdownItem: {
+    display: "block", width: "100%", textAlign: "left" as const, background: "transparent", border: "none",
+    color: "var(--text)", padding: "8px 12px", fontSize: 13, cursor: "pointer",
+  },
+  editModeToggle: { display: "flex", gap: 4, background: "var(--ink)", borderRadius: 6, padding: 2 },
+  editModeBtn:  { background: "transparent", border: "none", color: "var(--mute)", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
   editModeBtnActive: { background: "var(--panel)", color: "var(--accent)" },
 };
