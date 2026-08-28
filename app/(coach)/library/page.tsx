@@ -95,8 +95,17 @@ export default function LibraryPage() {
     }
   };
 
+  // Matches by exercise name OR by session type - "cardio"/"hybrid"/
+  // "strength"/"power" filters down to exercises tagged with that type
+  // (checked against the same display label used to render the type
+  // tags below, so "hybrid" matches entries stored as "Hyrox"), rather
+  // than only ever matching against the exercise's own name.
   const filtered = query.trim()
-    ? library.filter((e) => e.name.toLowerCase().includes(query.trim().toLowerCase()))
+    ? library.filter((e) => {
+        const q = query.trim().toLowerCase();
+        if (e.name.toLowerCase().includes(q)) return true;
+        return (e.types ?? []).some((t) => (TYPE_DISPLAY_LABEL[t] ?? t).toLowerCase().includes(q));
+      })
     : library;
 
   return (
@@ -144,7 +153,7 @@ export default function LibraryPage() {
 
           {library.length > 0 && (
             <input
-              placeholder="Search exercises…"
+              placeholder="Search exercises or type (e.g. Cardio, Hybrid)…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               style={{ ...styles.input, marginBottom: 14 }}
