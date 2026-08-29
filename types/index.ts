@@ -473,6 +473,34 @@ export interface AthleteOneRM {
   updated_at: string;
 }
 
+// 0078 — per-athlete, per-exercise load-velocity profile for
+// VBT-estimated 1RM. Separate from AthleteOneRM above (a manual fixed
+// value) - this is derived from a fitted regression over coach-entered
+// test points, see lib/velocity-profile.ts for the actual formulas.
+export interface AthleteVelocityProfile {
+  id: string;
+  athlete_id: string;
+  exercise_name: string;
+  mvt: number;
+  calibration_points: { load: number; velocity: number }[];
+  slope: number;
+  intercept: number;
+  updated_at: string;
+}
+
+// Daily readiness check-in — one row per athlete per day. See
+// lib/checkin.ts for the question/scoring shape (CheckInAnswers).
+export interface CheckIn {
+  id: string;
+  athlete_id: string;
+  date: string;
+  energy: number;
+  sleep: number;
+  soreness: number;
+  volume: number;
+  created_at: string;
+}
+
 // ------------------------------------------------------------
 // Programmes (Prog Library)
 // ------------------------------------------------------------
@@ -573,6 +601,19 @@ export interface TestSession {
   notes: string;
   created_at: string;
   results?: TestResult[];
+  group_test_session_id?: string | null; // 0080 — set when this session was created via Group Testing
+}
+
+// 0080 — a named parent for a squad-wide testing day. Thin wrapper:
+// each athlete in it still has a normal TestSession row (linked back
+// via group_test_session_id) holding the actual trials.
+export interface GroupTestSession {
+  id: string;
+  organisation_id: string;
+  name: string;
+  test_battery_id: string | null;
+  date: string; // YYYY-MM-DD
+  created_at: string;
 }
 
 export interface TestResult {

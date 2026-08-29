@@ -3,7 +3,7 @@ import { reorderSessionsOnDay, copySessionToDates } from "@/lib/data/sessions";
 import CopySessionModal from "@/components/CopySessionModal";
 
 import { useEffect, useState, useMemo } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import {
   listSessionsForAthlete,
@@ -91,6 +91,7 @@ function EditableName({ name, onSave }: { name: string; onSave: (n: string) => P
 export default function AthleteDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const athleteId = params.id;
 
   const [athlete, setAthlete] = useState<Athlete | null>(null);
@@ -212,6 +213,12 @@ export default function AthleteDetailPage() {
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
+
+  // Deep link from the dashboard's "Athlete messages" panel
+  useEffect(() => {
+    if (searchParams.get("openMessages") === "1") setMessageOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();

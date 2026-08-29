@@ -7,13 +7,14 @@ import {
   listBenchmarksForMetric, upsertBenchmark, deleteBenchmark,
 } from "@/lib/data/testing";
 import type { TestBattery, TestMetric, TestBenchmark } from "@/types";
+import GroupTestingTab from "@/components/GroupTestingTab";
 
 export default function TestingManagePage() {
   const [batteries, setBatteries] = useState<TestBattery[]>([]);
   const [metrics, setMetrics] = useState<TestMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"batteries" | "metrics">("batteries");
+  const [tab, setTab] = useState<"group" | "batteries" | "metrics">("batteries");
 
   const [selectedBatteryId, setSelectedBatteryId] = useState<string | null>(null);
   const [selectedMetricId, setSelectedMetricId] = useState<string | null>(null);
@@ -41,13 +42,16 @@ export default function TestingManagePage() {
       <div style={s.headRow}>
         <div>
           <h1 style={s.title}>🧪 Testing</h1>
-          <p style={s.subtitle}>Manage test batteries, metrics, and benchmark norms. Log results and generate reports from each athlete's page.</p>
+          <p style={s.subtitle}>Run a squad-wide testing session, or manage test batteries, metrics, and benchmark norms. Individual reports are generated from each athlete's page.</p>
         </div>
       </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
 
       <div style={s.tabs}>
+        <button style={{ ...s.tab, ...(tab === "group" ? s.tabActive : {}) }} onClick={() => setTab("group")}>
+          Group Testing
+        </button>
         <button style={{ ...s.tab, ...(tab === "batteries" ? s.tabActive : {}) }} onClick={() => setTab("batteries")}>
           Batteries
         </button>
@@ -58,6 +62,8 @@ export default function TestingManagePage() {
 
       {loading ? (
         <div style={s.empty}>Loading…</div>
+      ) : tab === "group" ? (
+        <GroupTestingTab batteries={batteries} />
       ) : tab === "batteries" ? (
         <BatteriesTab
           batteries={batteries}

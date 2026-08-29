@@ -8,11 +8,13 @@ import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete } from "@/lib/data/athletes";
 import { updateAthleteAvatar } from "@/lib/data/avatars";
 import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
+import { listVelocityProfiles, upsertVelocityProfile, deleteVelocityProfile } from "@/lib/data/velocity-profiles";
+import { fitLinearRegression } from "@/lib/velocity-profile";
 import { getOrgSettings } from "@/lib/data/settings";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
-import type { Athlete, AthleteOneRM } from "@/types";
+import type { Athlete, AthleteOneRM, AthleteVelocityProfile } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -203,6 +205,16 @@ export default function AthleteProfilePage() {
   const [newOneRM, setNewOneRM] = useState({ exercise_name: "", weight: "" });
   const [oneRmNameDropdownOpen, setOneRmNameDropdownOpen] = useState(false);
   const [savingOneRM, setSavingOneRM] = useState(false);
+  const [velocityProfiles, setVelocityProfiles] = useState<AthleteVelocityProfile[]>([]);
+  const [addingProfile, setAddingProfile] = useState(false);
+  const [newProfile, setNewProfile] = useState<{ exercise_name: string; mvt: string; points: { load: string; velocity: string }[] }>({
+    exercise_name: "",
+    mvt: "",
+    points: [{ load: "", velocity: "" }, { load: "", velocity: "" }],
+  });
+  const [profileNameDropdownOpen, setProfileNameDropdownOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const [loading, setLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(false);
   const [error, setError] = useState("");
@@ -213,6 +225,7 @@ export default function AthleteProfilePage() {
     load();
     listLibrary().then((entries) => setLibrary(entries)).catch(() => {});
     listAthleteOneRMs(athleteId).then(setOneRMs).catch(() => {});
+    listVelocityProfiles(athleteId).then(setVelocityProfiles).catch(() => {});
     getOrgSettings().then((s) => setOrgPbEnabled(s.pb_enabled !== false)).catch(() => {});
   }, [athleteId]);
 
@@ -345,6 +358,55 @@ export default function AthleteProfilePage() {
     } finally {
       setProgressLoading(false);
     }
+  };
+
+  // Live fit preview as the coach edits calibration points - lets them
+  // see slope/intercept/R² (fit quality) before committing, rather
+  // than only finding out after save whether the points were usable.
+  const newProfileFit = fitLinearRegression(
+    newProfile.points
+      .map((pt) => ({ load: parseFloat(pt.load), velocity: parseFloat(pt.velocity) }))
+      .filter((pt) => isFinite(pt.load) && isFinite(pt.velocity))
+  );
+
+  const resetProfileForm = () => {
+    setNewProfile({ exercise_name: "", mvt: "", points: [{ load: "", velocity: "" }, { load: "", velocity: "" }] });
+    setProfileError("");
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileError("");
+    const mvtVal = parseFloat(newProfile.mvt);
+    if (!newProfile.exercise_name.trim() || !isFinite(mvtVal) || mvtVal <= 0) {
+      setProfileError("Exercise name and a minimum velocity threshold are required.");
+      return;
+    }
+    const points = newProfile.points
+      .map((pt) => ({ load: parseFloat(pt.load), velocity: parseFloat(pt.velocity) }))
+      .filter((pt) => isFinite(pt.load) && isFinite(pt.velocity));
+    setSavingProfile(true);
+    try {
+      const saved = await upsertVelocityProfile(athleteId, newProfile.exercise_name, points, mvtVal);
+      setVelocityProfiles((prev) => [...prev.filter((r) => r.id !== saved.id), saved].sort((a, b) => a.exercise_name.localeCompare(b.exercise_name)));
+      setAddingProfile(false);
+      resetProfileForm();
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : "Could not save velocity profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleEditProfile = (profile: AthleteVelocityProfile) => {
+    setNewProfile({
+      exercise_name: profile.exercise_name,
+      mvt: String(profile.mvt),
+      points: profile.calibration_points.length
+        ? profile.calibration_points.map((pt) => ({ load: String(pt.load), velocity: String(pt.velocity) }))
+        : [{ load: "", velocity: "" }, { load: "", velocity: "" }],
+    });
+    setProfileError("");
+    setAddingProfile(true);
   };
 
   if (loading) return <div style={p.loading}>Loading profile…</div>;
@@ -784,6 +846,158 @@ export default function AthleteProfilePage() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Velocity profile (VBT) - calibrated load-velocity regression per
+          exercise, used to estimate 1RM from bar speed in reports.
+          Separate from the 1RM Tracker above (a manual fixed value) -
+          this is derived from test points the coach enters. */}
+      <div style={p.section}>
+        <div style={p.sectionTitle}>📈 Velocity profile (VBT)</div>
+        <p style={p.sectionHint}>
+          Enter a few test reps at different loads for an exercise (at least 2 different loads) to fit a
+          load-velocity line. Reports then estimate that exercise&apos;s 1RM from ordinary logged bar-speed data,
+          re-anchored through your calibrated line. Exercises without a profile here just show the raw bar-speed
+          trend, unchanged.
+        </p>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button style={p.ghostBtn} onClick={() => { if (addingProfile) resetProfileForm(); setAddingProfile((v) => !v); }}>
+            {addingProfile ? "Cancel" : "+ Add profile"}
+          </button>
+        </div>
+
+        {addingProfile && (
+          <div style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={p.sectionTitle}>Velocity profile</div>
+            {profileError && <div style={{ color: "#FF6B6B", fontSize: 12 }}>{profileError}</div>}
+
+            <div style={{ position: "relative" as const }}>
+              <input
+                placeholder="Exercise name"
+                value={newProfile.exercise_name}
+                onChange={(e) => { setNewProfile((v) => ({ ...v, exercise_name: e.target.value })); setProfileNameDropdownOpen(true); }}
+                onFocus={() => setProfileNameDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setProfileNameDropdownOpen(false), 150)}
+                style={p.editInput}
+              />
+              {profileNameDropdownOpen && newProfile.exercise_name.trim() && (
+                <div style={p.pbNameDropdown}>
+                  {library
+                    .filter((entry) => entry.name.toLowerCase().includes(newProfile.exercise_name.toLowerCase()))
+                    .slice(0, 8)
+                    .map((entry, i) => (
+                      <button
+                        key={i}
+                        style={p.pbNameDropdownItem}
+                        onMouseDown={() => { setNewProfile((v) => ({ ...v, exercise_name: entry.name })); setProfileNameDropdownOpen(false); }}
+                      >
+                        {entry.name}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                placeholder="Minimum velocity threshold"
+                value={newProfile.mvt}
+                onChange={(e) => setNewProfile((v) => ({ ...v, mvt: e.target.value }))}
+                style={{ ...p.editInput, flex: 1 }}
+                inputMode="decimal"
+              />
+              <span style={{ fontSize: 12, color: "var(--mute)" }}>m/s</span>
+            </div>
+
+            <div style={{ fontSize: 11, color: "var(--mute)", fontWeight: 700, textTransform: "uppercase" as const, marginTop: 4 }}>
+              Test points
+            </div>
+            {newProfile.points.map((pt, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  placeholder="Load (kg)"
+                  value={pt.load}
+                  onChange={(e) => setNewProfile((v) => ({ ...v, points: v.points.map((p2, j) => (j === i ? { ...p2, load: e.target.value } : p2)) }))}
+                  style={{ ...p.editInput, flex: 1 }}
+                  inputMode="decimal"
+                />
+                <input
+                  placeholder="Velocity (m/s)"
+                  value={pt.velocity}
+                  onChange={(e) => setNewProfile((v) => ({ ...v, points: v.points.map((p2, j) => (j === i ? { ...p2, velocity: e.target.value } : p2)) }))}
+                  style={{ ...p.editInput, flex: 1 }}
+                  inputMode="decimal"
+                />
+                {newProfile.points.length > 2 && (
+                  <button
+                    style={{ background: "transparent", border: "none", color: "#FF6B6B", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                    onClick={() => setNewProfile((v) => ({ ...v, points: v.points.filter((_, j) => j !== i) }))}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              style={{ ...p.ghostBtn, alignSelf: "flex-start" }}
+              onClick={() => setNewProfile((v) => ({ ...v, points: [...v.points, { load: "", velocity: "" }] }))}
+            >
+              + Add point
+            </button>
+
+            <div style={{ fontSize: 12, color: newProfileFit ? "var(--accent)" : "var(--mute)", marginTop: 4 }}>
+              {newProfileFit
+                ? `Fitted: slope ${newProfileFit.slope.toFixed(4)}, intercept ${newProfileFit.intercept.toFixed(3)}, R² ${newProfileFit.rSquared.toFixed(2)}`
+                : "Add at least 2 points at different loads to fit a profile."}
+            </div>
+
+            <button
+              style={{ ...p.ghostBtn, background: "var(--accent)", color: "#0a1420", border: "none", opacity: (!newProfile.exercise_name.trim() || !newProfileFit || savingProfile) ? 0.5 : 1 }}
+              disabled={!newProfile.exercise_name.trim() || !newProfileFit || savingProfile}
+              onClick={handleSaveProfile}
+            >
+              {savingProfile ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+
+        {velocityProfiles.length === 0 ? (
+          <div style={p.empty}>No velocity profiles set for this athlete yet.</div>
+        ) : (
+          <div style={p.pbList}>
+            {velocityProfiles.map((profile) => {
+              const fit = fitLinearRegression(profile.calibration_points);
+              return (
+                <div key={profile.id} style={{ ...p.checkinCard, gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={p.pbExercise}>{profile.exercise_name}</div>
+                    <div style={p.pbDate}>
+                      MVT {profile.mvt}m/s · slope {profile.slope.toFixed(4)} · intercept {profile.intercept.toFixed(3)}
+                      {fit && ` · R² ${fit.rSquared.toFixed(2)}`} · {profile.calibration_points.length} points · updated {formatDate(profile.updated_at)}
+                    </div>
+                  </div>
+                  <button style={p.ghostBtn} onClick={() => handleEditProfile(profile)}>Edit</button>
+                  <button
+                    style={{ background: "transparent", border: "none", color: "#FF6B6B", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                    title="Delete this velocity profile"
+                    onClick={async () => {
+                      if (!confirm(`Delete the velocity profile for ${profile.exercise_name}?`)) return;
+                      try {
+                        await deleteVelocityProfile(profile.id);
+                        setVelocityProfiles((prev) => prev.filter((r) => r.id !== profile.id));
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Could not delete velocity profile");
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

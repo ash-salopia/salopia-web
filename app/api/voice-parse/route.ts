@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,36 +107,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
     { role: "user", content: transcript },
   ];
 
-  let anthropicRes: Response;
-  try {
-    anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        system: SYSTEM,
-        messages,
-      }),
-    });
-  } catch (e) {
-    return NextResponse.json({ error: "Could not reach AI service" }, { status: 502 });
-  }
+  // "Build a session by talking" — wrong exercises kill the magic, so
+  // kept on the stronger model. The coach reviews the parse before save.
+  const r = await callClaude({ model: AI_MODEL.parse, system: SYSTEM, maxTokens: 1024, messages });
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
 
-  if (!anthropicRes.ok) {
-    const detail = await anthropicRes.text().catch(() => "");
-    return NextResponse.json(
-      { error: `AI request failed (${anthropicRes.status}): ${detail}` },
-      { status: 500 }
-    );
-  }
-
-  const anthropicData = await anthropicRes.json();
-  const raw: string = anthropicData?.content?.[0]?.text ?? "{}";
+  const raw: string = r.text || "{}";
 
   let parsed: { exercises?: ParsedExercise[]; session_type?: string; message?: string };
   try {

@@ -27,16 +27,18 @@ export interface SessionNoteAlert {
 
 // Athlete session notes the coach hasn't acknowledged yet, for the
 // dashboard's "Session comments" panel — org-wide via RLS, not scoped
-// to a single athlete. Non-inner embedded join, no ordering on the
-// joined table, same safe pattern as listRecentOrgPBs.
+// to a single athlete. Inner join on athletes with an archived filter
+// so an archived athlete's outstanding notes drop off the dashboard,
+// same as listAthletes() excludes them everywhere else.
 export async function listUnacknowledgedSessionNotes(): Promise<SessionNoteAlert[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("sessions")
-    .select("id, name, date, athlete_notes, athlete:athletes(id, name)")
+    .select("id, name, date, athlete_notes, athlete:athletes!inner(id, name)")
     .eq("athlete_notes_acknowledged", false)
     .not("athlete_notes", "is", null)
     .neq("athlete_notes", "")
+    .eq("athlete.archived", false)
     .order("date", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((s: any) => {

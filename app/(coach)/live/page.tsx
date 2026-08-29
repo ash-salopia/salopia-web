@@ -14,6 +14,9 @@ import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
 import { useIsMobile } from "@/lib/use-is-mobile";
 import type { Athlete, Session, SessionType, SetLog, SessionExercise, LibraryEntry } from "@/types";
+import {
+  findPreviousExercise, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal, progressionArrow,
+} from "@/lib/session-progress";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -39,29 +42,10 @@ function fmtDate(iso: string): string {
   return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-// Finds this exercise's most recent PRIOR session for the same
-// athlete (by name, case-insensitive) with at least one completed
-// set - so the coach can see what was actually lifted last time
-// without leaving Live Group to dig through session history.
-function findPreviousExercise(
-  sessions: Session[],
-  athleteId: string,
-  exerciseName: string,
-  beforeDate: string
-): SessionExercise | null {
-  const name = exerciseName.trim().toLowerCase();
-  if (!name) return null;
-  const past = sessions
-    .filter((s) => s.athlete_id === athleteId && s.date < beforeDate)
-    .sort((a, b) => (a.date < b.date ? 1 : -1)); // most recent first
-  for (const sess of past) {
-    const match = (sess.exercises ?? []).find(
-      (e) => (e.name ?? "").trim().toLowerCase() === name && (e.log ?? []).some((l) => l.done)
-    );
-    if (match) return match;
-  }
-  return null;
-}
+// Progression-signal helpers (findPreviousExercise, formatPrevSets,
+// computeBestSetSignal, computeTotalLoadSignal, progressionArrow) now
+// live in @/lib/session-progress so the AI session summary can reuse
+// the exact same numbers shown here.
 
 // A prescribed reps string only counts as an auto-fillable default
 // when it's a single clean number ("8") - a range ("8-12") has no one
@@ -72,122 +56,6 @@ function singleRepValue(prescribedReps?: string): string | null {
   return /^\d+$/.test(t) ? t : null;
 }
 
-// "50kg×8, 55kg×8" / "45s, 45s" / "×8, ×8" depending on how the
-// exercise was actually logged (weighted, bodyweight+time, or
-// bodyweight+reps) - only completed sets are included.
-function formatPrevSets(ex: SessionExercise | null): string | null {
-  if (!ex) return null;
-  const timeMode = (ex.time ?? "").trim().length > 0;
-  const showWeight = !ex.is_bodyweight;
-  const parts = (ex.log ?? [])
-    .filter((l) => l.done)
-    .map((l) => {
-      if (timeMode) return l.time?.trim() ? `${l.time}s` : null;
-      if (!showWeight) return l.reps?.trim() ? `×${l.reps}` : null;
-      if (l.weight?.trim() && l.reps?.trim()) return `${l.weight}kg×${l.reps}`;
-      if (l.weight?.trim()) return `${l.weight}kg`;
-      return null;
-    })
-    .filter((v): v is string => !!v);
-  return parts.length ? parts.join(", ") : null;
-}
-
-// The single best completed set this session (heaviest weight, longest
-// time, or most reps depending on how the exercise is prescribed) - the
-// one number worth comparing against last time to say "progressing or
-// not" without drowning the coach in every individual set.
-function bestCompletedValue(ex: SessionExercise | null): { weight: number | null; reps: number | null; time: number | null } | null {
-  if (!ex) return null;
-  const done = (ex.log ?? []).filter((l) => l.done);
-  if (!done.length) return null;
-  const timeMode = (ex.time ?? "").trim().length > 0;
-  if (timeMode) {
-    const times = done.map((l) => parseFloat(l.time ?? "")).filter((n) => isFinite(n));
-    return times.length ? { weight: null, reps: null, time: Math.max(...times) } : null;
-  }
-  const weights = done.map((l) => parseFloat(l.weight ?? "")).filter((n) => isFinite(n));
-  const reps = done.map((l) => parseInt(l.reps ?? "", 10)).filter((n) => isFinite(n));
-  const weight = weights.length ? Math.max(...weights) : null;
-  const repsMax = reps.length ? Math.max(...reps) : null;
-  if (weight == null && repsMax == null) return null;
-  return { weight, reps: repsMax, time: null };
-}
-
-type ProgressionSignal = { direction: "up" | "down" | "same"; label: string };
-
-// Compares this session's best completed set so far against the same
-// exercise's best set last time - a data-driven complement to the
-// coach's own 👍/👎 judgement call, not a replacement for it. Weight is
-// compared first since it's the primary progression axis for a loaded
-// exercise; if the load is unchanged, reps at that load is the
-// tie-breaker (more reps at the same weight is still progress).
-// Returns null whenever there's nothing yet to compare - no prior
-// session, or nothing logged done yet this session.
-function computeBestSetSignal(currentEx: SessionExercise, prevEx: SessionExercise | null): ProgressionSignal | null {
-  if (!prevEx) return null;
-  const cur = bestCompletedValue(currentEx);
-  const prev = bestCompletedValue(prevEx);
-  if (!cur || !prev) return null;
-
-  if (cur.time != null && prev.time != null) {
-    const diff = Math.round((cur.time - prev.time) * 10) / 10;
-    if (diff === 0) return { direction: "same", label: "same" };
-    return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff}s` };
-  }
-
-  if (cur.weight != null && prev.weight != null) {
-    const wDiff = Math.round((cur.weight - prev.weight) * 10) / 10;
-    if (wDiff !== 0) return { direction: wDiff > 0 ? "up" : "down", label: `${wDiff > 0 ? "+" : ""}${wDiff}kg` };
-    if (cur.reps != null && prev.reps != null && cur.reps !== prev.reps) {
-      const rDiff = cur.reps - prev.reps;
-      return { direction: rDiff > 0 ? "up" : "down", label: `same weight, ${rDiff > 0 ? "+" : ""}${rDiff} reps` };
-    }
-    return { direction: "same", label: "same" };
-  }
-
-  if (cur.reps != null && prev.reps != null) {
-    const rDiff = cur.reps - prev.reps;
-    if (rDiff === 0) return { direction: "same", label: "same" };
-    return { direction: rDiff > 0 ? "up" : "down", label: `${rDiff > 0 ? "+" : ""}${rDiff} reps` };
-  }
-
-  return null;
-}
-
-// Total tonnage (Σ weight×reps across every completed set) this session
-// so far vs last time - a separate axis from the single best set above:
-// a coach could add a 4th working set at the same weight, which the
-// best-set comparison alone would read as "same" even though the
-// session's real total work done went up. Only meaningful for a
-// weighted, rep-based exercise - stays null for bodyweight/time-mode
-// ones, where there's no weight to sum.
-function totalLoadValue(ex: SessionExercise | null): number | null {
-  if (!ex) return null;
-  const done = (ex.log ?? []).filter((l) => l.done);
-  if (!done.length) return null;
-  let total = 0;
-  let counted = false;
-  for (const l of done) {
-    const w = parseFloat(l.weight ?? "");
-    const r = parseInt(l.reps ?? "", 10);
-    if (isFinite(w) && isFinite(r)) { total += w * r; counted = true; }
-  }
-  return counted ? total : null;
-}
-
-function computeTotalLoadSignal(currentEx: SessionExercise, prevEx: SessionExercise | null): ProgressionSignal | null {
-  if (!prevEx) return null;
-  const cur = totalLoadValue(currentEx);
-  const prev = totalLoadValue(prevEx);
-  if (cur == null || prev == null) return null;
-  const diff = Math.round((cur - prev) * 10) / 10;
-  if (diff === 0) return { direction: "same", label: "same" };
-  return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff}kg` };
-}
-
-function progressionArrow(direction: "up" | "down" | "same"): string {
-  return direction === "up" ? "▲" : direction === "down" ? "▼" : "＝";
-}
 function progressionDirStyle(direction: "up" | "down" | "same"): React.CSSProperties {
   return direction === "up" ? s.exProgressionUp : direction === "down" ? s.exProgressionDown : s.exProgressionSame;
 }

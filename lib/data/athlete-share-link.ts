@@ -4,7 +4,8 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 import { todayISO } from "@/lib/date-utils";
 import { bestRollingOneRM, calculateSetTargets, type OneRMFormula } from "@/lib/one-rm";
 import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
-import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise, RecoveryConfig, HyroxConfig, CardioConfig } from "@/types";
+import type { CheckInAnswers } from "@/lib/checkin";
+import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise, RecoveryConfig, HyroxConfig, CardioConfig, CheckIn } from "@/types";
 
 // Service-role version of getOrgSettings, resolved via the athlete's
 // organisation rather than a coach login. Lives here (not in
@@ -519,6 +520,31 @@ export async function submitSessionFeedback(
     .from("session_feedback")
     .upsert({ session_id: sessionId, athlete_id: athleteId, ...feedback }, { onConflict: "session_id" });
   if (error) throw error;
+}
+
+// "Lock programme until check-in completed" (0079) — one check-in
+// row per athlete per day, independent of any particular session.
+export async function getTodayCheckIn(athleteId: string): Promise<CheckIn | null> {
+  noStore();
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("checkins")
+    .select("*")
+    .eq("athlete_id", athleteId)
+    .eq("date", todayISO())
+    .maybeSingle();
+  return data ?? null;
+}
+
+export async function submitCheckIn(athleteId: string, answers: CheckInAnswers): Promise<CheckIn> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("checkins")
+    .upsert({ athlete_id: athleteId, date: todayISO(), ...answers }, { onConflict: "athlete_id,date" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // Session Library (0034) — templates a coach has granted this athlete

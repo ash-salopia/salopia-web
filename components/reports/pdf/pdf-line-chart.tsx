@@ -55,7 +55,15 @@ export function buildMultiLineGeometry(series: LineSeries[], width: number, heig
     points: s.points.map((p) => `${xAt(p.date).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(" "),
   }));
 
-  const yTicks = [yMin, (yMin + yMax) / 2, yMax].map((v) => ({ y: yAt(v), label: v.toFixed(v % 1 === 0 ? 0 : 1) }));
+  // 1 decimal place loses all precision on small-magnitude series like
+  // bar speed (0.3-0.9 m/s) - every tick rounds to the same "0.4"/"0.5"
+  // regardless of the real values. 2 decimals for anything under 10
+  // covers that without changing the existing 1-decimal behaviour for
+  // normal tonnage-scale numbers.
+  const yTicks = [yMin, (yMin + yMax) / 2, yMax].map((v) => ({
+    y: yAt(v),
+    label: v.toFixed(v % 1 === 0 ? 0 : Math.abs(v) < 10 ? 2 : 1),
+  }));
   const xTickIdxs = Array.from(new Set([0, Math.floor((dates.length - 1) / 2), dates.length - 1]));
   const xTicks = xTickIdxs.map((i) => ({ x: xAt(dates[i]), label: fmtDate(dates[i]) }));
 

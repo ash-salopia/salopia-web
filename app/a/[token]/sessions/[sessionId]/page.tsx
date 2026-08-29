@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getAthleteByShareToken, getAthleteSessions } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken, getAthleteSessions, getOrgSettingsForAthlete, getTodayCheckIn } from "@/lib/data/athlete-share-link";
 import AthleteSessionView from "@/components/AthleteSessionView";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,19 @@ export default async function AthleteLinkSessionPage({
     allSessions = undefined;
   }
 
+  let lockUntilCheckin = false;
+  let checkedInToday = false;
+  try {
+    const [settings, todayCheckIn] = await Promise.all([
+      getOrgSettingsForAthlete(athlete.id),
+      getTodayCheckIn(athlete.id),
+    ]);
+    lockUntilCheckin = !!settings.lock_until_checkin;
+    checkedInToday = !!todayCheckIn;
+  } catch {
+    // Fail open - never lock an athlete out of their session over a fetch error.
+  }
+
   return (
     <AthleteSessionView
       session={session}
@@ -35,6 +48,8 @@ export default async function AthleteLinkSessionPage({
       sessionId={sessionId}
       athleteName={athlete.name}
       token={token}
+      lockUntilCheckin={lockUntilCheckin}
+      checkedInToday={checkedInToday}
     />
   );
 }

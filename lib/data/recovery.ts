@@ -160,9 +160,10 @@ export async function listLowRecoveryAlerts(minCount: number): Promise<RecoveryA
 
   const { data, error } = await supabase
     .from("session_feedback")
-    .select("athlete_id, created_at, athlete:athletes(id, name)")
+    .select("athlete_id, created_at, athlete:athletes!inner(id, name)")
     .lte("recovery_score", LOW_RECOVERY_CUTOFF)
     .gte("created_at", since)
+    .eq("athlete.archived", false)
     .order("created_at", { ascending: false });
   if (error) throw error;
 

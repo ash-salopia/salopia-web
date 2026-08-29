@@ -5,6 +5,7 @@ import type { ReportData } from "@/lib/data/reports";
 import type { ReportOptions } from "@/components/ReportRangeModal";
 import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
+import { AiShimmer, Typewriter } from "@/components/AiText";
 import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
 import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
 import { METRIC_META } from "@/lib/cardio-metrics";
@@ -165,6 +166,7 @@ export default function ReportModal({
     powerSpeedSessions = [],
     powerSpeedSummaries = [],
     velocitySummaries = [],
+    velocityOneRMSummaries = [],
     cardioMetricSummaries = [],
     rpeEntries = [],
     rpeWeekly = [],
@@ -365,10 +367,10 @@ export default function ReportModal({
               <DismissBtn onClick={() => dismiss("ai-summary")} />
               <div style={styles.aiLabel}>✨ AI Summary</div>
               {aiLoading ? (
-                <div style={styles.aiLoading}>Generating summary…</div>
+                <AiShimmer lines={3} />
               ) : aiSummary ? (
                 <>
-                  <p style={styles.aiText}>{aiSummary.summary}</p>
+                  <p style={styles.aiText}><Typewriter text={aiSummary.summary} /></p>
                   {aiSummary.themes && (
                     <>
                       <div style={styles.aiSubLabel}>Recurring themes from notes</div>
@@ -1067,7 +1069,7 @@ export default function ReportModal({
           {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("barspeed-trends") && (
             <div style={{ marginTop: 24, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("barspeed-trends")} />
-              <div style={styles.sectionTitle}>Bar Speed Trends</div>
+              <div style={styles.sectionTitle}>Velocity Based Training</div>
               {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
                 <div key={ex.name} style={{ marginBottom: 16 }}>
                   <div style={styles.metricSubheading}>
@@ -1083,7 +1085,34 @@ export default function ReportModal({
                     unit="m/s"
                     fmtDate={fmtDate}
                     height={140}
+                    yAxisWidth={56}
+                    yTickFormatter={(v) => v.toFixed(2)}
                   />
+                  {/* Only exercises with a saved velocity profile
+                      (athlete profile page) get this - everything else
+                      just shows the raw m/s trend above, unchanged. */}
+                  {(() => {
+                    const oneRm = velocityOneRMSummaries.find((r) => r.name === ex.name);
+                    if (!oneRm || oneRm.entries.length < 2) return null;
+                    return (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ ...styles.metricSubheading, fontSize: 12 }}>
+                          Estimated 1RM (VBT)
+                          {oneRm.overallPct != null && (
+                            <span style={{ color: oneRm.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
+                              ({oneRm.overallPct >= 0 ? "+" : ""}{oneRm.overallPct.toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+                        <MultiTrendLineChart
+                          series={[{ name: `${ex.name} (VBT e1RM)`, points: oneRm.entries.map((e) => ({ date: e.date, value: e.estimatedOneRM })) }]}
+                          unit="kg"
+                          fmtDate={fmtDate}
+                          height={140}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

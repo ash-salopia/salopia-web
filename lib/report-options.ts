@@ -152,7 +152,7 @@ export const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: 
 // section by ReportOptionsForm.
 export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "powerSpeedTrend", label: "Power/Speed trend charts", hint: "Per-exercise time/distance progress from power & speed sessions" },
-  { key: "barSpeedTrend", label: "Bar speed trend charts", hint: "Per-exercise velocity (m/s) progress, for exercises tracking bar speed" },
+  { key: "barSpeedTrend", label: "Velocity Based Training (VBT)", hint: "Per-exercise bar speed (m/s) progress, for exercises tracking velocity" },
   { key: "cardioMetricsTrend", label: "Cardio metric trends", hint: "Distance, HR, pace and other tracked metrics from cardio sessions" },
   { key: "hyroxMetricsTrend", label: "Hybrid metric trends", hint: "Distance, HR, pace and other tracked metrics from hybrid sessions" },
   { key: "cardioSessionsList", label: "Cardio session list", hint: "Plain date + session name list, separate from the metric trend charts" },

@@ -14,6 +14,9 @@ import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-ut
 import { getOrgSettings } from "@/lib/data/settings";
 import { listRecentOrgPBs, formatPBValue, type PersonalBest } from "@/lib/data/personal-bests";
 import { listLowRecoveryAlerts, type RecoveryAlert } from "@/lib/data/recovery";
+import { listRecentAthleteMessages, type RecentDirectMessage } from "@/lib/data/messages";
+import { listTodayCheckIns } from "@/lib/data/checkins";
+import { flaggedConditions } from "@/lib/checkin";
 import type { Athlete } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -39,6 +42,12 @@ interface ReportDue {
   athlete: Athlete;
   lastReportDate: string | null;
   daysOverdue: number;
+}
+
+interface CheckInAlert {
+  athleteId: string;
+  athleteName: string;
+  flags: string[];
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -67,6 +76,18 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -81,8 +102,10 @@ export default function DashboardPage() {
   const [testsDue, setTestsDue] = useState<TestAlert[]>([]);
   const [reportsDue, setReportsDue] = useState<ReportDue[]>([]);
   const [recentPBs, setRecentPBs] = useState<PersonalBest[]>([]);
+  const [recentMessages, setRecentMessages] = useState<RecentDirectMessage[]>([]);
   const [sessionNotes, setSessionNotes] = useState<SessionNoteAlert[]>([]);
   const [recoveryAlerts, setRecoveryAlerts] = useState<RecoveryAlert[]>([]);
+  const [checkInAlerts, setCheckInAlerts] = useState<CheckInAlert[]>([]);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [weekLabel, setWeekLabel] = useState("");
 
@@ -195,6 +218,20 @@ export default function DashboardPage() {
           setRecoveryAlerts([]);
         }
 
+        // ── Poor check-ins today ───────────────────────────────────────────────
+        if (orgSettings?.checkin_enabled) {
+          const todayCheckIns = await listTodayCheckIns().catch(() => []);
+          const alerts: CheckInAlert[] = [];
+          for (const c of todayCheckIns) {
+            if (!c.athlete) continue;
+            const flags = flaggedConditions(c, orgSettings.checkin_rules);
+            if (flags.length) alerts.push({ athleteId: c.athlete_id, athleteName: c.athlete.name, flags });
+          }
+          setCheckInAlerts(alerts.sort((a, b) => a.athleteName.localeCompare(b.athleteName)));
+        } else {
+          setCheckInAlerts([]);
+        }
+
         // ── Recent PBs (last 7 days) ──────────────────────────────────────────
         if (orgSettings?.pb_enabled !== false) {
           const pbs = await listRecentOrgPBs(7).catch(() => [] as PersonalBest[]);
@@ -206,6 +243,12 @@ export default function DashboardPage() {
         // ── Unread session comments ───────────────────────────────────────────
         const notes = await listUnacknowledgedSessionNotes().catch(() => [] as SessionNoteAlert[]);
         setSessionNotes(notes);
+
+        // ── Athlete messages ──────────────────────────────────────────────────
+        // No read/unread tracking on direct_messages - this is "who's messaged
+        // recently" rather than a true unread count.
+        const messages = await listRecentAthleteMessages(6).catch(() => [] as RecentDirectMessage[]);
+        setRecentMessages(messages);
 
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not load dashboard");
@@ -277,6 +320,57 @@ export default function DashboardPage() {
                       {dismissingId === n.sessionId ? "…" : "✓"}
                     </button>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Athlete messages */}
+          {recentMessages.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={{ fontSize: 14, marginRight: -4 }}>💬</span>
+                <span style={st.panelTitle}>Athlete messages</span>
+                <span style={st.panelCount(recentMessages.length)}>{recentMessages.length}</span>
+              </div>
+              <div style={st.noteList}>
+                {recentMessages.map((m) => (
+                  <button
+                    key={m.id}
+                    style={{ ...st.noteRowBtn }}
+                    onClick={() => router.push(`/athletes/${m.athlete_id}?openMessages=1`)}
+                  >
+                    <div style={st.noteMeta}>
+                      {m.athlete?.name ?? "Athlete"} · {formatRelativeTime(m.created_at)}
+                    </div>
+                    <div style={st.noteText}>
+                      {m.audio_path ? "🎤 Voice note" : m.body}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Poor check-ins today */}
+          {checkInAlerts.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={st.panelDot({ color: "#FF6B6B" })} />
+                <span style={st.panelTitle}>Poor check-ins today</span>
+                <span style={st.panelCount(checkInAlerts.length)}>{checkInAlerts.length}</span>
+              </div>
+              <div style={st.athleteList}>
+                {checkInAlerts.map((a) => (
+                  <button key={a.athleteId} style={st.athleteChip}
+                    onClick={() => router.push(`/athletes/${a.athleteId}`)}>
+                    {a.athleteName}
+                    {a.flags.map((f) => (
+                      <span key={f} style={{ fontSize: 10, fontWeight: 700, color: "#FF6B6B", background: "#3a1a1a", borderRadius: 4, padding: "1px 5px" }}>
+                        {f}
+                      </span>
+                    ))}
+                  </button>
                 ))}
               </div>
             </div>
@@ -526,6 +620,10 @@ const st: Record<string, any> = {
     background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 8px 8px 12px",
   },
   noteMain: { flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 },
+  noteRowBtn: {
+    display: "block", width: "100%", textAlign: "left", cursor: "pointer",
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 12px",
+  },
   noteMeta: { fontSize: 11, fontWeight: 700, color: "var(--mute)" },
   noteText: { fontSize: 13, color: "var(--text)", marginTop: 2, lineHeight: 1.4, whiteSpace: "pre-wrap" },
   noteDismissBtn: {

@@ -4,6 +4,7 @@ import { computeReport, type ComputedReport } from "@/lib/report-calc";
 import { computeStrengthReport, type ComputedStrengthReport } from "@/lib/strength-report-calc";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRMWithSource } from "@/lib/data/one-rm";
+import { listVelocityProfiles } from "@/lib/data/velocity-profiles";
 import type { OneRMSource } from "@/lib/data/settings";
 import type { OneRMFormula } from "@/lib/one-rm";
 
@@ -49,10 +50,11 @@ export async function generateReport(
     query = query.gte("date", rangeStart).lte("date", rangeEnd);
   }
 
-  const [{ data, error }, settings, athleteRes] = await Promise.all([
+  const [{ data, error }, settings, athleteRes, velocityProfiles] = await Promise.all([
     query.order("date", { ascending: true }),
     getOrgSettings(),
     supabase.from("athletes").select("bodyweight_kg").eq("id", athleteId).single(),
+    listVelocityProfiles(athleteId).catch(() => []),
   ]);
   if (error) throw error;
 
@@ -71,7 +73,7 @@ export async function generateReport(
   );
 
   return {
-    ...computeReport(allSessions),
+    ...computeReport(allSessions, velocityProfiles),
     rangeStart,
     rangeEnd,
     generated: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),

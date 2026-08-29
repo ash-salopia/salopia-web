@@ -24,6 +24,7 @@ import { listLibrary } from "@/lib/data/library";
 import { saveSessionAsTemplate } from "@/lib/data/templates";
 import { usePendingUndo } from "@/lib/use-pending-undo";
 import UndoBanner from "@/components/UndoBanner";
+import SessionProgressModal from "@/components/SessionProgressModal";
 import ExerciseCard from "@/components/ExerciseCard";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
@@ -97,11 +98,9 @@ export default function SessionDetailPage() {
   const [savingPreset, setSavingPreset] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
-  const [report, setReport] = useState("");
+  const [progressOpen, setProgressOpen] = useState(false);
   const [propagateScope, setPropagateScope] = useState<PropagateScope | "none">("none");
   const [propagating, setPropagating] = useState(false);
-  const [reportLoading, setReportLoading] = useState(false);
 
   // Convert DB session exercise to PSExercise shape
   const toPSExercise = (ex: any): PSExercise => {
@@ -772,23 +771,11 @@ export default function SessionDetailPage() {
             </button>
           </>
         )}
-        <button style={styles.ghostBtn} onClick={async () => {
-          setReportOpen(true);
-          setReportLoading(true);
-          setReport("");
-          try {
-            const res = await fetch("/api/session-report", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sessionId }),
-            });
-            const data = await res.json();
-            setReport(data.report ?? "Could not generate report.");
-          } catch { setReport("Could not generate report."); }
-          finally { setReportLoading(false); }
-        }}>
-          AI Report
-        </button>
+        {session.type === "strength" && (
+          <button style={styles.ghostBtn} onClick={() => setProgressOpen(true)}>
+            Progress vs last time
+          </button>
+        )}
         <button
           style={styles.ghostBtn}
           onClick={() => {
@@ -822,22 +809,12 @@ export default function SessionDetailPage() {
         )}
       </div>
 
-      {reportOpen && (
-        <div style={styles.overlay} onClick={() => setReportOpen(false)}>
-          <div style={{ ...styles.modal, maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalTitle}>📊 Session report</div>
-            {reportLoading ? (
-              <div style={{ fontSize: 14, color: "var(--mute)", padding: "20px 0", textAlign: "center" }}>
-                Generating report…
-              </div>
-            ) : (
-              <div style={{ fontSize: 14, color: "var(--mute)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-                {report}
-              </div>
-            )}
-            <button style={styles.modalCancel} onClick={() => setReportOpen(false)}>Close</button>
-          </div>
-        </div>
+      {progressOpen && session && (
+        <SessionProgressModal
+          session={session}
+          athleteId={athleteId}
+          onClose={() => setProgressOpen(false)}
+        />
       )}
 
       {saveTemplateOpen && (

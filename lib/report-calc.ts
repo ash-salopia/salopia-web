@@ -5,6 +5,7 @@
 // without either environment pulling in the other's client.
 import type { Session } from "@/types";
 import { METRIC_ORDER, METRIC_META, parseMetricNumber, distanceToKm, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
+import { estimateOneRMFromPoint } from "@/lib/velocity-profile";
 
 export interface ReportRow {
   date: string;
@@ -143,6 +144,80 @@ function collectVelocity(strengthSessions: Session[]): { exMap: VelocityMap; sum
       const overallPct =
         entries.length >= 2 && first.avgVelocity !== 0
           ? ((last.avgVelocity - first.avgVelocity) / Math.abs(first.avgVelocity)) * 100
+          : null;
+      return { name, entries, overallPct };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { exMap, summaries };
+}
+
+// VBT-estimated 1RM (0078) — a sibling to collectVelocity above, but
+// only produces a value for exercises with a saved
+// athlete_velocity_profiles calibration (by exercise name); everything
+// else is left alone, so an uncalibrated exercise still only ever
+// shows the raw m/s trend, never an invented number. Re-anchors the
+// profile's calibrated slope through each individual logged
+// (weight, velocity) point — see lib/velocity-profile.ts's
+// estimateOneRMFromPoint for why this is what lets the estimate trend
+// from ordinary training data rather than staying static between
+// calibration sessions — and takes the best (highest) estimate per
+// session, same "one row per session" shape as every other report
+// collector here.
+export interface VelocityOneRMRow {
+  date: string;
+  sessName: string;
+  estimatedOneRM: number;
+}
+export type VelocityOneRMMap = Record<string, VelocityOneRMRow[]>;
+export interface VelocityOneRMSummary {
+  name: string;
+  entries: VelocityOneRMRow[];
+  overallPct: number | null;
+}
+export interface VelocityProfileInput {
+  exercise_name: string;
+  slope: number;
+  mvt: number;
+}
+
+function collectVelocityOneRM(
+  strengthSessions: Session[],
+  profiles: VelocityProfileInput[]
+): { exMap: VelocityOneRMMap; summaries: VelocityOneRMSummary[] } {
+  const exMap: VelocityOneRMMap = {};
+  if (!profiles.length) return { exMap, summaries: [] };
+  const profileByName = new Map(profiles.map((p) => [p.exercise_name.trim().toLowerCase(), p]));
+
+  for (const sess of strengthSessions) {
+    if (sess.is_primer) continue;
+    for (const ex of sess.exercises ?? []) {
+      if (!ex.name || ex.is_primer || !(ex as any).track_velocity) continue;
+      const profile = profileByName.get(ex.name.trim().toLowerCase());
+      if (!profile) continue;
+
+      const estimates: number[] = [];
+      for (const s of ex.log ?? []) {
+        const weight = parseFloat((s as any).weight);
+        const velocity = parseFloat((s as any).velocity);
+        if (!isFinite(weight) || !isFinite(velocity)) continue;
+        const est = estimateOneRMFromPoint(profile.slope, profile.mvt, weight, velocity);
+        if (est != null) estimates.push(est);
+      }
+      if (!estimates.length) continue;
+
+      if (!exMap[ex.name]) exMap[ex.name] = [];
+      exMap[ex.name].push({ date: sess.date, sessName: sess.name, estimatedOneRM: Math.max(...estimates) });
+    }
+  }
+
+  const summaries: VelocityOneRMSummary[] = Object.entries(exMap)
+    .map(([name, entries]) => {
+      const first = entries[0];
+      const last = entries[entries.length - 1];
+      const overallPct =
+        entries.length >= 2 && first.estimatedOneRM !== 0
+          ? ((last.estimatedOneRM - first.estimatedOneRM) / Math.abs(first.estimatedOneRM)) * 100
           : null;
       return { name, entries, overallPct };
     })
@@ -372,6 +447,8 @@ export interface ComputedReport {
   sessionTypeStats: Record<string, SessionTypeStats>; // 0080 — per-type session counts + completion, keyed by type
   velocityExMap: VelocityMap;
   velocitySummaries: VelocitySummary[]; // alphabetical, empty when no exercise in range tracked bar speed
+  velocityOneRMExMap: VelocityOneRMMap;
+  velocityOneRMSummaries: VelocityOneRMSummary[]; // alphabetical, empty when no exercise has a saved velocity profile (0078)
   cardioMetricExMap: CardioMetricMap;
   cardioMetricSummaries: CardioMetricSummary[]; // metric-order, empty when no hyrox/cardio session in range logged anything
 }
@@ -704,7 +781,7 @@ function collectNotes(allSessions: Session[]): NoteEntry[] {
 //    must double their tonnage, matching the live in-session TTL
 //    display, so the report and the session view never disagree on
 //    the same logged data.
-export function computeReport(allSessions: Session[]): ComputedReport {
+export function computeReport(allSessions: Session[], velocityProfiles: VelocityProfileInput[] = []): ComputedReport {
   const strSessions = allSessions
     .filter((s) => s.type === "strength")
     .filter((s) => (s.exercises ?? []).some((e) => (e.log ?? []).some((l) => parseFloat(l.weight) > 0)));
@@ -773,8 +850,11 @@ export function computeReport(allSessions: Session[]): ComputedReport {
   // whether it also has loggable weight (e.g. a bodyweight jump
   // squat), so this runs against every strength session directly
   // rather than reusing strSessions' weight>0 filter above.
-  const { exMap: velocityExMap, summaries: velocitySummaries } = collectVelocity(
-    allSessions.filter((s) => s.type === "strength")
+  const strengthTypeSessions = allSessions.filter((s) => s.type === "strength");
+  const { exMap: velocityExMap, summaries: velocitySummaries } = collectVelocity(strengthTypeSessions);
+  const { exMap: velocityOneRMExMap, summaries: velocityOneRMSummaries } = collectVelocityOneRM(
+    strengthTypeSessions,
+    velocityProfiles
   );
   const { exMap: cardioMetricExMap, summaries: cardioMetricSummaries } = collectCardioMetrics([
     ...hyroxSessions,
@@ -803,6 +883,8 @@ export function computeReport(allSessions: Session[]): ComputedReport {
     sessionTypeStats,
     velocityExMap,
     velocitySummaries,
+    velocityOneRMExMap,
+    velocityOneRMSummaries,
     cardioMetricExMap,
     cardioMetricSummaries,
   };

@@ -304,7 +304,7 @@ export default function AthleteReportPdf({
 }) {
   const {
     exMap, exerciseSummaries, weeklyExMap, topProgressed, toReview, notes,
-    hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], cardioMetricSummaries = [], rpeEntries = [], rpeWeekly = [],
+    hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], velocityOneRMSummaries = [], cardioMetricSummaries = [], rpeEntries = [], rpeWeekly = [],
     trainingLoadEntries = [], trainingLoadWeekly = [], sessionTypeStats = {},
     generated, rangeStart, rangeEnd, strength, oneRmFormula, oneRmSource, bodyweightKg, oneRmReference,
   } = data;
@@ -640,19 +640,36 @@ export default function AthleteReportPdf({
 
         {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>BAR SPEED TRENDS</Text>
-            {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
-              <View key={ex.name} style={{ marginBottom: 10 }}>
-                <LineChart
-                  series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.avgVelocity })) }]}
-                  unit="m/s"
-                  height={100}
-                  showLegend={false}
-                  title={`${ex.name}${ex.overallPct != null ? `  (${ex.overallPct >= 0 ? "+" : ""}${ex.overallPct.toFixed(1)}%)` : ""}`}
-                  titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
-                />
-              </View>
-            ))}
+            <Text style={s.sectionTitle}>VELOCITY BASED TRAINING</Text>
+            {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => {
+              const oneRm = velocityOneRMSummaries.find((r) => r.name === ex.name);
+              const hasOneRm = oneRm && oneRm.entries.length >= 2;
+              return (
+                <View key={ex.name} style={{ marginBottom: 10 }}>
+                  <LineChart
+                    series={[{ name: ex.name, points: ex.entries.map((e) => ({ date: e.date, value: e.avgVelocity })) }]}
+                    unit="m/s"
+                    height={100}
+                    showLegend={false}
+                    title={`${ex.name}${ex.overallPct != null ? `  (${ex.overallPct >= 0 ? "+" : ""}${ex.overallPct.toFixed(1)}%)` : ""}`}
+                    titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
+                  />
+                  {/* Only exercises with a saved velocity profile get
+                      this second chart - everything else just shows
+                      the raw m/s trend above, unchanged. */}
+                  {hasOneRm && (
+                    <LineChart
+                      series={[{ name: `${ex.name} (VBT e1RM)`, points: oneRm!.entries.map((e) => ({ date: e.date, value: e.estimatedOneRM })) }]}
+                      unit="kg"
+                      height={100}
+                      showLegend={false}
+                      title={`Estimated 1RM (VBT)${oneRm!.overallPct != null ? `  (${oneRm!.overallPct >= 0 ? "+" : ""}${oneRm!.overallPct.toFixed(1)}%)` : ""}`}
+                      titleStyle={[s.bold, { fontSize: 8, marginBottom: 2 }]}
+                    />
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
 

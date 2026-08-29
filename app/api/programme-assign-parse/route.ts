@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 
 const SYSTEM = `You are a coaching assistant parsing a programme assignment instruction.
 
@@ -59,27 +60,10 @@ ${programmeNames.map((p) => `- id: "${p.id}", name: "${p.name}"`).join("\n")}
 
 Instruction: "${instruction}"`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 256,
-      system: SYSTEM,
-      messages: [{ role: "user", content: userMessage }],
-    }),
-  });
+  const r = await callClaude({ model: AI_MODEL.parse, system: SYSTEM, maxTokens: 256, prompt: userMessage });
+  if (!r.ok) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
 
-  if (!res.ok) {
-    return NextResponse.json({ error: "AI request failed" }, { status: 500 });
-  }
-
-  const data = await res.json();
-  const raw = data?.content?.[0]?.text ?? "{}";
+  const raw = r.text || "{}";
 
   let parsed: {
     programmeId?: string;

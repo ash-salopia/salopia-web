@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -175,36 +176,12 @@ export async function POST(
     { role: "user", content: userContent },
   ];
 
-  let anthropicRes: Response;
-  try {
-    anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096, // More than voice-parse - multi-session output can be long
-        system: buildSystem(libraryNames),
-        messages,
-      }),
-    });
-  } catch {
-    return NextResponse.json({ error: "Could not reach AI service" }, { status: 502 });
-  }
+  // Messy spreadsheet → structured multi-session output: accuracy-
+  // critical, kept on the stronger model. max_tokens high (long output).
+  const r = await callClaude({ model: AI_MODEL.parse, system: buildSystem(libraryNames), maxTokens: 4096, messages });
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
 
-  if (!anthropicRes.ok) {
-    const detail = await anthropicRes.text().catch(() => "");
-    return NextResponse.json(
-      { error: `AI request failed (${anthropicRes.status}): ${detail}` },
-      { status: 500 }
-    );
-  }
-
-  const anthropicData = await anthropicRes.json();
-  const raw: string = anthropicData?.content?.[0]?.text ?? "{}";
+  const raw: string = r.text || "{}";
 
   let parsed: { sessions?: ParsedSession[]; unmatchedExercises?: string[]; message?: string };
   try {

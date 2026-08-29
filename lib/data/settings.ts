@@ -143,6 +143,7 @@ export interface OrgSettings {
   weight_unit: WeightUnit;
   checkin_enabled: boolean;
   checkin_rules: CheckInRules;
+  lock_until_checkin: boolean; // 0079 — athletes can't log sets on today's programmed session until they've completed today's check-in
   hyrox_enabled: boolean;
   pb_enabled: boolean; // 0090 — org-wide default for Personal Bests tracking/display, per-athlete override on athletes.pb_enabled (same pattern as hyrox_enabled)
   challenges_enabled: boolean; // 0074 — org-wide default for the Challenges feature, per-athlete override on athletes.challenges_enabled (same pattern as hyrox_enabled/pb_enabled)
@@ -164,6 +165,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   weight_unit: "kg",
   checkin_enabled: true,
   checkin_rules: DEFAULT_CHECKIN_RULES,
+  lock_until_checkin: false,
   hyrox_enabled: true,
   pb_enabled: true,
   challenges_enabled: true,

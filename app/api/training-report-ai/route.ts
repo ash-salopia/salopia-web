@@ -4,6 +4,8 @@ import { computeReport } from "@/lib/report-calc";
 import { computeStrengthReport } from "@/lib/strength-report-calc";
 import { DEFAULT_SETTINGS } from "@/lib/data/settings";
 import { METRIC_META, METRIC_ORDER, type MetricKey } from "@/lib/cardio-metrics";
+import { AI_MODEL, callClaude } from "@/lib/ai/claude";
+import { fingerprintReportInput, getCachedReport, putCachedReport } from "@/lib/ai/report-cache";
 import type { Session, SessionExercise } from "@/types";
 
 const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks - only the data sections the coach actually selected for this report, plus optionally the coach's own context for this report. Only discuss what's actually present in the sections below; never reference a metric or session type that isn't included, even if you'd normally expect it. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
@@ -60,7 +62,8 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createClient();
   // Re-fetches and re-computes rather than trusting client-supplied
-  // numbers - same pattern as /api/session-report, and it means RLS
+  // numbers - re-fetches and re-computes rather than trusting the client,
+  // and it means RLS
   // (via this cookie-authenticated client) is what actually gates
   // access to this athlete's data, not anything passed in the body.
   let query = supabase
@@ -238,30 +241,30 @@ ${coachContext}` : "";
 
   const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 400,
-      system: SYSTEM,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  // The prompt string IS the full report data (computeReport-derived
+  // lines for every selected section). Any change to a logged set, note,
+  // RPE, or the selected options changes the prompt → busts the cache.
+  const hash = fingerprintReportInput({ v: 2, model: AI_MODEL.report, prompt });
+  const cached = await getCachedReport(supabase, { athleteId, reportType: "training_load", hash });
+  if (cached && typeof (cached as any).summary === "string") {
+    return NextResponse.json(cached, { headers: { "x-cache": "hit" } });
+  }
 
-  if (!res.ok) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
+  const r = await callClaude({ model: AI_MODEL.report, system: SYSTEM, maxTokens: 400, prompt });
+  if (!r.ok) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
 
-  const aiData = await res.json();
-  const text: string = aiData?.content?.[0]?.text ?? "";
-  const summaryMatch = text.match(/SUMMARY:\s*([\s\S]*?)(?:\n\s*THEMES:|$)/i);
-  const themesMatch = text.match(/THEMES:\s*([\s\S]*)$/i);
-
-  return NextResponse.json({
-    summary: summaryMatch?.[1]?.trim() || text.trim() || "Summary unavailable.",
+  const summaryMatch = r.text.match(/SUMMARY:\s*([\s\S]*?)(?:\n\s*THEMES:|$)/i);
+  const themesMatch = r.text.match(/THEMES:\s*([\s\S]*)$/i);
+  const out = {
+    summary: summaryMatch?.[1]?.trim() || r.text.trim() || "Summary unavailable.",
     themes: themesMatch?.[1]?.trim() || "No recurring themes noted.",
-  });
+  };
+
+  if (r.text.trim()) {
+    await putCachedReport(supabase, {
+      athleteId, reportType: "training_load", hash, model: AI_MODEL.report,
+      content: out, rangeStart, rangeEnd,
+    }).catch(() => {});
+  }
+  return NextResponse.json(out);
 }

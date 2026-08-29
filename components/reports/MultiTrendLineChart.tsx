@@ -20,12 +20,25 @@ export default function MultiTrendLineChart({
   fmtDate,
   height = 320,
   yDomain,
+  yTickFormatter,
+  yAxisWidth = 44,
 }: {
   series: TrendSeries[];
   unit: string;
   fmtDate: (iso: string) => string;
   height?: number;
   yDomain?: [number, number]; // fixes the axis range instead of auto-scaling to the data (e.g. RPE's fixed 1-10 scale)
+  // Recharts' default tick formatting picks "nice" round numbers for
+  // the axis, which for a small-magnitude series (e.g. bar speed,
+  // 0.3-0.9 m/s) can round away exactly the precision that matters -
+  // pass an explicit formatter for those cases rather than trusting
+  // the default guess. Undefined keeps today's behaviour unchanged for
+  // every other chart using this component.
+  yTickFormatter?: (value: number) => string;
+  // Default 44px is fine for a couple of digits + a short unit (kg,
+  // reps); a longer/more precise label (e.g. "0.44m/s") needs more
+  // room or it reads as cramped/unclear.
+  yAxisWidth?: number;
 }) {
   if (series.length === 0) return null;
 
@@ -49,7 +62,15 @@ export default function MultiTrendLineChart({
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
           <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--mute)" }} tickLine={false} axisLine={{ stroke: "var(--line)" }} />
-          <YAxis tick={{ fontSize: 10, fill: "var(--mute)" }} tickLine={false} axisLine={false} width={44} unit={unit} domain={yDomain ?? ["auto", "auto"]} />
+          <YAxis
+            tick={{ fontSize: 10, fill: "var(--mute)" }}
+            tickLine={false}
+            axisLine={false}
+            width={yAxisWidth}
+            unit={unit}
+            domain={yDomain ?? ["auto", "auto"]}
+            tickFormatter={yTickFormatter}
+          />
           <Tooltip
             contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12 }}
             labelStyle={{ color: "var(--text)" }}

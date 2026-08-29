@@ -79,7 +79,7 @@ export default function ProgrammesPage() {
         <div style={styles.list}>
           {filtered.map((p) => (
             <div key={p.id} style={styles.row} onClick={() => router.push(`/programmes/${p.id}`)}>
-              <div style={styles.rowAvatar}>📁</div>
+              <div style={styles.rowAvatar}>📆</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={styles.rowName}>{p.name}</div>
                 <div style={styles.rowMeta}>

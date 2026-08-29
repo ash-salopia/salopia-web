@@ -159,3 +159,21 @@ export function scoreCheckIn(
 
   return { avg, suggestions };
 }
+
+// Short labels for whichever wellbeing conditions are concerning
+// enough to flag on the coach dashboard — same thresholds and
+// per-condition on/off gating as scoreCheckIn above, but terse
+// labels instead of prose suggestions, and deliberately excludes
+// high_volume (that's a training-load signal, not a "something's
+// wrong" one, so it doesn't belong in a "poor check-in" flag list).
+export function flaggedConditions(
+  answers: CheckInAnswers,
+  rules: CheckInRules = DEFAULT_CHECKIN_RULES
+): string[] {
+  const { energy = 3, soreness = 3, sleep = 3 } = answers;
+  const flags: string[] = [];
+  if (energy <= 2 && rules.low_energy !== "proceed") flags.push("Low energy");
+  if (sleep <= 2 && rules.poor_sleep !== "proceed") flags.push("Poor sleep");
+  if (soreness >= 4 && rules.high_soreness !== "proceed") flags.push("High soreness");
+  return flags;
+}

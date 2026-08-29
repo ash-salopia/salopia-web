@@ -17,10 +17,22 @@ const TYPE_ICON: Record<Suggestion["type"], string> = {
   swap: "swap",
 };
 
-export default function CheckInModal({ onClose }: { onClose: () => void }) {
+interface Props {
+  onClose: () => void;
+  // Only passed by the athlete-link surface (AthleteSessionView) —
+  // when present, submitting the check-in also persists it via
+  // /api/athlete-link/checkin and calls onSubmitted on success. The
+  // coach-side "Live" page caller passes neither, so its behaviour
+  // (advisory only, never saved) is unchanged.
+  token?: string;
+  onSubmitted?: () => void;
+}
+
+export default function CheckInModal({ onClose, token, onSubmitted }: Props) {
   const [answers, setAnswers] = useState<CheckInAnswers>({ energy: 3, sleep: 3, soreness: 2, volume: 3 });
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [rules, setRules] = useState<CheckInRules>(DEFAULT_CHECKIN_RULES);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getOrgSettings()
@@ -32,6 +44,25 @@ export default function CheckInModal({ onClose }: { onClose: () => void }) {
 
   const set = (key: keyof CheckInAnswers, value: number) => {
     setAnswers((a) => ({ ...a, [key]: value }));
+  };
+
+  const handleSubmit = async () => {
+    setSuggestions(scoreCheckIn(answers, rules).suggestions);
+    if (!token) return;
+    setSaving(true);
+    try {
+      await fetch("/api/athlete-link/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, ...answers }),
+      });
+      onSubmitted?.();
+    } catch {
+      // Fail open - suggestions already shown, nothing blocks the athlete
+      // just because the save didn't go through this time.
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (suggestions) {
@@ -88,8 +119,8 @@ export default function CheckInModal({ onClose }: { onClose: () => void }) {
         ))}
         <div style={styles.footer}>
           <button style={styles.ghostBtn} onClick={onClose}>Skip</button>
-          <button style={styles.primaryBtn} onClick={() => setSuggestions(scoreCheckIn(answers, rules).suggestions)}>
-            Get recommendations
+          <button style={{ ...styles.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={handleSubmit} disabled={saving}>
+            {saving ? "Saving…" : "Get recommendations"}
           </button>
         </div>
       </div>

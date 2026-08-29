@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 
 type ConvMessage = { role: "user" | "assistant"; content: string };
 
@@ -130,35 +131,12 @@ export async function POST(req: NextRequest) {
     },
   ];
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096, // bulk multi-session edits (e.g. "from the 9th onwards") can produce many change objects
-      system: SYSTEM,
-      messages,
-    }),
-  });
+  // Multi-session edits ("from the 9th onwards") need real reasoning —
+  // kept on the stronger model; wrong edits are immediately visible.
+  const r = await callClaude({ model: AI_MODEL.edit, system: SYSTEM, maxTokens: 4096, messages });
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
 
-  if (!res.ok) {
-    // Was just `{ error: "AI request failed" }` with no detail - made it
-    // impossible to tell an auth/billing/model issue from a rate limit
-    // or an overloaded upstream from the client error alone. Matches the
-    // detail level notes-parse's route already surfaces.
-    const detail = await res.text().catch(() => "");
-    return NextResponse.json(
-      { error: `AI request failed (${res.status}): ${detail}` },
-      { status: 500 }
-    );
-  }
-
-  const data = await res.json();
-  const raw = data?.content?.[0]?.text ?? "{}";
+  const raw = r.text || "{}";
 
   let parsed: { changes?: SessionChange[]; message?: string };
   try {

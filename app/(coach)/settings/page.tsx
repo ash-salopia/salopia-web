@@ -364,6 +364,28 @@ export default function SettingsPage() {
 
           {settings.checkin_enabled && (
             <>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={s.cardLabel}>Lock programme until check-in completed</div>
+                  <div style={s.cardDesc}>
+                    Athletes must complete today's check-in before they can log sets on today's programmed session.
+                    Session Library workouts and past/future sessions are never locked.
+                  </div>
+                </div>
+                <button
+                  style={{
+                    ...s.toggleSwitch,
+                    background: settings.lock_until_checkin ? "var(--accent)" : "var(--panel2)",
+                  }}
+                  onClick={() => setSettings((prev) => ({ ...prev, lock_until_checkin: !prev.lock_until_checkin }))}
+                >
+                  <div style={{
+                    ...s.toggleThumb,
+                    transform: settings.lock_until_checkin ? "translateX(20px)" : "translateX(0)",
+                  }} />
+                </button>
+              </div>
+
               <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 4 }}>
                 <div style={s.cardLabel}>Recommendations per condition</div>
                 <div style={s.cardDesc}>

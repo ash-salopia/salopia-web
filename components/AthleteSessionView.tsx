@@ -9,9 +9,11 @@ import SessionRPEBlock from "@/components/SessionRPEBlock";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import PBCelebrationModal from "@/components/PBCelebrationModal";
+import SessionSummaryModal from "@/components/SessionSummaryModal";
 import RecoverySessionAthleteView from "@/components/recovery/RecoverySessionAthleteView";
 import HyroxCardioAthleteView from "@/components/HyroxCardioAthleteView";
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
+import { todayISO } from "@/lib/date-utils";
 import type { Session, SessionExercise, SetLog } from "@/types";
 
 interface DetectedPB {
@@ -89,12 +91,16 @@ export default function AthleteSessionView({
   sessionId,
   athleteName,
   token,
+  lockUntilCheckin,
+  checkedInToday: initialCheckedInToday,
 }: {
   session?: Session;
   allSessions?: Session[];
   sessionId?: string;
   athleteName: string;
   token: string;
+  lockUntilCheckin?: boolean;
+  checkedInToday?: boolean;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(initialSession ?? null);
@@ -133,6 +139,8 @@ export default function AthleteSessionView({
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
   const [pbCelebration, setPbCelebration] = useState<DetectedPB | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [checkedInToday, setCheckedInToday] = useState(initialCheckedInToday ?? false);
   const [openNotesFor, setOpenNotesFor] = useState<Set<string>>(new Set());
   // Bodyweight exercises hide the weight field by default, but an
   // athlete who's progressed past bodyweight (e.g. added a vest to
@@ -390,6 +398,14 @@ export default function AthleteSessionView({
     return <div style={{ padding: 32, textAlign: "center", color: "var(--mute)", fontSize: 14 }}>Loading…</div>;
   }
 
+  // "Lock programme until check-in completed" - only gates today's
+  // coach-programmed session; past/future dates and Session Library
+  // (informal, athlete-started) sessions are never locked.
+  const locked = !!lockUntilCheckin
+    && session.session_source === "programme"
+    && session.date === todayISO()
+    && !checkedInToday;
+
   // Recovery sessions render nothing like the exercise-log layout
   // below (no session_exercises rows to speak of for most formats) -   // delegate to a dedicated component rather than threading `type ===
   // "recovery"` conditionals through this already-large file.
@@ -435,12 +451,18 @@ export default function AthleteSessionView({
             </div>
           </div>
           <button style={styles.checkInBtn} onClick={() => setCheckInOpen(true)}>
-            ✓ Check-in
+            {checkedInToday ? "✓ Checked in" : "✓ Check-in"}
           </button>
         </div>
       </div>
 
-      {checkInOpen && <CheckInModal onClose={() => setCheckInOpen(false)} />}
+      {checkInOpen && (
+        <CheckInModal
+          onClose={() => setCheckInOpen(false)}
+          token={token}
+          onSubmitted={() => setCheckedInToday(true)}
+        />
+      )}
 
       {totalSets > 0 && (
         <div style={styles.progressWrap}>
@@ -477,7 +499,8 @@ export default function AthleteSessionView({
         readOnly={true}
       />
 
-      <div style={styles.exerciseList}>
+      <div style={styles.exerciseListWrap}>
+      <div style={{ ...styles.exerciseList, ...(locked ? styles.exerciseListLocked : {}) }}>
         {exercises.map((ex) => {
           const priorAnswer = priorProgress.get(ex.name.toLowerCase().trim());
           const allSetsDone = (ex.log ?? []).length > 0 && (ex.log ?? []).every((s) => s.done);
@@ -840,6 +863,17 @@ export default function AthleteSessionView({
         {!exercises.length && <div style={styles.empty}>No exercises in this session.</div>}
       </div>
 
+      {locked && (
+        <div style={styles.lockOverlay} onClick={() => setCheckInOpen(true)}>
+          <div style={styles.lockCard}>
+            <div style={styles.lockEmoji}>🔒</div>
+            <div style={styles.lockTitle}>Complete your check-in to unlock today's session</div>
+            <button style={styles.lockBtn} onClick={() => setCheckInOpen(true)}>Check in now</button>
+          </div>
+        </div>
+      )}
+      </div>
+
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
 
       <SessionNotesBlock
@@ -851,6 +885,14 @@ export default function AthleteSessionView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
+
+      <button style={styles.summaryBtn} onClick={() => setSummaryOpen(true)}>
+        📊 Session summary
+      </button>
+
+      {summaryOpen && (
+        <SessionSummaryModal session={session} onClose={() => setSummaryOpen(false)} />
+      )}
 
       {videoModal && (
         <VideoModal
@@ -927,6 +969,18 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
     flexShrink: 0,
   },
+  summaryBtn: {
+    width: "100%",
+    marginTop: 16,
+    background: "transparent",
+    border: "1px solid var(--line)",
+    color: "var(--text)",
+    borderRadius: 10,
+    padding: "12px 0",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   sessionName: { fontSize: 22, fontWeight: 700, color: "var(--text)" },
   sessionMeta: { fontSize: 13, color: "var(--mute)", marginTop: 2 },
   errorBox: {
@@ -973,7 +1027,24 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     flexShrink: 0,
   },
+  exerciseListWrap: { position: "relative" as const },
   exerciseList: { display: "flex", flexDirection: "column", gap: 12 },
+  exerciseListLocked: { filter: "blur(3px)", opacity: 0.5, pointerEvents: "none" as const, userSelect: "none" as const },
+  lockOverlay: {
+    position: "absolute" as const, inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", padding: 16,
+  },
+  lockCard: {
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14,
+    padding: "20px 24px", textAlign: "center" as const, maxWidth: 300,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+  },
+  lockEmoji: { fontSize: 28, marginBottom: 8 },
+  lockTitle: { fontSize: 14, fontWeight: 700, color: "var(--text)", lineHeight: 1.4, marginBottom: 14 },
+  lockBtn: {
+    background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10,
+    padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+  },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
   exHeadRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
   exName: { fontWeight: 700, fontSize: 15, color: "var(--text)" },

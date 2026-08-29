@@ -80,7 +80,7 @@ export default function TemplatesPage() {
         <div style={styles.list}>
           {filtered.map((t) => (
             <div key={t.id} style={styles.row} onClick={() => router.push(`/templates/${t.id}`)}>
-              <div style={styles.rowAvatar}>▦</div>
+              <div style={styles.rowAvatar}>📝</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={styles.rowName}>{t.name}</div>
                 <div style={styles.rowMeta}>
