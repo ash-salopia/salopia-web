@@ -45,6 +45,47 @@ interface Props {
   onDragOver?: (e: React.DragEvent) => void;
   onDragLeave?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
+  // Best-set / total-load change vs the same exercise last time — the
+  // same signals Live Group shows. Computed by the parent from saved
+  // data (lib/session-progress.ts); no AI.
+  progress?: {
+    prevDate: string | null;
+    prevSets: string | null;
+    best: { direction: "up" | "down" | "same"; label: string } | null;
+    total: { direction: "up" | "down" | "same"; label: string } | null;
+  } | null;
+}
+
+const PROG_COLOR: Record<"up" | "down" | "same", string> = {
+  up: "#2E9E5B", down: "#E53935", same: "var(--mute)",
+};
+const PROG_ARROW: Record<"up" | "down" | "same", string> = {
+  up: "▲", down: "▼", same: "＝",
+};
+
+function ProgressLine({ progress }: { progress: NonNullable<Props["progress"]> }) {
+  const { prevDate, prevSets, best, total } = progress;
+  if (!best && !total && !prevSets) return null;
+  const fmt = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3px 12px", fontSize: 11, padding: "5px 10px", background: "var(--ink)", borderTop: "1px solid var(--line)" }}>
+      {prevSets && (
+        <span style={{ color: "var(--mute)" }}>
+          {prevDate ? `${fmt(prevDate)}: ` : "Last time: "}{prevSets}
+        </span>
+      )}
+      {best && (
+        <span style={{ color: PROG_COLOR[best.direction], fontWeight: 600, whiteSpace: "nowrap" }}>
+          {PROG_ARROW[best.direction]} Best {best.label}
+        </span>
+      )}
+      {total && (
+        <span style={{ color: PROG_COLOR[total.direction], fontWeight: 600, whiteSpace: "nowrap" }}>
+          {PROG_ARROW[total.direction]} Load {total.label}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function ExerciseCard({
@@ -67,6 +108,7 @@ export default function ExerciseCard({
   onDragOver,
   onDragLeave,
   onDrop,
+  progress,
 }: Props) {
   const [applyFutureOn, setApplyFutureOn] = useState(false);
   const [eachSideInfoOpen, setEachSideInfoOpen] = useState(false);
@@ -739,6 +781,8 @@ export default function ExerciseCard({
       </div>
       </>
       )}
+
+      {progress && <ProgressLine progress={progress} />}
     </div>
   );
 }

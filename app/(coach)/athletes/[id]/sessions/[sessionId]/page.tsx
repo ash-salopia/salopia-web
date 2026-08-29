@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
@@ -24,8 +24,10 @@ import { listLibrary } from "@/lib/data/library";
 import { saveSessionAsTemplate } from "@/lib/data/templates";
 import { usePendingUndo } from "@/lib/use-pending-undo";
 import UndoBanner from "@/components/UndoBanner";
-import SessionProgressModal from "@/components/SessionProgressModal";
 import ExerciseCard from "@/components/ExerciseCard";
+import {
+  findPreviousExerciseEntry, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal,
+} from "@/lib/session-progress";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
@@ -59,6 +61,9 @@ export default function SessionDetailPage() {
   const sessionRef = useRef<Session | null>(null);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const [otherSessions, setOtherSessions] = useState<SessionStub[]>([]);
+  // Prior sessions (with exercise logs) for the "vs last time" signal on
+  // each exercise card — the same comparison Live Group shows.
+  const [priorSessions, setPriorSessions] = useState<{ athlete_id: string; date: string; exercises: SessionExercise[] }[]>([]);
   // Which strength exercise cards are expanded ("zoomed in") - existing
   // exercises load collapsed (the actual decluttering), a freshly-added
   // one is added to this set so it opens ready to fill in immediately.
@@ -98,7 +103,6 @@ export default function SessionDetailPage() {
   const [savingPreset, setSavingPreset] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
-  const [progressOpen, setProgressOpen] = useState(false);
   const [propagateScope, setPropagateScope] = useState<PropagateScope | "none">("none");
   const [propagating, setPropagating] = useState(false);
 
@@ -170,6 +174,45 @@ export default function SessionDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // Load this athlete's prior sessions (with logs) once the session is
+  // known — used for the per-exercise "vs last time" signal.
+  useEffect(() => {
+    if (!session?.athlete_id || !session.date) return;
+    const supabase = createClient();
+    Promise.resolve(
+      supabase
+        .from("sessions")
+        .select("athlete_id, date, session_exercises(name, log, time, is_bodyweight)")
+        .eq("athlete_id", session.athlete_id)
+        .lt("date", session.date)
+        .neq("id", session.id)
+        .order("date", { ascending: false })
+        .limit(60)
+    ).then(({ data }) => setPriorSessions(
+      (data ?? []).map((s: any) => ({ athlete_id: s.athlete_id, date: s.date, exercises: (s.session_exercises ?? []) as SessionExercise[] }))
+    )).catch(() => {});
+  }, [session?.id, session?.athlete_id, session?.date]);
+
+  // Per-exercise best-set / total-load change vs the same exercise last time.
+  const progressByExercise = useMemo(() => {
+    const map = new Map<string, {
+      prevDate: string | null; prevSets: string | null;
+      best: { direction: "up" | "down" | "same"; label: string } | null;
+      total: { direction: "up" | "down" | "same"; label: string } | null;
+    }>();
+    if (session?.type !== "strength" || !session.exercises || !session.athlete_id) return map;
+    for (const ex of session.exercises) {
+      const entry = findPreviousExerciseEntry(priorSessions, session.athlete_id, ex.name, session.date);
+      const prevEx = entry?.exercise ?? null;
+      const best = computeBestSetSignal(ex, prevEx);
+      const total = computeTotalLoadSignal(ex, prevEx);
+      if (best || total || entry) {
+        map.set(ex.id, { prevDate: entry?.date ?? null, prevSets: prevEx ? formatPrevSets(prevEx) : null, best, total });
+      }
+    }
+    return map;
+  }, [session?.id, session?.type, session?.exercises, session?.athlete_id, session?.date, priorSessions]);
 
   // Recompute %1RM previews whenever the set of prescribed percentages
   // actually changes (not on every keystroke elsewhere on the page).
@@ -771,11 +814,6 @@ export default function SessionDetailPage() {
             </button>
           </>
         )}
-        {session.type === "strength" && (
-          <button style={styles.ghostBtn} onClick={() => setProgressOpen(true)}>
-            Progress vs last time
-          </button>
-        )}
         <button
           style={styles.ghostBtn}
           onClick={() => {
@@ -809,13 +847,6 @@ export default function SessionDetailPage() {
         )}
       </div>
 
-      {progressOpen && session && (
-        <SessionProgressModal
-          session={session}
-          athleteId={athleteId}
-          onClose={() => setProgressOpen(false)}
-        />
-      )}
 
       {saveTemplateOpen && (
         <div style={styles.overlay} onClick={() => setSaveTemplateOpen(false)}>
@@ -935,6 +966,7 @@ export default function SessionDetailPage() {
                 onMoveDown={i < exercises.length - 1 ? () => handleReorderExercise(ex.id, i + 2) : undefined}
                 otherStrengthSessions={otherSessions.filter((s) => s.type === "strength" && s.id !== sessionId)}
                 onMoveToSession={(targetSessionId) => handleMoveExercise(ex.id, targetSessionId)}
+                progress={progressByExercise.get(ex.id) ?? null}
                 expanded={expandedExerciseIds.has(ex.id)}
                 onToggleExpand={() => toggleExerciseExpanded(ex.id)}
                 onDragStart={(e) => {
