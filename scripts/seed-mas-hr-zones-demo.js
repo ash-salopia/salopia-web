@@ -46,11 +46,11 @@ function addDaysISO(iso, n) {
 
 // ── Zone maths (mirrors lib/training-zones.ts DEFAULT_ZONE_MODEL) ─────────────
 const ZONES = [
-  { n: 1, name: "Recovery", hrLo: 50, hrHi: 68, masLo: 55, masHi: 70 },
-  { n: 2, name: "Aerobic", hrLo: 68, hrHi: 80, masLo: 70, masHi: 80 },
-  { n: 3, name: "Tempo / Threshold", hrLo: 80, hrHi: 88, masLo: 80, masHi: 90 },
-  { n: 4, name: "VO2max", hrLo: 88, hrHi: 95, masLo: 90, masHi: 105 },
-  { n: 5, name: "Speed / Anaerobic", hrLo: 95, hrHi: 100, masLo: 105, masHi: 130 },
+  { n: 1, name: "Recovery", hrLo: 50, hrHi: 68, masLo: 55, masHi: 68 },
+  { n: 2, name: "Endurance", hrLo: 68, hrHi: 80, masLo: 68, masHi: 80 },
+  { n: 3, name: "Tempo", hrLo: 80, hrHi: 87, masLo: 80, masHi: 88 },
+  { n: 4, name: "Threshold", hrLo: 87, hrHi: 93, masLo: 88, masHi: 95 },
+  { n: 5, name: "VO2 Max", hrLo: 93, hrHi: 100, masLo: 95, masHi: 115 },
 ];
 function pace(kmh) {
   const s = 3600 / kmh;

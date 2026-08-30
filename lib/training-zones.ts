@@ -19,13 +19,18 @@ export interface ZoneModel {
   zones: ZoneRow[];
 }
 
+// Standard endurance 5-zone model. Names follow the convention used by
+// most run/tri coaching (Friel etc.): Z3 = Tempo, Z4 = Threshold
+// (lactate/anaerobic threshold), Z5 = VO2 Max. HR bounds are % of max
+// HR (or HR reserve when a resting HR is set); MAS bounds are % of
+// Maximal Aerobic Speed (100% MAS ≈ velocity at VO2max).
 export const DEFAULT_ZONE_MODEL: ZoneModel = {
   zones: [
-    { n: 1, name: "Recovery", hrLowPct: 50, hrHighPct: 68, masLowPct: 55, masHighPct: 70 },
-    { n: 2, name: "Aerobic", hrLowPct: 68, hrHighPct: 80, masLowPct: 70, masHighPct: 80 },
-    { n: 3, name: "Tempo / Threshold", hrLowPct: 80, hrHighPct: 88, masLowPct: 80, masHighPct: 90 },
-    { n: 4, name: "VO2max", hrLowPct: 88, hrHighPct: 95, masLowPct: 90, masHighPct: 105 },
-    { n: 5, name: "Speed / Anaerobic", hrLowPct: 95, hrHighPct: 100, masLowPct: 105, masHighPct: 130 },
+    { n: 1, name: "Recovery", hrLowPct: 50, hrHighPct: 68, masLowPct: 55, masHighPct: 68 },
+    { n: 2, name: "Endurance", hrLowPct: 68, hrHighPct: 80, masLowPct: 68, masHighPct: 80 },
+    { n: 3, name: "Tempo", hrLowPct: 80, hrHighPct: 87, masLowPct: 80, masHighPct: 88 },
+    { n: 4, name: "Threshold", hrLowPct: 87, hrHighPct: 93, masLowPct: 88, masHighPct: 95 },
+    { n: 5, name: "VO2 Max", hrLowPct: 93, hrHighPct: 100, masLowPct: 95, masHighPct: 115 },
   ],
 };
 

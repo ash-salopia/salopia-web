@@ -852,7 +852,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "subhead", text: "What the athlete sees" },
       { type: "p", text: "When they open the session, each zoned segment shows **\"Zone 2 Aerobic · 138–158 bpm · 4:41–5:21 /km\"**, computed live from their current profile. Their full zone table is on their **Settings** page under **🫀 Training zones**." },
       { type: "subhead", text: "The zone model" },
-      { type: "p", text: "The generic 5-zone model — Z1 Recovery, Z2 Aerobic, Z3 Tempo/Threshold, Z4 VO2max, Z5 Speed/Anaerobic — is defined as % of Max HR and % of MAS in **Settings → Heart rate & MAS zones**, where the owner can adjust the boundaries and names." },
+      { type: "p", text: "The standard endurance 5-zone model — **Z1 Recovery · Z2 Endurance · Z3 Tempo · Z4 Threshold · Z5 VO2 Max** — is defined as % of Max HR and % of MAS in **Settings → Heart rate & MAS zones**, where the owner can adjust the boundaries and names." },
       { type: "note", text: "Older cardio sessions with a hand-typed zone/pace still show exactly as before — nothing changes until you use the zone picker." },
       { type: "note", text: "Don't prescribe by zone? Turn the whole feature off in **Settings → Heart rate & MAS zones** — the aerobic profile section, the zone picker and the athlete zone table all disappear." },
     ],
