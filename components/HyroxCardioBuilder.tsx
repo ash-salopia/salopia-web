@@ -22,6 +22,40 @@ import { MetricToggles, MetricBoxes, DistanceUnitPills } from "@/components/Metr
 import { DEFAULT_TRACKED_METRICS, resolveTrackedMetrics, resolveKeyMetrics, metricsForEquipment, type MetricKey, type MetricValues, type DistanceUnit } from "@/lib/cardio-metrics";
 import { saveLibraryEntry } from "@/lib/data/library";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
+import { zoneSummary, type ComputedZone } from "@/lib/training-zones";
+
+// Z1–Z5 + "Custom" picker. Stores the zone number on the config
+// (cfg.zone / block.zone). When a zone is set the athlete's HR + pace
+// targets are computed live from their aerobic profile — the readout
+// here previews it for the coach. "Custom" clears the zone and reveals
+// the free-text intensity/pace/HR fields for a hand-written prescription.
+function ZonePicker({ value, zones, onChange }: {
+  value?: number | null;
+  zones?: ComputedZone[] | null;
+  onChange: (z: number | null) => void;
+}) {
+  const z = value ?? null;
+  const computed = z != null && zones ? zones[z - 1] : null;
+  return (
+    <div>
+      <div style={s.dayLabelRow}>Training zone</div>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} onClick={() => onChange(z === n ? null : n)}
+            style={{ ...s.zoneBtn, ...(z === n ? s.zoneBtnOn : {}) }}>Z{n}</button>
+        ))}
+        <button onClick={() => onChange(null)} style={{ ...s.zoneBtn, ...(z == null ? s.zoneBtnOn : {}) }}>Custom</button>
+      </div>
+      {z != null && (
+        <div style={s.zoneReadout}>
+          {computed && (computed.hr || computed.pace)
+            ? zoneSummary(computed)
+            : `Z${z} — add Max HR / MAS on the athlete's profile to show HR & pace targets.`}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // LibraryEntry.types is stored capitalised ("Hyrox", "Cardio" - see
 // LibraryEntryForm's SESSION_TYPES), but every LibraryAutocomplete call
@@ -253,9 +287,10 @@ interface Props {
   library: LibraryEntry[];
   onTypeChange: (hyroxType: string | null, cardioType: string | null) => void;
   onConfigChange: (config: object) => void;
+  athleteZones?: ComputedZone[] | null; // 0086 — this athlete's 5 training zones
 }
 
-export default function HyroxCardioBuilder({ session, color, library, onTypeChange, onConfigChange }: Props) {
+export default function HyroxCardioBuilder({ session, color, library, onTypeChange, onConfigChange, athleteZones }: Props) {
   const isHyrox = session.type === "hyrox";
   const types = isHyrox ? HYROX_TYPES : CARDIO_TYPES;
   const currentType = isHyrox ? (session.hyrox_type || "") : ((session as any).cardio_type || "");
@@ -302,14 +337,14 @@ export default function HyroxCardioBuilder({ session, color, library, onTypeChan
       {isHyrox && currentType === "fixed"    && <HyroxFixed    cfg={cfg} upd={upd} library={library} />}
       {isHyrox && currentType === "cycling"  && <HyroxCycling  cfg={cfg} upd={upd} library={library} color={color} />}
       {isHyrox && currentType === "emom"     && <HyroxEMOM     cfg={cfg} upd={upd} library={library} />}
-      {isHyrox && currentType === "interval" && <HyroxInterval cfg={cfg} upd={upd} library={library} />}
+      {isHyrox && currentType === "interval" && <HyroxInterval cfg={cfg} upd={upd} library={library} athleteZones={athleteZones} />}
       {isHyrox && currentType === "circuit"  && <HyroxCircuit  cfg={cfg} upd={upd} library={library} />}
 
       {/* Cardio builders */}
-      {!isHyrox && currentType === "continuous"      && <CardioContinuous  cfg={cfg} upd={upd} library={library} />}
-      {!isHyrox && currentType === "threshold"       && <CardioThreshold   cfg={cfg} upd={upd} library={library} />}
-      {!isHyrox && currentType === "cardioIntervals" && <CardioIntervals   cfg={cfg} upd={upd} library={library} />}
-      {!isHyrox && currentType === "overUnder"       && <CardioOverUnder   cfg={cfg} upd={upd} library={library} />}
+      {!isHyrox && currentType === "continuous"      && <CardioContinuous  cfg={cfg} upd={upd} library={library} athleteZones={athleteZones} />}
+      {!isHyrox && currentType === "threshold"       && <CardioThreshold   cfg={cfg} upd={upd} library={library} athleteZones={athleteZones} />}
+      {!isHyrox && currentType === "cardioIntervals" && <CardioIntervals   cfg={cfg} upd={upd} library={library} athleteZones={athleteZones} />}
+      {!isHyrox && currentType === "overUnder"       && <CardioOverUnder   cfg={cfg} upd={upd} library={library} athleteZones={athleteZones} />}
     </div>
   );
 }
@@ -506,7 +541,7 @@ function HyroxEMOM({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; lib
 
 // ── Hyrox: Interval ───────────────────────────────────────────────────────────
 
-function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
+function HyroxInterval({ cfg, upd, library, athleteZones }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[]; athleteZones?: ComputedZone[] | null }) {
   const sets = numOr(cfg.sets, 6); const workSec = numOr(cfg.workSec, 120); const restSec = numOr(cfg.restSec, 90);
 
   return (
@@ -529,6 +564,7 @@ function HyroxInterval({ cfg, upd, library }: { cfg: any; upd: (p: any) => void;
         <Field label="Work (s)"><input inputMode="numeric" value={cfg.workSec ?? 120} onChange={e => upd({ workSec: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Rest (s)"><input inputMode="numeric" value={cfg.restSec ?? 90} onChange={e => upd({ restSec: e.target.value })} style={s.miniInput} /></Field>
       </div>
+      <ZonePicker value={cfg.zone} zones={athleteZones} onChange={(z) => upd({ zone: z ?? undefined })} />
       <TrackedMetricsRow cfg={cfg} upd={upd} subType="interval" available={metricsForEquipment(cfg.equipment)} keyMetrics={cfg.key_metrics} />
       <div style={s.dayLabelRow}>Log each set</div>
       {Array.from({ length: sets }, (_, i) => {
@@ -651,7 +687,7 @@ function HyroxCircuit({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; 
 
 // ── Cardio: Continuous / LSD ─────────────────────────────────────────────────
 
-function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
+function CardioContinuous({ cfg, upd, library, athleteZones }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[]; athleteZones?: ComputedZone[] | null }) {
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -669,12 +705,17 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
         <Field label="Duration (mins)"><input inputMode="numeric" value={cfg.duration || ""} placeholder="60" onChange={e => upd({ duration: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Distance"><input value={cfg.distance || ""} placeholder="e.g. 10 km" onChange={e => upd({ distance: e.target.value })} style={s.miniInput} /></Field>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <Field label="Zone / Intensity" grow><input value={cfg.intensity || ""} placeholder="e.g. Z2 / easy / 70% HR" onChange={e => upd({ intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
-        <Field label="Target pace"><input value={cfg.pace || ""} placeholder="e.g. 5:30/km" onChange={e => upd({ pace: e.target.value })} style={s.miniInput} /></Field>
-        <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 130–145 bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
+      <ZonePicker value={cfg.zone} zones={athleteZones} onChange={(z) => upd({ zone: z ?? undefined })} />
+      {cfg.zone == null && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, marginBottom: 8 }}>
+          <Field label="Zone / Intensity" grow><input value={cfg.intensity || ""} placeholder="e.g. Z2 / easy / 70% HR" onChange={e => upd({ intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
+          <Field label="Target pace"><input value={cfg.pace || ""} placeholder="e.g. 5:30/km" onChange={e => upd({ pace: e.target.value })} style={s.miniInput} /></Field>
+          <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 130–145 bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
+        </div>
+      )}
+      <div style={{ marginTop: 8 }}>
+        <Field label="Coaching notes"><input value={cfg.notes || ""} placeholder="e.g. Keep conversational, nasal breathing" onChange={e => upd({ notes: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
       </div>
-      <Field label="Coaching notes"><input value={cfg.notes || ""} placeholder="e.g. Keep conversational, nasal breathing" onChange={e => upd({ notes: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
       <TrackedMetricsRow cfg={cfg} upd={upd} subType="continuous" available={metricsForEquipment(cfg.equipment)} />
       <MetricBoxes
         tracked={cfg.tracked_metrics ?? DEFAULT_TRACKED_METRICS.continuous}
@@ -688,7 +729,7 @@ function CardioContinuous({ cfg, upd, library }: { cfg: any; upd: (p: any) => vo
 
 // ── Cardio: Threshold / Tempo ─────────────────────────────────────────────────
 
-function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
+function CardioThreshold({ cfg, upd, library, athleteZones }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[]; athleteZones?: ComputedZone[] | null }) {
   const blocks = cfg.blocks || [
     { label: "Warm-up",   duration: "10", intensity: "Z1 / easy",      repeat: 1, metrics: {} },
     { label: "Main set",  duration: "20", intensity: "threshold / LT",  repeat: 2, rest: "2 min easy", metrics: {} },
@@ -734,8 +775,11 @@ function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Field label="Duration (mins)"><input inputMode="numeric" value={b.duration} placeholder="20" onChange={e => updBlock(i, { duration: e.target.value })} style={s.miniInput} /></Field>
-              <Field label="Zone / Intensity" grow><input value={b.intensity} placeholder="e.g. threshold / Z4" onChange={e => updBlock(i, { intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
+              {b.zone == null && <Field label="Zone / Intensity" grow><input value={b.intensity} placeholder="e.g. threshold / Z4" onChange={e => updBlock(i, { intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>}
               {(b.repeat || 1) > 1 && <Field label="Recovery"><input value={b.rest || ""} placeholder="e.g. 2 min easy" onChange={e => updBlock(i, { rest: e.target.value })} style={s.miniInput} /></Field>}
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <ZonePicker value={b.zone} zones={athleteZones} onChange={(z) => updBlock(i, { zone: z ?? undefined })} />
             </div>
             <Field label="Activity (blank = same as above)">
               <LibraryAutocomplete value={b.modality || ""} library={library} types={["cardio", "hyrox"]} placeholder={cfg.modality || "Run"}
@@ -764,7 +808,7 @@ function CardioThreshold({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
 
 // ── Cardio: Intervals / VO2max ────────────────────────────────────────────────
 
-function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
+function CardioIntervals({ cfg, upd, library, athleteZones }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[]; athleteZones?: ComputedZone[] | null }) {
   const reps = numOr(cfg.reps, 6);
   return (
     <div style={{ marginTop: 12 }}>
@@ -788,11 +832,14 @@ function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
         <Field label="Rest (s)"><input inputMode="numeric" value={cfg.restDur || ""} placeholder="90" onChange={e => upd({ restDur: e.target.value })} style={s.miniInput} /></Field>
         <Field label="Rest type"><input value={cfg.restType || ""} placeholder="easy jog / walk" onChange={e => upd({ restType: e.target.value })} style={s.miniInput} /></Field>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <Field label="Zone / Intensity" grow><input value={cfg.intensity || ""} placeholder="e.g. Z5 / VO2max / 95–100% HR" onChange={e => upd({ intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
-        <Field label="Target pace"><input value={cfg.pace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ pace: e.target.value })} style={s.miniInput} /></Field>
-        <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 175+ bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
-      </div>
+      <ZonePicker value={cfg.zone} zones={athleteZones} onChange={(z) => upd({ zone: z ?? undefined })} />
+      {cfg.zone == null && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, marginBottom: 8 }}>
+          <Field label="Zone / Intensity" grow><input value={cfg.intensity || ""} placeholder="e.g. Z5 / VO2max / 95–100% HR" onChange={e => upd({ intensity: e.target.value })} style={{ ...s.miniInput, width: "100%" }} /></Field>
+          <Field label="Target pace"><input value={cfg.pace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ pace: e.target.value })} style={s.miniInput} /></Field>
+          <Field label="Target HR"><input value={cfg.hr || ""} placeholder="e.g. 175+ bpm" onChange={e => upd({ hr: e.target.value })} style={s.miniInput} /></Field>
+        </div>
+      )}
       <TrackedMetricsRow cfg={cfg} upd={upd} subType="cardioIntervals" available={metricsForEquipment(cfg.equipment)} />
       <div style={s.dayLabelRow}>Log each rep</div>
       {Array.from({ length: reps }, (_, i) => {
@@ -820,7 +867,7 @@ function CardioIntervals({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
 
 // ── Cardio: Over-Unders ───────────────────────────────────────────────────────
 
-function CardioOverUnder({ cfg, upd, library }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[] }) {
+function CardioOverUnder({ cfg, upd, library, athleteZones }: { cfg: any; upd: (p: any) => void; library: LibraryEntry[]; athleteZones?: ComputedZone[] | null }) {
   const sets = numOr(cfg.sets, 3); const reps = numOr(cfg.reps, 6);
   return (
     <div style={{ marginTop: 12 }}>
@@ -844,14 +891,20 @@ function CardioOverUnder({ cfg, upd, library }: { cfg: any; upd: (p: any) => voi
         <div style={{ background: "#152530", border: "1px solid #4DC3FF44", borderRadius: 10, padding: "10px 12px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#4DC3FF", letterSpacing: 1, marginBottom: 8 }}>UNDER (below threshold)</div>
           <Field label="Duration (s)"><input inputMode="numeric" value={cfg.underDur || "180"} onChange={e => upd({ underDur: e.target.value })} style={s.miniInput} /></Field>
-          <Field label="Zone / %"><input value={cfg.underInt || ""} placeholder="e.g. 93–95% FTP / Z3" onChange={e => upd({ underInt: e.target.value })} style={s.miniInput} /></Field>
-          <Field label="Pace"><input value={cfg.underPace || ""} placeholder="e.g. 4:20/km" onChange={e => upd({ underPace: e.target.value })} style={s.miniInput} /></Field>
+          <ZonePicker value={cfg.underZone} zones={athleteZones} onChange={(z) => upd({ underZone: z ?? undefined })} />
+          {cfg.underZone == null && <>
+            <Field label="Zone / %"><input value={cfg.underInt || ""} placeholder="e.g. 93–95% FTP / Z3" onChange={e => upd({ underInt: e.target.value })} style={s.miniInput} /></Field>
+            <Field label="Pace"><input value={cfg.underPace || ""} placeholder="e.g. 4:20/km" onChange={e => upd({ underPace: e.target.value })} style={s.miniInput} /></Field>
+          </>}
         </div>
         <div style={{ background: "#162743", border: "1px solid #3B8BEB44", borderRadius: 10, padding: "10px 12px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#3B8BEB", letterSpacing: 1, marginBottom: 8 }}>OVER (above threshold)</div>
           <Field label="Duration (s)"><input inputMode="numeric" value={cfg.overDur || "120"} onChange={e => upd({ overDur: e.target.value })} style={s.miniInput} /></Field>
-          <Field label="Zone / %"><input value={cfg.overInt || ""} placeholder="e.g. 105–110% FTP / Z5" onChange={e => upd({ overInt: e.target.value })} style={s.miniInput} /></Field>
-          <Field label="Pace"><input value={cfg.overPace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ overPace: e.target.value })} style={s.miniInput} /></Field>
+          <ZonePicker value={cfg.overZone} zones={athleteZones} onChange={(z) => upd({ overZone: z ?? undefined })} />
+          {cfg.overZone == null && <>
+            <Field label="Zone / %"><input value={cfg.overInt || ""} placeholder="e.g. 105–110% FTP / Z5" onChange={e => upd({ overInt: e.target.value })} style={s.miniInput} /></Field>
+            <Field label="Pace"><input value={cfg.overPace || ""} placeholder="e.g. 3:50/km" onChange={e => upd({ overPace: e.target.value })} style={s.miniInput} /></Field>
+          </>}
         </div>
       </div>
       <TrackedMetricsRow cfg={cfg} upd={upd} subType="overUnder" available={metricsForEquipment(cfg.equipment)} />
@@ -1160,4 +1213,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "6px 0", cursor: "pointer",
   },
   timerExpandedBody: { padding: "10px 14px 14px" },
+  zoneBtn: { background: "#1F272E", border: "1px solid #2A343D", borderRadius: 7, color: "#8593A0", padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  zoneBtnOn: { background: "#1a2840", borderColor: "#4DC3FF", color: "#4DC3FF" },
+  zoneReadout: { marginTop: 6, fontSize: 12, color: "#E8EDF1", background: "#1F272E", border: "1px solid #2A343D", borderRadius: 7, padding: "7px 10px" },
 };

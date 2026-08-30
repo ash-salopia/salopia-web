@@ -41,6 +41,9 @@ export interface Athlete {
   sex: "male" | "female" | null;
   date_of_birth: string | null; // YYYY-MM-DD
   bodyweight_kg: number | null; // 0028 — default for test sessions / IMTP relative strength
+  max_hr: number | null; // 0086 — max heart rate (bpm), drives HR training zones
+  resting_hr: number | null; // 0086 — resting HR (bpm); when set, HR zones use Karvonen / HR-reserve
+  mas_kmh: number | null; // 0086 — Maximal Aerobic Speed (km/h), drives per-zone pace/speed targets
   avatar_url: string | null; // 0042
   hide_pbs_from_feed: boolean; // 0047 — athlete privacy pref, feed-only
   feed_first_name_only: boolean; // 0047 — athlete privacy pref, feed-only
@@ -689,4 +692,6 @@ export interface DirectMessage {
   audio_path: string | null;
   audio_duration_seconds: number | null;
   created_at: string;
+  edited_at?: string | null;
+  acknowledged_at?: string | null; // 0084 — coach dismissed it off the Dashboard
 }

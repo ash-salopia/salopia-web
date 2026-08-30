@@ -9,6 +9,7 @@ import {
   type GroupTestSessionDetail, type GroupTestAthlete,
 } from "@/lib/data/testing";
 import { listAthletes } from "@/lib/data/athletes";
+import { useIsMobile } from "@/lib/use-is-mobile";
 import { getOrganisationBilling } from "@/lib/data/billing";
 import { getMyBranding } from "@/lib/data/branding";
 import { planReportCapabilities, type ReportCapability } from "@/lib/billing/entitlements";
@@ -58,6 +59,10 @@ export default function GroupTestGridPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
+  const isMobile = useIsMobile();
+  // Only the athlete name column stays frozen; BW scrolls with the
+  // metric columns. Narrower name column on mobile to show more sheet.
+  const NAME_W = isMobile ? 96 : 150;
 
   const [detail, setDetail] = useState<GroupTestSessionDetail | null>(null);
   const [benchmarksByMetric, setBenchmarksByMetric] = useState<Record<string, TestBenchmark[]>>({});
@@ -319,8 +324,8 @@ export default function GroupTestGridPage() {
           <table style={st.table}>
             <thead>
               <tr>
-                <th style={{ ...st.th, ...st.cornerName }}>Athlete</th>
-                <th style={{ ...st.th, ...st.cornerBw }}>BW (kg)</th>
+                <th style={{ ...st.th, ...st.cornerName, width: NAME_W, minWidth: NAME_W, maxWidth: NAME_W }}>Athlete</th>
+                <th style={{ ...st.th, ...st.bwHead }}>BW (kg)</th>
                 {cols.map((c) => (
                   <th key={c.key} style={{ ...st.th, ...st.colHead }}>
                     <div style={st.colHeadName}>{c.label}</div>
@@ -335,9 +340,9 @@ export default function GroupTestGridPage() {
                 const age = a ? ageInYears(a.date_of_birth, groupSession.date) : null;
                 return (
                   <tr key={s.id}>
-                    <td style={{ ...st.td, ...st.nameCell }}>
+                    <td style={{ ...st.td, ...st.nameCell, width: NAME_W, minWidth: NAME_W, maxWidth: NAME_W, padding: isMobile ? "6px 4px" : "6px 8px" }}>
                       <div style={st.nameCellInner}>
-                        <span style={st.athleteName}>{a?.name ?? "Athlete"}</span>
+                        <span style={{ ...st.athleteName, ...(isMobile ? st.athleteNameMobile : {}) }}>{a?.name ?? "Athlete"}</span>
                         <button style={st.removeBtn} title="Remove from session" onClick={() => removeAthlete(s.id, a?.name ?? "athlete")}>✕</button>
                       </div>
                     </td>
@@ -555,18 +560,19 @@ const st: Record<string, React.CSSProperties> = {
   colHead: { minWidth: 96, textAlign: "center", verticalAlign: "bottom" },
   colHeadName: { fontWeight: 700, color: "var(--text)", fontSize: 11, lineHeight: 1.2 },
   colHeadUnit: { fontWeight: 400, color: "var(--mute)", fontSize: 10, marginTop: 2 },
-  // The two frozen columns. Widths are explicit + border-box so their
-  // footprint is exactly NAME_W / BW_W, and bw's `left` lines up with
-  // the edge of the name column no matter how wide the content is.
-  cornerName: { left: 0, zIndex: 5, textAlign: "left", width: 150, minWidth: 150, maxWidth: 150 },
-  cornerBw: { left: 150, zIndex: 5, width: 64, minWidth: 64, maxWidth: 64, textAlign: "center" },
+  // Only the athlete name column is frozen (left: 0). Its width is set
+  // inline (NAME_W) so it can shrink on mobile. BW is a normal scrolling
+  // column, same as every metric column.
+  cornerName: { left: 0, zIndex: 5, textAlign: "left" },
+  bwHead: { width: 64, minWidth: 64, maxWidth: 64, textAlign: "center" },
 
   td: { borderBottom: "1px solid var(--line)", borderRight: "1px solid var(--line)", background: "var(--panel)", boxSizing: "border-box" },
-  nameCell: { position: "sticky", left: 0, zIndex: 2, padding: "6px 8px", width: 150, minWidth: 150, maxWidth: 150 },
+  nameCell: { position: "sticky", left: 0, zIndex: 2, padding: "6px 8px" },
   nameCellInner: { display: "flex", alignItems: "center", gap: 6, justifyContent: "space-between" },
   athleteName: { fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  athleteNameMobile: { whiteSpace: "normal", overflow: "visible", textOverflow: "clip", lineHeight: 1.15, fontSize: 11, wordBreak: "break-word" },
   removeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer", flexShrink: 0 },
-  bwCell: { position: "sticky", left: 150, zIndex: 2, padding: 4, width: 64, minWidth: 64, maxWidth: 64 },
+  bwCell: { padding: 4, width: 64, minWidth: 64, maxWidth: 64 },
   bwInput: { width: "100%", boxSizing: "border-box", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "5px 4px", fontSize: 12, textAlign: "center" },
 
   cell: { padding: 3, verticalAlign: "top" },

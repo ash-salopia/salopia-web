@@ -125,6 +125,22 @@ export async function updateAthleteTestingSchedule(
   if (error) throw error;
 }
 
+export async function updateAthleteAerobicProfile(
+  id: string,
+  profile: { maxHr: number | null; restingHr: number | null; masKmh: number | null }
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("athletes")
+    .update({
+      max_hr: profile.maxHr || null,
+      resting_hr: profile.restingHr || null,
+      mas_kmh: profile.masKmh || null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteAthlete(id: string): Promise<void> {
   const supabase = createClient();
   // Sessions reference athletes with ON DELETE CASCADE, so this also

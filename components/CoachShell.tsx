@@ -23,7 +23,8 @@ const NAV_ITEMS = [
   { href: "/reporting",   label: "Reporting",   icon: "📊" },
   { href: "/dashboard",   label: "Dashboard",   icon: "📋" },
   { href: "/settings",    label: "Settings",    icon: "⚙️" },
-  { href: "/requests",    label: "Request a Feature", icon: "💡" },
+  { href: "/forum",       label: "Coach Forum", icon: "🗣️" },
+  { href: "/help",        label: "Help & FAQ",  icon: "❓" },
 ];
 
 type BillingBanner =

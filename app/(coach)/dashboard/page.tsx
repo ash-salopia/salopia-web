@@ -14,9 +14,11 @@ import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-ut
 import { getOrgSettings } from "@/lib/data/settings";
 import { listRecentOrgPBs, formatPBValue, type PersonalBest } from "@/lib/data/personal-bests";
 import { listLowRecoveryAlerts, type RecoveryAlert } from "@/lib/data/recovery";
-import { listRecentAthleteMessages, type RecentDirectMessage } from "@/lib/data/messages";
+import { listRecentAthleteMessages, acknowledgeAthleteMessage, acknowledgeAthleteMessagesFor, type RecentDirectMessage } from "@/lib/data/messages";
 import { listTodayCheckIns } from "@/lib/data/checkins";
 import { flaggedConditions } from "@/lib/checkin";
+import { createClient } from "@/lib/supabase-browser";
+import DirectMessageThread from "@/components/DirectMessageThread";
 import type { Athlete } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -49,6 +51,11 @@ interface CheckInAlert {
   athleteName: string;
   flags: string[];
 }
+
+// How many rows the message / session-comment panels show before a
+// "Show N more" toggle — keeps the top of the Dashboard scannable when
+// there's a long backlog.
+const PANEL_COLLAPSED_ROWS = 4;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -104,10 +111,16 @@ export default function DashboardPage() {
   const [recentPBs, setRecentPBs] = useState<PersonalBest[]>([]);
   const [recentMessages, setRecentMessages] = useState<RecentDirectMessage[]>([]);
   const [sessionNotes, setSessionNotes] = useState<SessionNoteAlert[]>([]);
+  const [showAllNotes, setShowAllNotes] = useState(false);
+  const [showAllMessages, setShowAllMessages] = useState(false);
   const [recoveryAlerts, setRecoveryAlerts] = useState<RecoveryAlert[]>([]);
   const [checkInAlerts, setCheckInAlerts] = useState<CheckInAlert[]>([]);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [weekLabel, setWeekLabel] = useState("");
+
+  const [coachId, setCoachId] = useState("");
+  const [coachName, setCoachName] = useState("");
+  const [dmModal, setDmModal] = useState<{ athleteId: string; athleteName: string; initialText?: string } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -247,7 +260,7 @@ export default function DashboardPage() {
         // ── Athlete messages ──────────────────────────────────────────────────
         // No read/unread tracking on direct_messages - this is "who's messaged
         // recently" rather than a true unread count.
-        const messages = await listRecentAthleteMessages(6).catch(() => [] as RecentDirectMessage[]);
+        const messages = await listRecentAthleteMessages(25).catch(() => [] as RecentDirectMessage[]);
         setRecentMessages(messages);
 
       } catch (e) {
@@ -258,6 +271,42 @@ export default function DashboardPage() {
     };
     load();
   }, []);
+
+  // Coach identity for the direct-message popup. Coaches RLS returns
+  // every colleague, so resolve auth.uid() first (same pattern as the
+  // athlete page / Community).
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: auth }) => {
+      const uid = auth.user?.id;
+      if (!uid) return;
+      supabase.from("coaches").select("id, name").eq("id", uid).single().then(({ data }) => {
+        if (data) { setCoachId(data.id); setCoachName(data.name); }
+      });
+    });
+  }, []);
+
+  // Replying to an athlete from the pop-up counts as handled — clear all
+  // their outstanding messages from the panel. Server ack is best-effort
+  // (needs migration 0084); the local removal always happens.
+  const handleRepliedTo = (athleteId: string) => {
+    setRecentMessages((cur) => cur.filter((m) => m.athlete_id !== athleteId));
+    acknowledgeAthleteMessagesFor(athleteId).catch(() => {});
+  };
+
+  const handleDismissMessage = async (id: string) => {
+    setDismissingId(id);
+    const prev = recentMessages;
+    setRecentMessages((cur) => cur.filter((m) => m.id !== id)); // optimistic
+    try {
+      await acknowledgeAthleteMessage(id);
+    } catch {
+      setRecentMessages(prev);
+      setError("Could not dismiss - the acknowledged_at column may be missing (migration 0084)");
+    } finally {
+      setDismissingId(null);
+    }
+  };
 
   const handleDismissNote = async (sessionId: string) => {
     setDismissingId(sessionId);
@@ -300,7 +349,7 @@ export default function DashboardPage() {
                 <span style={st.panelCount(sessionNotes.length)}>{sessionNotes.length}</span>
               </div>
               <div style={st.noteList}>
-                {sessionNotes.map((n) => (
+                {(showAllNotes ? sessionNotes : sessionNotes.slice(0, PANEL_COLLAPSED_ROWS)).map((n) => (
                   <div key={n.sessionId} style={st.noteRow}>
                     <button
                       style={st.noteMain}
@@ -310,6 +359,17 @@ export default function DashboardPage() {
                         {n.athleteName} · {n.sessionName} · {n.date}
                       </div>
                       <div style={st.noteText}>{n.note}</div>
+                    </button>
+                    <button
+                      style={st.noteMsgBtn}
+                      onClick={() => setDmModal({
+                        athleteId: n.athleteId,
+                        athleteName: n.athleteName,
+                        initialText: `Re: your note on "${n.sessionName}" (${n.date}) — `,
+                      })}
+                      title={`Message ${n.athleteName} about this`}
+                    >
+                      💬
                     </button>
                     <button
                       style={st.noteDismissBtn}
@@ -322,6 +382,11 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
+              {sessionNotes.length > PANEL_COLLAPSED_ROWS && (
+                <button style={st.moreBtn} onClick={() => setShowAllNotes((v) => !v)}>
+                  {showAllNotes ? "Show less" : `Show ${sessionNotes.length - PANEL_COLLAPSED_ROWS} more`}
+                </button>
+              )}
             </div>
           )}
 
@@ -334,21 +399,35 @@ export default function DashboardPage() {
                 <span style={st.panelCount(recentMessages.length)}>{recentMessages.length}</span>
               </div>
               <div style={st.noteList}>
-                {recentMessages.map((m) => (
-                  <button
-                    key={m.id}
-                    style={{ ...st.noteRowBtn }}
-                    onClick={() => router.push(`/athletes/${m.athlete_id}?openMessages=1`)}
-                  >
-                    <div style={st.noteMeta}>
-                      {m.athlete?.name ?? "Athlete"} · {formatRelativeTime(m.created_at)}
-                    </div>
-                    <div style={st.noteText}>
-                      {m.audio_path ? "🎤 Voice note" : m.body}
-                    </div>
-                  </button>
+                {(showAllMessages ? recentMessages : recentMessages.slice(0, PANEL_COLLAPSED_ROWS)).map((m) => (
+                  <div key={m.id} style={st.noteRow}>
+                    <button
+                      style={st.noteMain}
+                      onClick={() => setDmModal({ athleteId: m.athlete_id, athleteName: m.athlete?.name ?? "Athlete" })}
+                    >
+                      <div style={st.noteMeta}>
+                        {m.athlete?.name ?? "Athlete"} · {formatRelativeTime(m.created_at)}
+                      </div>
+                      <div style={st.noteText}>
+                        {m.audio_path ? "🎤 Voice note" : m.body}
+                      </div>
+                    </button>
+                    <button
+                      style={st.noteDismissBtn}
+                      onClick={() => handleDismissMessage(m.id)}
+                      disabled={dismissingId === m.id}
+                      title="Dismiss from dashboard"
+                    >
+                      {dismissingId === m.id ? "…" : "✓"}
+                    </button>
+                  </div>
                 ))}
               </div>
+              {recentMessages.length > PANEL_COLLAPSED_ROWS && (
+                <button style={st.moreBtn} onClick={() => setShowAllMessages((v) => !v)}>
+                  {showAllMessages ? "Show less" : `Show ${recentMessages.length - PANEL_COLLAPSED_ROWS} more`}
+                </button>
+              )}
             </div>
           )}
 
@@ -551,6 +630,37 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {dmModal && (
+        <div style={st.overlay} onClick={() => setDmModal(null)}>
+          <div style={st.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={st.modalHead}>
+              <span style={st.modalTitle}>💬 {dmModal.athleteName}</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  style={st.modalLink}
+                  onClick={() => router.push(`/athletes/${dmModal.athleteId}?openMessages=1`)}
+                >
+                  Open athlete →
+                </button>
+                <button style={st.modalClose} onClick={() => setDmModal(null)}>✕</button>
+              </div>
+            </div>
+            {coachId ? (
+              <DirectMessageThread
+                athleteId={dmModal.athleteId}
+                athleteName={dmModal.athleteName}
+                coachId={coachId}
+                coachName={coachName}
+                initialText={dmModal.initialText}
+                onSent={() => handleRepliedTo(dmModal.athleteId)}
+              />
+            ) : (
+              <div style={st.empty}>Loading…</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -629,6 +739,26 @@ const st: Record<string, any> = {
   noteDismissBtn: {
     flexShrink: 0, background: "var(--good-dim)", border: "1px solid var(--good)", color: "var(--good)",
     borderRadius: 6, width: 28, height: 28, fontSize: 13, fontWeight: 700, cursor: "pointer",
+  },
+  noteMsgBtn: {
+    flexShrink: 0, background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--mute)",
+    borderRadius: 6, width: 28, height: 28, fontSize: 12, cursor: "pointer",
+  },
+  overlay: {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100,
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+  },
+  modal: {
+    background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16,
+    padding: 16, width: "100%", maxWidth: 460, display: "flex", flexDirection: "column", gap: 12,
+  },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  modalTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
+  modalLink: { background: "transparent", border: "none", color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  modalClose: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", lineHeight: 1 },
+  moreBtn: {
+    width: "100%", marginTop: 6, background: "transparent", border: "1px solid var(--line)",
+    color: "var(--mute)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer",
   },
 
   athleteList: { display: "flex", flexWrap: "wrap", gap: 6 },

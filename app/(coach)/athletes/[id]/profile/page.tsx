@@ -11,8 +11,10 @@ import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib
 import { listVelocityProfiles, upsertVelocityProfile, deleteVelocityProfile } from "@/lib/data/velocity-profiles";
 import { fitLinearRegression } from "@/lib/velocity-profile";
 import { getOrgSettings } from "@/lib/data/settings";
+import { DEFAULT_ZONE_MODEL, type ZoneModel } from "@/lib/training-zones";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
+import AerobicProfileSection from "@/components/AerobicProfileSection";
 import Avatar from "@/components/Avatar";
 import type { Athlete, AthleteOneRM, AthleteVelocityProfile } from "@/types";
 
@@ -187,6 +189,7 @@ export default function AthleteProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const [orgPbEnabled, setOrgPbEnabled] = useState(true);
+  const [zoneModel, setZoneModel] = useState<ZoneModel>(DEFAULT_ZONE_MODEL);
   const pbEnabled = orgPbEnabled && (athlete as any)?.pb_enabled !== false;
 
   const handleAvatarUpload = async (file: File) => {
@@ -226,7 +229,10 @@ export default function AthleteProfilePage() {
     listLibrary().then((entries) => setLibrary(entries)).catch(() => {});
     listAthleteOneRMs(athleteId).then(setOneRMs).catch(() => {});
     listVelocityProfiles(athleteId).then(setVelocityProfiles).catch(() => {});
-    getOrgSettings().then((s) => setOrgPbEnabled(s.pb_enabled !== false)).catch(() => {});
+    getOrgSettings().then((s) => {
+      setOrgPbEnabled(s.pb_enabled !== false);
+      if (s.zone_model) setZoneModel(s.zone_model);
+    }).catch(() => {});
   }, [athleteId]);
 
   const load = async () => {
@@ -727,6 +733,19 @@ export default function AthleteProfilePage() {
           </div>
         </div>
       </div>
+
+      {athlete && (
+        <AerobicProfileSection
+          athleteId={athleteId}
+          dob={athlete.date_of_birth ?? null}
+          initial={{
+            max_hr: (athlete as any).max_hr ?? null,
+            resting_hr: (athlete as any).resting_hr ?? null,
+            mas_kmh: (athlete as any).mas_kmh ?? null,
+          }}
+          zoneModel={zoneModel}
+        />
+      )}
 
       {/* 1RM Tracker */}
       <div style={p.section}>

@@ -22,3 +22,18 @@ export async function listTodayCheckIns(): Promise<CheckInRow[]> {
   if (error) throw error;
   return data ?? [];
 }
+
+// One athlete's recent check-ins, newest first - used by the
+// athlete-page Dashboard tab to show the last week or two of readiness
+// scores alongside the flags each one raised.
+export async function listAthleteCheckIns(athleteId: string, limit = 14): Promise<CheckIn[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("checkins")
+    .select("*")
+    .eq("athlete_id", athleteId)
+    .order("date", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}

@@ -40,7 +40,7 @@ export interface FeatureRequest {
 // (0069) is a narrow SECURITY DEFINER function exposing just
 // name/is_app_admin for any coach id, so author names resolve
 // correctly regardless of which org posted them.
-async function resolveCoachProfiles(
+export async function resolveCoachProfiles(
   supabase: ReturnType<typeof createClient>,
   coachIds: string[]
 ): Promise<Map<string, CoachProfile>> {

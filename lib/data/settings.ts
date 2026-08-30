@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase-browser";
 import type { OneRMFormula, WeightUnit } from "@/lib/one-rm";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
+import { DEFAULT_ZONE_MODEL, type ZoneModel } from "@/lib/training-zones";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,7 @@ export interface OrgSettings {
   recovery_alert_enabled: boolean;
   recovery_alert_threshold: 1 | 2 | 3; // low recovery-score feedback entries in the last 7 days needed to flag an athlete
   power_speed_benchmarks: PowerSpeedBenchmarkDef[];
+  zone_model: ZoneModel; // 0086 — 5-zone HR/MAS model for conditioning prescription
 }
 
 export const DEFAULT_SETTINGS: OrgSettings = {
@@ -179,6 +181,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   recovery_alert_enabled: true,
   recovery_alert_threshold: 2,
   power_speed_benchmarks: DEFAULT_POWER_SPEED_BENCHMARKS,
+  zone_model: DEFAULT_ZONE_MODEL,
 };
 
 // ── Coach-side (uses authenticated client) ────────────────────────────────────

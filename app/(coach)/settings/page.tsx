@@ -807,6 +807,44 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      <CollapsibleSection title="Heart rate & MAS zones">
+        <div style={s.card}>
+          <div style={s.cardLabel}>5-zone model</div>
+          <div style={s.cardDesc}>
+            Each athlete&apos;s Max HR and Maximal Aerobic Speed (set on their profile) turn these
+            percentages into bpm and pace targets. Prescribe a zone on a Cardio or Hybrid session and
+            the athlete sees their numbers. HR uses the heart-rate-reserve (Karvonen) method when the
+            athlete has a resting HR, otherwise plain % of max HR.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 8, marginTop: 6 }}>
+            <div style={{ display: "flex", gap: 6, fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.03em" }}>
+              <span style={{ flex: 1 }}>Zone name</span>
+              <span style={{ width: 66, textAlign: "center" as const }}>HR% lo</span>
+              <span style={{ width: 66, textAlign: "center" as const }}>HR% hi</span>
+              <span style={{ width: 66, textAlign: "center" as const }}>MAS% lo</span>
+              <span style={{ width: 66, textAlign: "center" as const }}>MAS% hi</span>
+            </div>
+            {settings.zone_model.zones.map((z, i) => {
+              const upd = (patch: Partial<typeof z>) => setSettings((prev) => ({
+                ...prev,
+                zone_model: { zones: prev.zone_model.zones.map((x, j) => j === i ? { ...x, ...patch } : x) },
+              }));
+              return (
+                <div key={z.n} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", width: 24 }}>Z{z.n}</span>
+                  <input style={{ ...s.metricInput, flex: 1 }} value={z.name}
+                    onChange={(e) => upd({ name: e.target.value })} />
+                  {(["hrLowPct", "hrHighPct", "masLowPct", "masHighPct"] as const).map((k) => (
+                    <input key={k} type="number" style={{ ...s.metricInput, width: 66, flex: "none" }} value={z[k]}
+                      onChange={(e) => upd({ [k]: e.target.value === "" ? 0 : parseFloat(e.target.value) } as Partial<typeof z>)} />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </CollapsibleSection>
+
       </fieldset>
 
       {orgId && (

@@ -11,6 +11,47 @@
 import { MetricBoxes } from "@/components/MetricBoxes";
 import type { MetricKey, MetricValues } from "@/lib/cardio-metrics";
 import type { Session } from "@/types";
+import { zoneSummary, type ComputedZone } from "@/lib/training-zones";
+
+// Prescribed training-zone targets for the athlete — Z chip + their
+// computed HR / pace band, live from their aerobic profile. Reads
+// cfg.zone (continuous / cardioIntervals / hyrox interval),
+// block.zone (threshold), or cfg.underZone / cfg.overZone (over-unders).
+function ZoneTargets({ cfg, subType, isHyrox, zones }: {
+  cfg: any; subType: string; isHyrox: boolean; zones?: ComputedZone[] | null;
+}) {
+  const rows: { label: string; n: number }[] = [];
+  if (!isHyrox && subType === "threshold") {
+    (cfg.blocks ?? []).forEach((b: any, i: number) => {
+      if (b?.zone != null) rows.push({ label: b.label || `Block ${i + 1}`, n: b.zone });
+    });
+  } else if (!isHyrox && subType === "overUnder") {
+    if (cfg.underZone != null) rows.push({ label: "Under", n: cfg.underZone });
+    if (cfg.overZone != null) rows.push({ label: "Over", n: cfg.overZone });
+  } else if (cfg.zone != null) {
+    rows.push({ label: "Target", n: cfg.zone });
+  }
+  if (!rows.length) return null;
+
+  return (
+    <div style={styles.section}>
+      <div style={styles.sectionLabel}>Target zone{rows.length > 1 ? "s" : ""}</div>
+      {rows.map((r, i) => {
+        const cz = zones && r.n >= 1 && r.n <= 5 ? zones[r.n - 1] : null;
+        const detail = cz && (cz.hr || cz.pace)
+          ? zoneSummary(cz).replace(/^Z\d+\s+/, "")
+          : "ask your coach to set your Max HR / MAS";
+        return (
+          <div key={i} style={styles.zoneRow}>
+            {rows.length > 1 && <span style={styles.zoneRowLabel}>{r.label}</span>}
+            <span style={styles.zoneChip}>Z{r.n}{cz ? ` ${cz.name}` : ""}</span>
+            <span style={styles.zoneDetail}>{detail}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export const HYROX_LABEL: Record<string, string> = {
   fixed: "Fixed Workout", cycling: "Cycling Intervals", emom: "EMOM",
@@ -25,10 +66,12 @@ export default function HyroxCardioLog({
   session,
   onPatch,
   compact = false,
+  zones,
 }: {
   session: Session;
   onPatch: (patch: object) => void;
   compact?: boolean;
+  zones?: ComputedZone[] | null;
 }) {
   const isHyrox = session.type === "hyrox";
   const subType = isHyrox ? (session.hyrox_type ?? "") : ((session as any).cardio_type ?? "");
@@ -311,6 +354,7 @@ export default function HyroxCardioLog({
 
   return (
     <>
+      <ZoneTargets cfg={cfg} subType={subType} isHyrox={isHyrox} zones={zones} />
       {structure && <div style={styles.section}>{structure}</div>}
       {hasAnyMetrics ? (
         <div style={styles.section}>
@@ -338,4 +382,8 @@ const styles: Record<string, React.CSSProperties> = {
   roundChip: { background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   roundChipOn: { background: "var(--good-dim)", borderColor: "var(--good)", color: "var(--good)" },
   emptyNote: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "12px 0" },
+  zoneRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const, marginTop: 6 },
+  zoneRowLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", minWidth: 44 },
+  zoneChip: { fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 6, padding: "3px 9px" },
+  zoneDetail: { fontSize: 13, color: "var(--text)" },
 };

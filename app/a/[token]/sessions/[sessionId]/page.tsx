@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getAthleteByShareToken, getAthleteSessions, getOrgSettingsForAthlete, getTodayCheckIn } from "@/lib/data/athlete-share-link";
 import AthleteSessionView from "@/components/AthleteSessionView";
+import { computeZones, DEFAULT_ZONE_MODEL, type ComputedZone } from "@/lib/training-zones";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function AthleteLinkSessionPage({
 
   let lockUntilCheckin = false;
   let checkedInToday = false;
+  let zones: ComputedZone[] | null = null;
   try {
     const [settings, todayCheckIn] = await Promise.all([
       getOrgSettingsForAthlete(athlete.id),
@@ -37,6 +39,10 @@ export default async function AthleteLinkSessionPage({
     ]);
     lockUntilCheckin = !!settings.lock_until_checkin;
     checkedInToday = !!todayCheckIn;
+    zones = computeZones(
+      { max_hr: athlete.max_hr ?? null, resting_hr: athlete.resting_hr ?? null, mas_kmh: athlete.mas_kmh ?? null },
+      settings.zone_model ?? DEFAULT_ZONE_MODEL
+    );
   } catch {
     // Fail open - never lock an athlete out of their session over a fetch error.
   }
@@ -50,6 +56,7 @@ export default async function AthleteLinkSessionPage({
       token={token}
       lockUntilCheckin={lockUntilCheckin}
       checkedInToday={checkedInToday}
+      zones={zones}
     />
   );
 }

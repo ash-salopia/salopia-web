@@ -25,6 +25,8 @@ interface Props {
   athleteName: string;
   coachId: string;
   coachName: string;
+  initialText?: string;
+  onSent?: () => void;
 }
 
 function formatTime(iso: string): string {
@@ -45,12 +47,14 @@ async function uploadCoachAudio(blob: Blob): Promise<{ path: string }> {
   return data;
 }
 
-export default function DirectMessageThread({ athleteId, athleteName, coachId, coachName }: Props) {
+export default function DirectMessageThread({ athleteId, athleteName, coachId, coachName, initialText, onSent }: Props) {
   const [messages, setMessages] = useState<DirectMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialText ?? "");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -88,6 +92,29 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
           }
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "direct_messages", filter: `athlete_id=eq.${athleteId}` },
+        (payload) => {
+          if (mounted) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === payload.new.id ? { ...m, ...(payload.new as DirectMessage) } : m))
+            );
+          }
+        }
+      )
+      .on(
+        // DELETE carries only the primary key under the default replica
+        // identity, so no athlete filter — match by id against local state.
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "direct_messages" },
+        (payload) => {
+          if (mounted) {
+            const goneId = (payload.old as { id?: string }).id;
+            if (goneId) setMessages((prev) => prev.filter((m) => m.id !== goneId));
+          }
+        }
+      )
       .subscribe();
 
     return () => { mounted = false; supabase.removeChannel(channel); };
@@ -110,6 +137,7 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
       audio_path: patch.audio_path,
       audio_duration_seconds: patch.audio_duration_seconds,
       created_at: new Date().toISOString(),
+      edited_at: null,
     };
     setMessages((prev) => [...prev, optimistic]);
 
@@ -127,6 +155,7 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
         .single();
       if (sendErr) throw sendErr;
       setMessages((prev) => prev.map((m) => (m.id === optimisticId ? (data as DirectMessage) : m)));
+      onSent?.();
       // Push is server-only code - this insert went straight through
       // the browser client (RLS), so a separate call triggers the
       // notification side effect. Fire-and-forget: a failed push
@@ -157,6 +186,51 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
     await insertMessage({ body: "", audio_path: audioPath, audio_duration_seconds: Math.round(durationSeconds) });
   };
 
+  const startEdit = (msg: DirectMessage) => {
+    setEditingId(msg.id);
+    setEditText(msg.body);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const id = editingId;
+    const body = editText.trim();
+    if (!body) return;
+    const before = messages.find((m) => m.id === id);
+    if (!before || body === before.body) { setEditingId(null); return; }
+    const editedAt = new Date().toISOString();
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, body, edited_at: editedAt } : m)));
+    setEditingId(null);
+    let { error: err } = await supabase
+      .from("direct_messages")
+      .update({ body, edited_at: editedAt })
+      .eq("id", id);
+    if (err) {
+      // The edited_at column may not exist yet (migration 0083) or the
+      // PostgREST schema cache may be stale — fall back to a plain body
+      // edit so the feature still works without the "edited" marker.
+      ({ error: err } = await supabase.from("direct_messages").update({ body }).eq("id", id));
+      if (!err) {
+        setMessages((prev) => prev.map((m) => (m.id === id && before ? { ...m, edited_at: before.edited_at ?? null } : m)));
+      }
+    }
+    if (err) {
+      setMessages((prev) => prev.map((m) => (m.id === id ? (before as DirectMessage) : m)));
+      setError("Could not edit message - please try again");
+    }
+  };
+
+  const deleteMessage = async (id: string) => {
+    if (!confirm("Delete this message? It will be removed for everyone.")) return;
+    const before = messages;
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    const { error: err } = await supabase.from("direct_messages").delete().eq("id", id);
+    if (err) {
+      setMessages(before);
+      setError("Could not delete message - please try again");
+    }
+  };
+
   if (loading) return <div style={s.loading}>Loading messages…</div>;
 
   return (
@@ -173,16 +247,49 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
         )}
         {messages.map((msg) => {
           const isMe = msg.sender_id === coachId && msg.sender_type === "coach";
+          const editing = editingId === msg.id;
           return (
             <div key={msg.id} style={{ ...s.messageRow, justifyContent: isMe ? "flex-end" : "flex-start" }}>
               <div style={{ ...s.bubble, ...(isMe ? s.bubbleMe : s.bubbleThem) }}>
                 {!isMe && <div style={s.senderName}>{msg.sender_name}</div>}
-                {msg.audio_path ? (
+                {editing ? (
+                  <div style={s.editWrap}>
+                    <textarea
+                      autoFocus
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      style={s.editInput}
+                      rows={2}
+                    />
+                    <div style={s.editActions}>
+                      <button style={s.editCancel} onClick={() => setEditingId(null)}>Cancel</button>
+                      <button style={s.editSave} onClick={saveEdit} disabled={!editText.trim()}>Save</button>
+                    </div>
+                  </div>
+                ) : msg.audio_path ? (
                   <VoiceNotePlayer audioPath={msg.audio_path} durationSeconds={msg.audio_duration_seconds} isMe={isMe} />
                 ) : (
                   <div style={s.body}>{msg.body}</div>
                 )}
-                <div style={s.time}>{formatTime(msg.created_at)}</div>
+                {!editing && (
+                  <div style={{ ...s.metaRow, ...(isMe ? s.metaRowMe : {}) }}>
+                    <span style={s.time}>
+                      {formatTime(msg.created_at)}{msg.edited_at ? " · edited" : ""}
+                    </span>
+                    {isMe && (
+                      <span style={s.msgActions}>
+                        {!msg.audio_path && (
+                          <button style={s.msgActionBtn} onClick={() => startEdit(msg)}>Edit</button>
+                        )}
+                        <button style={s.msgActionBtn} onClick={() => deleteMessage(msg.id)}>Delete</button>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -225,7 +332,16 @@ const s: Record<string, React.CSSProperties> = {
   bubbleThem: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderBottomLeftRadius: 4 },
   senderName: { fontSize: 10, fontWeight: 700, opacity: 0.7, marginBottom: 3, textTransform: "uppercase" as const, letterSpacing: "0.04em" },
   body: { fontSize: 14, lineHeight: 1.4, wordBreak: "break-word" as const },
-  time: { fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: "right" as const },
+  metaRow: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 4 },
+  metaRowMe: { justifyContent: "space-between" },
+  time: { fontSize: 10, opacity: 0.6 },
+  msgActions: { display: "flex", gap: 8 },
+  msgActionBtn: { background: "transparent", border: "none", padding: 0, fontSize: 10, fontWeight: 700, color: "inherit", opacity: 0.75, textDecoration: "underline", cursor: "pointer" },
+  editWrap: { display: "flex", flexDirection: "column", gap: 6, minWidth: 220 },
+  editInput: { width: "100%", boxSizing: "border-box", background: "var(--panel)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 8px", fontSize: 14, fontFamily: "inherit", lineHeight: 1.4, resize: "vertical" as const },
+  editActions: { display: "flex", gap: 6, justifyContent: "flex-end" },
+  editCancel: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  editSave: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
   inputRow: { display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid var(--line)", background: "var(--ink)" },
   input: { flex: 1, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 10, padding: "10px 12px", fontSize: 14 },
   sendBtn: { width: 40, height: 40, background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, fontSize: 18, fontWeight: 700, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },

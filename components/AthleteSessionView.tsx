@@ -93,6 +93,7 @@ export default function AthleteSessionView({
   token,
   lockUntilCheckin,
   checkedInToday: initialCheckedInToday,
+  zones,
 }: {
   session?: Session;
   allSessions?: Session[];
@@ -101,6 +102,7 @@ export default function AthleteSessionView({
   token: string;
   lockUntilCheckin?: boolean;
   checkedInToday?: boolean;
+  zones?: import("@/lib/training-zones").ComputedZone[] | null;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(initialSession ?? null);
@@ -430,6 +432,7 @@ export default function AthleteSessionView({
       <HyroxCardioAthleteView
         session={session}
         token={token}
+        zones={zones}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}
       />

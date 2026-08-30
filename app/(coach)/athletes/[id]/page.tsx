@@ -33,9 +33,11 @@ import SessionLibraryAccessModal from "@/components/SessionLibraryAccessModal";
 import GoalsManager from "@/components/GoalsManager";
 import ExportModal from "@/components/ExportModal";
 import RecoverySessionModal from "@/components/RecoverySessionModal";
+import AthleteDashboard from "@/components/AthleteDashboard";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
+import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
@@ -114,7 +116,9 @@ export default function AthleteDetailPage() {
   const [lastCopyRangeStart, setLastCopyRangeStart] = useState("");
   const [lastCopyRangeEnd, setLastCopyRangeEnd] = useState("");
   const [libraryAccessOpen, setLibraryAccessOpen] = useState(false);
-  const [calView, setCalView] = useState<"month" | "week">("month");
+  const [calView, setCalView] = useState<"dashboard" | "month" | "week">("month");
+  const [checkinEnabled, setCheckinEnabled] = useState(true);
+  const [checkinRules, setCheckinRules] = useState<CheckInRules>(DEFAULT_CHECKIN_RULES);
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
     const dow = d.getDay();
@@ -210,6 +214,8 @@ export default function AthleteDetailPage() {
     getOrgSettings().then((s) => {
       setHyroxEnabled(s.hyrox_enabled !== false);
       setSquadComparisonEnabled(s.squad_comparison_enabled !== false);
+      setCheckinEnabled(s.checkin_enabled !== false);
+      if (s.checkin_rules) setCheckinRules(s.checkin_rules);
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
@@ -751,19 +757,35 @@ export default function AthleteDetailPage() {
       <div style={styles.calendarWrap}>
         {/* Month navigation */}
         <div style={styles.calendarHeader}>
-          <button style={styles.calNavBtn} onClick={calView === "month" ? prevMonth : prevWeek}>‹</button>
-          <span style={styles.calTitle}>{calView === "month" ? calendarTitle : weekTitle}</span>
-          <button style={styles.calNavBtn} onClick={calView === "month" ? nextMonth : nextWeek}>›</button>
+          {calView !== "dashboard" && (
+            <>
+              <button style={styles.calNavBtn} onClick={calView === "month" ? prevMonth : prevWeek}>‹</button>
+              <span style={styles.calTitle}>{calView === "month" ? calendarTitle : weekTitle}</span>
+              <button style={styles.calNavBtn} onClick={calView === "month" ? nextMonth : nextWeek}>›</button>
+            </>
+          )}
           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-            {(["month", "week"] as const).map(v => (
+            {(["dashboard", "month", "week"] as const).map(v => (
               <button key={v} style={{ ...styles.viewTabBtn, ...(calView === v ? styles.viewTabBtnActive : {}) }} onClick={() => setCalView(v)}>
-                {v === "month" ? "Month" : "Week"}
+                {v === "dashboard" ? "Dashboard" : v === "month" ? "Month" : "Week"}
               </button>
             ))}
           </div>
         </div>
 
-        {calView === "week" ? (
+        {calView === "dashboard" ? (
+          <AthleteDashboard
+            athleteId={athleteId}
+            athleteName={athlete.name}
+            sessions={sessions}
+            lastTestDate={lastTestDate}
+            retestWeeks={retestWeeks}
+            checkinEnabled={checkinEnabled}
+            checkinRules={checkinRules}
+            onOpenMessages={() => setMessageOpen(true)}
+            onOpenSession={(sid) => router.push(`/athletes/${athleteId}/sessions/${sid}`)}
+          />
+        ) : calView === "week" ? (
           <div style={styles.weekScrollWrap}>
           <div style={styles.weekGrid}>
             {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((dayLabel, di) => {

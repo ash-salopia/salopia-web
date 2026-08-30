@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
+import type { ComputedZone } from "@/lib/training-zones";
 
 export default function AthleteSettingsPage() {
   const params = useParams();
@@ -17,6 +18,15 @@ export default function AthleteSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [zoneData, setZoneData] = useState<{ hasProfile: boolean; usesReserve: boolean; zones: ComputedZone[] } | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`/api/athlete-link/training-zones?token=${token}`)
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setZoneData(d); })
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -128,6 +138,46 @@ export default function AthleteSettingsPage() {
             {saved && <div style={s.savedMsg}>✓ Saved</div>}
           </div>
         )}
+
+        <div style={{ ...s.pageTitle, marginTop: 28 }}>🫀 Training zones</div>
+        <div style={s.pageSubtitle}>
+          Your heart-rate and pace targets for each conditioning zone. Set by your coach.
+        </div>
+        <div style={s.card}>
+          {!zoneData ? (
+            <div style={s.loading}>Loading…</div>
+          ) : !zoneData.hasProfile ? (
+            <div style={s.rowDesc}>Your coach hasn&apos;t added your Max HR or MAS yet — ask them to set it up so your zones show here.</div>
+          ) : (
+            <>
+              <table style={s.zoneTable}>
+                <thead>
+                  <tr>
+                    <th style={{ ...s.zTh, textAlign: "left" }}>Zone</th>
+                    <th style={s.zTh}>Heart rate</th>
+                    <th style={s.zTh}>Pace /km</th>
+                    <th style={s.zTh}>Speed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zoneData.zones.map((z) => (
+                    <tr key={z.n}>
+                      <td style={{ ...s.zTd, textAlign: "left" }}><strong style={{ color: "var(--text)" }}>Z{z.n}</strong> {z.name}</td>
+                      <td style={s.zTd}>{z.hr ? `${z.hr.low}–${z.hr.high}` : "—"}</td>
+                      <td style={s.zTd}>{z.pace ? `${z.pace.low}–${z.pace.high}` : "—"}</td>
+                      <td style={s.zTd}>{z.speed ? `${z.speed.low}–${z.speed.high} km/h` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ ...s.rowDesc, marginTop: 8 }}>
+                {zoneData.usesReserve
+                  ? "HR bands use your heart-rate reserve (resting to max)."
+                  : "HR bands are a percentage of your max HR."}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -150,4 +200,7 @@ const s: Record<string, React.CSSProperties> = {
   toggleSwitch: { width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative" as const, flexShrink: 0, transition: "background 0.2s" },
   toggleThumb: { position: "absolute" as const, top: 3, left: 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "transform 0.2s" },
   savedMsg: { fontSize: 12, color: "var(--good)", fontWeight: 600, marginTop: 10 },
+  zoneTable: { width: "100%", borderCollapse: "collapse" as const, fontSize: 12 },
+  zTh: { textAlign: "center" as const, fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.03em", padding: "0 6px 6px", borderBottom: "1px solid var(--line)" },
+  zTd: { textAlign: "center" as const, padding: "7px 6px", color: "var(--mute)", borderBottom: "1px solid var(--line)" },
 };

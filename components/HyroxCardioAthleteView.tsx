@@ -15,15 +15,18 @@ import { HyroxTimer } from "@/components/HyroxCardioBuilder";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { Session } from "@/types";
+import type { ComputedZone } from "@/lib/training-zones";
 
 export default function HyroxCardioAthleteView({
   session: initialSession,
   token,
+  zones,
   onUpdated,
   onBack,
 }: {
   session: Session;
   token: string;
+  zones?: ComputedZone[] | null;
   onUpdated: () => void;
   onBack: () => void;
 }) {
@@ -92,7 +95,7 @@ export default function HyroxCardioAthleteView({
       {saving && <div style={styles.savingNote}>Saving…</div>}
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly />
       {subType && <HyroxTimer session={session} color={color} />}
-      <HyroxCardioLog session={session} onPatch={patchConfig} />
+      <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} />
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}

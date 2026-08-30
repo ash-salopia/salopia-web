@@ -29,6 +29,7 @@ import {
   findPreviousExerciseEntry, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal,
 } from "@/lib/session-progress";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
+import { computeZones, DEFAULT_ZONE_MODEL, type ComputedZone } from "@/lib/training-zones";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
 import NotesSessionModal from "@/components/NotesSessionModal";
 import PowerSpeedExerciseCard from "@/components/PowerSpeedExerciseCard";
@@ -60,7 +61,26 @@ export default function SessionDetailPage() {
   // captured in a stale closure from when the delete happened.
   const sessionRef = useRef<Session | null>(null);
   useEffect(() => { sessionRef.current = session; }, [session]);
+
+  useEffect(() => {
+    if (!athleteId) return;
+    const supabase = createClient();
+    Promise.all([
+      supabase.from("athletes").select("max_hr, resting_hr, mas_kmh").eq("id", athleteId).single(),
+      getOrgSettings().catch(() => null),
+    ]).then(([{ data }, settings]) => {
+      if (!data) return;
+      setAthleteZones(computeZones(
+        { max_hr: (data as any).max_hr ?? null, resting_hr: (data as any).resting_hr ?? null, mas_kmh: (data as any).mas_kmh ?? null },
+        settings?.zone_model ?? DEFAULT_ZONE_MODEL
+      ));
+    }).catch(() => {});
+  }, [athleteId]);
   const [otherSessions, setOtherSessions] = useState<SessionStub[]>([]);
+  // This athlete's 5 training zones (HR + pace), for the Cardio/Hybrid
+  // zone picker. Recomputed if the coach edits the athlete's aerobic
+  // profile or the org zone model.
+  const [athleteZones, setAthleteZones] = useState<ComputedZone[] | null>(null);
   // Prior sessions (with exercise logs) for the "vs last time" signal on
   // each exercise card — the same comparison Live Group shows.
   const [priorSessions, setPriorSessions] = useState<{ athlete_id: string; date: string; exercises: SessionExercise[] }[]>([]);
@@ -1035,6 +1055,7 @@ export default function SessionDetailPage() {
           library={library}
           onTypeChange={handleSessionTypeChange}
           onConfigChange={handleConfigChange}
+          athleteZones={athleteZones}
         />
       )}
 
