@@ -809,6 +809,26 @@ export default function SettingsPage() {
 
       <CollapsibleSection title="Heart rate & MAS zones">
         <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable MAS &amp; heart-rate zones</div>
+              <div style={s.cardDesc}>
+                Adds the aerobic profile (Max HR, resting HR, MAS) to each athlete&apos;s page, a
+                Z1&ndash;Z5 picker on Cardio/Hybrid sessions, and a zone table in the athlete app.
+                Turn off if you don&apos;t prescribe by zone.
+              </div>
+            </div>
+            <button
+              style={{ ...s.toggleSwitch, background: settings.aerobic_zones_enabled ? "var(--accent)" : "var(--panel2)" }}
+              onClick={() => setSettings((prev) => ({ ...prev, aerobic_zones_enabled: !prev.aerobic_zones_enabled }))}
+            >
+              <div style={{ ...s.toggleThumb, transform: settings.aerobic_zones_enabled ? "translateX(20px)" : "translateX(0)" }} />
+            </button>
+          </div>
+        </div>
+
+        {settings.aerobic_zones_enabled && (
+        <div style={s.card}>
           <div style={s.cardLabel}>5-zone model</div>
           <div style={s.cardDesc}>
             Each athlete&apos;s Max HR and Maximal Aerobic Speed (set on their profile) turn these
@@ -843,6 +863,7 @@ export default function SettingsPage() {
             })}
           </div>
         </div>
+        )}
       </CollapsibleSection>
 
       </fieldset>

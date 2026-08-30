@@ -32,6 +32,7 @@ export default async function AthleteLinkSessionPage({
   let lockUntilCheckin = false;
   let checkedInToday = false;
   let zones: ComputedZone[] | null = null;
+  let zonesEnabled = true;
   try {
     const [settings, todayCheckIn] = await Promise.all([
       getOrgSettingsForAthlete(athlete.id),
@@ -39,6 +40,7 @@ export default async function AthleteLinkSessionPage({
     ]);
     lockUntilCheckin = !!settings.lock_until_checkin;
     checkedInToday = !!todayCheckIn;
+    zonesEnabled = settings.aerobic_zones_enabled !== false;
     zones = computeZones(
       { max_hr: athlete.max_hr ?? null, resting_hr: athlete.resting_hr ?? null, mas_kmh: athlete.mas_kmh ?? null },
       settings.zone_model ?? DEFAULT_ZONE_MODEL
@@ -57,6 +59,7 @@ export default async function AthleteLinkSessionPage({
       lockUntilCheckin={lockUntilCheckin}
       checkedInToday={checkedInToday}
       zones={zones}
+      zonesEnabled={zonesEnabled}
     />
   );
 }

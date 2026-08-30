@@ -67,11 +67,13 @@ export default function HyroxCardioLog({
   onPatch,
   compact = false,
   zones,
+  zonesEnabled = true,
 }: {
   session: Session;
   onPatch: (patch: object) => void;
   compact?: boolean;
   zones?: ComputedZone[] | null;
+  zonesEnabled?: boolean;
 }) {
   const isHyrox = session.type === "hyrox";
   const subType = isHyrox ? (session.hyrox_type ?? "") : ((session as any).cardio_type ?? "");
@@ -354,7 +356,7 @@ export default function HyroxCardioLog({
 
   return (
     <>
-      <ZoneTargets cfg={cfg} subType={subType} isHyrox={isHyrox} zones={zones} />
+      {zonesEnabled && <ZoneTargets cfg={cfg} subType={subType} isHyrox={isHyrox} zones={zones} />}
       {structure && <div style={styles.section}>{structure}</div>}
       {hasAnyMetrics ? (
         <div style={styles.section}>

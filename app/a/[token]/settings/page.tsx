@@ -18,7 +18,7 @@ export default function AthleteSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [zoneData, setZoneData] = useState<{ hasProfile: boolean; usesReserve: boolean; zones: ComputedZone[] } | null>(null);
+  const [zoneData, setZoneData] = useState<{ enabled: boolean; hasProfile: boolean; usesReserve: boolean; zones: ComputedZone[] } | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -139,6 +139,7 @@ export default function AthleteSettingsPage() {
           </div>
         )}
 
+        {zoneData?.enabled !== false && <>
         <div style={{ ...s.pageTitle, marginTop: 28 }}>🫀 Training zones</div>
         <div style={s.pageSubtitle}>
           Your heart-rate and pace targets for each conditioning zone. Set by your coach.
@@ -178,6 +179,7 @@ export default function AthleteSettingsPage() {
             </>
           )}
         </div>
+        </>}
       </div>
     </div>
   );

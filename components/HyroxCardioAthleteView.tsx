@@ -21,12 +21,14 @@ export default function HyroxCardioAthleteView({
   session: initialSession,
   token,
   zones,
+  zonesEnabled = true,
   onUpdated,
   onBack,
 }: {
   session: Session;
   token: string;
   zones?: ComputedZone[] | null;
+  zonesEnabled?: boolean;
   onUpdated: () => void;
   onBack: () => void;
 }) {
@@ -95,7 +97,7 @@ export default function HyroxCardioAthleteView({
       {saving && <div style={styles.savingNote}>Saving…</div>}
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly />
       {subType && <HyroxTimer session={session} color={color} />}
-      <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} />
+      <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} zonesEnabled={zonesEnabled} />
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}

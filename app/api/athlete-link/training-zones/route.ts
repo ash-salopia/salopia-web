@@ -14,9 +14,11 @@ export async function GET(request: Request) {
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
   let model = DEFAULT_ZONE_MODEL;
+  let enabled = true;
   try {
     const settings = await getOrgSettingsForAthlete(athlete.id);
     if (settings.zone_model) model = settings.zone_model;
+    enabled = settings.aerobic_zones_enabled !== false;
   } catch { /* fall back to default model */ }
 
   const profile = {
@@ -26,6 +28,7 @@ export async function GET(request: Request) {
   };
 
   return NextResponse.json({
+    enabled,
     hasProfile: !!(profile.max_hr || profile.mas_kmh),
     usesReserve: !!(profile.max_hr && profile.resting_hr),
     zones: computeZones(profile, model),

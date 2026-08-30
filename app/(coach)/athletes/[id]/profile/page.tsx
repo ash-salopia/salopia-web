@@ -190,6 +190,7 @@ export default function AthleteProfilePage() {
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const [orgPbEnabled, setOrgPbEnabled] = useState(true);
   const [zoneModel, setZoneModel] = useState<ZoneModel>(DEFAULT_ZONE_MODEL);
+  const [aerobicZonesEnabled, setAerobicZonesEnabled] = useState(true);
   const pbEnabled = orgPbEnabled && (athlete as any)?.pb_enabled !== false;
 
   const handleAvatarUpload = async (file: File) => {
@@ -231,6 +232,7 @@ export default function AthleteProfilePage() {
     listVelocityProfiles(athleteId).then(setVelocityProfiles).catch(() => {});
     getOrgSettings().then((s) => {
       setOrgPbEnabled(s.pb_enabled !== false);
+      setAerobicZonesEnabled(s.aerobic_zones_enabled !== false);
       if (s.zone_model) setZoneModel(s.zone_model);
     }).catch(() => {});
   }, [athleteId]);
@@ -734,7 +736,7 @@ export default function AthleteProfilePage() {
         </div>
       </div>
 
-      {athlete && (
+      {athlete && aerobicZonesEnabled && (
         <AerobicProfileSection
           athleteId={athleteId}
           dob={athlete.date_of_birth ?? null}

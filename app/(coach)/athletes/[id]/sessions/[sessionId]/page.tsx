@@ -69,6 +69,7 @@ export default function SessionDetailPage() {
       supabase.from("athletes").select("max_hr, resting_hr, mas_kmh").eq("id", athleteId).single(),
       getOrgSettings().catch(() => null),
     ]).then(([{ data }, settings]) => {
+      setZonesEnabled(settings?.aerobic_zones_enabled !== false);
       if (!data) return;
       setAthleteZones(computeZones(
         { max_hr: (data as any).max_hr ?? null, resting_hr: (data as any).resting_hr ?? null, mas_kmh: (data as any).mas_kmh ?? null },
@@ -81,6 +82,7 @@ export default function SessionDetailPage() {
   // zone picker. Recomputed if the coach edits the athlete's aerobic
   // profile or the org zone model.
   const [athleteZones, setAthleteZones] = useState<ComputedZone[] | null>(null);
+  const [zonesEnabled, setZonesEnabled] = useState(true);
   // Prior sessions (with exercise logs) for the "vs last time" signal on
   // each exercise card — the same comparison Live Group shows.
   const [priorSessions, setPriorSessions] = useState<{ athlete_id: string; date: string; exercises: SessionExercise[] }[]>([]);
@@ -1056,6 +1058,7 @@ export default function SessionDetailPage() {
           onTypeChange={handleSessionTypeChange}
           onConfigChange={handleConfigChange}
           athleteZones={athleteZones}
+          zonesEnabled={zonesEnabled}
         />
       )}
 

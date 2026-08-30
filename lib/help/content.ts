@@ -854,6 +854,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "subhead", text: "The zone model" },
       { type: "p", text: "The generic 5-zone model — Z1 Recovery, Z2 Aerobic, Z3 Tempo/Threshold, Z4 VO2max, Z5 Speed/Anaerobic — is defined as % of Max HR and % of MAS in **Settings → Heart rate & MAS zones**, where the owner can adjust the boundaries and names." },
       { type: "note", text: "Older cardio sessions with a hand-typed zone/pace still show exactly as before — nothing changes until you use the zone picker." },
+      { type: "note", text: "Don't prescribe by zone? Turn the whole feature off in **Settings → Heart rate & MAS zones** — the aerobic profile section, the zone picker and the athlete zone table all disappear." },
     ],
   },
   {
@@ -1961,6 +1962,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**Flag poor recovery on the dashboard** — the Dashboard recovery panel; set how many low scores in 7 days triggers it.",
         "**Enable weekly reflections** — a Sunday reflection prompt in the athlete app, with your score metrics and prompts.",
         "**Report reminder frequency** — drives the Dashboard \"Reports due\" panel.",
+        "**Enable MAS & heart-rate zones** — the aerobic profile on athlete pages, the Z1–Z5 picker on Cardio/Hybrid sessions, and the athlete zone table.",
       ] },
     ],
   },
