@@ -13,8 +13,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter } from "next/navigation";
 import {
   listTestMetrics, listBenchmarksForMetric, listTestSessions,
-  buildTestReportView, sortByMetricGroup, RAG_COLOR,
-  type GroupTestAthlete, type CompareBasis, type TestReportRatedRow,
+  buildTestReportView, sortByMetricGroup, RAG_COLOR, RATING_SCOPE_LABEL,
+  type GroupTestAthlete, type CompareBasis, type TestReportRatedRow, type RatingScope,
 } from "@/lib/data/testing";
 import TestReportModal from "@/components/TestReportModal";
 import TestReportBody from "@/components/reports/TestReportBody";
@@ -85,6 +85,7 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
   );
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [compareTo, setCompareTo] = useState<"previous" | "best" | "first">("previous");
+  const [ratingScope, setRatingScope] = useState<RatingScope>("both");
 
   const openMenu = async () => {
     setMenuOpen((v) => !v);
@@ -171,7 +172,7 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
       for (const a of gsAthletes) {
         const view = buildTestReportView(a, orderedHistory(a.id), data.metrics, data.benchmarksByMetric, { kind: compareTo });
         const blob = await pdf(
-          <TestReportPdf athleteName={a.name} athleteGroup={a.group} athleteSex={a.sex} view={view} branding={branding} />
+          <TestReportPdf athleteName={a.name} athleteGroup={a.group} athleteSex={a.sex} view={view} ratingScope={ratingScope} branding={branding} />
         ).toBlob();
         zip.file(`${slug(a.name) || "athlete"}-testing-${groupSession.date}.pdf`, blob);
       }
@@ -217,6 +218,14 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
               ))}
             </select>
           </label>
+          <label style={st.compareRow}>
+            <span style={st.compareRowLabel}>Ratings</span>
+            <select style={st.compareRowSelect} value={ratingScope} onChange={(e) => setRatingScope(e.target.value as RatingScope)}>
+              {(Object.keys(RATING_SCOPE_LABEL) as RatingScope[]).map((k) => (
+                <option key={k} value={k}>{RATING_SCOPE_LABEL[k]}</option>
+              ))}
+            </select>
+          </label>
           {items.map((it) => {
             const locked = !capabilities.has(it.cap);
             return (
@@ -249,6 +258,7 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
           benchmarksByMetric={ref.benchmarksByMetric}
           branding={branding}
           initialCompareTo={{ kind: compareTo }}
+          initialRatingScope={ratingScope}
           onClose={() => setOpen(null)}
         />
       )}
@@ -261,6 +271,7 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
           benchmarksByMetric={ref.benchmarksByMetric}
           branding={branding}
           compareTo={compareTo}
+          ratingScope={ratingScope}
           onClose={() => setOpen(null)}
         />
       )}
@@ -272,6 +283,7 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
           benchmarksByMetric={ref.benchmarksByMetric}
           branding={branding}
           compareTo={{ kind: compareTo }}
+          ratingScope={ratingScope}
           onClose={() => setOpen(null)}
         />
       )}
@@ -280,13 +292,14 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
 }
 
 // ── 1 · Sequential per-athlete viewer ────────────────────────────────────────
-function SequentialViewer({ athletes, historyFor, metrics, benchmarksByMetric, branding, initialCompareTo, onClose }: {
+function SequentialViewer({ athletes, historyFor, metrics, benchmarksByMetric, branding, initialCompareTo, initialRatingScope, onClose }: {
   athletes: GroupTestAthlete[];
   historyFor: (athleteId: string) => TestSession[];
   metrics: TestMetric[];
   benchmarksByMetric: Record<string, TestBenchmark[]>;
   branding: ResolvedBranding;
   initialCompareTo: CompareBasis;
+  initialRatingScope: RatingScope;
   onClose: () => void;
 }) {
   const [idx, setIdx] = useState(0);
@@ -302,6 +315,7 @@ function SequentialViewer({ athletes, historyFor, metrics, benchmarksByMetric, b
       benchmarksByMetric={benchmarksByMetric}
       branding={branding}
       initialCompareTo={initialCompareTo}
+      initialRatingScope={initialRatingScope}
       onClose={onClose}
       nav={{
         index: idx,
@@ -314,7 +328,7 @@ function SequentialViewer({ athletes, historyFor, metrics, benchmarksByMetric, b
 }
 
 // ── 3 · Squad summary ────────────────────────────────────────────────────────
-function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchmarksByMetric, branding, compareTo, onClose }: {
+function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchmarksByMetric, branding, compareTo, ratingScope, onClose }: {
   groupSession: GroupTestSession;
   athletes: GroupTestAthlete[];
   historyFor: (athleteId: string) => TestSession[];
@@ -322,8 +336,11 @@ function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchm
   benchmarksByMetric: Record<string, TestBenchmark[]>;
   branding: ResolvedBranding;
   compareTo: "previous" | "best" | "first";
+  ratingScope: RatingScope;
   onClose: () => void;
 }) {
+  const scopeRag = (r: TestReportRatedRow | undefined) =>
+    ratingScope === "population" ? r?.popRag ?? null : r?.eliteRag ?? null;
   const accent = branding.primaryColor || "#1f6fd6";
 
   // One report view per athlete, pinned to this group session as "latest".
@@ -440,7 +457,8 @@ function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchm
                         </td>
                         {ratedMetrics.map((m) => {
                           const row = ratedRow(a.id, m.id);
-                          const color = row?.eliteRag ? RAG_COLOR[row.eliteRag] : null;
+                          const rag = scopeRag(row);
+                          const color = rag ? RAG_COLOR[rag] : null;
                           const nowCell = (
                             <td key={`${m.id}-now`} style={{ ...st.sTd, background: color ? color + "22" : "transparent", fontWeight: color ? 700 : 400 }}>
                               {row ? row.latest : "—"}
@@ -532,7 +550,7 @@ function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchm
           )}
 
           <div style={st.summaryFoot}>
-            &ldquo;Now&rdquo; cell colour = Elite Youth rating (green excellent → red needs work) where age/sex norms exist. Best trial shown.
+            &ldquo;Now&rdquo; cell colour = {ratingScope === "population" ? "general-population" : "elite-youth"} rating (green excellent → red needs work) where age/sex norms exist. Best trial shown.
             {anyComparison ? ` Change is vs ${COMPARE_LABEL[compareTo].toLowerCase()}.` : ""} Snapshot on a single day — interpret with training load and wellbeing.
           </div>
         </div>
@@ -544,13 +562,14 @@ function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchm
 const ASYM_COLOR: Record<string, string> = { normal: "#2E9E5B", monitor: "#FB8C00", concern: "#E53935" };
 
 // ── 2 · Combined batch print ─────────────────────────────────────────────────
-function BatchPrint({ athletes, historyFor, metrics, benchmarksByMetric, branding, compareTo, onClose }: {
+function BatchPrint({ athletes, historyFor, metrics, benchmarksByMetric, branding, compareTo, ratingScope, onClose }: {
   athletes: GroupTestAthlete[];
   historyFor: (athleteId: string) => TestSession[];
   metrics: TestMetric[];
   benchmarksByMetric: Record<string, TestBenchmark[]>;
   branding: ResolvedBranding;
   compareTo: CompareBasis;
+  ratingScope: RatingScope;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -575,6 +594,7 @@ function BatchPrint({ athletes, historyFor, metrics, benchmarksByMetric, brandin
               athleteSex={a.sex}
               view={view}
               mode="full"
+              ratingScope={ratingScope}
               branding={branding}
               pageBreak={i < athletes.length - 1}
             />

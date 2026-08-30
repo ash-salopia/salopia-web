@@ -7,7 +7,7 @@
 
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
-import { RAG_COLOR, RAG_LABEL, type TestReportView } from "@/lib/data/testing";
+import { RAG_COLOR, RAG_LABEL, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 
@@ -22,14 +22,17 @@ export interface TestReportPdfProps {
   athleteGroup?: string | null;
   athleteSex: "male" | "female" | null;
   view: TestReportView;
+  ratingScope?: RatingScope;
   branding?: ResolvedBranding;
 }
 
 export default function TestReportPdf({
-  athleteName, athleteGroup, athleteSex, view, branding = DEFAULT_BRANDING,
+  athleteName, athleteGroup, athleteSex, view, ratingScope = "both", branding = DEFAULT_BRANDING,
 }: TestReportPdfProps) {
   const { athleteAge, latestSession, ratedRows, asymmetryRows, compare } = view;
   const accent = branding.primaryColor || "#1f6fd6";
+  const showElite = ratingScope !== "population";
+  const showPop = ratingScope !== "elite";
 
   return (
     <Document title={`${athleteName} - Physical Testing Report`}>
@@ -76,8 +79,8 @@ export default function TestReportPdf({
               ) : (
                 <Text style={[s.tCell, s.tHead, s.colNum]}>Result</Text>
               )}
-              <Text style={[s.tCell, s.tHead, s.colNum]}>Elite</Text>
-              <Text style={[s.tCell, s.tHead, s.colNum]}>Pop.</Text>
+              {showElite && <Text style={[s.tCell, s.tHead, s.colNum]}>{ratingScope === "elite" ? "Rating" : "Elite"}</Text>}
+              {showPop && <Text style={[s.tCell, s.tHead, s.colNum]}>{ratingScope === "population" ? "Rating" : "Pop."}</Text>}
             </View>
             {ratedRows.map(({ metric, latest, prev, eliteRag, popRag }) => {
               const lower = metric.better_direction === "lower";
@@ -97,8 +100,8 @@ export default function TestReportPdf({
                   ) : (
                     <Text style={[s.tCell, s.colNum]}>{latest}{metric.unit}</Text>
                   )}
-                  <View style={[s.tCell, s.colNum]}>{eliteRag ? <RagBadge rag={eliteRag} /> : <Text style={s.na}>N/A</Text>}</View>
-                  <View style={[s.tCell, s.colNum]}>{popRag ? <RagBadge rag={popRag} /> : <Text style={s.na}>N/A</Text>}</View>
+                  {showElite && <View style={[s.tCell, s.colNum]}>{eliteRag ? <RagBadge rag={eliteRag} /> : <Text style={s.na}>N/A</Text>}</View>}
+                  {showPop && <View style={[s.tCell, s.colNum]}>{popRag ? <RagBadge rag={popRag} /> : <Text style={s.na}>N/A</Text>}</View>}
                 </View>
               );
             })}
@@ -115,11 +118,12 @@ export default function TestReportPdf({
             ))}
 
             <Text style={[s.sectionHeader, { backgroundColor: accent }]}>Test Explanations &amp; Personalised Commentary</Text>
-            {ratedRows.map(({ metric, eliteRag }) => {
-              const commentary = eliteRag === "excellent" ? metric.commentary_excellent
-                : eliteRag === "good" ? metric.commentary_good
-                : eliteRag === "average" ? metric.commentary_average
-                : eliteRag === "needs_work" ? metric.commentary_needs_work
+            {ratedRows.map(({ metric, eliteRag, popRag }) => {
+              const rag = ratingScope === "population" ? popRag : eliteRag;
+              const commentary = rag === "excellent" ? metric.commentary_excellent
+                : rag === "good" ? metric.commentary_good
+                : rag === "average" ? metric.commentary_average
+                : rag === "needs_work" ? metric.commentary_needs_work
                 : "";
               if (!metric.what_it_measures && !commentary) return null;
               return (
@@ -132,9 +136,10 @@ export default function TestReportPdf({
               );
             })}
             <Text style={s.sourceNote}>
-              Elite ratings compare against trained youth athletes of the same age and sex. Population ratings compare
-              against general school-age children. All benchmarks are indicative and should be interpreted alongside
-              physical maturity, training age, and sport context.
+              {showElite ? "Elite ratings compare against trained youth athletes of the same age and sex. " : ""}
+              {showPop ? "Population ratings compare against general school-age children of the same age and sex. " : ""}
+              All benchmarks are indicative and should be interpreted alongside physical maturity, training age, and
+              sport context.
             </Text>
           </>
         )}

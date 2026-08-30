@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { buildTestReportView, testResultsToCSV, downloadCSV, type CompareBasis } from "@/lib/data/testing";
+import { buildTestReportView, testResultsToCSV, downloadCSV, RATING_SCOPE_LABEL, type CompareBasis, type RatingScope } from "@/lib/data/testing";
 import TestReportBody from "@/components/reports/TestReportBody";
 import type { TestSession, TestMetric, TestBenchmark } from "@/types";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
@@ -40,6 +40,8 @@ interface Props {
   nav?: { index: number; total: number; onPrev: () => void; onNext: () => void };
   // Preselected comparison basis (e.g. from the group Reports menu).
   initialCompareTo?: CompareBasis;
+  // Preselected norm set(s) to rate against (from the group Reports menu).
+  initialRatingScope?: RatingScope;
 }
 
 // Opens the report body in a fresh window with a light print stylesheet
@@ -60,9 +62,10 @@ function printReport(title: string) {
   w.onload = () => { w.focus(); w.print(); };
 }
 
-export default function TestReportModal({ athlete, sessions, metrics, benchmarksByMetric, branding = DEFAULT_BRANDING, onClose, nav, initialCompareTo }: Props) {
+export default function TestReportModal({ athlete, sessions, metrics, benchmarksByMetric, branding = DEFAULT_BRANDING, onClose, nav, initialCompareTo, initialRatingScope }: Props) {
   const [mode, setMode] = useState<ReportMode>("full");
   const [compareTo, setCompareTo] = useState<CompareBasis>(initialCompareTo ?? { kind: "previous" });
+  const [ratingScope, setRatingScope] = useState<RatingScope>(initialRatingScope ?? "both");
 
   const view = buildTestReportView(athlete, sessions, metrics, benchmarksByMetric, compareTo);
 
@@ -97,23 +100,39 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
             <button style={{ ...s.modeTab, ...(mode === "progress" ? s.modeTabActive : {}) }} onClick={() => setMode("progress")}>Progress only</button>
             <button style={{ ...s.modeTab, ...(mode === "csv" ? s.modeTabActive : {}) }} onClick={() => setMode("csv")}>Raw data export</button>
           </div>
-          {mode !== "csv" && sessions.length >= 2 && (
-            <label style={s.compareWrap}>
-              <span style={s.compareLabel}>Compare to</span>
-              <select
-                style={s.compareSelect}
-                value={basisValue(compareTo)}
-                onChange={(e) => setCompareTo(parseBasis(e.target.value))}
-              >
-                <option value="previous">Previous test</option>
-                <option value="best">Best previous result</option>
-                <option value="first">First test</option>
-                {sessions.slice(1).map((sess) => (
-                  <option key={sess.id} value={`session:${sess.id}`}>{fmtShortDate(sess.date)}</option>
-                ))}
-              </select>
-            </label>
-          )}
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            {mode === "full" && (
+              <label style={s.compareWrap}>
+                <span style={s.compareLabel}>Ratings</span>
+                <select
+                  style={s.compareSelect}
+                  value={ratingScope}
+                  onChange={(e) => setRatingScope(e.target.value as RatingScope)}
+                >
+                  {(Object.keys(RATING_SCOPE_LABEL) as RatingScope[]).map((k) => (
+                    <option key={k} value={k}>{RATING_SCOPE_LABEL[k]}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {mode !== "csv" && sessions.length >= 2 && (
+              <label style={s.compareWrap}>
+                <span style={s.compareLabel}>Compare to</span>
+                <select
+                  style={s.compareSelect}
+                  value={basisValue(compareTo)}
+                  onChange={(e) => setCompareTo(parseBasis(e.target.value))}
+                >
+                  <option value="previous">Previous test</option>
+                  <option value="best">Best previous result</option>
+                  <option value="first">First test</option>
+                  {sessions.slice(1).map((sess) => (
+                    <option key={sess.id} value={`session:${sess.id}`}>{fmtShortDate(sess.date)}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
         </div>
 
         {mode === "csv" ? (
@@ -135,6 +154,7 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
                 athleteSex={athlete.sex}
                 view={view}
                 mode={mode === "progress" ? "progress" : "full"}
+                ratingScope={ratingScope}
                 branding={branding}
               />
             </div>

@@ -9,7 +9,7 @@
 // Derivation lives in lib/data/testing.ts's buildTestReportView — this
 // file only lays the numbers out.
 
-import { RAG_COLOR, RAG_LABEL, type TestReportView } from "@/lib/data/testing";
+import { RAG_COLOR, RAG_LABEL, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
@@ -26,18 +26,23 @@ export interface TestReportBodyProps {
   athleteSex: "male" | "female" | null;
   view: TestReportView;
   mode?: "full" | "progress";
+  ratingScope?: RatingScope;
   branding?: ResolvedBranding;
   /** Rendered on its own printable page (adds page-break + top margin). */
   pageBreak?: boolean;
 }
 
 export default function TestReportBody({
-  athleteName, athleteGroup, athleteSex, view, mode = "full",
+  athleteName, athleteGroup, athleteSex, view, mode = "full", ratingScope = "both",
   branding = DEFAULT_BRANDING, pageBreak = false,
 }: TestReportBodyProps) {
   const { athleteAge, latestSession, ratedRows, asymmetryRows, compare } = view;
   const accent = branding.primaryColor || "#1f6fd6";
   const full = mode === "full";
+  const showElite = ratingScope !== "population";
+  const showPop = ratingScope !== "elite";
+  // commentary keys off whichever rating is shown (elite when both)
+  const scopeRag = (r: { eliteRag: unknown; popRag: unknown }) => (ratingScope === "population" ? r.popRag : r.eliteRag);
 
   return (
     <div style={{ ...s.wrap, ...(pageBreak ? s.pageBreak : null) }}>
@@ -70,7 +75,7 @@ export default function TestReportBody({
           {(["excellent", "good", "average", "needs_work"] as RagStatus[]).map((r) => (
             <span key={r} style={{ ...s.legendBadge, background: RAG_COLOR[r] }}>{RAG_LABEL[r].toUpperCase()}</span>
           ))}
-          <span style={s.legendNote}>Same colour scale for Elite and Population ratings.</span>
+          {ratingScope === "both" && <span style={s.legendNote}>Same colour scale for Elite and Population ratings.</span>}
         </div>
       )}
 
@@ -96,8 +101,8 @@ export default function TestReportBody({
                       <th style={s.th}>Δ</th>
                     </>
                   : <th style={s.th}>Result</th>}
-                {full && <th style={s.th}>Elite Rating</th>}
-                {full && <th style={s.th}>Pop. Rating</th>}
+                {full && showElite && <th style={s.th}>{ratingScope === "elite" ? "Rating" : "Elite Rating"}</th>}
+                {full && showPop && <th style={s.th}>{ratingScope === "population" ? "Rating" : "Pop. Rating"}</th>}
               </tr>
             </thead>
             <tbody>
@@ -117,8 +122,8 @@ export default function TestReportBody({
                           </td>
                         </>
                       : <td style={s.td}>{latest}{metric.unit}</td>}
-                    {full && <td style={s.td}>{eliteRag ? <RagBadge rag={eliteRag} /> : <span style={s.na}>N/A</span>}</td>}
-                    {full && <td style={s.td}>{popRag ? <RagBadge rag={popRag} /> : <span style={s.na}>N/A</span>}</td>}
+                    {full && showElite && <td style={s.td}>{eliteRag ? <RagBadge rag={eliteRag} /> : <span style={s.na}>N/A</span>}</td>}
+                    {full && showPop && <td style={s.td}>{popRag ? <RagBadge rag={popRag} /> : <span style={s.na}>N/A</span>}</td>}
                   </tr>
                 );
               })}
@@ -145,11 +150,13 @@ export default function TestReportBody({
           {full && (
             <>
               <div style={{ ...s.sectionHeader, background: accent }}>Test Explanations &amp; Personalised Commentary</div>
-              {ratedRows.map(({ metric, eliteRag }) => {
-                const commentary = eliteRag === "excellent" ? metric.commentary_excellent
-                  : eliteRag === "good" ? metric.commentary_good
-                  : eliteRag === "average" ? metric.commentary_average
-                  : eliteRag === "needs_work" ? metric.commentary_needs_work
+              {ratedRows.map((row) => {
+                const { metric } = row;
+                const rag = scopeRag(row) as RagStatus | null;
+                const commentary = rag === "excellent" ? metric.commentary_excellent
+                  : rag === "good" ? metric.commentary_good
+                  : rag === "average" ? metric.commentary_average
+                  : rag === "needs_work" ? metric.commentary_needs_work
                   : "";
                 if (!metric.what_it_measures && !commentary) return null;
                 return (
@@ -162,7 +169,7 @@ export default function TestReportBody({
                       <div style={s.explainRow}><span style={{ ...s.explainLabel, color: accent }}>WHY IT MATTERS</span><span>{metric.why_it_matters}</span></div>
                     )}
                     {commentary && (
-                      <div style={{ ...s.explainRow, background: eliteRag ? RAG_COLOR[eliteRag] + "18" : "transparent" }}>
+                      <div style={{ ...s.explainRow, background: rag ? RAG_COLOR[rag] + "18" : "transparent" }}>
                         <span style={{ ...s.explainLabel, color: accent }}>YOUR RESULT</span><span>{commentary}</span>
                       </div>
                     )}
@@ -170,9 +177,10 @@ export default function TestReportBody({
                 );
               })}
               <div style={s.sourceNote}>
-                Elite ratings compare against trained youth athletes of the same age and sex. Population ratings compare
-                against general school-age children. All benchmarks are indicative and should be interpreted alongside
-                physical maturity, training age, and sport context.
+                {showElite && "Elite ratings compare against trained youth athletes of the same age and sex. "}
+                {showPop && "Population ratings compare against general school-age children of the same age and sex. "}
+                All benchmarks are indicative and should be interpreted alongside physical maturity, training age, and
+                sport context.
               </div>
             </>
           )}

@@ -631,6 +631,18 @@ export type CompareBasis =
   | { kind: "first" }                       // earliest session — baseline
   | { kind: "session"; sessionId: string }; // one specific earlier session
 
+// Which norm set(s) a Test Report rates against. Reports default to
+// showing both side by side (the deliberate original-tool design — a
+// single scale reads as either discouraging or meaninglessly easy on
+// its own), but a coach can narrow to just one.
+export type RatingScope = "both" | "elite" | "population";
+
+export const RATING_SCOPE_LABEL: Record<RatingScope, string> = {
+  both: "Elite + Population",
+  elite: "Elite youth only",
+  population: "General population only",
+};
+
 export interface TestReportView {
   athleteAge: number | null;
   latestSession: TestSession | null;

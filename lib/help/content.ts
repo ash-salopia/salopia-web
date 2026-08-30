@@ -1248,6 +1248,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "p", text: "A benchmark has four bands: below **Average** = Needs Work, then **Average**, **Good**, **Excellent**. A result is placed in a band and coloured red / amber / green accordingly." },
       { type: "p", text: "Benchmarks are split into **General population** and **Elite youth**, and each is matched to the athlete's **sex** and **age at the test date**. So the same jump height can be \"Good\" for a 14-year-old and \"Average\" for an 18-year-old." },
+      { type: "p", text: "Reports show both side by side by default, but the **Ratings** control on the report lets you show just one — elite-youth only, or general-population only." },
       { type: "note", text: "No rating shows if the athlete has no date of birth, or if there's no benchmark covering their age/sex for that metric and population." },
     ],
   },
@@ -1346,11 +1347,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
     category: "testing",
     title: "Individual test reports",
     summary: "📄 View Report: Full / Progress / Raw, with a Compare-to control.",
-    keywords: ["test report", "view report", "compare", "norms", "print", "pdf", "csv"],
+    keywords: ["test report", "view report", "compare", "norms", "print", "pdf", "csv", "elite", "population", "ratings"],
     body: [
       { type: "p", text: "On the athlete's **🧪 Testing** page, click **📄 View Report**." },
       { type: "steps", items: [
         "Pick a mode: **Full report + norms**, **Progress only**, or **Raw data export**.",
+        "**Ratings** — show **Elite + Population** (default), **Elite youth only**, or **General population only**. This also picks which norm drives the personalised commentary.",
         "With two or more sessions, set **Compare to** — **Previous test**, **Best previous result**, **First test**, or a specific earlier date.",
         "Full/Progress: click **🖨 Print / Save PDF**. Raw: click **⬇ Download CSV**.",
       ] },
@@ -1393,7 +1395,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "The 📄 Reports ▾ menu — athlete reports, squad summary, print-all, ZIP.",
     keywords: ["group report", "squad summary", "batch print", "zip", "reports menu", "tier"],
     body: [
-      { type: "p", text: "From a group session, open **📄 Reports ▾**. Set **Compare to** at the top, then pick:" },
+      { type: "p", text: "From a group session, open **📄 Reports ▾**. Set **Compare to** and **Ratings** (Elite + Population / Elite youth only / General population only) at the top — these apply to whichever report you open — then pick:" },
       { type: "steps", items: [
         "**Athlete reports** — flick through each athlete's report with Prev/Next.",
         "**Squad summary** — one landscape table: athletes × metrics, RAG-coloured, with Prev / Now / Δ and a squad-average row.",
