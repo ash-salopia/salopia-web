@@ -47,6 +47,13 @@ const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   recovery: { label: "Recovery", color: "#2DD4BF" },
 };
 
+// The athlete has written a note on this session (0033). Shown as an
+// orange dot on the session title in the calendar so a coach can see
+// at a glance which sessions have athlete feedback to read.
+function hasAthleteNote(s: Session): boolean {
+  return !!(s.athlete_notes && s.athlete_notes.trim());
+}
+
 function EditableName({ name, onSave }: { name: string; onSave: (n: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
@@ -833,6 +840,7 @@ export default function AthleteDetailPage() {
                             </div>
                           </div>
                           <button style={styles.weekSessionName} onClick={e => { e.stopPropagation(); router.push(`/athletes/${athleteId}/sessions/${session.id}`); }}>
+                            {hasAthleteNote(session) && <span style={styles.athleteNoteDot} title="Athlete left a note on this session" />}
                             {session.name}
                           </button>
                           {session.type === "recovery" ? (
@@ -889,7 +897,8 @@ export default function AthleteDetailPage() {
                           <button style={{ ...styles.reorderBtn, opacity: si === 0 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "up", session.id); }}>▴</button>
                           <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
                         </div>
-                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={session.type === "recovery" ? `${session.name} - ${recoverySessionCardLine(session)}` : session.name}>
+                        <button style={{ ...styles.calSessionChip, background: meta.color + "22", borderColor: meta.color + "66", color: meta.color, flex: 1 }} onClick={e => { e.stopPropagation(); if (session.id) router.push(`/athletes/${athleteId}/sessions/${session.id}`); }} title={hasAthleteNote(session) ? `${session.name} — athlete left a note` : (session.type === "recovery" ? `${session.name} - ${recoverySessionCardLine(session)}` : session.name)}>
+                          {hasAthleteNote(session) && <span style={styles.athleteNoteDot} />}
                           {session.name.length > 12 ? session.name.slice(0, 11) + "…" : session.name}
                         </button>
                         <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
@@ -1463,6 +1472,7 @@ const styles: Record<string, React.CSSProperties> = {
   weekSessionCard: { background: "var(--ink)", border: "1px solid var(--line)", borderLeft: "3px solid", borderRadius: 6, padding: "6px 8px", display: "flex", flexDirection: "column" as const, gap: 3 },
   weekSessionName: { background: "transparent", border: "none", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, textAlign: "left" as const },
   calSessionChip: { fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 5px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap" as const },
+  athleteNoteDot: { display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: "#FF8A00", boxShadow: "0 0 0 1.5px var(--panel), 0 0 5px #FF8A00", marginRight: 5, flexShrink: 0, verticalAlign: "middle" as const },
   typeDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   sessionName: { fontWeight: 700, fontSize: 14, color: "var(--text)" },
   sessionMeta: { fontSize: 12, color: "var(--mute)", marginTop: 2 },
