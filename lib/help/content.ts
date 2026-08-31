@@ -543,6 +543,26 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "p", text: `Onboarding a large existing squad from a spreadsheet? Email **${SUPPORT}** with the list and we can help load it.` },
     ],
   },
+  {
+    id: "rtp-status",
+    category: "athletes",
+    title: "Availability & return-to-play status",
+    summary: "Mark each athlete Available / Modified / Rehab / Return to play / Unavailable, with a note and a date.",
+    keywords: ["return to play", "return-to-play", "rtp", "availability", "rehab", "injury", "injured", "modified training", "unavailable", "physio", "status"],
+    body: [
+      { type: "note", text: "Needs **Track additional training load & rehab data** turned on — see **Turn on training-load & rehab monitoring**." },
+      { type: "p", text: "Open the athlete → **Manage → Profile**, and in the **Settings** section set their **Availability**: **Available**, **Modified training**, **Rehab**, **Return to play** or **Unavailable**. Add a short **note** (e.g. \"L hamstring strain — running progression\") and a **since** date — it fills in with today's date when you move them off Available." },
+      { type: "subhead", text: "Where it shows" },
+      { type: "steps", items: [
+        "A coloured badge on the **Athletes** list.",
+        "An **Availability** panel on the **Dashboard** listing everyone who isn't fully available.",
+        "A tile on the athlete's **Dashboard** tab.",
+        "A line at the top of their training report and its AI summary.",
+      ] },
+      { type: "note", text: "Setting a status other than **Available** also switches on the **pain and wellness questions** in that athlete's daily check-in (when those tick-boxes are enabled). Move them back to **Available** and the questions stop — unless you tick **Keep the pain & wellness questions on** on their profile, which forces them on for an athlete you want to keep watching even though they're cleared." },
+      { type: "tip", text: "It's a shared label and note — it doesn't restrict what you can programme. Use it as the single source of truth between the S&C coach and the physio." },
+    ],
+  },
 
   // ═══════════════════════ Sessions ═══════════════════════
   {
@@ -817,6 +837,20 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "p", text: "**+ Add session** → **Recovery** opens a format picker, then the recovery editor. Build the session as a list of items the athlete works through as a checklist." },
       { type: "p", text: "You can turn on a short post-session feedback form (how recovered they feel, soreness, fatigue, any pain). Save a configuration you'll reuse with **Save as preset**." },
+    ],
+  },
+  {
+    id: "sport-session",
+    category: "sessions",
+    title: "Sport / Other sessions",
+    summary: "Log non-gym training — club sessions, matches, swims, rehab work — with a duration and intensity so it counts toward load.",
+    keywords: ["sport", "other", "cross training", "cross-training", "match", "game", "club training", "pitch", "swim", "external session", "rehab session", "duration", "rpe", "return to play"],
+    body: [
+      { type: "note", text: "The **Sport / Other** type only appears when **Track additional training load & rehab data** is on (Settings)." },
+      { type: "p", text: "**+ Add session** → **Sport / Other**. Enter the **activity** (\"5-a-side\", \"team training\", \"pool session\"), a **planned duration** in minutes, a **planned intensity** (session RPE 1–10), and any notes for the athlete." },
+      { type: "p", text: "When the athlete opens it they confirm the **actual duration** and **actual RPE** and can add a note back. That's what feeds the load figures — see **Training load & return-to-play monitoring**." },
+      { type: "subhead", text: "Athletes can add their own" },
+      { type: "p", text: "From their app home screen an athlete can tap **Log a sport / other session** to record something you didn't schedule (\"played 5-a-side, 60 min, RPE 7\"). It shows on both calendars and counts toward load — but not toward programme adherence." },
     ],
   },
   {
@@ -1524,6 +1558,51 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "p", text: "When athletes log a **Session RPE** (1–10), the report can multiply it by session duration to give an sRPE load per session, then a weekly trend and a per-session list. It captures conditioning and skill work that tonnage misses." },
       { type: "p", text: "Tick **Training load (sRPE)** in the report options; add **List every session** for the full breakdown." },
+      { type: "p", text: "For the return-to-play view of the same data — acute:chronic workload ratio, load-spike and monotony flags across every session type — see **Training load & return-to-play monitoring**." },
+    ],
+  },
+  {
+    id: "load-monitoring",
+    category: "reporting",
+    title: "Training load & return-to-play monitoring",
+    summary: "Turns session RPE + duration into ACWR, load-spike and monotony flags for rehab and return-to-play decisions.",
+    keywords: ["training load", "return to play", "return-to-play", "rtp", "acwr", "acute chronic", "workload ratio", "load spike", "monotony", "strain", "rehab", "reconditioning", "physio", "physiotherapist", "sports therapist", "srpe", "internal load", "injury risk"],
+    body: [
+      { type: "p", text: "Built for coaches working with a physiotherapist or sports therapist. It takes what athletes already log — a **session RPE** (1–10) and a **duration** — and turns it into the internal-load measures used for return-to-play and rehab progression, across **every** session type (Strength, Power/Speed, Hybrid, Cardio and Sport / Other)." },
+      { type: "subhead", text: "The one number: session load (sRPE)" },
+      { type: "p", text: "**Session load = RPE × duration in minutes** (Foster's sRPE). A 60-minute session at RPE 7 = 420. Sum a day, a week, and you have one figure that puts a gym session, a pitch session and a rehab circuit on the same scale." },
+      { type: "note", text: "A session with an RPE but no duration is left out of the load figures (the report says how many). Strength and Power sessions need a duration — entered by you in the builder, or by the athlete when they log RPE — to count." },
+      { type: "subhead", text: "Turn it on" },
+      { type: "steps", items: [
+        "**Settings → Training load & rehab → Track additional training load & rehab data**.",
+        "Tick the elements you want: **ACWR**, **weekly load-spike alert**, **monotony & strain**, **return-to-play status**, **daily wellness questions**, **pain tracking**.",
+        "Set your thresholds — the load-spike % and the ACWR sweet-spot band.",
+      ] },
+      { type: "note", text: "The ACWR / spike / monotony analytics and the Sport / Other session type apply to your whole roster. The **pain and wellness check-in questions** only reach an athlete once you set their **Availability** to something other than “Available” — so you're not asking healthy athletes to rate their pain every day." },
+      { type: "subhead", text: "Where you read it" },
+      { type: "steps", items: [
+        "**Dashboard** → a **Load flags** panel (athletes whose ACWR, weekly spike or monotony crossed a threshold) and an **Availability** panel.",
+        "**Athlete → Dashboard tab** → ACWR and Availability tiles in the metric strip.",
+        "**Reporting** → tick **Training load & ACWR**, pick a **26-week** range → the ACWR chart, weekly load with % change, and the monotony/strain table. It's also fed into the AI summary.",
+      ] },
+      { type: "tip", text: "For a meaningful ACWR you need roughly 4 weeks of consistent logging first — it compares the last 7 days against the last 28." },
+      { type: "note", text: "It's one org-wide toggle with per-element tick-boxes. A pure strength & conditioning coach who leaves it off sees no change anywhere, and the **Sport / Other** session type stays hidden." },
+    ],
+  },
+  {
+    id: "acwr-explained",
+    category: "reporting",
+    title: "ACWR, load spike & monotony — what they mean",
+    summary: "Plain definitions of the return-to-play load metrics and how to read the flags.",
+    keywords: ["acwr", "acute chronic workload ratio", "load spike", "monotony", "strain", "foster", "sweet spot", "detraining", "return to play", "how calculated", "injury risk"],
+    body: [
+      { type: "subhead", text: "ACWR — acute:chronic workload ratio" },
+      { type: "p", text: "The last **7 days** of session load divided by the average week across the last **28 days**. Around **1.0** means this week matches recent training. The default **sweet spot is 0.8–1.3** (you can change it): below suggests detraining or lost fitness; above means load is climbing faster than the body has adapted to — where injury risk rises. Shown as a line chart with the band shaded, plus the latest value." },
+      { type: "subhead", text: "Weekly load-spike alert" },
+      { type: "p", text: "Flags any week whose total load is more than a set percentage (default **50%**) above the average of the previous four weeks. A blunter, easier-to-explain version of ACWR — good for catching a heavy match week or an over-ambitious return." },
+      { type: "subhead", text: "Monotony & strain (Foster)" },
+      { type: "p", text: "**Monotony** = the week's average daily load ÷ its day-to-day variation. A high value (flagged above **2.0**) means every day looked the same — no hard/easy structure, which is itself a risk factor. **Strain** = weekly load × monotony, so a big unvarying week scores highest." },
+      { type: "note", text: "All of these are built on athlete-reported RPE and duration. They're decision support for a coach and physio, not a diagnosis." },
     ],
   },
   {
@@ -1782,6 +1861,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "p", text: "The same section has **Lock programme until check-in completed** — the athlete can't log today's programmed session until they've done their check-in. Past, future and library sessions are never locked." },
       { type: "subhead", text: "Where you see the results" },
       { type: "p", text: "The Dashboard's **Poor check-ins today** panel lists athletes whose answers flagged something. You can also open the check-in (advisory) from Live group." },
+      { type: "note", text: "With **Track additional training load & rehab data** on, athletes whose **Availability** isn't set to “Available” also get **fatigue**, **life stress** and a **0–10 pain score** with a body-area — see **Sport sessions & the pain check-in**. Pain, high fatigue and high stress flag on the Dashboard too." },
     ],
   },
   {
@@ -1965,7 +2045,31 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**Enable weekly reflections** — a Sunday reflection prompt in the athlete app, with your score metrics and prompts.",
         "**Report reminder frequency** — drives the Dashboard \"Reports due\" panel.",
         "**Enable MAS & heart-rate zones** — the aerobic profile on athlete pages, the Z1–Z5 picker on Cardio/Hybrid sessions, and the athlete zone table.",
+        "**Track additional training load & rehab data** — ACWR, load-spike and monotony flags, a return-to-play status per athlete, the Sport / Other session type, and pain/wellness questions on the check-in. Each element has its own tick-box.",
       ] },
+    ],
+  },
+  {
+    id: "load-monitoring-setup",
+    category: "settings",
+    title: "Turn on training-load & rehab monitoring",
+    summary: "Settings → Training load & rehab: one master toggle, then tick the elements you want.",
+    keywords: ["training load", "rehab", "return to play", "acwr", "enable", "toggle", "pain tracking", "wellness", "monotony", "load spike", "physio settings", "sport session"],
+    body: [
+      { type: "p", text: "**Settings → Training load & rehab → Track additional training load & rehab data** is the master switch (owner only). Off by default — nothing about it shows until you turn it on." },
+      { type: "subhead", text: "The tick-boxes" },
+      { type: "steps", items: [
+        "**Acute:chronic workload ratio (ACWR)** — the ACWR chart and dashboard flag.",
+        "**Weekly load-spike alert** — dashboard flag for a week well above the recent average.",
+        "**Monotony & strain** — Foster's measures in the report.",
+        "**Return-to-play / availability status** — the status field on each athlete, plus its badges and panels.",
+        "**Daily wellness questions** — adds fatigue and life-stress to the daily check-in.",
+        "**Pain tracking** — adds a 0–10 pain score and body-area to the daily check-in.",
+      ] },
+      { type: "note", text: "The wellness and pain questions are only asked of athletes whose **Availability** is set to anything other than **Available** — so the availability status is the on/off for an individual athlete. Healthy athletes keep the original 4-question check-in. To keep the questions running for a cleared athlete you still want to watch, tick **Keep the pain & wellness questions on** in the Availability box on their profile." },
+      { type: "subhead", text: "Thresholds" },
+      { type: "p", text: "Set the **weekly load-spike %** (default 50) and the **ACWR sweet-spot band** (default 0.8–1.3). These decide when an athlete gets flagged." },
+      { type: "note", text: "Turning the master toggle back off hides every part of the feature but keeps the data — including any Sport / Other sessions already logged." },
     ],
   },
   {
@@ -2145,7 +2249,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**Unlimited** — no athlete cap. Adds **Print all — combined** and **Download all as PDF ZIP** for group testing.",
         "**Trial** — everything, no cap (while in trial).",
       ] },
-      { type: "p", text: "All coaching features — programming, Live group, community, challenges, documents, individual testing — are on every plan. The tiers differ on seat count and the bulk/squad report options." },
+      { type: "p", text: "All coaching features — programming, Live group, community, challenges, documents, individual testing, and training-load / return-to-play monitoring — are on every plan. The tiers differ on seat count and the bulk/squad report options." },
     ],
   },
   {
@@ -2408,6 +2512,21 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "p", text: "Recovery sessions show as a checklist; Hybrid/Cardio sessions show stations with interval timers. Neither uses the weight/reps grid. If you prescribed a training zone, the athlete sees their target HR and pace band for it (from the aerobic profile you set)." },
       { type: "p", text: "If you enabled feedback on a Recovery session, the athlete taps **Finish session** and answers a short check (how recovered, soreness, fatigue, any pain) that comes back to you." },
+    ],
+  },
+  {
+    id: "athlete-load-monitoring",
+    category: "athlete-app",
+    title: "Sport sessions & the pain check-in (athlete app)",
+    summary: "What the athlete sees when load monitoring is on: a sport-session logger and extra check-in questions.",
+    keywords: ["athlete", "sport session", "log training", "pain", "wellness", "check in", "check-in", "fatigue", "stress", "return to play", "rehab"],
+    body: [
+      { type: "p", text: "When you've turned on **Track additional training load & rehab data**, your athletes get two extra things in their app." },
+      { type: "subhead", text: "Log a sport / other session" },
+      { type: "p", text: "A button on their home screen: **Log a sport / other session**. They enter the activity, date, duration and how hard it felt (RPE), plus an optional note. It's for anything outside their programme — club training, a match, a swim, extra running. Every athlete gets this." },
+      { type: "subhead", text: "Extra check-in questions" },
+      { type: "p", text: "**Only for athletes you're monitoring** — anyone whose **Availability** isn't set to “Available”, or who has **Keep the pain & wellness questions on** ticked on their profile. Their daily check-in gains **fatigue** and **life stress** (1–5), and a **pain** question — a 0–10 score and where it is (a body-area picker). Anything they flag shows in your Dashboard's **Poor check-ins today** panel and on their Dashboard tab. A healthy athlete's check-in is unchanged." },
+      { type: "p", text: "A **Sport / Other** session you scheduled works like any other: they open it and confirm the actual duration and RPE." },
     ],
   },
   {
@@ -2765,6 +2884,80 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["white label", "remove branding", "own logo", "premium", "rebrand"],
     body: [
       { type: "p", text: "The **Premium** tier lets you set your own **Brand name** and **Logo**, which replace \"VIS BUILD\" in your athletes' app, plus hide the powered-by footer. Every plan can already set a custom **accent colour**. Premium isn't self-serve — email " + SUPPORT + " to enable it." },
+    ],
+  },
+  {
+    id: "faq-rehab-load",
+    category: "faq",
+    title: "How do I monitor training load for a return-to-play athlete?",
+    summary: "Turn on Training load & rehab, set the athlete's availability, and log sessions with a duration + RPE.",
+    keywords: ["return to play", "rtp", "rehab", "load monitoring", "physio", "reconditioning", "acwr", "injury", "physiotherapist"],
+    body: [
+      { type: "steps", items: [
+        "**Settings → Training load & rehab → Track additional training load & rehab data**, and tick the elements you want (ACWR, load-spike, monotony, pain/wellness).",
+        "On the athlete's **Profile**, set their **Availability** (Rehab / Modified / Return to play). That also switches on the pain & wellness check-in questions for them.",
+        "Log their sessions — gym, conditioning or **Sport / Other** — each with a **duration** and a **session RPE**.",
+        "Read it back on the **Dashboard** (Load flags, Availability) and in **Reporting** → tick **Training load & ACWR**, 26-week range.",
+      ] },
+      { type: "p", text: "Full detail: **Training load & return-to-play monitoring** in the Reporting section." },
+    ],
+  },
+  {
+    id: "faq-what-is-load",
+    category: "faq",
+    title: "What counts toward an athlete's training load?",
+    summary: "Session RPE × duration, for any session that has both. Recovery sessions and primers don't count.",
+    keywords: ["training load", "srpe", "what counts", "load calculation", "included", "excluded", "duration"],
+    body: [
+      { type: "p", text: "Load = the athlete's **session RPE (1–10) × the session duration in minutes**, added up across Strength, Power/Speed, Hybrid, Cardio and Sport / Other sessions." },
+      { type: "p", text: "A session needs **both** an RPE and a duration to count. Strength/Power sessions have no duration unless you or the athlete enter one — the report says how many were left out. Recovery sessions and primer/activation sessions never count." },
+    ],
+  },
+  {
+    id: "faq-acwr-blank",
+    category: "faq",
+    title: "An athlete's ACWR or training-load report is empty",
+    summary: "It needs the toggle on, a few weeks of history, and sessions with a duration + RPE.",
+    keywords: ["acwr blank", "no training load", "empty report", "load not showing", "acwr missing", "no acwr"],
+    body: [
+      { type: "steps", items: [
+        "**Settings → Training load & rehab** must be on, and **Training load & ACWR** ticked in the report options.",
+        "ACWR compares the last 7 days to the last 28 — it needs about **3–4 weeks** of logged sessions before it shows anything.",
+        "Sessions only count if they have a **duration** and a **session RPE** — check the athlete has been logging RPE.",
+        "Use a longer range — **26 weeks** — so there's enough to plot.",
+      ] },
+    ],
+  },
+  {
+    id: "faq-pain-questions-everyone",
+    category: "faq",
+    title: "Do all my athletes get the pain questions on their check-in?",
+    summary: "No — only athletes whose availability isn't \"Available\", plus anyone you've manually flagged.",
+    keywords: ["pain check in", "wellness questions", "everyone", "all athletes", "pain score", "opt out", "healthy athletes"],
+    body: [
+      { type: "p", text: "The extra **fatigue / stress / pain** questions only appear for an athlete whose **Availability** is set to something other than **Available** (Modified, Rehab, Return to play, Unavailable)." },
+      { type: "p", text: "To keep the questions running for a cleared athlete you still want to watch, tick **Keep the pain & wellness questions on** in the Availability box on their profile. Everyone else keeps the standard 4-question check-in." },
+    ],
+  },
+  {
+    id: "faq-log-match",
+    category: "faq",
+    title: "How does an athlete log a match or a club training session?",
+    summary: "A Sport / Other session — you schedule one, or the athlete adds it from their app.",
+    keywords: ["match", "game", "club training", "fixture", "external session", "log match", "non gym", "pitch session"],
+    body: [
+      { type: "p", text: "With **Training load & rehab** on: **+ Add session → Sport / Other**, enter the activity, duration and intensity. Or the athlete taps **Log a sport / other session** on their app home screen (\"5-a-side, 60 min, RPE 7\")." },
+      { type: "p", text: "Either way it counts toward their training load, so a heavy match week shows up in ACWR and the load-spike flag." },
+    ],
+  },
+  {
+    id: "faq-sport-type-missing",
+    category: "faq",
+    title: "There's no \"Sport / Other\" session type",
+    summary: "It's hidden until you turn on Training load & rehab in Settings.",
+    keywords: ["sport session missing", "no sport type", "add session menu", "sport other", "menu item gone"],
+    body: [
+      { type: "p", text: "The **Sport / Other** type only appears in the **+ Add session** menu once **Settings → Training load & rehab → Track additional training load & rehab data** is on." },
     ],
   },
   {

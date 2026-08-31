@@ -6,7 +6,32 @@ export interface CheckInAnswers {
   sleep: number;    // 1-5, low=very poor, high=very well
   soreness: number; // 1-5, low=none, high=very sore
   volume: number;   // 1-5, low=much less, high=much more
+  // 0088 — only collected when the org's daily-wellness / pain-tracking
+  // tick-boxes are on. All optional so existing check-ins are unaffected.
+  fatigue?: number | null;        // 1-5, low=very fresh, high=exhausted
+  stress?: number | null;         // 1-5, low=very low, high=very high
+  pain_score?: number | null;     // 0-10
+  pain_location?: string | null;
+  wellness_notes?: string | null;
 }
+
+// 0088 — extra 1-5 questions shown under the base 4 when daily_wellness is on.
+export const WELLNESS_QUESTIONS: {
+  key: "fatigue" | "stress";
+  label: string;
+  low: string;
+  high: string;
+}[] = [
+  { key: "fatigue", label: "Overall fatigue today?",   low: "Very fresh", high: "Exhausted" },
+  { key: "stress",  label: "Life stress right now?",   low: "Very low",  high: "Very high" },
+];
+
+// 0088 — quick-pick body areas for a reported pain score; "Other" reveals a
+// free-text box.
+export const PAIN_LOCATIONS = [
+  "Ankle", "Knee", "Hip", "Lower back", "Upper back", "Shoulder",
+  "Hamstring", "Quad", "Calf", "Groin", "Foot", "Neck", "Elbow", "Wrist", "Other",
+];
 
 export const CHECKIN_QUESTIONS: {
   key: keyof CheckInAnswers;
@@ -170,10 +195,16 @@ export function flaggedConditions(
   answers: CheckInAnswers,
   rules: CheckInRules = DEFAULT_CHECKIN_RULES
 ): string[] {
-  const { energy = 3, soreness = 3, sleep = 3 } = answers;
+  const { energy = 3, soreness = 3, sleep = 3, fatigue, stress, pain_score } = answers;
   const flags: string[] = [];
   if (energy <= 2 && rules.low_energy !== "proceed") flags.push("Low energy");
   if (sleep <= 2 && rules.poor_sleep !== "proceed") flags.push("Poor sleep");
   if (soreness >= 4 && rules.high_soreness !== "proceed") flags.push("High soreness");
+  // 0088 — wellness/pain flags (fixed thresholds, only when the field was asked)
+  if (pain_score != null && pain_score >= 4) {
+    flags.push(pain_score >= 7 ? "High pain" : "Pain reported");
+  }
+  if (fatigue != null && fatigue >= 4) flags.push("High fatigue");
+  if (stress != null && stress >= 4) flags.push("High stress");
   return flags;
 }

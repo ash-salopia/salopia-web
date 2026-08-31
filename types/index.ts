@@ -3,7 +3,10 @@
 // If you change a column there, update the matching type here.
 // ============================================================
 
-export type SessionType = "strength" | "hyrox" | "cardio" | "power_speed" | "recovery";
+export type SessionType = "strength" | "hyrox" | "cardio" | "power_speed" | "recovery" | "sport";
+
+// 0088 — return-to-play / availability status per athlete
+export type RtpStatus = "available" | "modified" | "rehab" | "return_to_play" | "unavailable";
 
 export type HyroxType = "fixed" | "cycling" | "emom" | "interval" | "circuit";
 
@@ -51,6 +54,10 @@ export interface Athlete {
   pb_enabled: boolean; // 0073 — per-athlete override of the org-level Personal Bests toggle (lib/data/settings.ts); org setting still wins if it's off. Distinct from hide_pbs_from_feed (0047), which only hides an already-tracked PB from the community feed — this instead turns detection/tracking off entirely.
   challenges_enabled: boolean; // 0074 — per-athlete override of the org-level Challenges toggle (lib/data/settings.ts); org setting still wins if it's off
   squad_comparison_enabled: boolean; // 0075 — per-athlete override of the org-level "Compare to squad" report toggle (lib/data/settings.ts); org setting still wins if it's off
+  rtp_status: RtpStatus; // 0088 — availability / return-to-play status; 'available' is the default for everyone
+  rtp_note: string | null; // 0088 — free-text context for the current status (e.g. "L hamstring strain, running progression")
+  rtp_since: string | null; // 0088 — YYYY-MM-DD the current status started
+  monitor_wellness: boolean; // 0089 — force the pain/wellness check-in questions on even when rtp_status is 'available'
   created_at: string;
 }
 
@@ -392,6 +399,15 @@ export interface RecoveryConfig {
   checklist_items?: RecoveryChecklistItem[];
 }
 
+// 0088 — Sport / Other sessions (cross-training, match play, court sports).
+// The activity label lives in Session.name, actual duration in
+// Session.duration_min, actual session-RPE in Session.rpe. sport_config only
+// carries the coach's planned targets so they survive once the athlete logs
+// their actuals over the top.
+export interface SportConfig {
+  planned?: { duration_min?: number | null; rpe?: number | null } | null;
+}
+
 // ------------------------------------------------------------
 // Sessions (real, dated sessions on an athlete's calendar)
 // ------------------------------------------------------------
@@ -413,7 +429,9 @@ export interface Session {
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation
   rpe: number | null;              // 0031 — post-session RPE (1-10) logged by athlete
   rpe_logged_at: string | null;
-  session_source: "programme" | "library"; // 0034 — 'library' = athlete-started informal session, excluded from calendar + Training Load Report
+  duration_min: number | null; // 0088 — actual session length in minutes; the missing half of Foster sRPE load. Nullable — falls back to estimateSessionDurationMinutes() for hyrox/cardio
+  sport_config: SportConfig | null; // 0088 — only set on type === 'sport'
+  session_source: "programme" | "library" | "athlete_logged"; // 0034/0088 — 'library' = athlete-started informal session (excluded from calendar + reports); 'athlete_logged' = athlete-added ad-hoc sport session (counts toward load, excluded from adherence)
   recovery_category: RecoveryCategory | null; // 0046
   recovery_format: RecoveryFormat | null; // 0046
   recovery_config: RecoveryConfig; // 0046
@@ -501,6 +519,11 @@ export interface CheckIn {
   sleep: number;
   soreness: number;
   volume: number;
+  fatigue: number | null; // 0088 — 1-5, only asked when the daily-wellness tick-box is on
+  stress: number | null; // 0088 — 1-5, only asked when the daily-wellness tick-box is on
+  pain_score: number | null; // 0088 — 0-10, only asked when the pain-tracking tick-box is on
+  pain_location: string | null; // 0088 — body area for pain_score
+  wellness_notes: string | null; // 0088 — free-text note on the wellness/pain section
   created_at: string;
 }
 

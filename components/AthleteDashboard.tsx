@@ -16,6 +16,8 @@ import { useEffect, useMemo, useState } from "react";
 import { listAthleteMessages } from "@/lib/data/messages";
 import { listAthleteCheckIns } from "@/lib/data/checkins";
 import { listAthletePBs, type PersonalBest } from "@/lib/data/personal-bests";
+import { computeLoadMonitoring } from "@/lib/training-load";
+import { rtpMeta } from "@/lib/rtp";
 import { flaggedConditions, CHECKIN_QUESTIONS } from "@/lib/checkin";
 import type { CheckInRules } from "@/lib/checkin";
 import type { CheckIn, DirectMessage, Session } from "@/types";
@@ -28,6 +30,9 @@ interface Props {
   retestWeeks: number | "";
   checkinEnabled: boolean;
   checkinRules?: CheckInRules;
+  loadMonitoringEnabled?: boolean;
+  rtpStatus?: string | null;
+  rtpSince?: string | null;
   onOpenMessages: () => void;
   onOpenSession: (sessionId: string) => void;
 }
@@ -84,7 +89,7 @@ const SCORE_COLOR = (key: string, v: number): string => {
 
 export default function AthleteDashboard({
   athleteId, athleteName, sessions, lastTestDate, retestWeeks,
-  checkinEnabled, checkinRules, onOpenMessages, onOpenSession,
+  checkinEnabled, checkinRules, loadMonitoringEnabled, rtpStatus, rtpSince, onOpenMessages, onOpenSession,
 }: Props) {
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
@@ -99,6 +104,14 @@ export default function AthleteDashboard({
     }
     return () => { alive = false; };
   }, [athleteId, checkinEnabled]);
+
+  const acwr = useMemo(() => {
+    if (!loadMonitoringEnabled) return null;
+    const end = isoToday();
+    const start = addDays(end, -55);
+    const lm = computeLoadMonitoring(sessions, start, end, { acwrLow: 0.8, acwrHigh: 1.3, spikePct: 50 });
+    return lm.latestAcwr;
+  }, [sessions, loadMonitoringEnabled]);
 
   const metrics = useMemo(() => {
     const today = isoToday();
@@ -177,6 +190,12 @@ export default function AthleteDashboard({
         <Metric label="Avg RPE" value={metrics.avgRpe} sub="last 14 days" />
         <Metric label="New PBs" value={String(metrics.pbCount)} sub="last 30 days" good={metrics.pbCount > 0} />
         {metrics.nextTest && <Metric label="Next test" value={metrics.nextTest.label} danger={metrics.nextTest.danger} />}
+        {acwr?.acwr != null && (
+          <Metric label="ACWR" value={acwr.acwr.toFixed(2)} sub="7d vs 28d load" danger={acwr.band === "spike" || acwr.band === "detrain"} good={acwr.band === "sweet"} />
+        )}
+        {loadMonitoringEnabled && rtpStatus && rtpStatus !== "available" && (
+          <Metric label="Availability" value={rtpMeta(rtpStatus).label} sub={rtpSince ? `since ${rtpSince}` : undefined} danger={rtpStatus === "unavailable" || rtpStatus === "rehab"} />
+        )}
       </div>
 
       {/* ── Three columns ──────────────────────────────────────────── */}
@@ -237,7 +256,8 @@ export default function AthleteDashboard({
             {checkinEnabled && checkIns.length === 0 && <div style={st.empty}>No check-ins logged yet.</div>}
             {checkinEnabled && checkIns.map((c) => {
               const flags = flaggedConditions(
-                { energy: c.energy, sleep: c.sleep, soreness: c.soreness, volume: c.volume },
+                { energy: c.energy, sleep: c.sleep, soreness: c.soreness, volume: c.volume,
+                  fatigue: c.fatigue, stress: c.stress, pain_score: c.pain_score },
                 checkinRules
               );
               return (
@@ -256,6 +276,21 @@ export default function AthleteDashboard({
                       );
                     })}
                   </div>
+                  {(c.pain_score != null || c.fatigue != null || c.stress != null) && (
+                    <div style={st.scoreRow}>
+                      {c.fatigue != null && (
+                        <span style={{ ...st.scorePill, borderColor: SCORE_COLOR("soreness", c.fatigue), color: SCORE_COLOR("soreness", c.fatigue) }}>Fatigue {c.fatigue}</span>
+                      )}
+                      {c.stress != null && (
+                        <span style={{ ...st.scorePill, borderColor: SCORE_COLOR("soreness", c.stress), color: SCORE_COLOR("soreness", c.stress) }}>Stress {c.stress}</span>
+                      )}
+                      {c.pain_score != null && c.pain_score > 0 && (
+                        <span style={{ ...st.scorePill, borderColor: "#E53935", color: "#E53935" }}>
+                          Pain {c.pain_score}/10{c.pain_location ? ` · ${c.pain_location}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {flags.length > 0 && (
                     <div style={st.flagRow}>
                       {flags.map((f) => <span key={f} style={st.flag}>{f}</span>)}

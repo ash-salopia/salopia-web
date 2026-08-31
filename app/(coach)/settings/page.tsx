@@ -866,6 +866,87 @@ export default function SettingsPage() {
         )}
       </CollapsibleSection>
 
+      <CollapsibleSection title="Training load & rehab">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Track additional training load &amp; rehab data</div>
+              <div style={s.cardDesc}>
+                For physios and multi-disciplinary teams: session load (RPE &times; duration), acute:chronic
+                workload ratio (ACWR), load-spike and monotony flags, a daily wellness &amp; pain check-in,
+                and a return-to-play status per athlete. Adds a &ldquo;Sport / Other&rdquo; session type for
+                logging non-gym training. Leave off if you only do strength &amp; conditioning &mdash; nothing
+                changes anywhere.
+              </div>
+            </div>
+            <button
+              style={{ ...s.toggleSwitch, background: settings.load_monitoring_enabled ? "var(--accent)" : "var(--panel2)" }}
+              onClick={() => setSettings((prev) => ({ ...prev, load_monitoring_enabled: !prev.load_monitoring_enabled }))}
+            >
+              <div style={{ ...s.toggleThumb, transform: settings.load_monitoring_enabled ? "translateX(20px)" : "translateX(0)" }} />
+            </button>
+          </div>
+
+          {settings.load_monitoring_enabled && (
+            <>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 4 }}>
+                <div style={s.cardLabel}>Which elements to include</div>
+                <div style={s.cardDesc}>Untick anything you don&apos;t want.</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 12, marginTop: 6 }}>
+                {([
+                  { key: "acwr", label: "Acute:chronic workload ratio (ACWR)", desc: "Compares the last 7 days of training load to the last 28. Below ~0.8 may mean detraining; above ~1.3–1.5 injury risk climbs." },
+                  { key: "load_spike_alert", label: "Weekly load-spike alert", desc: "Flags an athlete whose week is well above their recent average." },
+                  { key: "monotony_strain", label: "Monotony & strain", desc: "Foster's monotony (how samey the week was) and strain (weekly load × monotony)." },
+                  { key: "rtp_status", label: "Return-to-play / availability status", desc: "A status per athlete (available / modified / rehab / return to play / unavailable) shown on the athletes list, dashboard and reports." },
+                  { key: "daily_wellness", label: "Daily wellness questions", desc: "Adds fatigue and life-stress to the daily check-in — only for athletes whose availability isn't set to “Available”." },
+                  { key: "pain_tracking", label: "Pain tracking", desc: "Adds a 0–10 pain score and body-area to the daily check-in — only for athletes whose availability isn't “Available”." },
+                ] as const).map((el) => (
+                  <label key={el.key} style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={settings.load_monitoring[el.key]}
+                      onChange={(e) => setSettings((prev) => ({
+                        ...prev,
+                        load_monitoring: { ...prev.load_monitoring, [el.key]: e.target.checked },
+                      }))}
+                      style={{ marginTop: 2 }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{el.label}</div>
+                      <div style={s.cardDesc}>{el.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 14 }}>
+                <div style={s.cardLabel}>Thresholds</div>
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 10, marginTop: 8 }}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "var(--text)" }}>
+                    Flag a weekly load spike above
+                    <input type="number" style={{ ...s.metricInput, width: 72, flex: "none" }}
+                      value={settings.load_spike_pct}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, load_spike_pct: e.target.value === "" ? 0 : parseFloat(e.target.value) }))} />
+                    % of the 4-week average
+                  </label>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "var(--text)" }}>
+                    ACWR sweet spot
+                    <input type="number" step={0.1} style={{ ...s.metricInput, width: 72, flex: "none" }}
+                      value={settings.acwr_low}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, acwr_low: e.target.value === "" ? 0 : parseFloat(e.target.value) }))} />
+                    to
+                    <input type="number" step={0.1} style={{ ...s.metricInput, width: 72, flex: "none" }}
+                      value={settings.acwr_high}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, acwr_high: e.target.value === "" ? 0 : parseFloat(e.target.value) }))} />
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </CollapsibleSection>
+
       </fieldset>
 
       {orgId && (

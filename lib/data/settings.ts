@@ -160,7 +160,33 @@ export interface OrgSettings {
   power_speed_benchmarks: PowerSpeedBenchmarkDef[];
   aerobic_zones_enabled: boolean; // 0086 — MAS / heart-rate training zones feature (profile section, zone picker, athlete zone table)
   zone_model: ZoneModel; // 0086 — 5-zone HR/MAS model for conditioning prescription
+  // 0088 — training-load / return-to-play monitoring. Master toggle + per-element
+  // tick-boxes. Master off (default) = an S&C-only coach sees zero change anywhere.
+  load_monitoring_enabled: boolean;
+  load_monitoring: LoadMonitoringToggles;
+  load_spike_pct: number; // flag a weekly load this many % above the 4-week average
+  acwr_low: number; // ACWR sweet-spot floor (below = possible detraining)
+  acwr_high: number; // ACWR sweet-spot ceiling (above = injury risk climbs)
 }
+
+// 0088 — individually toggleable elements of the load-monitoring feature.
+export interface LoadMonitoringToggles {
+  acwr: boolean; // acute:chronic workload ratio chart + flag
+  load_spike_alert: boolean; // weekly load-spike dashboard flag
+  monotony_strain: boolean; // Foster monotony & strain
+  rtp_status: boolean; // per-athlete availability status field + displays
+  daily_wellness: boolean; // fatigue + stress questions on the daily check-in
+  pain_tracking: boolean; // pain score (0-10) + location on the daily check-in
+}
+
+export const DEFAULT_LOAD_MONITORING: LoadMonitoringToggles = {
+  acwr: true,
+  load_spike_alert: true,
+  monotony_strain: true,
+  rtp_status: true,
+  daily_wellness: true,
+  pain_tracking: true,
+};
 
 export const DEFAULT_SETTINGS: OrgSettings = {
   one_rm_formula: "lander",
@@ -184,7 +210,25 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   power_speed_benchmarks: DEFAULT_POWER_SPEED_BENCHMARKS,
   aerobic_zones_enabled: true,
   zone_model: DEFAULT_ZONE_MODEL,
+  load_monitoring_enabled: false,
+  load_monitoring: DEFAULT_LOAD_MONITORING,
+  load_spike_pct: 50,
+  acwr_low: 0.8,
+  acwr_high: 1.3,
 };
+
+// Merge stored org settings over the defaults. A plain spread replaces nested
+// objects wholesale, so load_monitoring (and any future nested object) needs an
+// explicit deep merge or a stored value missing a later-added key reads as
+// undefined. Used by all three settings readers.
+export function mergeOrgSettings(stored: Partial<OrgSettings> | null | undefined): OrgSettings {
+  const s = stored ?? {};
+  return {
+    ...DEFAULT_SETTINGS,
+    ...s,
+    load_monitoring: { ...DEFAULT_LOAD_MONITORING, ...(s.load_monitoring ?? {}) },
+  };
+}
 
 // ── Coach-side (uses authenticated client) ────────────────────────────────────
 
@@ -202,7 +246,7 @@ export async function getOrgSettings(): Promise<OrgSettings> {
     .eq("id", coach.organisation_id)
     .single();
 
-  return { ...DEFAULT_SETTINGS, ...(org?.settings ?? {}) };
+  return mergeOrgSettings(org?.settings);
 }
 
 export async function updateOrgSettings(patch: Partial<OrgSettings>): Promise<void> {
@@ -219,7 +263,7 @@ export async function updateOrgSettings(patch: Partial<OrgSettings>): Promise<vo
     .eq("id", coach.organisation_id)
     .single();
 
-  const merged = { ...DEFAULT_SETTINGS, ...(org?.settings ?? {}), ...patch };
+  const merged = mergeOrgSettings({ ...(org?.settings ?? {}), ...patch });
 
   const { error } = await supabase
     .from("organisations")

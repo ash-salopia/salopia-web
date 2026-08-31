@@ -12,6 +12,7 @@ import PBCelebrationModal from "@/components/PBCelebrationModal";
 import SessionSummaryModal from "@/components/SessionSummaryModal";
 import RecoverySessionAthleteView from "@/components/recovery/RecoverySessionAthleteView";
 import HyroxCardioAthleteView from "@/components/HyroxCardioAthleteView";
+import SportSessionAthleteView from "@/components/sport/SportSessionAthleteView";
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import { todayISO } from "@/lib/date-utils";
 import type { Session, SessionExercise, SetLog } from "@/types";
@@ -95,6 +96,8 @@ export default function AthleteSessionView({
   checkedInToday: initialCheckedInToday,
   zones,
   zonesEnabled = true,
+  wellnessCheckIn = false,
+  painCheckIn = false,
 }: {
   session?: Session;
   allSessions?: Session[];
@@ -105,6 +108,8 @@ export default function AthleteSessionView({
   checkedInToday?: boolean;
   zones?: import("@/lib/training-zones").ComputedZone[] | null;
   zonesEnabled?: boolean;
+  wellnessCheckIn?: boolean;
+  painCheckIn?: boolean;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(initialSession ?? null);
@@ -425,6 +430,19 @@ export default function AthleteSessionView({
     );
   }
 
+  // Sport / Other sessions (0088) have no exercises — just a plan and the
+  // athlete's logged duration + RPE + note. Dedicated component.
+  if (session.type === "sport") {
+    return (
+      <SportSessionAthleteView
+        session={session}
+        token={token}
+        onUpdated={refetchSession}
+        onBack={() => router.push(`/a/${token}`)}
+      />
+    );
+  }
+
   // Hyrox/cardio sessions store their prescription in
   // hyrox_config/cardio_config, not session_exercises - same reasoning
   // as the recovery branch above, delegate rather than threading type
@@ -467,6 +485,8 @@ export default function AthleteSessionView({
           onClose={() => setCheckInOpen(false)}
           token={token}
           onSubmitted={() => setCheckedInToday(true)}
+          wellnessEnabled={wellnessCheckIn}
+          painEnabled={painCheckIn}
         />
       )}
 

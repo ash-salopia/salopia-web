@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listAthletes } from "@/lib/data/athletes";
+import { listAthletes, listUnavailableAthletes } from "@/lib/data/athletes";
+import { listLoadFlags, type LoadFlag } from "@/lib/data/training-load-dashboard";
+import { rtpMeta } from "@/lib/rtp";
 import {
   listAllSessionDates,
   getWeekCompletionData,
@@ -115,6 +117,8 @@ export default function DashboardPage() {
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [recoveryAlerts, setRecoveryAlerts] = useState<RecoveryAlert[]>([]);
   const [checkInAlerts, setCheckInAlerts] = useState<CheckInAlert[]>([]);
+  const [loadFlags, setLoadFlags] = useState<LoadFlag[]>([]);
+  const [unavailable, setUnavailable] = useState<Athlete[]>([]);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [weekLabel, setWeekLabel] = useState("");
 
@@ -243,6 +247,19 @@ export default function DashboardPage() {
           setCheckInAlerts(alerts.sort((a, b) => a.athleteName.localeCompare(b.athleteName)));
         } else {
           setCheckInAlerts([]);
+        }
+
+        // ── Training-load monitoring (0088) ──────────────────────────────────
+        if (orgSettings?.load_monitoring_enabled) {
+          if (orgSettings.load_monitoring.rtp_status) {
+            setUnavailable(await listUnavailableAthletes().catch(() => []));
+          } else {
+            setUnavailable([]);
+          }
+          setLoadFlags(await listLoadFlags(orgSettings).catch(() => []));
+        } else {
+          setUnavailable([]);
+          setLoadFlags([]);
         }
 
         // ── Recent PBs (last 7 days) ──────────────────────────────────────────
@@ -447,6 +464,53 @@ export default function DashboardPage() {
                     {a.flags.map((f) => (
                       <span key={f} style={{ fontSize: 10, fontWeight: 700, color: "#FF6B6B", background: "#3a1a1a", borderRadius: 4, padding: "1px 5px" }}>
                         {f}
+                      </span>
+                    ))}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Availability / return-to-play (0088) */}
+          {unavailable.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={st.panelDot({ color: unavailable.some((a) => a.rtp_status === "unavailable") ? "#EF4444" : "#EAB308" })} />
+                <span style={st.panelTitle}>Availability</span>
+                <span style={st.panelCount(unavailable.length)}>{unavailable.length}</span>
+              </div>
+              <div style={st.athleteList}>
+                {unavailable.map((a) => {
+                  const m = rtpMeta(a.rtp_status);
+                  return (
+                    <button key={a.id} style={st.athleteChip} onClick={() => router.push(`/athletes/${a.id}`)}>
+                      {a.name}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: m.color, background: `${m.color}22`, borderRadius: 4, padding: "1px 5px" }}>
+                        {m.label}{a.rtp_since ? ` · since ${a.rtp_since}` : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Load flags (0088) */}
+          {loadFlags.length > 0 && (
+            <div style={st.panel}>
+              <div style={st.panelHead}>
+                <span style={st.panelDot({ color: loadFlags.some((f) => f.severe) ? "#EF4444" : "var(--warn)" })} />
+                <span style={st.panelTitle}>Load flags</span>
+                <span style={st.panelCount(loadFlags.length)}>{loadFlags.length}</span>
+              </div>
+              <div style={st.athleteList}>
+                {loadFlags.map((f) => (
+                  <button key={f.athleteId} style={st.athleteChip} onClick={() => router.push(`/athletes/${f.athleteId}`)}>
+                    {f.athleteName}
+                    {f.reasons.map((r) => (
+                      <span key={r} style={{ fontSize: 10, fontWeight: 700, color: "var(--warn)", background: "#3a2f14", borderRadius: 4, padding: "1px 5px" }}>
+                        {r}
                       </span>
                     ))}
                   </button>

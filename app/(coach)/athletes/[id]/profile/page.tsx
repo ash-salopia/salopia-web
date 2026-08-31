@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { updatePB, deletePB, createManualPB, formatPBValue } from "@/lib/data/personal-bests";
 import { listLibrary } from "@/lib/data/library";
-import { archiveAthlete } from "@/lib/data/athletes";
+import { archiveAthlete, updateAthleteRtpStatus } from "@/lib/data/athletes";
+import { RTP_STATUSES } from "@/lib/rtp";
 import { updateAthleteAvatar } from "@/lib/data/avatars";
 import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
 import { listVelocityProfiles, upsertVelocityProfile, deleteVelocityProfile } from "@/lib/data/velocity-profiles";
@@ -189,6 +190,8 @@ export default function AthleteProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const [orgPbEnabled, setOrgPbEnabled] = useState(true);
+  const [rtpEnabled, setRtpEnabled] = useState(false);
+  const [wellnessCheckInOn, setWellnessCheckInOn] = useState(false);
   const [zoneModel, setZoneModel] = useState<ZoneModel>(DEFAULT_ZONE_MODEL);
   const [aerobicZonesEnabled, setAerobicZonesEnabled] = useState(true);
   const pbEnabled = orgPbEnabled && (athlete as any)?.pb_enabled !== false;
@@ -232,6 +235,11 @@ export default function AthleteProfilePage() {
     listVelocityProfiles(athleteId).then(setVelocityProfiles).catch(() => {});
     getOrgSettings().then((s) => {
       setOrgPbEnabled(s.pb_enabled !== false);
+      // The availability control is shown whenever load monitoring is on — it
+      // also drives which athletes get the pain/wellness check-in questions, so
+      // it has to be reachable even if the "show on dashboards" tick-box is off.
+      setRtpEnabled(s.load_monitoring_enabled);
+      setWellnessCheckInOn(s.load_monitoring_enabled && (s.load_monitoring.daily_wellness || s.load_monitoring.pain_tracking));
       setAerobicZonesEnabled(s.aerobic_zones_enabled !== false);
       if (s.zone_model) setZoneModel(s.zone_model);
     }).catch(() => {});
@@ -534,6 +542,91 @@ export default function AthleteProfilePage() {
             }} />
           </button>
         </div>
+
+        {rtpEnabled && athlete && (
+          <div style={{ ...p.checkinCard, marginTop: 8, flexDirection: "column" as const, alignItems: "stretch" as const, gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Availability / return-to-play</div>
+              <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
+                Shown on the athletes list, your dashboard and their reports.
+                {wellnessCheckInOn && " Setting anything other than Available also adds the pain / wellness questions to this athlete's daily check-in."}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+              {RTP_STATUSES.map((st) => {
+                const active = (athlete.rtp_status ?? "available") === st.value;
+                return (
+                  <button
+                    key={st.value}
+                    style={{
+                      padding: "7px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      border: `1px solid ${active ? st.color : "var(--line)"}`,
+                      background: active ? `${st.color}22` : "var(--panel2)",
+                      color: active ? st.color : "var(--text)",
+                    }}
+                    onClick={async () => {
+                      const prev = { rtp_status: athlete.rtp_status, rtp_note: athlete.rtp_note, rtp_since: athlete.rtp_since };
+                      const rtp_since = st.value !== "available" && !athlete.rtp_since ? todayISO() : athlete.rtp_since;
+                      setAthlete((a) => a ? { ...a, rtp_status: st.value, rtp_since } : a);
+                      try {
+                        await updateAthleteRtpStatus(athleteId, { rtp_status: st.value, rtp_since });
+                      } catch {
+                        setAthlete((a) => a ? { ...a, ...prev } : a);
+                      }
+                    }}
+                  >
+                    {st.label}
+                  </button>
+                );
+              })}
+            </div>
+            {(athlete.rtp_status ?? "available") !== "available" && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
+                <input
+                  placeholder="Note (e.g. L hamstring strain, running progression)"
+                  defaultValue={athlete.rtp_note ?? ""}
+                  onBlur={async (e) => {
+                    const note = e.target.value.trim() || null;
+                    if (note === (athlete.rtp_note ?? null)) return;
+                    setAthlete((a) => a ? { ...a, rtp_note: note } : a);
+                    try { await updateAthleteRtpStatus(athleteId, { rtp_note: note }); } catch {}
+                  }}
+                  style={{ flex: 1, minWidth: 220, background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 11px", fontSize: 13 }}
+                />
+                <label style={{ fontSize: 12, color: "var(--mute)", display: "flex", gap: 6, alignItems: "center" }}>
+                  since
+                  <input
+                    type="date"
+                    value={athlete.rtp_since ?? ""}
+                    onChange={async (e) => {
+                      const d = e.target.value || null;
+                      setAthlete((a) => a ? { ...a, rtp_since: d } : a);
+                      try { await updateAthleteRtpStatus(athleteId, { rtp_since: d }); } catch {}
+                    }}
+                    style={{ background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 9px", fontSize: 13 }}
+                  />
+                </label>
+              </div>
+            )}
+            {wellnessCheckInOn && (athlete.rtp_status ?? "available") === "available" && (
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, color: "var(--mute)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={!!athlete.monitor_wellness}
+                  onChange={async (e) => {
+                    const next = e.target.checked;
+                    const prev = !!athlete.monitor_wellness;
+                    setAthlete((a) => a ? { ...a, monitor_wellness: next } : a);
+                    try { await updateAthleteRtpStatus(athleteId, { monitor_wellness: next }); }
+                    catch { setAthlete((a) => a ? { ...a, monitor_wellness: prev } : a); }
+                  }}
+                  style={{ marginTop: 1 }}
+                />
+                <span>Keep the pain &amp; wellness check-in questions on for this athlete even while they&apos;re available (a chronic niggle, a heavy competition block).</span>
+              </label>
+            )}
+          </div>
+        )}
 
         <div style={{ ...p.checkinCard, marginTop: 8 }}>
           <div style={{ flex: 1 }}>

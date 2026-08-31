@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { computeReport } from "@/lib/report-calc";
+import { computeLoadMonitoring } from "@/lib/training-load";
 import { computeStrengthReport } from "@/lib/strength-report-calc";
 import { DEFAULT_SETTINGS } from "@/lib/data/settings";
 import { METRIC_META, METRIC_ORDER, type MetricKey } from "@/lib/cardio-metrics";
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
   let includeNotes: boolean;
   let includeRpe: boolean;
   let includeTrainingLoad: boolean;
+  let includeLoadMonitoring = false;
   let includeCardio: boolean;
   let includeHyrox: boolean;
   let includePowerSpeed: boolean;
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
     includeNotes = !!body.includeNotes;
     includeRpe = !!body.includeRpe;
     includeTrainingLoad = !!body.includeTrainingLoad;
+    includeLoadMonitoring = !!body.includeLoadMonitoring;
     includeCardio = !!body.includeCardio;
     includeHyrox = !!body.includeHyrox;
     includePowerSpeed = !!body.includePowerSpeed;
@@ -70,7 +73,7 @@ export async function POST(req: NextRequest) {
     .from("sessions")
     .select("*, session_exercises(*), athletes(name)")
     .eq("athlete_id", athleteId)
-    .eq("session_source", "programme");
+    .in("session_source", ["programme", "athlete_logged"]);
   if (rangeStart && rangeEnd) query = query.gte("date", rangeStart).lte("date", rangeEnd);
   const { data, error } = await query.order("date", { ascending: true });
   if (error) return NextResponse.json({ error: "Could not load sessions" }, { status: 500 });
@@ -119,6 +122,26 @@ ${rpeLines}`;
 
 TRAINING LOAD (sRPE — session RPE × estimated session length in minutes, hybrid/cardio only):
 ${lines}`;
+  }
+
+  let loadMonitoringBlock = "";
+  if (includeLoadMonitoring) {
+    const dates = allSessions.map((s) => s.date).filter(Boolean).sort();
+    const lmStart = rangeStart ?? dates[0];
+    const lmEnd = rangeEnd ?? dates[dates.length - 1];
+    if (lmStart && lmEnd) {
+      const lm = computeLoadMonitoring(allSessions, lmStart, lmEnd, { acwrLow: 0.8, acwrHigh: 1.3, spikePct: 50 });
+      const latest = lm.latestAcwr;
+      const spikeWeeks = lm.spikes.filter((w) => w.flagged).map((w) => `${w.weekStart} (+${w.changePct}%)`);
+      const highMon = lm.monotony.filter((m) => m.monotony != null && m.monotony > 2).map((m) => `${m.weekStart} (${m.monotony?.toFixed(2)})`);
+      loadMonitoringBlock = `
+
+TRAINING-LOAD MONITORING (sRPE-based, all session types with RPE + a duration):
+Latest ACWR (acute:chronic workload ratio, 7d vs 28d): ${latest?.acwr != null ? `${latest.acwr.toFixed(2)} (${latest.band})` : "not enough history"}. Sweet spot 0.8–1.3; below = detraining risk, above = injury risk.
+Weekly load spikes (>50% over 4-week average): ${spikeWeeks.length ? spikeWeeks.join(", ") : "none"}.
+High monotony weeks (>2.0, i.e. too samey): ${highMon.length ? highMon.join(", ") : "none"}.
+${lm.excludedNoDuration ? `Note: ${lm.excludedNoDuration} RPE'd session(s) excluded from load — no duration logged.` : ""}`;
+    }
   }
 
   let cardioBlock = "";
@@ -227,7 +250,7 @@ ${e1rmLines || "No e1RM data available in this range."}`;
   // Nothing to summarise if every selected section came back empty -
   // don't burn an AI call (or risk it inventing content) for a report
   // with a ticked option but zero logged data behind it.
-  if (!exerciseLines && !e1rmBlock && !notesLines && !rpeBlock && !trainingLoadBlock && !cardioBlock && !hyroxBlock && !powerSpeedBlock && !barSpeedBlock) {
+  if (!exerciseLines && !e1rmBlock && !notesLines && !rpeBlock && !trainingLoadBlock && !loadMonitoringBlock && !cardioBlock && !hyroxBlock && !powerSpeedBlock && !barSpeedBlock) {
     return NextResponse.json({
       summary: "No logged training data in this range yet.",
       themes: "No recurring themes noted.",
@@ -239,7 +262,7 @@ ${e1rmLines || "No e1RM data available in this range."}`;
 COACH CONTEXT FOR THIS REPORT:
 ${coachContext}` : "";
 
-  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
+  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
 
   // The prompt string IS the full report data (computeReport-derived
   // lines for every selected section). Any change to a logged set, note,

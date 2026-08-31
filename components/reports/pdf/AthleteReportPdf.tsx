@@ -24,6 +24,9 @@ import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
+import { rtpMeta } from "@/lib/rtp";
+
+const rtpLabel = (status: string) => rtpMeta(status).label;
 
 // ── Palette (print-mode, matches ReportModal.handlePrint) ─────────────────────
 
@@ -306,6 +309,7 @@ export default function AthleteReportPdf({
     exMap, exerciseSummaries, weeklyExMap, topProgressed, toReview, notes,
     hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], velocityOneRMSummaries = [], cardioMetricSummaries = [], rpeEntries = [], rpeWeekly = [],
     trainingLoadEntries = [], trainingLoadWeekly = [], sessionTypeStats = {},
+    loadMonitoring, loadMonitoringSettings, athleteRtp,
     generated, rangeStart, rangeEnd, strength, oneRmFormula, oneRmSource, bodyweightKg, oneRmReference,
   } = data;
 
@@ -763,6 +767,63 @@ export default function AthleteReportPdf({
                   </View>
                 ))}
               </View>
+            )}
+          </View>
+        )}
+
+        {options.loadMonitoring && loadMonitoring && loadMonitoringSettings && (
+          <View>
+            <Text style={s.sectionTitle}>TRAINING LOAD & AVAILABILITY</Text>
+
+            {loadMonitoringSettings.rtp_status && athleteRtp?.status && athleteRtp.status !== "available" && (
+              <Text style={[s.emptyNote, { color: C.text }]}>
+                Availability: {rtpLabel(athleteRtp.status)}{athleteRtp.since ? ` since ${fmtDate(athleteRtp.since)}` : ""}{athleteRtp.note ? ` — ${athleteRtp.note}` : ""}
+              </Text>
+            )}
+
+            {loadMonitoringSettings.acwr && (() => {
+              const pts = loadMonitoring.acwr.filter((p) => p.acwr != null).map((p) => ({ date: p.date, value: p.acwr as number }));
+              const latest = loadMonitoring.latestAcwr;
+              return (
+                <View style={{ marginBottom: 6 }}>
+                  <Text style={s.metricSubheading}>
+                    ACUTE:CHRONIC WORKLOAD RATIO{latest?.acwr != null ? ` — LATEST ${latest.acwr.toFixed(2)}` : ""}
+                  </Text>
+                  {pts.length >= 2
+                    ? <LineChart series={[{ name: "ACWR", points: pts }]} unit="" height={100} yDomain={[0, 2]} />
+                    : <Text style={s.emptyNote}>Not enough history yet — ACWR needs at least 3 weeks of logged load.</Text>}
+                </View>
+              );
+            })()}
+
+            {loadMonitoringSettings.load_spike_alert && loadMonitoring.spikes.length > 0 && (
+              <View style={{ marginBottom: 4 }}>
+                <Text style={s.metricSubheading}>WEEKLY LOAD vs 4-WEEK AVERAGE</Text>
+                {loadMonitoring.spikes.map((w, i) => (
+                  <View key={i} style={s.listRow}>
+                    <Text>Week of {fmtDate(w.weekStart)}</Text>
+                    <Text style={s.bold}>{w.load}{w.changePct != null ? `  (${w.changePct > 0 ? "+" : ""}${w.changePct}%)` : ""}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {loadMonitoringSettings.monotony_strain && loadMonitoring.monotony.some((m) => m.monotony != null) && (
+              <View style={{ marginBottom: 4 }}>
+                <Text style={s.metricSubheading}>MONOTONY & STRAIN</Text>
+                {loadMonitoring.monotony.filter((m) => m.monotony != null).map((m, i) => (
+                  <View key={i} style={s.listRow}>
+                    <Text>Week of {fmtDate(m.weekStart)}</Text>
+                    <Text style={s.bold}>monotony {m.monotony?.toFixed(2)} · strain {m.strain}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {loadMonitoring.excludedNoDuration > 0 && (
+              <Text style={s.emptyNote}>
+                {loadMonitoring.excludedNoDuration} session(s) had an RPE but no duration and were left out of the load figures.
+              </Text>
             )}
           </View>
         )}

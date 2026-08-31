@@ -7,6 +7,8 @@ import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
 import { AiShimmer, Typewriter } from "@/components/AiText";
 import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
+import { ACWR_BAND_LABEL, MONOTONY_HIGH } from "@/lib/training-load";
+import { rtpMeta } from "@/lib/rtp";
 import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSnapshot";
 import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
@@ -172,6 +174,9 @@ export default function ReportModal({
     rpeWeekly = [],
     trainingLoadEntries = [],
     trainingLoadWeekly = [],
+    loadMonitoring,
+    loadMonitoringSettings,
+    athleteRtp,
     sessionTypeStats = {},
     generated,
     rangeStart,
@@ -1180,6 +1185,81 @@ export default function ReportModal({
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          )}
+
+          {options.loadMonitoring && loadMonitoring && loadMonitoringSettings && !dismissed.has("load-monitoring") && (
+            <div style={{ marginTop: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("load-monitoring")} />
+              <div style={styles.sectionTitle}>Training Load &amp; Availability</div>
+
+              {loadMonitoringSettings.rtp_status && athleteRtp && athleteRtp.status && athleteRtp.status !== "available" && (
+                <div style={{ ...styles.highlightEmpty, borderLeft: `3px solid ${rtpMeta(athleteRtp.status).color}` }}>
+                  <b>Availability:</b> {rtpMeta(athleteRtp.status).label}
+                  {athleteRtp.since ? ` since ${fmtDate(athleteRtp.since)}` : ""}
+                  {athleteRtp.note ? ` — ${athleteRtp.note}` : ""}
+                </div>
+              )}
+
+              {loadMonitoringSettings.acwr && (() => {
+                const pts = loadMonitoring.acwr.filter((p) => p.acwr != null).map((p) => ({ date: p.date, value: p.acwr as number }));
+                const latest = loadMonitoring.latestAcwr;
+                return (
+                  <div style={{ marginTop: 12, marginBottom: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--mute)", marginBottom: 6 }}>
+                      Acute:chronic workload ratio (7 days vs 28)
+                      {latest?.acwr != null && (
+                        <span style={{ marginLeft: 8, color: latest.band === "sweet" ? "#22C55E" : "#EF4444" }}>
+                          latest {latest.acwr.toFixed(2)} — {latest.band ? ACWR_BAND_LABEL[latest.band] : ""}
+                        </span>
+                      )}
+                    </div>
+                    {pts.length >= 2 ? (
+                      <MultiTrendLineChart series={[{ name: "ACWR", points: pts }]} unit="" fmtDate={fmtDate} height={200} yDomain={[0, 2]} />
+                    ) : (
+                      <div style={styles.highlightEmpty}>Not enough history yet — ACWR needs at least 3 weeks of logged load.</div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {loadMonitoringSettings.load_spike_alert && loadMonitoring.spikes.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--mute)", marginBottom: 6 }}>Weekly load vs 4-week average</div>
+                  <div style={styles.hyroxList}>
+                    {loadMonitoring.spikes.map((w, i) => (
+                      <div key={i} style={styles.hyroxRow}>
+                        <span>Week of {fmtDate(w.weekStart)}</span>
+                        <span style={{ fontWeight: 700, color: w.flagged ? "#EF4444" : "var(--text)" }}>
+                          {w.load}{w.changePct != null ? `  (${w.changePct > 0 ? "+" : ""}${w.changePct}%)` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {loadMonitoringSettings.monotony_strain && loadMonitoring.monotony.some((m) => m.monotony != null) && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--mute)", marginBottom: 6 }}>Monotony &amp; strain (Foster)</div>
+                  <div style={styles.hyroxList}>
+                    {loadMonitoring.monotony.filter((m) => m.monotony != null).map((m, i) => (
+                      <div key={i} style={styles.hyroxRow}>
+                        <span>Week of {fmtDate(m.weekStart)}</span>
+                        <span style={{ fontWeight: 700, color: (m.monotony ?? 0) > MONOTONY_HIGH ? "#EF4444" : "var(--text)" }}>
+                          monotony {m.monotony?.toFixed(2)} · strain {m.strain}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {loadMonitoring.excludedNoDuration > 0 && (
+                <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 8 }}>
+                  {loadMonitoring.excludedNoDuration} session{loadMonitoring.excludedNoDuration === 1 ? "" : "s"} had an RPE but no duration and {loadMonitoring.excludedNoDuration === 1 ? "was" : "were"} left out of the load figures.
+                </div>
               )}
             </div>
           )}

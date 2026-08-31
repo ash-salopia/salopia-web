@@ -453,7 +453,7 @@ export interface ComputedReport {
   cardioMetricSummaries: CardioMetricSummary[]; // metric-order, empty when no hyrox/cardio session in range logged anything
 }
 
-function weekStartISO(dateISO: string): string {
+export function weekStartISO(dateISO: string): string {
   const d = new Date(dateISO + "T12:00:00Z");
   const day = d.getUTCDay(); // 0=Sun..6=Sat
   const diffToMonday = day === 0 ? 6 : day - 1;
@@ -538,7 +538,7 @@ function numOrNull(v: unknown): number | null {
 // already used for each builder's own structure preview/timer - and for
 // Fixed/Circuit-Rounds specifically, there is no structural formula, so
 // those two return null unless a duration was actually logged.
-function estimateSessionDurationMinutes(session: Session): number | null {
+export function estimateSessionDurationMinutes(session: Session): number | null {
   if (session.type === "hyrox") {
     const subType = session.hyrox_type;
     const cfg: any = session.hyrox_config ?? {};

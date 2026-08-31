@@ -3,7 +3,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { todayISO } from "@/lib/date-utils";
 import { bestRollingOneRM, calculateSetTargets, type OneRMFormula } from "@/lib/one-rm";
-import { DEFAULT_SETTINGS, type OrgSettings } from "@/lib/data/settings";
+import { mergeOrgSettings, type OrgSettings } from "@/lib/data/settings";
 import type { CheckInAnswers } from "@/lib/checkin";
 import type { Athlete, Session, SessionExercise, SetLog, Template, TemplateDef, PrescribedExercise, RecoveryConfig, HyroxConfig, CardioConfig, CheckIn } from "@/types";
 
@@ -19,7 +19,7 @@ export async function getOrgSettingsForAthlete(athleteId: string): Promise<OrgSe
     .eq("id", athleteId)
     .single();
   const org = Array.isArray(data?.organisations) ? data.organisations[0] : (data?.organisations as any);
-  return { ...DEFAULT_SETTINGS, ...(org?.settings ?? {}) };
+  return mergeOrgSettings(org?.settings);
 }
 
 // Looks up the athlete matching a share token. Returns null if the
@@ -409,6 +409,71 @@ export async function updateSessionRPE(
     .update({ rpe, rpe_logged_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw error;
+}
+
+// 0088 — athlete records how long a session actually took (the missing half of
+// Foster sRPE load). Used by Sport / Other sessions; harmless on any type.
+export async function updateSessionDuration(
+  sessionId: string,
+  athleteId: string,
+  durationMin: number | null
+): Promise<void> {
+  if (durationMin != null && (!Number.isFinite(durationMin) || durationMin < 0 || durationMin > 1440)) {
+    throw new Error("Duration must be between 0 and 1440 minutes");
+  }
+  const supabase = createServiceRoleClient();
+  const { data: session, error: lookupError } = await supabase
+    .from("sessions")
+    .select("id, athlete_id")
+    .eq("id", sessionId)
+    .single();
+  if (lookupError || !session) throw new Error("Session not found");
+  if (session.athlete_id !== athleteId) throw new Error("This session does not belong to you");
+
+  const { error } = await supabase
+    .from("sessions")
+    .update({ duration_min: durationMin == null ? null : Math.round(durationMin) })
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
+// 0088 — an athlete logs an ad-hoc sport / other session they did off their own
+// bat ("played 5-a-side, 60 min, RPE 7"). session_source = 'athlete_logged':
+// counts toward training load, stays out of adherence stats.
+export async function createAthleteSportSession(
+  athleteId: string,
+  input: { activity: string; durationMin: number | null; rpe: number | null; notes: string; date?: string }
+): Promise<Session> {
+  const activity = input.activity.trim() || "Sport session";
+  const durationMin = input.durationMin == null ? null : Math.round(input.durationMin);
+  if (durationMin != null && (!Number.isFinite(durationMin) || durationMin < 0 || durationMin > 1440)) {
+    throw new Error("Duration must be between 0 and 1440 minutes");
+  }
+  const rpe = input.rpe;
+  if (rpe != null && (!Number.isInteger(rpe) || rpe < 1 || rpe > 10)) {
+    throw new Error("RPE must be a whole number from 1 to 10");
+  }
+  const date = input.date ?? todayISO();
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .insert({
+      athlete_id: athleteId,
+      type: "sport",
+      date,
+      name: activity,
+      duration_min: durationMin,
+      rpe,
+      rpe_logged_at: rpe != null ? new Date().toISOString() : null,
+      athlete_notes: input.notes.trim() || null,
+      athlete_notes_acknowledged: !input.notes.trim(),
+      session_source: "athlete_logged",
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Session;
 }
 
 // Athlete-side completion taps on a Recovery session — checklist

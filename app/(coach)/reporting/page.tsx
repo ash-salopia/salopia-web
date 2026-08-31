@@ -7,6 +7,7 @@ import { todayISO, resolveDateRange, type ReportRangeMode } from "@/lib/date-uti
 import { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/lib/report-options";
 import { generateReport } from "@/lib/data/reports";
 import { listAthletes } from "@/lib/data/athletes";
+import { getOrgSettings } from "@/lib/data/settings";
 import { listReportPresets, saveReportPreset, deleteReportPreset, type ReportPreset } from "@/lib/data/report-presets";
 import { getMyBranding } from "@/lib/data/branding";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
@@ -147,6 +148,7 @@ async function fetchAiSummary(
       includeNotes: options.athleteNotes,
       includeRpe: options.sessionRpe,
       includeTrainingLoad: options.trainingLoadTrend,
+      includeLoadMonitoring: options.loadMonitoring,
       includeCardio: options.cardioMetricsTrend,
       includeHyrox: options.hyroxMetricsTrend,
       includePowerSpeed: options.powerSpeedTrend,
@@ -267,9 +269,11 @@ export default function ReportingPage() {
   // link. DEFAULT_BRANDING (plain "VIS BUILD" text) until this loads
   // or for orgs with no branding set.
   const [branding, setBranding] = useState<ResolvedBranding>(DEFAULT_BRANDING);
+  const [loadMonitoringEnabled, setLoadMonitoringEnabled] = useState(false);
 
   useEffect(() => {
     listAthletes().then(setAthletes).catch(() => {});
+    getOrgSettings().then((sett) => setLoadMonitoringEnabled(sett.load_monitoring_enabled === true)).catch(() => {});
     listReportPresets<ReportOptions>("athlete").then(setPresets).catch(() => {});
     listReportPresets<SquadPresetOptions>("squad").then(setSquadPresets).catch(() => {});
     getMyBranding().then(setBranding).catch(() => {});
@@ -786,6 +790,7 @@ export default function ReportingPage() {
                 options={options}
                 onChange={setOptions}
                 hyroxEnabled={targetIds.length === 0 || athletes.some((a) => targetIds.includes(a.id) && a.hyrox_enabled)}
+                loadMonitoringEnabled={loadMonitoringEnabled}
               />
 
               {(options.lineChart || options.powerSpeedTrend) && (

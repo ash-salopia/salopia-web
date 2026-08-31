@@ -14,6 +14,8 @@ import {
 } from "@/lib/data/athletes";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
+import { getOrgSettings } from "@/lib/data/settings";
+import { rtpMeta } from "@/lib/rtp";
 import type { Athlete } from "@/types";
 
 export default function AthletesPage() {
@@ -33,6 +35,7 @@ export default function AthletesPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [rtpEnabled, setRtpEnabled] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -50,6 +53,9 @@ export default function AthletesPage() {
 
   useEffect(() => {
     load();
+    getOrgSettings()
+      .then((sett) => setRtpEnabled(sett.load_monitoring_enabled && sett.load_monitoring.rtp_status))
+      .catch(() => {});
   }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -293,7 +299,14 @@ export default function AthletesPage() {
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={styles.cardName}>{athlete.name}</div>
-                {athlete.group && <div style={styles.cardGroup}>{athlete.group}</div>}
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  {athlete.group && <div style={styles.cardGroup}>{athlete.group}</div>}
+                  {rtpEnabled && athlete.rtp_status && athlete.rtp_status !== "available" && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: rtpMeta(athlete.rtp_status).color, background: `${rtpMeta(athlete.rtp_status).color}22`, borderRadius: 4, padding: "1px 6px" }}>
+                      {rtpMeta(athlete.rtp_status).label}
+                    </span>
+                  )}
+                </div>
               </div>
               {!showArchived && (
                 <button

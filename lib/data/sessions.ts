@@ -272,7 +272,7 @@ export async function addExercisesToSession(
 
 export async function updateSession(
   sessionId: string,
-  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes">>
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes" | "duration_min" | "rpe" | "sport_config">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);

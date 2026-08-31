@@ -6,6 +6,7 @@ import { DEFAULT_BRANDING } from "@/types/branding";
 import { useRouter } from "next/navigation";
 import type { Athlete, Session, SessionType } from "@/types";
 import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/components/WeeklyReflectionModal";
+import LogSportModal from "@/components/sport/LogSportModal";
 import Avatar from "@/components/Avatar";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import { isPushSupported, currentPushSubscription, subscribeToPush } from "@/lib/push/subscribe-client";
@@ -16,6 +17,7 @@ const TYPE_META: Record<SessionType, { label: string; color: string; short: stri
   cardio:   { label: "Cardio",   color: "#4DC3FF", short: "Car" },
   power_speed: { label: "Power/Speed", color: "#A855F7", short: "P/S" },
   recovery: { label: "Recovery", color: "#2DD4BF", short: "Rec" },
+  sport: { label: "Sport / Other", color: "#F59E0B", short: "Sport" },
 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -46,7 +48,7 @@ function getMonthWeeks(year: number, month: number): Date[][] {
 }
 
 export default function AthleteLinkShell({
-  athlete, sessions: initialSessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true, challengesEnabled = true,
+  athlete, sessions: initialSessions, token, branding = DEFAULT_BRANDING, hyroxEnabled = true, reflectionEnabled = true, challengesEnabled = true, loadMonitoringEnabled = false,
 }: {
   athlete: Athlete;
   sessions: Session[];
@@ -55,6 +57,7 @@ export default function AthleteLinkShell({
   hyroxEnabled?: boolean;
   reflectionEnabled?: boolean;
   challengesEnabled?: boolean;
+  loadMonitoringEnabled?: boolean;
 }) {
   const router = useRouter();
 
@@ -156,6 +159,7 @@ export default function AthleteLinkShell({
 
   const [calView, setCalView] = useState<"month" | "week">("week");
   const [reflectionOpen, setReflectionOpen] = useState(false);
+  const [logSportOpen, setLogSportOpen] = useState(false);
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
     const dow = d.getDay();
@@ -447,6 +451,17 @@ export default function AthleteLinkShell({
           );
         })()}
 
+        {loadMonitoringEnabled && (
+          <button style={st.reflectionPrompt} onClick={() => setLogSportOpen(true)}>
+            <span style={{ fontSize: 18 }}>⚽</span>
+            <div style={{ flex: 1, textAlign: "left" as const }}>
+              <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>Log a sport / other session</div>
+              <div style={{ fontSize: 11, color: "var(--mute)" }}>Club training, a match, a swim, a ride…</div>
+            </div>
+            <span style={{ color: "var(--accent)", fontSize: 12, fontWeight: 700 }}>Add →</span>
+          </button>
+        )}
+
         {/* Legend */}
         <div style={st.legend}>
           {Object.entries(TYPE_META).filter(([type]) => type !== "hyrox" || hyroxEnabled).map(([type, meta]) => (
@@ -504,6 +519,14 @@ export default function AthleteLinkShell({
           weekStart={currentWeekStart()}
           weekLabel={weekStartLabel(currentWeekStart())}
           onClose={() => setReflectionOpen(false)}
+        />
+      )}
+
+      {logSportOpen && (
+        <LogSportModal
+          token={token}
+          onClose={() => setLogSportOpen(false)}
+          onLogged={fetchSessions}
         />
       )}
     </div>

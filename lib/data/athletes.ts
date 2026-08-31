@@ -112,6 +112,30 @@ export async function updateAthlete(
   if (error) throw error;
 }
 
+// 0088 — return-to-play / availability status.
+export async function updateAthleteRtpStatus(
+  id: string,
+  patch: { rtp_status?: string; rtp_note?: string | null; rtp_since?: string | null; monitor_wellness?: boolean }
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("athletes").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+// 0088 — active athletes who are not fully available, for the dashboard
+// "Availability" panel.
+export async function listUnavailableAthletes(): Promise<Athlete[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("athletes")
+    .select("*")
+    .eq("archived", false)
+    .neq("rtp_status", "available")
+    .order("rtp_since", { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []) as Athlete[];
+}
+
 export async function updateAthleteTestingSchedule(
   id: string,
   lastTestDate: string | null,

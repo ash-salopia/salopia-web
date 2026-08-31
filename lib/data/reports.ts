@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase-browser";
 import type { Session, SessionExercise } from "@/types";
 import { computeReport, type ComputedReport } from "@/lib/report-calc";
+import { computeLoadMonitoring, type LoadMonitoringResult } from "@/lib/training-load";
 import { computeStrengthReport, type ComputedStrengthReport } from "@/lib/strength-report-calc";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRMWithSource } from "@/lib/data/one-rm";
@@ -23,6 +24,21 @@ export interface ReportData extends ComputedReport {
   // has set one, else the rolling estimate) plus which one won — used
   // to render the "manual" tag on the Strength report.
   oneRmReference: Record<string, { value: number | null; source: "manual" | "rolling" }>;
+  // 0088 — sRPE load / ACWR / monotony over the range. Always computed (cheap);
+  // the report section that shows it is gated by options.loadMonitoring +
+  // the org's load_monitoring tick-boxes.
+  loadMonitoring: LoadMonitoringResult;
+  loadMonitoringSettings: {
+    enabled: boolean;
+    acwr: boolean;
+    load_spike_alert: boolean;
+    monotony_strain: boolean;
+    rtp_status: boolean;
+    acwrLow: number;
+    acwrHigh: number;
+    spikePct: number;
+  };
+  athleteRtp: { status: string | null; note: string | null; since: string | null };
 }
 
 // Fetches an athlete's sessions in range and hands them to the shared
@@ -43,9 +59,11 @@ export async function generateReport(
     .select("*, session_exercises(*)")
     .eq("athlete_id", athleteId)
     // Library sessions are informal/standalone (started by the athlete
-    // from their Session Library, separate from their assigned
-    // programme) — they must never count toward Training Load.
-    .eq("session_source", "programme");
+    // from their Session Library) and must never count toward reports.
+    // 'athlete_logged' (ad-hoc sport sessions the athlete added) DO count
+    // toward training load — they're real training — but are excluded from
+    // adherence stats downstream (collectCompletion keys on 'programme').
+    .in("session_source", ["programme", "athlete_logged"]);
   if (rangeStart && rangeEnd) {
     query = query.gte("date", rangeStart).lte("date", rangeEnd);
   }
@@ -53,7 +71,7 @@ export async function generateReport(
   const [{ data, error }, settings, athleteRes, velocityProfiles] = await Promise.all([
     query.order("date", { ascending: true }),
     getOrgSettings(),
-    supabase.from("athletes").select("bodyweight_kg").eq("id", athleteId).single(),
+    supabase.from("athletes").select("bodyweight_kg, rtp_status, rtp_note, rtp_since").eq("id", athleteId).single(),
     listVelocityProfiles(athleteId).catch(() => []),
   ]);
   if (error) throw error;
@@ -64,6 +82,17 @@ export async function generateReport(
   }));
 
   const strength = computeStrengthReport(allSessions, settings.one_rm_formula);
+
+  // Range for the daily zero-fill: the explicit range, else the span of
+  // sessions we actually have.
+  const dates = allSessions.map((s) => s.date).filter(Boolean).sort();
+  const lmStart = rangeStart ?? dates[0] ?? new Date().toISOString().slice(0, 10);
+  const lmEnd = rangeEnd ?? dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10);
+  const loadMonitoring = computeLoadMonitoring(allSessions, lmStart, lmEnd, {
+    acwrLow: settings.acwr_low,
+    acwrHigh: settings.acwr_high,
+    spikePct: settings.load_spike_pct,
+  });
 
   const oneRmReference: ReportData["oneRmReference"] = {};
   await Promise.all(
@@ -82,5 +111,21 @@ export async function generateReport(
     oneRmSource: settings.one_rm_source,
     bodyweightKg: athleteRes.data?.bodyweight_kg ?? null,
     oneRmReference,
+    loadMonitoring,
+    loadMonitoringSettings: {
+      enabled: settings.load_monitoring_enabled,
+      acwr: settings.load_monitoring.acwr,
+      load_spike_alert: settings.load_monitoring.load_spike_alert,
+      monotony_strain: settings.load_monitoring.monotony_strain,
+      rtp_status: settings.load_monitoring.rtp_status,
+      acwrLow: settings.acwr_low,
+      acwrHigh: settings.acwr_high,
+      spikePct: settings.load_spike_pct,
+    },
+    athleteRtp: {
+      status: (athleteRes.data as { rtp_status?: string | null } | null)?.rtp_status ?? null,
+      note: (athleteRes.data as { rtp_note?: string | null } | null)?.rtp_note ?? null,
+      since: (athleteRes.data as { rtp_since?: string | null } | null)?.rtp_since ?? null,
+    },
   };
 }

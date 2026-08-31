@@ -45,6 +45,7 @@ const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   cardio: { label: "Cardio", color: "#4DC3FF" },
   power_speed: { label: "Power/Speed", color: "#A855F7" },
   recovery: { label: "Recovery", color: "#2DD4BF" },
+  sport: { label: "Sport / Other", color: "#F59E0B" },
 };
 
 // The athlete has written a note on this session (0033). Shown as an
@@ -112,6 +113,7 @@ export default function AthleteDetailPage() {
   const [typePicker, setTypePicker] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [hyroxEnabled, setHyroxEnabled] = useState(true);
+  const [loadMonitoringEnabled, setLoadMonitoringEnabled] = useState(false);
   const [squadComparisonEnabled, setSquadComparisonEnabled] = useState(true);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   // Last-used copy-to-range dates, shared across CopySessionModal opens
@@ -220,6 +222,7 @@ export default function AthleteDetailPage() {
     if (athleteId) load();
     getOrgSettings().then((s) => {
       setHyroxEnabled(s.hyrox_enabled !== false);
+      setLoadMonitoringEnabled(s.load_monitoring_enabled === true);
       setSquadComparisonEnabled(s.squad_comparison_enabled !== false);
       setCheckinEnabled(s.checkin_enabled !== false);
       if (s.checkin_rules) setCheckinRules(s.checkin_rules);
@@ -264,7 +267,7 @@ export default function AthleteDetailPage() {
         athleteId,
         type,
         date,
-        TYPE_META[type]?.label ?? "Session",
+        type === "sport" ? "Sport session" : TYPE_META[type]?.label ?? "Session",
         []
       );
       router.push(`/athletes/${athleteId}/sessions/${session.id}`);
@@ -403,6 +406,7 @@ export default function AthleteDetailPage() {
             includeNotes: options.athleteNotes,
             includeRpe: options.sessionRpe,
             includeTrainingLoad: options.trainingLoadTrend,
+            includeLoadMonitoring: options.loadMonitoring,
             includeCardio: options.cardioMetricsTrend,
             includeHyrox: options.hyroxMetricsTrend,
             includePowerSpeed: options.powerSpeedTrend,
@@ -733,7 +737,10 @@ export default function AthleteDetailPage() {
                   {new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
                 </div>
               )}
-              {(Object.keys(TYPE_META) as SessionType[]).filter(t => t !== "hyrox" || hyroxEnabled).map((t) => (
+              {(Object.keys(TYPE_META) as SessionType[])
+                .filter(t => t !== "hyrox" || hyroxEnabled)
+                .filter(t => t !== "sport" || loadMonitoringEnabled)
+                .map((t) => (
                 <button
                   key={t}
                   style={styles.typeOption}
@@ -789,6 +796,9 @@ export default function AthleteDetailPage() {
             retestWeeks={retestWeeks}
             checkinEnabled={checkinEnabled}
             checkinRules={checkinRules}
+            loadMonitoringEnabled={loadMonitoringEnabled}
+            rtpStatus={(athlete as any).rtp_status ?? null}
+            rtpSince={(athlete as any).rtp_since ?? null}
             onOpenMessages={() => setMessageOpen(true)}
             onOpenSession={(sid) => router.push(`/athletes/${athleteId}/sessions/${sid}`)}
           />
@@ -1032,6 +1042,7 @@ export default function AthleteDetailPage() {
           hyroxEnabled={hyroxEnabled && (athlete as any).hyrox_enabled !== false}
           athleteId={athleteId}
           squadComparisonEnabled={squadComparisonEnabled && (athlete as any).squad_comparison_enabled !== false}
+          loadMonitoringEnabled={loadMonitoringEnabled}
           onGenerate={handleGenerateReport}
           onClose={() => setReportRangeOpen(false)}
         />

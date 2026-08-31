@@ -9,6 +9,7 @@ const PRESETS: { key: ReportRangeMode; label: string }[] = [
   { key: "4w", label: "Last 4 weeks" },
   { key: "8w", label: "Last 8 weeks" },
   { key: "12w", label: "Last 12 weeks" },
+  { key: "26w", label: "Last 26 weeks" },
   { key: "all", label: "All time" },
   { key: "custom", label: "Custom range" },
 ];

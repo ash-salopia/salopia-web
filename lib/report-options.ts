@@ -45,6 +45,7 @@ export interface ReportOptions {
   hyroxSessionsList: boolean;
   trainingLoadTrend: boolean; // 0078 — sRPE (RPE × duration) weekly training load, hyrox+cardio combined
   trainingLoadShowAll: boolean; // 0086 — also list every individual session's training load, not just the graph/total (mirrors sessionRpeShowAll)
+  loadMonitoring: boolean; // 0088 — ACWR, weekly load spike, monotony & strain, availability. Renders whatever the org has enabled in load_monitoring. Universal (like sessionRpe), only offered when the org's master toggle is on.
   sessionCompletion: boolean; // 0080 — sessions logged + % of prescribed sessions completed, per session type
   // 0075 — "where does this athlete sit relative to their own squad" on
   // their own report (rank/average for TTL and Completion, average-only
@@ -83,6 +84,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   hyroxSessionsList: false,
   trainingLoadTrend: false,
   trainingLoadShowAll: true, // preserves existing behaviour (full per-session list) until a coach opts into the narrower view
+  loadMonitoring: false,
   sessionCompletion: false,
   squadComparison: false,
   squadComparisonGroupId: null,
@@ -170,6 +172,7 @@ const CONTENT_FIELD_KEYS: (keyof ReportOptions)[] = [
   "ttl", "e1rm", "aiSummary", "athleteNotes", "sessionRpe",
   "powerSpeedTrend", "barSpeedTrend", "cardioMetricsTrend", "hyroxMetricsTrend",
   "cardioSessionsList", "hyroxSessionsList", "trainingLoadTrend", "sessionCompletion",
+  "loadMonitoring",
 ];
 
 export function hasAnyContentSelected(options: ReportOptions): boolean {

@@ -38,13 +38,14 @@ import RecoverySessionEditor from "@/components/recovery/RecoverySessionEditor";
 import { saveRecoveryPreset } from "@/lib/data/recovery";
 import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import SportSessionEditor from "@/components/sport/SportSessionEditor";
 import SessionCompareModal from "@/components/SessionCompareModal";
 import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
 
 type SessionStub = { id: string; name: string; date: string; type: string };
 
 const STUB_TYPE_COLOR: Record<string, string> = {
-  strength: "#3B8BEB", hyrox: "#B388FF", cardio: "#4DC3FF", power_speed: "#A855F7", recovery: "#2DD4BF",
+  strength: "#3B8BEB", hyrox: "#B388FF", cardio: "#4DC3FF", power_speed: "#A855F7", recovery: "#2DD4BF", sport: "#F59E0B",
 };
 
 export default function SessionDetailPage() {
@@ -681,6 +682,13 @@ export default function SessionDetailPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 
+  const handleSportPatch = async (patch: Partial<Pick<Session, "name" | "duration_min" | "rpe" | "session_notes" | "sport_config">>) => {
+    if (!session) return;
+    setSession((prev) => (prev ? { ...prev, ...patch } : prev));
+    try { await updateSession(sessionId, patch); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
   if (loading) return <div style={styles.empty}>Loading…</div>;
   if (error && !session) return <div style={styles.errorBox}>{error}</div>;
   if (!session) return <div style={styles.empty}>Session not found.</div>;
@@ -1043,6 +1051,8 @@ export default function SessionDetailPage() {
             + Add exercise
           </button>
         </>
+      ) : session.type === "sport" ? (
+        <SportSessionEditor session={session} onChange={handleSportPatch} />
       ) : session.type === "recovery" ? (
         <RecoverySessionEditor
           session={session}

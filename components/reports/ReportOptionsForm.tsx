@@ -37,11 +37,13 @@ export default function ReportOptionsForm({
   hyroxEnabled = true,
   athleteId,
   squadComparisonEnabled = false,
+  loadMonitoringEnabled = false,
 }: {
   options: ReportOptions;
   onChange: (next: ReportOptions) => void;
   disableCharts?: boolean;
   hyroxEnabled?: boolean;
+  loadMonitoringEnabled?: boolean;
   // 0075 — "Compare to squad" is only offered when there's one clear
   // athlete to resolve a squad for (the single-athlete report flow) -
   // absent on the bulk Reporting tab's multi-athlete form.
@@ -399,6 +401,20 @@ export default function ReportOptionsForm({
             <span style={{ fontSize: 11, color: "var(--mute)" }}>Perceived exertion (1-10) logged after each session, plus range average</span>
           </span>
         </label>
+        {loadMonitoringEnabled && (
+          <label style={s.checkOption}>
+            <input
+              type="checkbox"
+              checked={options.loadMonitoring}
+              onChange={(e) => set("loadMonitoring", e.target.checked)}
+              style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+            />
+            <span>
+              <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>Training load &amp; ACWR</span>
+              <span style={{ fontSize: 11, color: "var(--mute)" }}>Weekly load, acute:chronic ratio, monotony &amp; strain, availability</span>
+            </span>
+          </label>
+        )}
         {options.sessionRpe && (
           <label style={{ ...s.checkOption, paddingLeft: 26 }}>
             <input

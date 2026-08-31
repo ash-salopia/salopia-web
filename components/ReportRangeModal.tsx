@@ -15,6 +15,7 @@ export default function ReportRangeModal({
   hyroxEnabled = true,
   athleteId,
   squadComparisonEnabled = false,
+  loadMonitoringEnabled = false,
   onGenerate,
   onClose,
 }: {
@@ -22,6 +23,7 @@ export default function ReportRangeModal({
   hyroxEnabled?: boolean;
   athleteId?: string;
   squadComparisonEnabled?: boolean;
+  loadMonitoringEnabled?: boolean;
   onGenerate: (start: string | null, end: string | null, options: ReportOptions) => void;
   onClose: () => void;
 }) {
@@ -135,6 +137,7 @@ export default function ReportRangeModal({
             options={options}
             onChange={setOptions}
             hyroxEnabled={hyroxEnabled}
+            loadMonitoringEnabled={loadMonitoringEnabled}
             athleteId={athleteId}
             squadComparisonEnabled={squadComparisonEnabled}
           />

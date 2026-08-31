@@ -24,6 +24,7 @@ const TYPE_META: Record<SessionType, { label: string; color: string; dim: string
   cardio:      { label: "Cardio",      color: "#4DC3FF", dim: "#1a2c38" },
   power_speed: { label: "Power/Speed", color: "#A855F7", dim: "#2a1a4a" },
   recovery:    { label: "Recovery",    color: "#2DD4BF", dim: "#123832" },
+  sport:       { label: "Sport / Other", color: "#F59E0B", dim: "#3a2a0a" },
 };
 
 function todayISO(): string {
