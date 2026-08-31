@@ -621,9 +621,10 @@ export default function LiveGroupPage() {
                     const timeMode = (ex.time ?? "").trim().length > 0;
                     const completionOnly = !!ex.completion_only;
                     const showVelocity = !!ex.track_velocity && !completionOnly;
+                    const showPause = !!ex.track_pause && !completionOnly && !timeMode;
                     const setGridCols = completionOnly
                       ? "32px 44px"
-                      : [showWeight ? "1fr" : "", "1fr", showVelocity ? "1fr" : "", "40px", "44px"]
+                      : [showWeight ? "1fr" : "", "1fr", showVelocity ? "1fr" : "", showPause ? "1fr" : "", "40px", "44px"]
                           .filter(Boolean).join(" ").replace(/^/, "32px ");
                     // What the athlete actually did last time on this
                     // exercise, so the coach doesn't have to leave
@@ -741,6 +742,7 @@ export default function LiveGroupPage() {
                               {!completionOnly && showWeight && <span style={s.setColLabel}>Weight (kg)</span>}
                               {!completionOnly && <span style={s.setColLabel}>{timeMode ? "Time (s)" : "Reps"}</span>}
                               {showVelocity && <span style={s.setColLabel}>Speed (m/s)</span>}
+                              {showPause && <span style={s.setColLabel}>Pause (s)</span>}
                               {!completionOnly && <span style={s.setColLabel} />}
                               <span style={s.setColLabel}>Done</span>
                             </div>
@@ -837,6 +839,22 @@ export default function LiveGroupPage() {
                                       const v = e.target.value;
                                       if (v === (set.velocity ?? "")) return;
                                       handleLogChange(activeSess.id, ex.id, si, { velocity: v });
+                                    }}
+                                  />
+                                )}
+                                {showPause && (
+                                  <input
+                                    key={`p-${ex.id}-${si}-${set.pause}`}
+                                    defaultValue={set.pause ?? ""}
+                                    type="number"
+                                    step="0.5"
+                                    placeholder={ex.target_pause ? `${ex.target_pause}s` : "pause"}
+                                    inputMode="numeric"
+                                    style={s.setInput}
+                                    onBlur={(e) => {
+                                      const v = e.target.value;
+                                      if (v === (set.pause ?? "")) return;
+                                      handleLogChange(activeSess.id, ex.id, si, { pause: v });
                                     }}
                                   />
                                 )}

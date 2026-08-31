@@ -583,7 +583,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         ],
       },
       { type: "subhead", text: "Per-exercise flags" },
-      { type: "p", text: "Tick as needed: **Each side** (doubles tonnage), **Bodyweight only**, **Use %1RM** (per-set % ramp instead of a fixed load), **Primer / activation** (excluded from reports), **Completion only** (just a done tick), **Bar speed (m/s)** (adds a velocity box and a target speed)." },
+      { type: "p", text: "Tick as needed: **Each side** (doubles tonnage), **Bodyweight only**, **Use %1RM** (per-set % ramp instead of a fixed load), **Primer / activation** (excluded from reports), **Completion only** (just a done tick), **Bar speed (m/s)** (adds a velocity box and a target speed), **Pause (s)** (adds a pause box per set — a longer hold at the same load counts as progress)." },
       { type: "tip", text: "If a typed exercise isn't in your Library, a **+ Add \"…\" to library** button appears so you can save it for next time." },
     ],
   },
@@ -675,8 +675,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "session-flags",
     category: "sessions",
     title: "Exercise flags & toggles explained",
-    summary: "Each side, Bodyweight only, Use %1RM, Primer, Completion only, Bar speed.",
-    keywords: ["flags", "toggles", "each side", "unilateral", "%1rm", "completion only", "bar speed", "primer"],
+    summary: "Each side, Bodyweight only, Use %1RM, Primer, Completion only, Bar speed, Pause.",
+    keywords: ["flags", "toggles", "each side", "unilateral", "%1rm", "completion only", "bar speed", "primer", "pause", "paused reps", "tempo"],
     body: [
       { type: "steps", items: [
         "**Each side** — the prescription is per limb. Doubles the tonnage counted in reports.",
@@ -685,6 +685,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**Primer / activation** — a deliberately light session (e.g. pre-match). Excluded from reports and the rolling 1RM estimate.",
         "**Completion only** — just a done tick per set, no weight/reps/time boxes.",
         "**Bar speed (m/s)** — adds a velocity box per set and a target speed. Feeds VBT sections in reports.",
+        "**Pause (s)** — adds a pause box per set and an optional target hold, for paused-tempo lifts. A longer pause at the same weight and reps shows as progress in Live Group and the \"vs last time\" comparison (e.g. \"Best: same, +1s pause\", green).",
       ] },
     ],
   },
@@ -740,6 +741,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["progress", "vs last time", "signals", "best", "load", "tonnage", "arrows", "comparison"],
     body: [
       { type: "p", text: "At the bottom of each Strength exercise card (in the session builder and in Live group) you'll see the previous session's sets, plus **▲ / ▼ / ＝ Best** and **▲ / ▼ / ＝ Load** — how the best set and the total tonnage moved." },
+      { type: "p", text: "**Best** compares weight first, then reps at the same weight, then — if the exercise has **Pause (s)** ticked — the pause held. A longer pause at the same load and reps reads as progress (\"same, +1s pause\", green)." },
       { type: "p", text: "This is computed purely from saved data. It's the same signal Live group shows." },
       { type: "note", text: "It needs a previous session containing an exercise with the **same name**. Primer sessions are skipped, and it's Strength-only." },
     ],

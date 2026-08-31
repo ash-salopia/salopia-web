@@ -632,6 +632,7 @@ export default function AthleteSessionView({
                   const timeMode = (ex.time ?? "").trim().length > 0;
                   const completionOnly = !!ex.completion_only;
                   const showVelocity = !!ex.track_velocity && !completionOnly;
+                  const showPause = !!ex.track_pause && !completionOnly && !timeMode;
                   // Header and every row share this exact template string
                   // so the Load/Reps/Time columns line up pixel-for-pixel -                   // the "copy last set" slot is always reserved as its own
                   // fixed-width track (populated or not) so a row that
@@ -639,7 +640,7 @@ export default function AthleteSessionView({
                   // columns narrower than the header or its sibling rows.
                   const gridCols = completionOnly
                     ? "22px 32px"
-                    : [showWeight ? "1fr" : "", "1fr", showVelocity ? "1fr" : "", "56px", "32px"]
+                    : [showWeight ? "1fr" : "", "1fr", showVelocity ? "1fr" : "", showPause ? "1fr" : "", "56px", "32px"]
                         .filter(Boolean).join(" ").replace(/^/, "22px ");
                   return (
                 <div style={styles.setSectionRow}>
@@ -651,6 +652,7 @@ export default function AthleteSessionView({
                         {showWeight && <div style={styles.setColLabel}>Load</div>}
                         <div style={styles.setColLabel}>{timeMode ? "Time" : "Reps"}</div>
                         {showVelocity && <div style={styles.setColLabel}>Speed</div>}
+                        {showPause && <div style={styles.setColLabel}>Pause</div>}
                         <div />
                         <div />
                       </div>
@@ -747,6 +749,21 @@ export default function AthleteSessionView({
                             }}
                             placeholder={ex.target_velocity ? `${ex.target_velocity} m/s` : "m/s"}
                             inputMode="decimal"
+                            style={styles.setInput}
+                          />
+                        )}
+                        {showPause && (
+                          <input
+                            key={`${ex.id}-${i}-p-${set.pause}`}
+                            defaultValue={set.pause ?? ""}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                              const v = e.target.value.replace(/[^0-9.]/g, "");
+                              if (v === (set.pause ?? "")) return;
+                              handleSetUpdate(ex.id, i, { pause: v });
+                            }}
+                            placeholder={ex.target_pause ? `${ex.target_pause}s` : "pause s"}
+                            inputMode="numeric"
                             style={styles.setInput}
                           />
                         )}

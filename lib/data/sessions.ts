@@ -418,6 +418,8 @@ export async function copySessionsRange(
       completion_only: e.completion_only ?? false,
       track_velocity: e.track_velocity ?? false,
       target_velocity: e.target_velocity ?? "",
+      track_pause: e.track_pause ?? false,
+      target_pause: e.target_pause ?? "",
       // Copying resets the log (no logged weights carried over) —
       // matches the prototype's copyExercise(e, true), which keeps
       // the progress flag but clears actual logged data since this
@@ -566,6 +568,8 @@ export async function propagateFutureOccurrences(
         completion_only: e.completion_only ?? false,
         track_velocity: e.track_velocity ?? false,
         target_velocity: e.target_velocity ?? "",
+        track_pause: e.track_pause ?? false,
+        target_pause: e.target_pause ?? "",
         log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
       }));
       const { error } = await supabase.from("session_exercises").insert(rows);
@@ -591,6 +595,8 @@ export async function propagateFutureOccurrences(
         completion_only: sourceEx.completion_only ?? false,
         track_velocity: sourceEx.track_velocity ?? false,
         target_velocity: sourceEx.target_velocity ?? "",
+        track_pause: sourceEx.track_pause ?? false,
+        target_pause: sourceEx.target_pause ?? "",
       }).eq("id", targetEx.id);
       if (error) throw error;
     }
@@ -755,6 +761,8 @@ export async function copySessionToDates(
         completion_only: e.completion_only ?? false,
         track_velocity: e.track_velocity ?? false,
         target_velocity: e.target_velocity ?? "",
+        track_pause: e.track_pause ?? false,
+        target_pause: e.target_pause ?? "",
         log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
       }));
       const { error: exErr } = await supabase.from("session_exercises").insert(exRows);

@@ -96,6 +96,7 @@ export interface SetLog {
   done: boolean;
   time?: string; // 0041 — actual time achieved for a time-mode bodyweight set (e.g. a plank hold), separate from the prescribed ex.time
   velocity?: string; // bar speed (m/s) actually achieved on this set — only shown/entered when the exercise has track_velocity on
+  pause?: string; // 0090 — pause/hold in seconds held on this set — only shown/entered when the exercise has track_pause on
 }
 
 // ------------------------------------------------------------
@@ -121,6 +122,8 @@ export interface ExerciseBase {
   completion_only?: boolean; // coach-set: nothing to track for this exercise (e.g. a mobility drill) — hides weight/reps/time entirely, logging is just a done tick per set
   track_velocity?: boolean; // coach-set: show a bar speed (m/s) box per set, in addition to whatever else this exercise logs
   target_velocity?: string; // prescribed target bar speed (m/s), shown alongside the logged velocity — only meaningful when track_velocity is on
+  track_pause?: boolean; // 0090 — coach-set: show a "pause (s)" box per set, for paused-tempo lifts. Feeds the "Best:" progression signal
+  target_pause?: string; // 0090 — prescribed pause/hold in seconds, shown alongside the logged pause — only meaningful when track_pause is on
   // 0058 — Home Programmes only (see templates.share_code). `equipment`
   // tags what this prescription needs (e.g. "Dumbbells", "" = none/
   // bodyweight); `alternatives` are coach-authored equipment swaps the

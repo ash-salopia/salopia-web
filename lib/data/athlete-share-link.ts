@@ -709,6 +709,10 @@ export async function startLibrarySession(athleteId: string, templateDefId: stri
       percent_1rm: e.percent_1rm ?? null,
       use_percent_1rm: e.use_percent_1rm ?? false,
       set_percents: e.set_percents ?? [],
+      track_velocity: (e as { track_velocity?: boolean }).track_velocity ?? false,
+      target_velocity: (e as { target_velocity?: string }).target_velocity ?? "",
+      track_pause: (e as { track_pause?: boolean }).track_pause ?? false,
+      target_pause: (e as { target_pause?: string }).target_pause ?? "",
       sort_order: i,
       log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
     }));

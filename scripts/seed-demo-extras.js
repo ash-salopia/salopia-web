@@ -472,16 +472,22 @@ async function main() {
       .filter((a) => /Jake Morrison|Sophie Bennett|Ava Thompson/.test(a.name))
       .slice(0, 2);
     const exDefs = [
-      { name: "Barbell Back Squat", order: "1", sets: 4, reps: "5", w: 100, progress: "yes" },
-      { name: "Romanian Deadlift", order: "2", sets: 3, reps: "8", w: 80, progress: "yes" },
-      { name: "Barbell Bench Press", order: "3", sets: 4, reps: "6", w: 65, progress: "" },
+      // Paused Front Squat: tracked pause. Last time 1s; today's target 2s — when
+      // the coach logs 2s at the same weight, "Best:" reads "same, +1s pause" (green).
+      { name: "Paused Front Squat", order: "1", sets: 3, reps: "4", w: 70, progress: "", track_pause: true, pastPause: "1", targetPause: "2" },
+      { name: "Barbell Back Squat", order: "2", sets: 4, reps: "5", w: 100, progress: "yes" },
+      { name: "Romanian Deadlift", order: "3", sets: 3, reps: "8", w: 80, progress: "yes" },
+      { name: "Barbell Bench Press", order: "4", sets: 4, reps: "6", w: 65, progress: "" },
     ];
+    const hasPauseCol = !(await sb.from("session_exercises").select("track_pause").limit(1)).error;
     const mkRows = (sessionId, logged) => exDefs.map((e, i) => ({
       session_id: sessionId, name: e.name, order: e.order, sets: e.sets, reps: e.reps,
       time: "", rest: "120s", target_load: "", tempo: "2-0-2", sort_order: i, is_bodyweight: false,
       progress: logged ? e.progress : "", progress_reminder: false,
+      ...(hasPauseCol && e.track_pause ? { track_pause: true, target_pause: e.targetPause ?? "" } : {}),
       log: Array.from({ length: e.sets }, () => ({
-        weight: logged ? String(e.w) : "", reps: logged ? e.reps.replace(/\D.*/, "") : "", time: "", done: !!logged,
+        weight: logged ? String(e.w) : "", reps: logged ? e.reps.replace(/\D.*/, "") : "", time: "",
+        pause: hasPauseCol && logged && e.track_pause ? e.pastPause : "", done: !!logged,
       })),
     }));
     for (const a of liveAthletes) {
@@ -495,7 +501,7 @@ async function main() {
       }).select("id").single();
       if (todaySess.data) await sb.from("session_exercises").insert(mkRows(todaySess.data.id, false));
     }
-    console.log(`Live Group: ${liveAthletes.length} athletes with a "ready to progress" hint today.`);
+    console.log(`Live Group: ${liveAthletes.length} athletes with progress + pause hints today${hasPauseCol ? "" : " (pause skipped — 0090 not applied)"}.`);
   }
 
   console.log(`\n✓ Demo extras seeded in "${DEMO_ORG_NAME}".`);

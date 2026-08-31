@@ -613,6 +613,17 @@ export default function ExerciseCard({
             <span style={{ color: exercise.track_velocity ? "var(--accent)" : "var(--mute)" }}>Bar speed (m/s)</span>
           </label>
         )}
+        {!exercise.completion_only && !timeMode && (
+          <label style={styles.checkboxRow} title="Show a pause (s) box per set, for paused-tempo lifts. A longer pause at the same weight shows as progress in Live Group.">
+            <input
+              type="checkbox"
+              checked={!!exercise.track_pause}
+              onChange={(e) => onEditPresc({ track_pause: e.target.checked })}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: exercise.track_pause ? "var(--accent)" : "var(--mute)" }}>Pause (s)</span>
+          </label>
+        )}
       </div>
 
       <div style={styles.prescRow}>
@@ -658,6 +669,17 @@ export default function ExerciseCard({
               onChange={(e) => onEditPresc({ target_velocity: e.target.value })}
               placeholder="e.g. 0.8"
               inputMode="decimal"
+              style={styles.miniInput}
+            />
+          </Field>
+        )}
+        {exercise.track_pause && !exercise.completion_only && !timeMode && (
+          <Field label="Pause">
+            <input
+              value={exercise.target_pause ?? ""}
+              onChange={(e) => onEditPresc({ target_pause: e.target.value.replace(/[^0-9.]/g, "") })}
+              placeholder="e.g. 2s"
+              inputMode="numeric"
               style={styles.miniInput}
             />
           </Field>
@@ -752,6 +774,15 @@ export default function ExerciseCard({
                   onChange={(e) => updateSet(i, { velocity: e.target.value })}
                   placeholder={exercise.target_velocity ? `${exercise.target_velocity} m/s` : "m/s"}
                   inputMode="decimal"
+                  style={styles.setInput}
+                />
+              )}
+              {exercise.track_pause && !timeMode && (
+                <input
+                  value={set.pause ?? ""}
+                  onChange={(e) => updateSet(i, { pause: e.target.value.replace(/[^0-9.]/g, "") })}
+                  placeholder={exercise.target_pause ? `${exercise.target_pause}s` : "pause s"}
+                  inputMode="numeric"
                   style={styles.setInput}
                 />
               )}
