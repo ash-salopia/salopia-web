@@ -9,6 +9,7 @@ import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/compo
 import LogSportModal from "@/components/sport/LogSportModal";
 import Avatar from "@/components/Avatar";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
+import { rtpMeta } from "@/lib/rtp";
 import { isPushSupported, currentPushSubscription, subscribeToPush } from "@/lib/push/subscribe-client";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; short: string }> = {
@@ -295,6 +296,20 @@ export default function AthleteLinkShell({
         </div>
       </div>
 
+      {/* Availability / return-to-play banner (0091) */}
+      {loadMonitoringEnabled && athlete.rtp_status && athlete.rtp_status !== "available" && (() => {
+        const m = rtpMeta(athlete.rtp_status);
+        return (
+          <div style={{ ...st.rtpBanner, borderColor: `${m.color}66`, background: `${m.color}14` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
+              <span style={{ ...st.rtpBadge, background: m.color }}>{m.label}</span>
+              {athlete.rtp_since && <span style={st.rtpSince}>since {athlete.rtp_since}</span>}
+            </div>
+            {athlete.rtp_athlete_note && <div style={st.rtpNote}>{athlete.rtp_athlete_note}</div>}
+          </div>
+        );
+      })()}
+
       {/* Nav tabs */}
       <div style={st.tabs}>
         <button style={st.tab} onClick={() => router.push(`/a/${token}/community`)}>
@@ -543,6 +558,10 @@ const st: Record<string, React.CSSProperties> = {
   pushBannerDesc: { fontSize: 11, color: "var(--mute)", marginTop: 2, maxWidth: 260 },
   pushBannerDismiss: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "8px 6px" },
   pushBannerEnable: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  rtpBanner: { margin: "12px 16px 0", border: "1px solid", borderRadius: 10, padding: "10px 12px" },
+  rtpBadge: { fontSize: 11, fontWeight: 700, color: "#0a1420", borderRadius: 5, padding: "2px 8px", textTransform: "uppercase" as const, letterSpacing: "0.03em" },
+  rtpSince: { fontSize: 11, color: "var(--mute)" },
+  rtpNote: { fontSize: 13, color: "var(--text)", lineHeight: 1.5, marginTop: 6, whiteSpace: "pre-wrap" as const },
   header: { padding: "20px 16px 12px", borderBottom: "1px solid var(--line)" },
   headerRow: { display: "flex", alignItems: "center", gap: 12 },
   avatarEditBtn: {

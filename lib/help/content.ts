@@ -547,20 +547,23 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "rtp-status",
     category: "athletes",
     title: "Availability & return-to-play status",
-    summary: "Mark each athlete Available / Modified / Rehab / Return to play / Unavailable, with a note and a date.",
+    summary: "Mark each athlete Available / Return to play / Modified training / Rehab / Unavailable, with a note and a date.",
     keywords: ["return to play", "return-to-play", "rtp", "availability", "rehab", "injury", "injured", "modified training", "unavailable", "physio", "status"],
     body: [
       { type: "note", text: "Needs **Track additional training load & rehab data** turned on — see **Turn on training-load & rehab monitoring**." },
-      { type: "p", text: "Open the athlete → **Manage → Profile**, and in the **Settings** section set their **Availability**: **Available**, **Modified training**, **Rehab**, **Return to play** or **Unavailable**. Add a short **note** (e.g. \"L hamstring strain — running progression\") and a **since** date — it fills in with today's date when you move them off Available." },
+      { type: "p", text: "Open the athlete → **Manage → Profile**, and in the **Settings** section set their **Availability**: **Available**, **Return to play**, **Modified training**, **Rehab** or **Unavailable**, plus a **since** date (fills in with today when you move them off Available)." },
+      { type: "subhead", text: "Two notes" },
+      { type: "steps", items: [
+        "**Note — coaches only** — clinical context for you and the physio (\"L hamstring grade 2, running progression\"). Never shown to the athlete.",
+        "**What the athlete can / can't do** — a plain-language message the athlete sees in their app (\"Upper body + bike only, no running or jumping. Reassess Friday.\").",
+      ] },
       { type: "subhead", text: "Where it shows" },
       { type: "steps", items: [
-        "A coloured badge on the **Athletes** list.",
-        "An **Availability** panel on the **Dashboard** listing everyone who isn't fully available.",
-        "A tile on the athlete's **Dashboard** tab.",
-        "A line at the top of their training report and its AI summary.",
+        "**Coach side:** a coloured badge on the **Athletes** list, an **Availability** panel on the **Dashboard**, a tile on the athlete's **Dashboard** tab, and a line at the top of their training report + AI summary.",
+        "**Athlete side:** a coloured banner on their app home screen and a card in their app **Settings**, showing the status and the \"what you can / can't do\" message.",
       ] },
       { type: "note", text: "Setting a status other than **Available** also switches on the **pain and wellness questions** in that athlete's daily check-in (when those tick-boxes are enabled). Move them back to **Available** and the questions stop — unless you tick **Keep the pain & wellness questions on** on their profile, which forces them on for an athlete you want to keep watching even though they're cleared." },
-      { type: "tip", text: "It's a shared label and note — it doesn't restrict what you can programme. Use it as the single source of truth between the S&C coach and the physio." },
+      { type: "tip", text: "It doesn't restrict what you can programme — it's a shared status + the athlete's instructions, not a lock. Use it as the single source of truth between the S&C coach, the physio and the athlete." },
     ],
   },
 
@@ -2897,7 +2900,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "steps", items: [
         "**Settings → Training load & rehab → Track additional training load & rehab data**, and tick the elements you want (ACWR, load-spike, monotony, pain/wellness).",
-        "On the athlete's **Profile**, set their **Availability** (Rehab / Modified / Return to play). That also switches on the pain & wellness check-in questions for them.",
+        "On the athlete's **Profile**, set their **Availability** (Return to play / Modified training / Rehab). That also switches on the pain & wellness check-in questions for them.",
         "Log their sessions — gym, conditioning or **Sport / Other** — each with a **duration** and a **session RPE**.",
         "Read it back on the **Dashboard** (Load flags, Availability) and in **Reporting** → tick **Training load & ACWR**, 26-week range.",
       ] },
@@ -2937,7 +2940,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "No — only athletes whose availability isn't \"Available\", plus anyone you've manually flagged.",
     keywords: ["pain check in", "wellness questions", "everyone", "all athletes", "pain score", "opt out", "healthy athletes"],
     body: [
-      { type: "p", text: "The extra **fatigue / stress / pain** questions only appear for an athlete whose **Availability** is set to something other than **Available** (Modified, Rehab, Return to play, Unavailable)." },
+      { type: "p", text: "The extra **fatigue / stress / pain** questions only appear for an athlete whose **Availability** is set to something other than **Available** (Return to play, Modified training, Rehab, Unavailable)." },
       { type: "p", text: "To keep the questions running for a cleared athlete you still want to watch, tick **Keep the pain & wellness questions on** in the Availability box on their profile. Everyone else keeps the standard 4-question check-in." },
     ],
   },
@@ -3060,7 +3063,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Fix the set value — PBs re-check on every save.",
     keywords: ["wrong pb", "false pb", "bad personal best", "fix pb"],
     body: [
-      { type: "p", text: "PB detection runs on every set save, so correcting a mistyped weight or rep count also corrects (or removes) the PB. Only sets marked **done** count. You can also edit or delete a PB directly on the athlete **Profile → 🏆 Personal bests**." },
+      { type: "p", text: "PB detection runs on every set save, so correcting a mistyped weight or rep count also corrects (or removes) the PB. Only sets marked **done** count. You can also edit or delete a PB directly on the athlete **Profile → 🏆 Personal bests** (tap the ✎ on the PB row)." },
+      { type: "p", text: "**Deleting a PB** hides that exercise from the list — even if the value came from a logged session (so a fluke logged weight can be removed without editing the session). Adding a manual PB for the same exercise brings it back." },
     ],
   },
   {

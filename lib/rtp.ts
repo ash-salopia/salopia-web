@@ -3,11 +3,13 @@
 
 import type { RtpStatus } from "@/types";
 
+// Order = most to least available: it's the order the buttons appear in the
+// athlete-profile control.
 export const RTP_STATUSES: { value: RtpStatus; label: string; color: string; short: string }[] = [
   { value: "available", label: "Available", color: "#22C55E", short: "OK" },
+  { value: "return_to_play", label: "Return to play", color: "#3B82F6", short: "RTP" },
   { value: "modified", label: "Modified training", color: "#EAB308", short: "Mod" },
   { value: "rehab", label: "Rehab", color: "#F97316", short: "Rehab" },
-  { value: "return_to_play", label: "Return to play", color: "#3B82F6", short: "RTP" },
   { value: "unavailable", label: "Unavailable", color: "#EF4444", short: "Out" },
 ];
 

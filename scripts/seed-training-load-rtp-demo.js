@@ -242,6 +242,7 @@ async function main() {
       bodyweight_kg: 78,
       rtp_status: "return_to_play",
       rtp_note: "L hamstring strain (grade 2) — cleared for full training, load monitored on return.",
+      rtp_athlete_note: "You're cleared for full training and contact. Log every extra session (5-a-side, running) so we can watch the load. Flag any tightness in the hamstring straight away — don't push through it.",
       rtp_since: rtpSince,
     })
     .select("id, share_token")
@@ -249,6 +250,10 @@ async function main() {
   if (aErr) {
     if (/column .*(rtp_status|rtp_note|rtp_since)/i.test(aErr.message)) {
       console.error("Migration 0088 not applied — apply supabase/migrations/0088_training_load_monitoring.sql first.");
+      process.exit(1);
+    }
+    if (/column .*rtp_athlete_note/i.test(aErr.message)) {
+      console.error("Migration 0091 not applied — apply supabase/migrations/0091_rtp_athlete_note.sql first.");
       process.exit(1);
     }
     throw aErr;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAthleteByShareToken, updateAthleteVisibilitySettings } from "@/lib/data/athlete-share-link";
+import { getAthleteByShareToken, updateAthleteVisibilitySettings, getOrgSettingsForAthlete } from "@/lib/data/athlete-share-link";
 
 // GET /api/athlete-link/visibility-settings?token=xxx
 export async function GET(request: Request) {
@@ -10,9 +10,22 @@ export async function GET(request: Request) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
+  // 0091 — the athlete's availability / return-to-play status, for the
+  // read-only card on their Settings page (the home-screen banner reads it
+  // straight off the server-rendered athlete object).
+  let availability: { status: string; note: string | null; since: string | null } | null = null;
+  try {
+    const settings = await getOrgSettingsForAthlete(athlete.id);
+    const status = (athlete as any).rtp_status ?? "available";
+    if (settings.load_monitoring_enabled && status !== "available") {
+      availability = { status, note: (athlete as any).rtp_athlete_note ?? null, since: (athlete as any).rtp_since ?? null };
+    }
+  } catch { /* non-fatal */ }
+
   return NextResponse.json({
     hide_pbs_from_feed: (athlete as any).hide_pbs_from_feed ?? false,
     feed_first_name_only: (athlete as any).feed_first_name_only ?? false,
+    availability,
   });
 }
 

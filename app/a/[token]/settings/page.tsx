@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
 import type { ComputedZone } from "@/lib/training-zones";
+import { rtpMeta } from "@/lib/rtp";
 
 export default function AthleteSettingsPage() {
   const params = useParams();
@@ -19,6 +20,7 @@ export default function AthleteSettingsPage() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [zoneData, setZoneData] = useState<{ enabled: boolean; hasProfile: boolean; usesReserve: boolean; zones: ComputedZone[] } | null>(null);
+  const [availability, setAvailability] = useState<{ status: string; note: string | null; since: string | null } | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -36,6 +38,7 @@ export default function AthleteSettingsPage() {
         if (d.error) throw new Error(d.error);
         setHidePBs(!!d.hide_pbs_from_feed);
         setFirstNameOnly(!!d.feed_first_name_only);
+        setAvailability(d.availability ?? null);
       })
       .catch((e) => setError(e?.message ?? "Could not load settings"))
       .finally(() => setLoading(false));
@@ -96,6 +99,25 @@ export default function AthleteSettingsPage() {
         {error && <div style={s.errorBox}>{error}</div>}
 
         {token && <PushNotificationToggle mode="athlete" token={token} />}
+
+        {availability && (() => {
+          const m = rtpMeta(availability.status);
+          return (
+            <>
+              <div style={{ ...s.pageTitle, marginTop: 28 }}>🩹 Your availability</div>
+              <div style={s.pageSubtitle}>Set by your coach. Follow this until they change it.</div>
+              <div style={{ ...s.card, border: `1px solid ${m.color}66`, background: `${m.color}12` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#0a1420", background: m.color, borderRadius: 5, padding: "3px 9px", textTransform: "uppercase" as const, letterSpacing: "0.03em" }}>{m.label}</span>
+                  {availability.since && <span style={{ fontSize: 12, color: "var(--mute)" }}>since {availability.since}</span>}
+                </div>
+                {availability.note
+                  ? <div style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.5, marginTop: 8, whiteSpace: "pre-wrap" as const }}>{availability.note}</div>
+                  : <div style={{ ...s.rowDesc, marginTop: 8 }}>No specific guidance yet — check with your coach about what you can do.</div>}
+              </div>
+            </>
+          );
+        })()}
 
         {loading ? (
           <div style={s.loading}>Loading…</div>

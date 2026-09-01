@@ -898,7 +898,7 @@ export default function SettingsPage() {
                   { key: "acwr", label: "Acute:chronic workload ratio (ACWR)", desc: "Compares the last 7 days of training load to the last 28. Below ~0.8 may mean detraining; above ~1.3–1.5 injury risk climbs." },
                   { key: "load_spike_alert", label: "Weekly load-spike alert", desc: "Flags an athlete whose week is well above their recent average." },
                   { key: "monotony_strain", label: "Monotony & strain", desc: "Foster's monotony (how samey the week was) and strain (weekly load × monotony)." },
-                  { key: "rtp_status", label: "Return-to-play / availability status", desc: "A status per athlete (available / modified / rehab / return to play / unavailable) shown on the athletes list, dashboard and reports." },
+                  { key: "rtp_status", label: "Return-to-play / availability status", desc: "A status per athlete (available / return to play / modified training / rehab / unavailable) shown on the athletes list, dashboard and reports. Anything other than “available” also switches on the pain & wellness check-in questions for that athlete." },
                   { key: "daily_wellness", label: "Daily wellness questions", desc: "Adds fatigue and life-stress to the daily check-in — only for athletes whose availability isn't set to “Available”." },
                   { key: "pain_tracking", label: "Pain tracking", desc: "Adds a 0–10 pain score and body-area to the daily check-in — only for athletes whose availability isn't “Available”." },
                 ] as const).map((el) => (

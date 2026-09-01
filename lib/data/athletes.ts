@@ -115,7 +115,7 @@ export async function updateAthlete(
 // 0088 — return-to-play / availability status.
 export async function updateAthleteRtpStatus(
   id: string,
-  patch: { rtp_status?: string; rtp_note?: string | null; rtp_since?: string | null; monitor_wellness?: boolean }
+  patch: { rtp_status?: string; rtp_note?: string | null; rtp_athlete_note?: string | null; rtp_since?: string | null; monitor_wellness?: boolean }
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("athletes").update(patch).eq("id", id);

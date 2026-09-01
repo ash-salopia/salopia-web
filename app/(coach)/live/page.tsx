@@ -248,8 +248,24 @@ export default function LiveGroupPage() {
     const ex = sess?.exercises?.find((e) => e.id === exerciseId);
     if (!ex) return;
     const newLog = (ex.log ?? []).map((l, i) => i === setIndex ? { ...l, ...patch } : l);
-    try { await updateExerciseLog(exerciseId, newLog); }
+    try { await updateExerciseLog(exerciseId, newLog); detectCoachPB(sessionId, exerciseId, newLog); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
+  // Live Group logs sets straight to session_exercises.log — it doesn't go
+  // through the athlete-link log route, so PB detection has to be triggered
+  // here too (the same /api/athlete-link/detect-pb the session builder uses).
+  // Fire-and-forget; a failed PB check must never surface as a failed save.
+  const detectCoachPB = (sessionId: string, exerciseId: string, log: SetLog[]) => {
+    const sess = sessions.find((s) => s.id === sessionId);
+    if (!sess?.athlete_id || (sess.type !== "strength" && sess.type !== "power_speed")) return;
+    const anyDone = log.some((l) => l.done && (parseFloat(String(l.weight)) > 0 || (l.reps ?? "").trim()));
+    if (!anyDone) return;
+    fetch("/api/athlete-link/detect-pb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteId: sess.athlete_id, exerciseId, sessionId, log }),
+    }).catch(() => {});
   };
 
   const handleToggleDot = async (
@@ -283,7 +299,7 @@ export default function LiveGroupPage() {
         ),
       })
     );
-    try { await updateExerciseLog(exerciseId, newLog); }
+    try { await updateExerciseLog(exerciseId, newLog); detectCoachPB(sessionId, exerciseId, newLog); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 

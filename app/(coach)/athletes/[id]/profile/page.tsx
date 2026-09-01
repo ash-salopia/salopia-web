@@ -308,6 +308,12 @@ export default function AthleteProfilePage() {
         }
       }
 
+      // 0092 — drop PBs the coach has explicitly hidden (covers values
+      // re-derived from logged sessions, which deleting a personal_bests
+      // row can't remove).
+      const hidden = new Set<string>(((athleteData as any)?.pb_hidden ?? []).map((s: string) => s.toLowerCase()));
+      for (const k of hidden) bestPerExercise.delete(k);
+
       setPbs(Array.from(bestPerExercise.values()).sort((a, b) => pbSortValue(b) - pbSortValue(a)));
 
       // Session stats
@@ -581,31 +587,45 @@ export default function AthleteProfilePage() {
               })}
             </div>
             {(athlete.rtp_status ?? "available") !== "available" && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
-                <input
-                  placeholder="Note (e.g. L hamstring strain, running progression)"
-                  defaultValue={athlete.rtp_note ?? ""}
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
+                  <input
+                    placeholder="Note — coaches only (e.g. L hamstring strain grade 2, running progression)"
+                    defaultValue={athlete.rtp_note ?? ""}
+                    onBlur={async (e) => {
+                      const note = e.target.value.trim() || null;
+                      if (note === (athlete.rtp_note ?? null)) return;
+                      setAthlete((a) => a ? { ...a, rtp_note: note } : a);
+                      try { await updateAthleteRtpStatus(athleteId, { rtp_note: note }); } catch {}
+                    }}
+                    style={{ flex: 1, minWidth: 220, background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 11px", fontSize: 13 }}
+                  />
+                  <label style={{ fontSize: 12, color: "var(--mute)", display: "flex", gap: 6, alignItems: "center" }}>
+                    since
+                    <input
+                      type="date"
+                      value={athlete.rtp_since ?? ""}
+                      onChange={async (e) => {
+                        const d = e.target.value || null;
+                        setAthlete((a) => a ? { ...a, rtp_since: d } : a);
+                        try { await updateAthleteRtpStatus(athleteId, { rtp_since: d }); } catch {}
+                      }}
+                      style={{ background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 9px", fontSize: 13 }}
+                    />
+                  </label>
+                </div>
+                <textarea
+                  placeholder="What the athlete can / can't do — they see this in their app (e.g. Upper body + bike only, no running or jumping. Reassess Friday.)"
+                  defaultValue={athlete.rtp_athlete_note ?? ""}
+                  rows={2}
                   onBlur={async (e) => {
                     const note = e.target.value.trim() || null;
-                    if (note === (athlete.rtp_note ?? null)) return;
-                    setAthlete((a) => a ? { ...a, rtp_note: note } : a);
-                    try { await updateAthleteRtpStatus(athleteId, { rtp_note: note }); } catch {}
+                    if (note === (athlete.rtp_athlete_note ?? null)) return;
+                    setAthlete((a) => a ? { ...a, rtp_athlete_note: note } : a);
+                    try { await updateAthleteRtpStatus(athleteId, { rtp_athlete_note: note }); } catch {}
                   }}
-                  style={{ flex: 1, minWidth: 220, background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 11px", fontSize: 13 }}
+                  style={{ width: "100%", background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 11px", fontSize: 13, resize: "vertical" as const }}
                 />
-                <label style={{ fontSize: 12, color: "var(--mute)", display: "flex", gap: 6, alignItems: "center" }}>
-                  since
-                  <input
-                    type="date"
-                    value={athlete.rtp_since ?? ""}
-                    onChange={async (e) => {
-                      const d = e.target.value || null;
-                      setAthlete((a) => a ? { ...a, rtp_since: d } : a);
-                      try { await updateAthleteRtpStatus(athleteId, { rtp_since: d }); } catch {}
-                    }}
-                    style={{ background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 9px", fontSize: 13 }}
-                  />
-                </label>
               </div>
             )}
             {wellnessCheckInOn && (athlete.rtp_status ?? "available") === "available" && (
@@ -1201,6 +1221,14 @@ export default function AthleteProfilePage() {
                       reps: parseInt(newPB.reps) || null,
                       date: newPB.date,
                     });
+                    // Un-hide the exercise if it was previously deleted (0092).
+                    const key = newPB.exercise_name.trim().toLowerCase();
+                    const curHidden = (((athlete as any)?.pb_hidden ?? []) as string[]);
+                    if (curHidden.some(s => s.toLowerCase() === key)) {
+                      const nextHidden = curHidden.filter(s => s.toLowerCase() !== key);
+                      await createClient().from("athletes").update({ pb_hidden: nextHidden }).eq("id", athleteId);
+                      setAthlete(a => a ? ({ ...a, pb_hidden: nextHidden } as any) : a);
+                    }
                     setPbs(prev => [...prev, { id: created.id, exercise_name: created.exercise_name, weight_kg: created.weight_kg, reps: created.reps, time_seconds: null, date: created.date }].sort((a, b) => pbSortValue(b) - pbSortValue(a)));
                     setAddingPB(false);
                     setNewPB({ exercise_name: "", weight: "", reps: "", date: "" });
@@ -1267,11 +1295,21 @@ export default function AthleteProfilePage() {
                         <button
                           style={{ ...p.dangerBtn, fontSize: 12, padding: "5px 10px" }}
                           onClick={async () => {
-                            if (!pb.id) return;
-                            if (!confirm(`Delete PB for ${pb.exercise_name}? This cannot be undone.`)) return;
+                            if (!confirm(`Delete PB for ${pb.exercise_name}? It won't show again unless you add it back manually.`)) return;
+                            const key = pb.exercise_name.toLowerCase();
                             try {
-                              await deletePB(pb.id);
-                              setPbs(prev => prev.filter(r => r.exercise_name !== pb.exercise_name));
+                              if (pb.id) await deletePB(pb.id);
+                              // Hide the exercise so a value re-derived from a
+                              // logged session doesn't just reappear next load.
+                              const supabase = createClient();
+                              const nextHidden = Array.from(new Set([
+                                ...(((athlete as any)?.pb_hidden ?? []) as string[]).map(s => s.toLowerCase()),
+                                key,
+                              ]));
+                              const { error: hErr } = await supabase.from("athletes").update({ pb_hidden: nextHidden }).eq("id", athleteId);
+                              if (hErr) throw hErr;
+                              setAthlete(a => a ? ({ ...a, pb_hidden: nextHidden } as any) : a);
+                              setPbs(prev => prev.filter(r => r.exercise_name.toLowerCase() !== key));
                               setEditingPB(null);
                             } catch (e) {
                               setError(e instanceof Error ? e.message : "Could not delete PB");
@@ -1285,16 +1323,27 @@ export default function AthleteProfilePage() {
                           style={{ ...p.ghostBtn, background: "var(--accent)", color: "#0a1420", border: "none", opacity: savingPB ? 0.5 : 1 }}
                           disabled={savingPB}
                           onClick={async () => {
-                            if (!pb.id) return;
                             setSavingPB(true);
                             try {
                               const wKg = parseFloat(editValues.weight);
                               const reps = parseInt(editValues.reps) || null;
-                              await updatePB(pb.id, {
-                                weight_kg: isNaN(wKg) ? null : wKg,
-                                reps,
-                                date: editValues.date || pb.date,
-                              });
+                              if (pb.id) {
+                                await updatePB(pb.id, {
+                                  weight_kg: isNaN(wKg) ? null : wKg,
+                                  reps,
+                                  date: editValues.date || pb.date,
+                                });
+                              } else {
+                                // Log-derived PB — no row to update, so pin it as a
+                                // manual PB with the corrected value instead.
+                                await createManualPB({
+                                  athleteId,
+                                  exerciseName: pb.exercise_name,
+                                  weightKg: isNaN(wKg) ? null : wKg,
+                                  reps,
+                                  date: editValues.date || pb.date,
+                                });
+                              }
                               setPbs(prev => prev.map(r =>
                                 r.exercise_name === pb.exercise_name
                                   ? { ...r, weight_kg: isNaN(wKg) ? r.weight_kg : wKg, reps, date: editValues.date || r.date }
