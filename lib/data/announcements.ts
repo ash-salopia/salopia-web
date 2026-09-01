@@ -40,9 +40,12 @@ export async function createAnnouncement(input: {
 }): Promise<Announcement> {
   const supabase = createClient();
 
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
   const { data: coach, error: coachErr } = await supabase
     .from("coaches")
     .select("id, organisation_id")
+    .eq("id", user.id)
     .single();
   if (coachErr) throw coachErr;
 

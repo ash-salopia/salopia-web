@@ -75,9 +75,20 @@ async function main() {
   }
 
   const { data: coaches } = await sb
-    .from("coaches").select("id, name, role").eq("organisation_id", org.id);
+    .from("coaches").select("id, name, role, accepted_at, email").eq("organisation_id", org.id);
   const owner = (coaches ?? []).find((c) => c.role === "owner") ?? (coaches ?? [])[0];
   if (!owner) { console.error("Demo org has no coach — run scripts/seed-demo-org.js first."); process.exit(1); }
+
+  // Heal an owner seeded before accepted_at/email were set — otherwise Team
+  // Settings shows them as "pending" (the /demo password login never runs
+  // ensureCoachProvisioned to flip it).
+  if (!owner.accepted_at || !owner.email) {
+    await sb.from("coaches").update({
+      accepted_at: owner.accepted_at ?? new Date().toISOString(),
+      email: owner.email ?? env.DEMO_COACH_EMAIL,
+    }).eq("id", owner.id);
+    console.log(`Healed owner "${owner.name}" (was showing as pending).`);
+  }
 
   const { data: athleteRows } = await sb
     .from("athletes").select("id, name, group, sex, date_of_birth, bodyweight_kg")

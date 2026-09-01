@@ -42,10 +42,15 @@ export async function createGroup(
   colour = "#4a9eff"
 ): Promise<Group> {
   const supabase = createClient();
-  // Get org id from coaches table
+  // Get org id from coaches table — resolve auth.uid() first, since
+  // coaches RLS returns every colleague in the org (a bare .single()
+  // breaks once an org has 2+ coaches).
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
   const { data: coach, error: coachErr } = await supabase
     .from("coaches")
     .select("organisation_id")
+    .eq("id", user.id)
     .single();
   if (coachErr) throw coachErr;
 

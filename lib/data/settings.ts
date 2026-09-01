@@ -232,18 +232,30 @@ export function mergeOrgSettings(stored: Partial<OrgSettings> | null | undefined
 
 // ── Coach-side (uses authenticated client) ────────────────────────────────────
 
-export async function getOrgSettings(): Promise<OrgSettings> {
-  const supabase = createClient();
+// Coaches RLS returns every colleague in the org, so a bare
+// .from("coaches").single() breaks the moment an org has 2+ coaches —
+// resolve auth.uid() first (same lesson as getMyOrganisationId,
+// GroupChat, challenges, etc.).
+async function myOrgId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
   const { data: coach } = await supabase
     .from("coaches")
     .select("organisation_id")
+    .eq("id", user.id)
     .single();
-  if (!coach) return DEFAULT_SETTINGS;
+  return coach?.organisation_id ?? null;
+}
+
+export async function getOrgSettings(): Promise<OrgSettings> {
+  const supabase = createClient();
+  const orgId = await myOrgId(supabase);
+  if (!orgId) return DEFAULT_SETTINGS;
 
   const { data: org } = await supabase
     .from("organisations")
     .select("settings")
-    .eq("id", coach.organisation_id)
+    .eq("id", orgId)
     .single();
 
   return mergeOrgSettings(org?.settings);
@@ -251,16 +263,13 @@ export async function getOrgSettings(): Promise<OrgSettings> {
 
 export async function updateOrgSettings(patch: Partial<OrgSettings>): Promise<void> {
   const supabase = createClient();
-  const { data: coach } = await supabase
-    .from("coaches")
-    .select("organisation_id")
-    .single();
-  if (!coach) throw new Error("No coach profile found");
+  const orgId = await myOrgId(supabase);
+  if (!orgId) throw new Error("No coach profile found");
 
   const { data: org } = await supabase
     .from("organisations")
     .select("settings")
-    .eq("id", coach.organisation_id)
+    .eq("id", orgId)
     .single();
 
   const merged = mergeOrgSettings({ ...(org?.settings ?? {}), ...patch });
@@ -268,7 +277,7 @@ export async function updateOrgSettings(patch: Partial<OrgSettings>): Promise<vo
   const { error } = await supabase
     .from("organisations")
     .update({ settings: merged })
-    .eq("id", coach.organisation_id);
+    .eq("id", orgId);
 
   if (error) throw error;
 }

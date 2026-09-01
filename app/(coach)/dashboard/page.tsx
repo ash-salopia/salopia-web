@@ -124,7 +124,7 @@ export default function DashboardPage() {
 
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
-  const [dmModal, setDmModal] = useState<{ athleteId: string; athleteName: string; initialText?: string } | null>(null);
+  const [dmModal, setDmModal] = useState<{ athleteId: string; athleteName: string; initialText?: string; sessionId?: string } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -383,6 +383,7 @@ export default function DashboardPage() {
                         athleteId: n.athleteId,
                         athleteName: n.athleteName,
                         initialText: `Re: your note on "${n.sessionName}" (${n.date}) — `,
+                        sessionId: n.sessionId,
                       })}
                       title={`Message ${n.athleteName} about this`}
                     >
@@ -717,7 +718,12 @@ export default function DashboardPage() {
                 coachId={coachId}
                 coachName={coachName}
                 initialText={dmModal.initialText}
-                onSent={() => handleRepliedTo(dmModal.athleteId)}
+                onSent={() => {
+                  handleRepliedTo(dmModal.athleteId);
+                  // Replied to a session comment from its 💬 button — clear it
+                  // off the "Session comments" panel too, same as the ✓ tick.
+                  if (dmModal.sessionId) handleDismissNote(dmModal.sessionId);
+                }}
               />
             ) : (
               <div style={st.empty}>Loading…</div>

@@ -985,8 +985,11 @@ function ChatTab({ groups, coachId, coachName }: {
             key={g.id}
             style={{
               ...s.ghostBtn,
-              borderColor: selectedGroupId === g.id ? g.colour : undefined,
-              color: selectedGroupId === g.id ? g.colour : undefined,
+              borderColor: selectedGroupId === g.id ? g.colour : "var(--line)",
+              // An explicit `undefined` here was overriding s.ghostBtn's
+              // colour, leaving unselected tabs to inherit near-invisible
+              // dark text. Fall back to the muted grey so they stay readable.
+              color: selectedGroupId === g.id ? g.colour : "var(--mute)",
               fontWeight: selectedGroupId === g.id ? 700 : 600,
             }}
             onClick={() => setSelectedGroupId(g.id)}

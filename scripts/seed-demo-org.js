@@ -146,6 +146,11 @@ async function createDemoOrgAndCoach() {
     organisation_id: org.id,
     name: "Alex Carter",
     role: "owner",
+    // Without these the coach reads as "pending" in Team Settings and the
+    // /demo login (signInWithPassword) never runs ensureCoachProvisioned
+    // to flip it. Set them at creation.
+    email: DEMO_COACH_EMAIL,
+    accepted_at: new Date().toISOString(),
   });
   if (coachErr) throw coachErr;
 

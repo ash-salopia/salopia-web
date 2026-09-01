@@ -384,8 +384,8 @@ export default function AthleteCommunityPage() {
                       key={g.id}
                       style={{
                         ...s.groupBtn,
-                        borderColor: selectedGroupId === g.id ? g.colour : undefined,
-                        color: selectedGroupId === g.id ? g.colour : undefined,
+                        borderColor: selectedGroupId === g.id ? g.colour : "var(--line)",
+                        color: selectedGroupId === g.id ? g.colour : "var(--mute)",
                         fontWeight: selectedGroupId === g.id ? 700 : 600,
                       }}
                       onClick={() => loadGroup(g.id)}
