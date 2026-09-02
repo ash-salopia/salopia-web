@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import AthletePageHeading from "@/components/AthletePageHeading";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface GoalWithProgress {
   id: string;
   label: string;
-  goal_type: "exercise" | "weight" | "time" | "text";
+  goal_type: "exercise" | "weight" | "time" | "text" | "test";
   exercise_name: string | null;
   rep_max: number | null;
   target_kg: number | null;
@@ -24,7 +25,32 @@ interface GoalWithProgress {
   gap_kg: number | null;
   gap_pct: number | null;
   progress_pct: number;
+  // Shared
+  target_date: string | null;
+  show_on_calendar: boolean;
+  // Test-metric goals
+  start_value: number | null;
+  start_value_date: string | null;
+  target_value: number | null;
+  test_metric_name?: string | null;
+  test_unit?: string;
+  better_direction?: "higher" | "lower";
+  current_value?: number | null;
+  current_value_date?: string | null;
+  test_achieved?: boolean;
 }
+
+interface TestMetricOption {
+  metric_id: string;
+  name: string;
+  unit: string;
+  better_direction: "higher" | "lower";
+  current_value: number | null;
+  current_value_date: string | null;
+}
+
+const fmtDate = (iso: string) =>
+  new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
 
@@ -64,7 +90,8 @@ function GoalCard({
   };
 
   const hasProgress = goal.goal_type === "exercise" && goal.current_best_kg !== null;
-  const isAchieved = hasProgress && goal.progress_pct >= 100;
+  const isAchieved = (hasProgress && goal.progress_pct >= 100) || (goal.goal_type === "test" && !!goal.test_achieved);
+  const tu = goal.test_unit ?? goal.unit ?? "";
 
   return (
     <div style={{ ...s.card, ...(goal.starred ? s.cardStarred : {}), ...(isAchieved ? s.cardAchieved : {}) }}>
@@ -125,6 +152,42 @@ function GoalCard({
         </div>
       )}
 
+      {/* Test-metric goal progress */}
+      {goal.goal_type === "test" && (
+        <div style={s.progressSection}>
+          <div style={s.statsRow}>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Started</div>
+              <div style={s.statValue}>
+                {goal.start_value != null
+                  ? <>{goal.start_value}{tu}{goal.start_value_date && <span style={s.statSub}> {fmtDate(goal.start_value_date)}</span>}</>
+                  : <span style={s.statEmpty}>—</span>}
+              </div>
+            </div>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Now</div>
+              <div style={s.statValue}>
+                {goal.current_value != null
+                  ? <>{goal.current_value}{tu}</>
+                  : <span style={s.statEmpty}>No test yet</span>}
+              </div>
+            </div>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Target</div>
+              <div style={{ ...s.statValue, color: isAchieved ? "var(--good)" : "var(--text)" }}>
+                {isAchieved ? "✓ Hit!" : <>{goal.target_value}{tu}</>}
+              </div>
+            </div>
+          </div>
+          {goal.current_value != null && (
+            <div style={{ marginTop: 8 }}>
+              <ProgressBar pct={goal.progress_pct} />
+              <div style={s.progressLabel}>{goal.progress_pct}% of the way there</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Weight goal */}
       {goal.goal_type === "weight" && goal.target_kg !== null && (
         <div style={s.targetLine}>
@@ -143,6 +206,14 @@ function GoalCard({
       {goal.goal_type === "text" && goal.target_text && (
         <div style={s.targetText}>{goal.target_text}</div>
       )}
+
+      {goal.target_date && (
+        <div style={s.deadline}>
+          {goal.show_on_calendar ? "🎯 " : "📅 "}
+          Target date: <strong>{fmtDate(goal.target_date)}</strong>
+          {goal.show_on_calendar ? " · on your calendar" : ""}
+        </div>
+      )}
     </div>
   );
 }
@@ -159,10 +230,18 @@ export default function AthleteGoalsPage() {
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
   const [newLabel, setNewLabel] = useState("");
-  const [newType, setNewType] = useState<"weight" | "time" | "text">("text");
+  const [newType, setNewType] = useState<"weight" | "time" | "text" | "test">("text");
   const [newTarget, setNewTarget] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newOnCalendar, setNewOnCalendar] = useState(false);
+  const [newMetricId, setNewMetricId] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Testing metrics the athlete has a result for + whether the org lets
+  // them set test goals themselves.
+  const [testMetrics, setTestMetrics] = useState<TestMetricOption[]>([]);
+  const [testGoalsAllowed, setTestGoalsAllowed] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -174,7 +253,17 @@ export default function AthleteGoalsPage() {
       })
       .catch((e) => setError(e?.message ?? "Could not load goals"))
       .finally(() => setLoading(false));
+    fetch(`/api/athlete-link/test-metrics?token=${token}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) return;
+        setTestMetrics(d.metrics ?? []);
+        setTestGoalsAllowed(!!d.athlete_editable);
+      })
+      .catch(() => {});
   }, [token]);
+
+  const newMetric = testMetrics.find((m) => m.metric_id === newMetricId) ?? null;
 
   const handleStarToggle = (id: string, starred: boolean) => {
     setGoals((prev) =>
@@ -183,28 +272,45 @@ export default function AthleteGoalsPage() {
     );
   };
 
+  const resetAddForm = () => {
+    setAdding(false);
+    setNewLabel(""); setNewTarget(""); setNewNotes(""); setNewType("text");
+    setNewDate(""); setNewOnCalendar(false); setNewMetricId("");
+  };
+
   const handleAddGoal = async () => {
-    if (!newLabel.trim()) return;
+    const isTest = newType === "test";
+    const label = isTest && newMetric && !newLabel.trim() ? `${newMetric.name} target` : newLabel.trim();
+    if (!label) return;
+    if (isTest && (!newMetric || !newTarget)) { setError("Pick a test and a target value."); return; }
     setSaving(true);
+    setError("");
     try {
       const res = await fetch("/api/athlete-link/goals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          label: newLabel.trim(),
+          label,
           goal_type: newType,
           target_kg: newType === "weight" && newTarget ? parseFloat(newTarget) : null,
           target_time: newType === "time" ? newTarget : "",
           target_text: newType === "text" ? newTarget : "",
+          target_date: newDate || null,
+          show_on_calendar: newOnCalendar && !!newDate,
+          test_metric_id: isTest ? newMetricId : null,
+          target_value: isTest && newTarget ? parseFloat(newTarget) : null,
           notes: newNotes.trim(),
         }),
       });
       const data = await res.json();
       if (data.goal) {
-        setGoals((prev) => [...prev, { ...data.goal, current_best_kg: null, gap_kg: null, gap_pct: null, progress_pct: 0 }]);
-        setAdding(false);
-        setNewLabel(""); setNewTarget(""); setNewNotes(""); setNewType("text");
+        setGoals((prev) => [...prev, {
+          ...data.goal,
+          current_best_kg: null, gap_kg: null, gap_pct: null, progress_pct: 0,
+          current_value: data.goal.start_value ?? null,
+        }]);
+        resetAddForm();
       } else if (data.error) {
         setError("Could not add goal: " + data.error);
       }
@@ -226,8 +332,9 @@ export default function AthleteGoalsPage() {
         </button>
       </div>
 
+      <AthletePageHeading emoji="🎯" title="My Goals" />
+
       <div style={s.content}>
-        <div style={s.pageTitle}>🎯 My Goals</div>
 
         {error && <div style={s.errorBox}>{error}</div>}
 
@@ -266,36 +373,86 @@ export default function AthleteGoalsPage() {
           <div style={s.addForm}>
             <div style={s.addFormTitle}>Add your own goal</div>
             <div>
-              <div style={s.fieldLabel}>Goal</div>
-              <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
-                placeholder="e.g. Run a 5k, Lose 5kg" style={s.input} autoFocus />
-            </div>
-            <div>
               <div style={s.fieldLabel}>Type</div>
               <div style={s.typeRow}>
-                {(["text", "weight", "time"] as const).map((t) => (
+                {((testGoalsAllowed && testMetrics.length > 0
+                  ? ["text", "test", "weight", "time"]
+                  : ["text", "weight", "time"]) as ("text" | "test" | "weight" | "time")[]).map((t) => (
                   <button key={t} style={{ ...s.typeBtn, ...(newType === t ? s.typeBtnActive : {}) }}
                     onClick={() => setNewType(t)}>
-                    {t === "text" ? "📝 General" : t === "weight" ? "⚖️ Weight" : "⏱ Time"}
+                    {t === "text" ? "📝 General" : t === "test" ? "📊 Test" : t === "weight" ? "⚖️ Weight" : "⏱ Time"}
                   </button>
                 ))}
               </div>
             </div>
+
+            {newType === "test" ? (
+              <>
+                <div>
+                  <div style={s.fieldLabel}>Which test</div>
+                  <select value={newMetricId} onChange={(e) => setNewMetricId(e.target.value)} style={s.input}>
+                    <option value="">Choose a test…</option>
+                    {testMetrics.map((m) => (
+                      <option key={m.metric_id} value={m.metric_id}>
+                        {m.name} — now {m.current_value}{m.unit}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {newMetric && (
+                  <div style={s.baselineNote}>
+                    Currently <strong>{newMetric.current_value}{newMetric.unit}</strong>
+                    {newMetric.current_value_date ? ` (tested ${fmtDate(newMetric.current_value_date)})` : ""} ·
+                    {newMetric.better_direction === "lower" ? " lower is better" : " higher is better"}
+                  </div>
+                )}
+                <div>
+                  <div style={s.fieldLabel}>Target ({newMetric?.unit || "value"})</div>
+                  <input type="number" value={newTarget} onChange={(e) => setNewTarget(e.target.value)}
+                    placeholder={newMetric?.better_direction === "lower" ? "e.g. 2.9" : "e.g. 35"} style={s.input} />
+                </div>
+                <div>
+                  <div style={s.fieldLabel}>Goal name (optional)</div>
+                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                    placeholder={newMetric ? `${newMetric.name} target` : "e.g. CMJ target"} style={s.input} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div style={s.fieldLabel}>Goal</div>
+                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                    placeholder="e.g. Run a 5k, Lose 5kg" style={s.input} autoFocus />
+                </div>
+                <div>
+                  <div style={s.fieldLabel}>{newType === "time" ? "Target time (MM:SS)" : newType === "weight" ? "Target (kg)" : "Describe your target"}</div>
+                  <input value={newTarget} onChange={(e) => setNewTarget(e.target.value)}
+                    placeholder={newType === "time" ? "e.g. 25:00" : newType === "weight" ? "e.g. 75" : "What does success look like?"}
+                    style={s.input} />
+                </div>
+              </>
+            )}
+
             <div>
-              <div style={s.fieldLabel}>{newType === "time" ? "Target time (MM:SS)" : newType === "weight" ? "Target (kg)" : "Describe your target"}</div>
-              <input value={newTarget} onChange={(e) => setNewTarget(e.target.value)}
-                placeholder={newType === "time" ? "e.g. 25:00" : newType === "weight" ? "e.g. 75" : "What does success look like?"}
-                style={s.input} />
+              <div style={s.fieldLabel}>Target date (optional)</div>
+              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={s.input} />
             </div>
+            {newDate && (
+              <label style={s.calCheck}>
+                <input type="checkbox" checked={newOnCalendar} onChange={(e) => setNewOnCalendar(e.target.checked)}
+                  style={{ accentColor: "var(--accent)" }} />
+                Show as a 🎯 milestone on my calendar
+              </label>
+            )}
             <div>
               <div style={s.fieldLabel}>Notes (optional)</div>
               <input value={newNotes} onChange={(e) => setNewNotes(e.target.value)}
                 placeholder="Any extra motivation or context…" style={s.input} />
             </div>
             <div style={s.formBtns}>
-              <button style={s.cancelBtn} onClick={() => setAdding(false)}>Cancel</button>
-              <button style={{ ...s.saveBtn, opacity: !newLabel.trim() || saving ? 0.5 : 1 }}
-                disabled={!newLabel.trim() || saving} onClick={handleAddGoal}>
+              <button style={s.cancelBtn} onClick={resetAddForm}>Cancel</button>
+              <button style={{ ...s.saveBtn, opacity: saving ? 0.5 : 1 }}
+                disabled={saving} onClick={handleAddGoal}>
                 {saving ? "Saving…" : "Add goal"}
               </button>
             </div>
@@ -344,6 +501,9 @@ const s: Record<string, React.CSSProperties> = {
   progressLabel: { fontSize: 11, color: "var(--mute)", marginTop: 4, textAlign: "right" as const },
   targetLine: { fontSize: 13, color: "var(--mute)" },
   targetText: { fontSize: 13, color: "var(--mute)", lineHeight: 1.5 },
+  deadline: { fontSize: 12, color: "var(--accent)" },
+  baselineNote: { fontSize: 12, color: "var(--mute)", lineHeight: 1.5 },
+  calCheck: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text)", cursor: "pointer", lineHeight: 1.4 },
   // Add form
   addBtn: { width: "100%", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 10, padding: "12px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   addForm: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 },

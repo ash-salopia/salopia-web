@@ -113,8 +113,73 @@ export async function GET(req: NextRequest) {
   const formula = orgSettings.one_rm_formula;
   const unit = orgSettings.weight_unit;
 
+  // Test-metric goals: pull the athlete's test history + metric defs once,
+  // then resolve each goal's current best value below.
+  const testGoals = (goals ?? []).filter((g: any) => g.goal_type === "test" && g.test_metric_id);
+  const testLatest: Record<string, { value: number; date: string }> = {};
+  const testMetricInfo: Record<string, { unit: string; better_direction: "higher" | "lower"; name: string }> = {};
+  if (testGoals.length) {
+    const metricIds = Array.from(new Set(testGoals.map((g: any) => g.test_metric_id as string)));
+    const [metricsRes, sessionsRes] = await Promise.all([
+      supabase.from("test_metrics").select("id, name, unit, better_direction").in("id", metricIds),
+      supabase
+        .from("test_sessions")
+        .select("date, results:test_results(test_metric_id, value)")
+        .eq("athlete_id", athlete.id)
+        .order("date", { ascending: false }),
+    ]);
+    for (const m of metricsRes.data ?? []) {
+      testMetricInfo[m.id as string] = {
+        unit: (m.unit as string) ?? "",
+        better_direction: m.better_direction as "higher" | "lower",
+        name: m.name as string,
+      };
+    }
+    for (const sess of sessionsRes.data ?? []) {
+      for (const mid of metricIds) {
+        if (testLatest[mid]) continue;
+        const dir = testMetricInfo[mid]?.better_direction ?? "higher";
+        const vals = ((sess.results ?? []) as { test_metric_id: string; value: number }[])
+          .filter((r) => r.test_metric_id === mid)
+          .map((r) => Number(r.value))
+          .filter((n) => Number.isFinite(n));
+        if (!vals.length) continue;
+        testLatest[mid] = { value: dir === "lower" ? Math.min(...vals) : Math.max(...vals), date: sess.date as string };
+      }
+    }
+  }
+
   const goalsWithProgress = await Promise.all(
     (goals ?? []).map(async (goal: any) => {
+      if (goal.goal_type === "test" && goal.test_metric_id && goal.target_value != null) {
+        const info = testMetricInfo[goal.test_metric_id];
+        const dir = info?.better_direction ?? "higher";
+        const current = testLatest[goal.test_metric_id]?.value ?? null;
+        const start = goal.start_value != null ? Number(goal.start_value) : null;
+        const target = Number(goal.target_value);
+        const improved = dir === "lower" ? "down" : "up";
+        const achieved = current != null && (improved === "up" ? current >= target : current <= target);
+        // Progress across the start→target span (0 at baseline, 100 at target).
+        let progress_pct = 0;
+        if (current != null) {
+          if (achieved) progress_pct = 100;
+          else if (start != null && start !== target) {
+            progress_pct = Math.max(0, Math.min(100, Math.round(((current - start) / (target - start)) * 100)));
+          }
+        }
+        return {
+          ...goal,
+          test_metric_name: info?.name ?? null,
+          test_unit: info?.unit ?? goal.unit ?? "",
+          better_direction: dir,
+          current_value: current,
+          current_value_date: testLatest[goal.test_metric_id]?.date ?? null,
+          test_achieved: achieved,
+          progress_pct,
+          display_unit: unit,
+        };
+      }
+
       if (goal.goal_type !== "exercise" || !goal.exercise_name || !goal.rep_max || !goal.target_kg) {
         return {
           ...goal,
@@ -184,31 +249,77 @@ export async function POST(req: NextRequest) {
 
   // Sanitise numeric fields — JSON.stringify converts NaN→null, but
   // parseFloat("abc") = NaN which Supabase rejects for numeric columns.
-  const rawTargetKg = goalData.target_kg;
-  const safeTargetKg = (rawTargetKg !== null && rawTargetKg !== undefined && !isNaN(Number(rawTargetKg)))
-    ? Number(rawTargetKg)
-    : null;
+  const num = (v: any): number | null =>
+    (v !== null && v !== undefined && v !== "" && !isNaN(Number(v))) ? Number(v) : null;
+  const safeTargetKg = num(goalData.target_kg);
 
   // Validate goal_type to avoid check-constraint rejection
-  const validGoalTypes = ["exercise", "weight", "time", "text"] as const;
+  const validGoalTypes = ["exercise", "weight", "time", "text", "test"] as const;
   const safeGoalType = validGoalTypes.includes(goalData.goal_type) ? goalData.goal_type : "text";
+
+  const insert: Record<string, any> = {
+    athlete_id: athlete.id,
+    label: (goalData.label ?? "").trim() || "Goal",
+    goal_type: safeGoalType,
+    exercise_name: goalData.exercise_name ?? null,
+    rep_max: goalData.rep_max ? Number(goalData.rep_max) : null,
+    target_kg: safeTargetKg,
+    target_time: goalData.target_time ?? "",
+    target_text: goalData.target_text ?? "",
+    unit: goalData.unit ?? "",
+    starred: false,
+    notes: goalData.notes ?? "",
+    created_by: "athlete",
+    target_date: goalData.target_date || null,
+    show_on_calendar: !!goalData.show_on_calendar,
+  };
+
+  // Test-metric goals: only when the org lets athletes self-serve, and
+  // the baseline is snapshotted server-side from the athlete's own test
+  // history (never trusted from the client).
+  if (safeGoalType === "test") {
+    const orgSettings = await getOrgSettingsForAthlete(athlete.id);
+    if (orgSettings.test_goals_athlete_editable !== true) {
+      return NextResponse.json({ error: "Your coach sets testing goals for you." }, { status: 403 });
+    }
+    const metricId = goalData.test_metric_id;
+    const targetValue = num(goalData.target_value);
+    if (!metricId || targetValue == null) {
+      return NextResponse.json({ error: "Pick a test and a target value." }, { status: 400 });
+    }
+    const [{ data: metric }, { data: sessions }] = await Promise.all([
+      supabase.from("test_metrics").select("id, unit, better_direction, organisation_id").eq("id", metricId).single(),
+      supabase
+        .from("test_sessions")
+        .select("date, results:test_results(test_metric_id, value)")
+        .eq("athlete_id", athlete.id)
+        .order("date", { ascending: false }),
+    ]);
+    if (!metric || metric.organisation_id !== athlete.organisation_id) {
+      return NextResponse.json({ error: "Unknown test metric." }, { status: 400 });
+    }
+    let start: { value: number; date: string } | null = null;
+    for (const sess of sessions ?? []) {
+      const vals = ((sess.results ?? []) as { test_metric_id: string; value: number }[])
+        .filter((r) => r.test_metric_id === metricId)
+        .map((r) => Number(r.value))
+        .filter((n) => Number.isFinite(n));
+      if (vals.length) {
+        start = { value: metric.better_direction === "lower" ? Math.min(...vals) : Math.max(...vals), date: sess.date as string };
+        break;
+      }
+    }
+    insert.test_metric_id = metricId;
+    insert.target_value = targetValue;
+    insert.unit = (metric.unit as string) ?? "";
+    insert.start_value = start?.value ?? null;
+    insert.start_value_date = start?.date ?? null;
+    insert.target_kg = null;
+  }
 
   const { data, error } = await supabase
     .from("athlete_goals")
-    .insert({
-      athlete_id: athlete.id,
-      label: (goalData.label ?? "").trim() || "Goal",
-      goal_type: safeGoalType,
-      exercise_name: goalData.exercise_name ?? null,
-      rep_max: goalData.rep_max ? Number(goalData.rep_max) : null,
-      target_kg: safeTargetKg,
-      target_time: goalData.target_time ?? "",
-      target_text: goalData.target_text ?? "",
-      unit: goalData.unit ?? "",
-      starred: false,
-      notes: goalData.notes ?? "",
-      created_by: "athlete",
-    })
+    .insert(insert)
     .select()
     .single();
 
@@ -219,7 +330,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ goal: data });
 }
 
-// ── PATCH — star / unstar ─────────────────────────────────────────────────────
+// ── PATCH — star / unstar, or toggle the calendar milestone ───────────────────
 
 export async function PATCH(req: NextRequest) {
   let body: any;
@@ -227,7 +338,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const { token, goalId, starred } = body;
+  const { token, goalId, starred, show_on_calendar } = body;
   if (!token || !goalId) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
   const athlete = await getAthleteByShareToken(token);
@@ -244,10 +355,14 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Goal not found" }, { status: 404 });
   }
 
-  const { error } = await supabase
-    .from("athlete_goals")
-    .update({ starred: !!starred })
-    .eq("id", goalId);
+  const patch: Record<string, any> = {};
+  if (typeof starred === "boolean") patch.starred = starred;
+  if (typeof show_on_calendar === "boolean") patch.show_on_calendar = show_on_calendar;
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  const { error } = await supabase.from("athlete_goals").update(patch).eq("id", goalId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

@@ -107,6 +107,25 @@ export default function AthleteLinkShell({
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [fetchSessions]);
 
+  // Goal milestones (🎯) shown on the calendar — target dates of goals a
+  // coach or the athlete flagged with "show on calendar".
+  const [milestones, setMilestones] = useState<{ id: string; label: string; goal_type: string; date: string }[]>([]);
+  useEffect(() => {
+    fetch(`/api/athlete-link/goal-milestones?token=${token}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d?.milestones)) setMilestones(d.milestones); })
+      .catch(() => {});
+  }, [token]);
+  const milestonesByDate = useMemo(() => {
+    const m = new Map<string, { id: string; label: string }[]>();
+    for (const ms of milestones) {
+      const list = m.get(ms.date) ?? [];
+      list.push({ id: ms.id, label: ms.label });
+      m.set(ms.date, list);
+    }
+    return m;
+  }, [milestones]);
+
   // Push can't be turned on "by default" - the browser always requires
   // an explicit tap on its own permission prompt, and silently calling
   // requestPermission() on page load (no click) risks some browsers'
@@ -233,6 +252,18 @@ export default function AthleteLinkShell({
     d.setDate(d.getDate() + 7);
     setWeekStart(d.toISOString().slice(0, 10));
   };
+
+  // Weekly reflection - anchored to the week being viewed (week view) or
+  // the current week (month view). Shown for the current week and any past
+  // week, hidden for future weeks. The in-progress week is read-only until
+  // Saturday; once a week is over it can always be back-filled.
+  const thisWeekMonday = currentWeekStart();
+  const reflectionWeek = calView === "week" ? weekStart : thisWeekMonday;
+  const reflectionIsFuture = reflectionWeek > thisWeekMonday;
+  const reflectionIsCurrent = reflectionWeek === thisWeekMonday;
+  const weekendNow = [0, 6].includes(new Date().getDay()); // Sat or Sun
+  const reflectionReadOnly = reflectionIsCurrent && !weekendNow;
+  const showReflection = reflectionEnabled && !reflectionIsFuture;
 
   const prevMonth = () => setCalendarMonth(({ year, month }) =>
     month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }
@@ -368,7 +399,14 @@ export default function AthleteLinkShell({
                     </span>
                   </div>
                   <div style={{ padding: 8, display: "flex", flexDirection: "column" as const, gap: 6 }}>
-                    {daySess.length === 0 && <div style={{ fontSize: 12, color: "var(--line)", padding: "4px 0" }}>Rest</div>}
+                    {(milestonesByDate.get(iso) ?? []).map((ms) => (
+                      <button key={ms.id} style={st.milestoneRow} onClick={() => router.push(`/a/${token}/goals`)}>
+                        <span style={{ fontSize: 13 }}>🎯</span>
+                        <span style={{ flex: 1, textAlign: "left" as const, fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>{ms.label}</span>
+                        <span style={{ fontSize: 10, color: "var(--mute)", fontWeight: 700 }}>MILESTONE</span>
+                      </button>
+                    ))}
+                    {daySess.length === 0 && (milestonesByDate.get(iso) ?? []).length === 0 && <div style={{ fontSize: 12, color: "var(--line)", padding: "4px 0" }}>Rest</div>}
                     {daySess.map(session => {
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                       return (
@@ -423,6 +461,17 @@ export default function AthleteLinkShell({
                     {day.getDate()}
                   </div>
 
+                  {(milestonesByDate.get(iso) ?? []).map((ms) => (
+                    <button
+                      key={ms.id}
+                      title={`🎯 ${ms.label}`}
+                      style={{ ...st.chip, background: "var(--accent)28", borderColor: "var(--accent)88", color: "var(--accent)" }}
+                      onClick={() => router.push(`/a/${token}/goals`)}
+                    >
+                      🎯
+                    </button>
+                  ))}
+
                   {daySessions.map((session) => {
                     const meta = TYPE_META[session.type];
                     return (
@@ -448,23 +497,20 @@ export default function AthleteLinkShell({
         </div>
         )} {/* end week/month */}
 
-        {/* Weekly reflection prompt - visible on Sundays */}
-        {reflectionEnabled && (() => {
-          const today = new Date();
-          const isSunday = today.getDay() === 0;
-          const ws = currentWeekStart();
-          if (!isSunday) return null;
-          return (
-            <button style={st.reflectionPrompt} onClick={() => setReflectionOpen(true)}>
-              <span style={{ fontSize: 18 }}>📝</span>
-              <div style={{ flex: 1, textAlign: "left" as const }}>
-                <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>Weekly Reflection</div>
-                <div style={{ fontSize: 11, color: "var(--mute)" }}>{weekStartLabel(ws)}</div>
-              </div>
-              <span style={{ color: "var(--accent)", fontSize: 12, fontWeight: 700 }}>Complete →</span>
-            </button>
-          );
-        })()}
+        {/* Weekly reflection - for the viewed week. Past weeks stay open to
+            back-fill; the in-progress week is read-only until Saturday. */}
+        {showReflection && (
+          <button style={st.reflectionPrompt} onClick={() => setReflectionOpen(true)}>
+            <span style={{ fontSize: 18 }}>📝</span>
+            <div style={{ flex: 1, textAlign: "left" as const }}>
+              <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>Weekly Reflection</div>
+              <div style={{ fontSize: 11, color: "var(--mute)" }}>{weekStartLabel(reflectionWeek)}</div>
+            </div>
+            <span style={{ color: reflectionReadOnly ? "var(--mute)" : "var(--accent)", fontSize: 12, fontWeight: 700 }}>
+              {reflectionReadOnly ? "Opens Sat" : "Complete →"}
+            </span>
+          </button>
+        )}
 
         {loadMonitoringEnabled && (
           <button style={st.reflectionPrompt} onClick={() => setLogSportOpen(true)}>
@@ -528,11 +574,12 @@ export default function AthleteLinkShell({
         )}
       </div>
 
-      {reflectionOpen && reflectionEnabled && (
+      {reflectionOpen && showReflection && (
         <WeeklyReflectionModal
           token={token}
-          weekStart={currentWeekStart()}
-          weekLabel={weekStartLabel(currentWeekStart())}
+          weekStart={reflectionWeek}
+          weekLabel={weekStartLabel(reflectionWeek)}
+          readOnly={reflectionReadOnly}
           onClose={() => setReflectionOpen(false)}
         />
       )}
@@ -587,6 +634,11 @@ const st: Record<string, React.CSSProperties> = {
   dayNum: { fontSize: 10, color: "var(--mute)", textAlign: "right" as const, paddingRight: 2 },
   chip: { fontSize: 9, fontWeight: 700, borderRadius: 3, padding: "2px 3px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", textAlign: "center" as const, width: "100%" },
   legend: { display: "flex", gap: 12, justifyContent: "center", marginTop: 10 },
+  milestoneRow: {
+    display: "flex", alignItems: "center", gap: 8, width: "100%",
+    background: "var(--accent-dim)", border: "1px dashed var(--accent)66",
+    borderRadius: 8, padding: "8px 10px", cursor: "pointer",
+  },
   reflectionPrompt: {
     display: "flex", alignItems: "center", gap: 10, width: "100%",
     background: "var(--accent-dim)", border: "1px solid var(--accent)44",

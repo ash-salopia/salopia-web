@@ -9,6 +9,8 @@ import {
   updateGoal,
   type AthleteGoal,
 } from "@/lib/data/goals";
+import { listTestMetrics, latestTestValues } from "@/lib/data/testing";
+import type { TestMetric } from "@/types";
 
 const REP_OPTIONS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
 const REP_LABELS: Record<number, string> = {
@@ -16,8 +18,11 @@ const REP_LABELS: Record<number, string> = {
   6: "6RM", 8: "8RM", 10: "10RM", 12: "12RM", 15: "15RM", 20: "20RM",
 };
 
-type GoalType = "exercise" | "weight" | "time" | "text";
+type GoalType = "exercise" | "weight" | "time" | "text" | "test";
 type Tier = "primary" | "secondary" | "";
+
+const fmtTestDate = (iso: string) =>
+  new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 interface Props {
   athleteId: string;
@@ -50,22 +55,38 @@ export default function GoalsManager({ athleteId, athleteName, onClose }: Props)
   const [tier, setTier] = useState<Tier>("");
   const [unit, setUnit] = useState("kg");
   const [notes, setNotes] = useState("");
+  const [testMetricId, setTestMetricId] = useState("");
+  const [targetValue, setTargetValue] = useState("");
+  const [showOnCalendar, setShowOnCalendar] = useState(false);
+
+  // Testing metrics + this athlete's latest recorded values, for "test" goals.
+  const [testMetrics, setTestMetrics] = useState<TestMetric[]>([]);
+  const [testValues, setTestValues] = useState<Record<string, { value: number; date: string }>>({});
 
   useEffect(() => {
     listGoalsForAthlete(athleteId)
       .then(setGoals)
       .catch(() => setError("Could not load goals"))
       .finally(() => setLoading(false));
+    Promise.all([listTestMetrics(), latestTestValues(athleteId)])
+      .then(([ms, vals]) => { setTestMetrics(ms.filter((m) => !m.is_bilateral)); setTestValues(vals); })
+      .catch(() => {});
   }, [athleteId]);
+
+  const selectedMetric = testMetrics.find((m) => m.id === testMetricId) ?? null;
+  const selectedBaseline = testMetricId ? testValues[testMetricId] ?? null : null;
 
   const resetForm = () => {
     setLabel(""); setExerciseName(""); setRepMax(1); setTargetKg("");
     setTargetTime(""); setTargetText(""); setTargetDate(""); setTier("");
-    setUnit("kg"); setNotes(""); setAdding(false);
+    setUnit("kg"); setNotes(""); setTestMetricId(""); setTargetValue("");
+    setShowOnCalendar(false); setAdding(false);
   };
 
   const autoLabel = goalType === "exercise" && exerciseName
     ? `${exerciseName} ${REP_LABELS[repMax] ?? `${repMax}RM`}`
+    : goalType === "test" && selectedMetric
+    ? `${selectedMetric.name} target`
     : "";
 
   const handleCreate = async () => {
@@ -74,6 +95,8 @@ export default function GoalsManager({ athleteId, athleteName, onClose }: Props)
     if (goalType === "exercise" && !exerciseName.trim()) { setError("Enter an exercise name"); return; }
     if (goalType === "exercise" && !targetKg) { setError("Enter a target weight"); return; }
     if (goalType === "weight" && !targetKg) { setError("Enter a target weight"); return; }
+    if (goalType === "test" && !selectedMetric) { setError("Pick a test"); return; }
+    if (goalType === "test" && !targetValue) { setError("Enter a target value"); return; }
 
     setSaving(true);
     setError("");
@@ -87,13 +110,23 @@ export default function GoalsManager({ athleteId, athleteName, onClose }: Props)
           ? parseFloat(targetKg) : null,
         target_time: goalType === "time" ? targetTime : "",
         target_text: goalType === "text" ? targetText : "",
-        unit: goalType === "weight" ? unit : goalType === "exercise" ? "kg" : "",
+        unit: goalType === "weight" ? unit
+          : goalType === "exercise" ? "kg"
+          : goalType === "test" ? (selectedMetric?.unit ?? "")
+          : "",
         starred: tier === "primary",
         notes,
         created_by: "coach",
-        ...(targetDate ? { target_date: targetDate } : {}),
-        ...(tier ? { tier } : {}),
-      } as any);
+        target_date: targetDate || null,
+        show_on_calendar: showOnCalendar && !!targetDate,
+        tier: tier || null,
+        ...(goalType === "test" && selectedMetric ? {
+          test_metric_id: selectedMetric.id,
+          target_value: parseFloat(targetValue),
+          start_value: selectedBaseline?.value ?? null,
+          start_value_date: selectedBaseline?.date ?? null,
+        } : {}),
+      });
       setGoals((prev) => [...prev, goal].sort((a, b) => {
         const tierOrder: Record<string, number> = { primary: 0, secondary: 1, null: 2 };
         return (tierOrder[(a as any).tier ?? 'null'] ?? 2) - (tierOrder[(b as any).tier ?? 'null'] ?? 2);
@@ -198,15 +231,56 @@ export default function GoalsManager({ athleteId, athleteName, onClose }: Props)
                 <div>
                   <div style={s.fieldLabel}>Goal type</div>
                   <div style={s.typeRow}>
-                    {(["exercise", "weight", "time", "text"] as GoalType[]).map((t) => (
+                    {(["exercise", "test", "weight", "time", "text"] as GoalType[])
+                      .filter((t) => t !== "test" || testMetrics.length > 0)
+                      .map((t) => (
                       <button key={t}
                         style={{ ...s.typeBtn, ...(goalType === t ? s.typeBtnActive : {}) }}
                         onClick={() => { setGoalType(t); setUnit(t === "weight" ? "kg" : ""); }}>
-                        {t === "exercise" ? "Exercise" : t === "weight" ? "Weight" : t === "time" ? "Time" : "Other"}
+                        {t === "exercise" ? "Exercise" : t === "test" ? "Test" : t === "weight" ? "Weight" : t === "time" ? "Time" : "Other"}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {goalType === "test" && (
+                  <>
+                    <div>
+                      <div style={s.fieldLabel}>Test metric</div>
+                      <select value={testMetricId} onChange={(e) => setTestMetricId(e.target.value)} style={s.input} autoFocus>
+                        <option value="">Choose a test…</option>
+                        {testMetrics.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}{m.unit ? ` (${m.unit})` : ""}
+                            {testValues[m.id] ? ` — now ${testValues[m.id].value}${m.unit}` : " — no result yet"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={s.twoCol}>
+                      <div>
+                        <div style={s.fieldLabel}>Current (baseline)</div>
+                        <input
+                          value={selectedBaseline ? `${selectedBaseline.value}${selectedMetric?.unit ?? ""}` : "No result yet"}
+                          disabled style={{ ...s.input, opacity: 0.7 }} />
+                        {selectedBaseline && (
+                          <div style={s.autoLabel}>Tested {fmtTestDate(selectedBaseline.date)}</div>
+                        )}
+                      </div>
+                      <div>
+                        <div style={s.fieldLabel}>Target ({selectedMetric?.unit || "value"})</div>
+                        <input type="number" value={targetValue} onChange={(e) => setTargetValue(e.target.value)}
+                          placeholder={selectedMetric?.better_direction === "lower" ? "e.g. 2.9" : "e.g. 35"} style={s.input} />
+                      </div>
+                    </div>
+                    {selectedMetric && (
+                      <div style={s.autoLabel}>
+                        {selectedMetric.better_direction === "lower" ? "Lower is better for this test." : "Higher is better for this test."}
+                      </div>
+                    )}
+                    {autoLabel && <div style={s.autoLabel}>Label: <strong>{autoLabel}</strong></div>}
+                  </>
+                )}
 
                 {goalType === "exercise" && (
                   <>
@@ -297,6 +371,15 @@ export default function GoalsManager({ athleteId, athleteName, onClose }: Props)
                   </div>
                 </div>
 
+                {targetDate && (
+                  <label style={s.calCheck}>
+                    <input type="checkbox" checked={showOnCalendar}
+                      onChange={(e) => setShowOnCalendar(e.target.checked)}
+                      style={{ accentColor: "var(--accent)" }} />
+                    Show as a milestone (🎯) on {athleteName.split(" ")[0]}&rsquo;s calendar on that date
+                  </label>
+                )}
+
                 <div style={s.formActions}>
                   <button style={s.cancelBtn} onClick={resetForm}>Cancel</button>
                   <button style={{ ...s.saveBtn, opacity: saving ? 0.6 : 1 }}
@@ -328,19 +411,23 @@ function GoalRow({ goal, onStar, onDelete, onEdit }: {
   // Edit state
   const [editLabel, setEditLabel] = useState(goal.label);
   const [editTargetKg, setEditTargetKg] = useState(String(goal.target_kg ?? ""));
+  const [editTargetValue, setEditTargetValue] = useState(String(g.target_value ?? ""));
   const [editTargetTime, setEditTargetTime] = useState(goal.target_time ?? "");
   const [editTargetText, setEditTargetText] = useState(goal.target_text ?? "");
   const [editTargetDate, setEditTargetDate] = useState(g.target_date ?? "");
   const [editTier, setEditTier] = useState<string>(tier ?? "");
   const [editNotes, setEditNotes] = useState(goal.notes ?? "");
+  const [editShowOnCal, setEditShowOnCal] = useState<boolean>(!!g.show_on_calendar);
 
   const handleSave = () => {
     onEdit(goal, {
       label: editLabel.trim() || goal.label,
-      target_kg: editTargetKg ? parseFloat(editTargetKg) : null,
+      target_kg: goal.goal_type === "test" ? goal.target_kg : (editTargetKg ? parseFloat(editTargetKg) : null),
+      ...(goal.goal_type === "test" ? { target_value: editTargetValue ? parseFloat(editTargetValue) : null } : {}),
       target_time: editTargetTime,
       target_text: editTargetText,
       target_date: editTargetDate || null,
+      show_on_calendar: !!editTargetDate && editShowOnCal,
       tier: editTier || null,
       notes: editNotes,
       starred: editTier === "primary" ? true : goal.starred,
@@ -377,6 +464,12 @@ function GoalRow({ goal, onStar, onDelete, onEdit }: {
             <input value={editTargetText} onChange={(e) => setEditTargetText(e.target.value)} style={s.editInput} />
           </div>
         )}
+        {goal.goal_type === "test" && (
+          <div>
+            <div style={s.fieldLabel2}>Target ({goal.unit || "value"})</div>
+            <input type="number" value={editTargetValue} onChange={(e) => setEditTargetValue(e.target.value)} style={s.editInput} />
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <div>
             <div style={s.fieldLabel2}>Tier</div>
@@ -395,6 +488,14 @@ function GoalRow({ goal, onStar, onDelete, onEdit }: {
           <div style={s.fieldLabel2}>Notes</div>
           <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} style={s.editInput} />
         </div>
+        {editTargetDate && (
+          <label style={s.calCheck}>
+            <input type="checkbox" checked={editShowOnCal}
+              onChange={(e) => setEditShowOnCal(e.target.checked)}
+              style={{ accentColor: "var(--accent)" }} />
+            Show as a 🎯 milestone on the calendar
+          </label>
+        )}
         <div style={{ display: "flex", gap: 8 }}>
           <button style={s.saveBtn} onClick={handleSave}>Save changes</button>
           <button style={s.deleteBtn2} onClick={() => onDelete(goal.id)}>Delete goal</button>
@@ -403,12 +504,15 @@ function GoalRow({ goal, onStar, onDelete, onEdit }: {
     );
   }
 
+  const u = goal.unit || "";
   const subtitle = goal.goal_type === "exercise"
     ? `Target: ${goal.target_kg}kg`
     : goal.goal_type === "weight"
-    ? `Target: ${goal.target_kg}${goal.unit ? " " + goal.unit : ""}`
+    ? `Target: ${goal.target_kg}${u ? " " + u : ""}`
     : goal.goal_type === "time"
     ? `Target: ${goal.target_time}`
+    : goal.goal_type === "test"
+    ? `${g.start_value != null ? `${g.start_value}${u} → ` : ""}${g.target_value}${u}`
     : goal.target_text || "";
 
   return (
@@ -423,7 +527,8 @@ function GoalRow({ goal, onStar, onDelete, onEdit }: {
         {subtitle && <div style={s.goalSub}>{subtitle}</div>}
         {g.target_date && (
           <div style={s.goalDate}>
-            Achieve by: {new Date(g.target_date + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            {g.show_on_calendar ? "🎯 " : ""}Achieve by: {new Date(g.target_date + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            {g.show_on_calendar ? " · on calendar" : ""}
           </div>
         )}
         {goal.notes && <div style={s.goalNotes}>{goal.notes}</div>}
@@ -472,6 +577,7 @@ const s: Record<string, React.CSSProperties> = {
   textarea: { width: "100%", minHeight: 70, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 12px", fontSize: 14, resize: "vertical" as const, fontFamily: "inherit" },
   twoCol: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   autoLabel: { fontSize: 12, color: "var(--mute)", fontStyle: "italic" },
+  calCheck: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text)", cursor: "pointer", lineHeight: 1.4 },
   formActions: { display: "flex", gap: 8, marginTop: 4 },
   cancelBtn: { flex: 1, background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   saveBtn: { flex: 2, background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" },

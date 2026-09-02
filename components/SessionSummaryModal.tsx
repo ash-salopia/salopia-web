@@ -1,10 +1,21 @@
 "use client";
 
 import type { Session, SessionExercise } from "@/types";
+import {
+  findPreviousExercise, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal,
+  progressionArrow, type ProgressionSignal,
+} from "@/lib/session-progress";
 
 interface Props {
   session: Session;
+  // The athlete's full session history — enables the "vs last time"
+  // Best / Total-load signals, the same ones Live Group shows the coach.
+  allSessions?: Session[];
   onClose: () => void;
+}
+
+function signalColor(direction: "up" | "down" | "same"): string {
+  return direction === "up" ? "var(--good)" : direction === "down" ? "#ff7d7d" : "var(--mute)";
 }
 
 function parseWeight(s: string | undefined | null): number {
@@ -26,13 +37,22 @@ interface ExerciseSummary {
   volume: number;
   bestSet: string | null;
   optedOut: boolean;
+  prevLabel: string | null;
+  bestSignal: ProgressionSignal | null;
+  totalSignal: ProgressionSignal | null;
+}
+
+interface ProgressCtx {
+  allSessions: Session[];
+  athleteId: string;
+  beforeDate: string;
 }
 
 // Deliberately just the heaviest completed weighted set, or (for a
 // time/bodyweight exercise) the first completed set's time/reps - a
 // quick recap for the athlete, not the precision the coach's reports
 // need.
-function summariseExercise(ex: SessionExercise): ExerciseSummary {
+function summariseExercise(ex: SessionExercise, ctx?: ProgressCtx): ExerciseSummary {
   const log = ex.log ?? [];
   const done = log.filter((s) => s.done);
   const timeMode = (ex.time ?? "").trim().length > 0;
@@ -57,6 +77,19 @@ function summariseExercise(ex: SessionExercise): ExerciseSummary {
     }
   }
 
+  // "vs last time" signals — identical maths to Live Group (shared
+  // helpers in lib/session-progress). Only when history is available and
+  // the athlete didn't skip this exercise.
+  let prevLabel: string | null = null;
+  let bestSignal: ProgressionSignal | null = null;
+  let totalSignal: ProgressionSignal | null = null;
+  if (ctx && !ex.opted_out) {
+    const prevEx = findPreviousExercise(ctx.allSessions, ctx.athleteId, ex.name, ctx.beforeDate);
+    prevLabel = formatPrevSets(prevEx);
+    bestSignal = computeBestSetSignal(ex, prevEx);
+    totalSignal = computeTotalLoadSignal(ex, prevEx);
+  }
+
   return {
     id: ex.id,
     name: ex.name,
@@ -65,14 +98,20 @@ function summariseExercise(ex: SessionExercise): ExerciseSummary {
     volume,
     bestSet,
     optedOut: ex.opted_out,
+    prevLabel,
+    bestSignal,
+    totalSignal,
   };
 }
 
-export default function SessionSummaryModal({ session, onClose }: Props) {
+export default function SessionSummaryModal({ session, allSessions, onClose }: Props) {
+  const ctx: ProgressCtx | undefined = allSessions && allSessions.length
+    ? { allSessions, athleteId: session.athlete_id, beforeDate: session.date }
+    : undefined;
   const exSummaries = (session.exercises ?? [])
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map(summariseExercise);
+    .map((ex) => summariseExercise(ex, ctx));
 
   const active = exSummaries.filter((e) => !e.optedOut);
   const exercisesCompleted = active.filter((e) => e.setsTotal > 0 && e.setsDone === e.setsTotal).length;
@@ -114,16 +153,36 @@ export default function SessionSummaryModal({ session, onClose }: Props) {
         </div>
 
         <div style={s.exList}>
-          {exSummaries.map((e) => (
-            <div key={e.id} style={s.exRow}>
-              <div style={s.exName}>{e.name}</div>
-              <div style={s.exMeta}>
-                {e.optedOut
-                  ? "Skipped"
-                  : `${e.setsDone}/${e.setsTotal} sets${e.bestSet ? ` · ${e.bestSet}` : ""}`}
+          {exSummaries.map((e) => {
+            const hasSignals = !e.optedOut && (e.prevLabel || e.bestSignal || e.totalSignal);
+            return (
+              <div key={e.id} style={s.exRow}>
+                <div style={s.exRowTop}>
+                  <div style={s.exName}>{e.name}</div>
+                  <div style={s.exMeta}>
+                    {e.optedOut
+                      ? "Skipped"
+                      : `${e.setsDone}/${e.setsTotal} sets${e.bestSet ? ` · ${e.bestSet}` : ""}`}
+                  </div>
+                </div>
+                {hasSignals && (
+                  <div style={s.exSignals}>
+                    {e.prevLabel && <span style={s.prevLine}>Last: {e.prevLabel}</span>}
+                    {e.bestSignal && (
+                      <span style={{ ...s.signal, color: signalColor(e.bestSignal.direction) }}>
+                        {progressionArrow(e.bestSignal.direction)} Best: {e.bestSignal.label}
+                      </span>
+                    )}
+                    {e.totalSignal && (
+                      <span style={{ ...s.signal, color: signalColor(e.totalSignal.direction) }}>
+                        {progressionArrow(e.totalSignal.direction)} Total: {e.totalSignal.label}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {!exSummaries.length && <div style={s.empty}>No exercises in this session.</div>}
         </div>
 
@@ -161,11 +220,15 @@ const s: Record<string, React.CSSProperties> = {
   statLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginTop: 2 },
   exList: { display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 12 },
   exRow: {
-    display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+    display: "flex", flexDirection: "column" as const, gap: 4,
     background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "9px 12px",
   },
+  exRowTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
   exName: { fontSize: 13, fontWeight: 700, color: "var(--text)" },
   exMeta: { fontSize: 12, color: "var(--mute)", whiteSpace: "nowrap" as const, flexShrink: 0 },
+  exSignals: { display: "flex", flexDirection: "column" as const, gap: 1 },
+  prevLine: { fontSize: 11, color: "var(--accent)" },
+  signal: { fontSize: 11, fontWeight: 700 },
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", textAlign: "center" as const, padding: "12px 0" },
   notesBox: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", marginBottom: 16 },
   notesLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 4 },

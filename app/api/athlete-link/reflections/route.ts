@@ -46,6 +46,16 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ config, reflection: reflection ?? null });
 }
 
+// Monday (YYYY-MM-DD) of the week containing `d`, in server/UTC terms
+// (dub1 ≈ UK, so this tracks the athlete's local week closely enough for
+// a day-of-week gate).
+function weekMondayUTC(d = new Date()): string {
+  const day = d.getUTCDay();
+  const mon = new Date(d);
+  mon.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
+  return mon.toISOString().slice(0, 10);
+}
+
 // POST /api/athlete-link/reflections
 // Body: { token, week_start, scores: {key: 1-5}, good, better, how }
 export async function POST(req: NextRequest) {
@@ -56,6 +66,20 @@ export async function POST(req: NextRequest) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+
+  // Timing: past weeks can be back-filled any time; the in-progress week
+  // only unlocks on Saturday (the app already shows it read-only until
+  // then); future weeks are rejected outright.
+  const thisMonday = weekMondayUTC();
+  if (week_start > thisMonday) {
+    return NextResponse.json({ error: "That week hasn't started yet." }, { status: 400 });
+  }
+  if (week_start === thisMonday) {
+    const dow = new Date().getUTCDay(); // 0 Sun, 6 Sat
+    if (dow !== 6 && dow !== 0) {
+      return NextResponse.json({ error: "This week's reflection opens on Saturday." }, { status: 403 });
+    }
+  }
 
   const supabase = await createClient();
 

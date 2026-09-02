@@ -594,6 +594,28 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      {/* ── Goals ── */}
+      <CollapsibleSection title="Goals">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Let athletes set goals from their test results</div>
+              <div style={s.cardDesc}>
+                On their Goals page, athletes can pick a test they&rsquo;ve done (e.g. CMJ), set a
+                target and a date, and optionally show it as a 🎯 milestone on their calendar.
+                When off, only you can create testing goals — athletes still see the ones you set.
+              </div>
+            </div>
+            <button
+              style={{ ...s.toggleSwitch, background: settings.test_goals_athlete_editable ? "var(--accent)" : "var(--panel2)" }}
+              onClick={() => setSettings((prev) => ({ ...prev, test_goals_athlete_editable: !prev.test_goals_athlete_editable }))}
+            >
+              <div style={{ ...s.toggleThumb, transform: settings.test_goals_athlete_editable ? "translateX(20px)" : "translateX(0)" }} />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
       {/* ── Weekly Reflection ── */}
       <CollapsibleSection title="Weekly Reflection">
         <div style={s.card}>

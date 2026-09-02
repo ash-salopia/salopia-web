@@ -157,6 +157,10 @@ export interface OrgSettings {
   reflection_how_prompt: string;
   recovery_alert_enabled: boolean;
   recovery_alert_threshold: 1 | 2 | 3; // low recovery-score feedback entries in the last 7 days needed to flag an athlete
+  // 0093 — whether athletes can create goals off their own testing data
+  // (e.g. "CMJ 33cm → 35cm in 8 weeks"). Off = coach-only; athletes still
+  // see test goals a coach set for them.
+  test_goals_athlete_editable: boolean;
   power_speed_benchmarks: PowerSpeedBenchmarkDef[];
   aerobic_zones_enabled: boolean; // 0086 — MAS / heart-rate training zones feature (profile section, zone picker, athlete zone table)
   zone_model: ZoneModel; // 0086 — 5-zone HR/MAS model for conditioning prescription
@@ -248,6 +252,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   reflection_how_prompt: "How will you improve next week?",
   recovery_alert_enabled: true,
   recovery_alert_threshold: 2,
+  test_goals_athlete_editable: false,
   power_speed_benchmarks: DEFAULT_POWER_SPEED_BENCHMARKS,
   aerobic_zones_enabled: true,
   zone_model: DEFAULT_ZONE_MODEL,

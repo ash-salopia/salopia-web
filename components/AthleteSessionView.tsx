@@ -934,7 +934,7 @@ export default function AthleteSessionView({
       </button>
 
       {summaryOpen && (
-        <SessionSummaryModal session={session} onClose={() => setSummaryOpen(false)} />
+        <SessionSummaryModal session={session} allSessions={allSessions} onClose={() => setSummaryOpen(false)} />
       )}
 
       {videoModal && (

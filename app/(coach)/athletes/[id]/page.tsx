@@ -39,6 +39,7 @@ import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
 import { getMyBranding } from "@/lib/data/branding";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
+import { listGoalMilestones, type GoalMilestone } from "@/lib/data/goals";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
@@ -130,6 +131,7 @@ export default function AthleteDetailPage() {
   const [calView, setCalView] = useState<"dashboard" | "month" | "week">("month");
   const [checkinEnabled, setCheckinEnabled] = useState(true);
   const [branding, setBranding] = useState<ResolvedBranding>(DEFAULT_BRANDING);
+  const [goalMilestones, setGoalMilestones] = useState<GoalMilestone[]>([]);
   const [checkinRules, setCheckinRules] = useState<CheckInRules>(DEFAULT_CHECKIN_RULES);
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
@@ -231,8 +233,19 @@ export default function AthleteDetailPage() {
       if (s.checkin_rules) setCheckinRules(s.checkin_rules);
     }).catch(() => {});
     getMyBranding().then(setBranding).catch(() => {});
+    if (athleteId) listGoalMilestones([athleteId]).then((m) => setGoalMilestones(m[athleteId] ?? [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
+
+  const milestonesByDate = useMemo(() => {
+    const m = new Map<string, GoalMilestone[]>();
+    for (const ms of goalMilestones) {
+      const list = m.get(ms.target_date) ?? [];
+      list.push(ms);
+      m.set(ms.target_date, list);
+    }
+    return m;
+  }, [goalMilestones]);
 
   // Deep link from the dashboard's "Athlete messages" panel
   useEffect(() => {
@@ -836,6 +849,11 @@ export default function AthleteDetailPage() {
                       if (draggingSessionId) handleMoveSessionToDay(draggingSessionId, iso);
                     }}
                   >
+                    {(milestonesByDate.get(iso) ?? []).map((ms) => (
+                      <div key={ms.id} style={styles.milestoneCard} title={`🎯 ${ms.label}`}>
+                        🎯 {ms.label}
+                      </div>
+                    ))}
                     {daySess.map((session, si) => {
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                       return (
@@ -897,6 +915,9 @@ export default function AthleteDetailPage() {
                   <div style={{ ...styles.calDayNum, color: isToday ? "var(--accent)" : isCurrentMonth ? "var(--mute)" : "var(--line)", fontWeight: isToday ? 700 : 400 }}>
                     {day.getDate()}
                   </div>
+                  {(milestonesByDate.get(iso) ?? []).map((ms) => (
+                    <div key={ms.id} style={styles.milestoneChip} title={`🎯 ${ms.label}`}>🎯 {ms.label}</div>
+                  ))}
                   {daySess.map((session, si) => {
                     const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                     return (
@@ -1488,6 +1509,8 @@ const styles: Record<string, React.CSSProperties> = {
   weekSessionCard: { background: "var(--ink)", border: "1px solid var(--line)", borderLeft: "3px solid", borderRadius: 6, padding: "6px 8px", display: "flex", flexDirection: "column" as const, gap: 3 },
   weekSessionName: { background: "transparent", border: "none", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, textAlign: "left" as const },
   calSessionChip: { fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 5px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap" as const },
+  milestoneCard: { background: "var(--accent-dim)", border: "1px dashed var(--accent)66", borderRadius: 6, padding: "5px 8px", fontSize: 11, fontWeight: 700, color: "var(--accent)" },
+  milestoneChip: { fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 5px", border: "1px dashed var(--accent)66", background: "var(--accent-dim)", color: "var(--accent)", lineHeight: 1.4, overflow: "hidden", whiteSpace: "nowrap" as const, textOverflow: "ellipsis" },
   athleteNoteDot: { display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: "#FF8A00", boxShadow: "0 0 0 1.5px var(--panel), 0 0 5px #FF8A00", marginRight: 5, flexShrink: 0, verticalAlign: "middle" as const },
   typeDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   sessionName: { fontWeight: 700, fontSize: 14, color: "var(--text)" },

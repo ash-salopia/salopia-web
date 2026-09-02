@@ -151,6 +151,26 @@ export async function listTestSessions(athleteId: string): Promise<TestSession[]
   return data ?? [];
 }
 
+// The most recent recorded best value per metric for one athlete — walks
+// test sessions newest-first and takes the first session that has a trial
+// for each metric. Powers the "set a goal off this test result" pickers
+// (coach GoalsManager, athlete goals page). `bestTrialAnySide` applies the
+// metric's better_direction, so this is the same number a report shows.
+export async function latestTestValues(
+  athleteId: string,
+): Promise<Record<string, { value: number; date: string }>> {
+  const [sessions, metrics] = await Promise.all([listTestSessions(athleteId), listTestMetrics()]);
+  const out: Record<string, { value: number; date: string }> = {};
+  for (const sess of sessions) {
+    for (const metric of metrics) {
+      if (out[metric.id]) continue;
+      const v = bestTrialAnySide(sess.results ?? [], metric);
+      if (v != null) out[metric.id] = { value: v, date: sess.date };
+    }
+  }
+  return out;
+}
+
 export async function createTestSession(params: {
   athleteId: string; testBatteryId: string | null; date: string;
   bodyweightKg: number | null; notes?: string;

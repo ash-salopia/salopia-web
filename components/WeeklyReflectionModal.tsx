@@ -15,6 +15,10 @@ interface Props {
   token: string;
   weekStart: string;
   weekLabel: string;
+  /** True Mon–Fri of the in-progress week: the form is shown but can't be
+   *  submitted yet (completion opens on Saturday). Past weeks are never
+   *  read-only — they can be back-filled any time. */
+  readOnly?: boolean;
   onClose: () => void;
 }
 
@@ -73,7 +77,7 @@ export function weekStartLabel(weekStart: string): string {
   return "w/c " + d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onClose }: Props) {
+export default function WeeklyReflectionModal({ token, weekStart, weekLabel, readOnly = false, onClose }: Props) {
   const [config, setConfig]   = useState<ReflectionConfig | null>(null);
   const [scores, setScores]   = useState<Record<string, number>>({});
   const [good, setGood]       = useState("");
@@ -146,6 +150,12 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
         ) : (
           <div style={s.body}>
 
+            {readOnly && (
+              <div style={s.readOnlyBanner}>
+                🔒 This week isn’t over yet — you can complete this reflection from Saturday.
+              </div>
+            )}
+
             {saved && !saving && (
               <div style={s.savedBanner}>✓ Reflection saved for this week</div>
             )}
@@ -172,6 +182,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                         return (
                           <button
                             key={n}
+                            disabled={readOnly}
                             title={def ? `${def.label} - ${def.meaning}` : String(n)}
                             style={{
                               ...s.scoreBtn,
@@ -180,8 +191,11 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                               color: active ? "#0a1420" : "var(--mute)",
                               fontWeight: active ? 800 : 500,
                               transform: active ? "scale(1.08)" : "scale(1)",
+                              cursor: readOnly ? "default" : "pointer",
+                              opacity: readOnly && !active ? 0.55 : 1,
                             }}
                             onClick={() => {
+                              if (readOnly) return;
                               setScores(prev => ({ ...prev, [metric.key]: n }));
                               setSaved(false);
                             }}
@@ -244,23 +258,30 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, onC
                     {prompt}
                   </div>
                   <textarea
-                    style={s.textarea}
+                    style={{ ...s.textarea, ...(readOnly ? s.textareaReadOnly : null) }}
                     value={value}
                     onChange={e => set(e.target.value)}
-                    placeholder="Write freely…"
+                    readOnly={readOnly}
+                    placeholder={readOnly ? "—" : "Write freely…"}
                     rows={3}
                   />
                 </div>
               ))}
             </div>
 
-            <button
-              style={{ ...s.saveBtn, opacity: (!hasAnyInput || saving) ? 0.45 : 1 }}
-              disabled={!hasAnyInput || saving}
-              onClick={handleSave}
-            >
-              {saving ? "Saving…" : saved ? "Update reflection" : "Save reflection"}
-            </button>
+            {readOnly ? (
+              <button style={{ ...s.saveBtn, opacity: 0.5, cursor: "default" }} disabled>
+                Opens Saturday
+              </button>
+            ) : (
+              <button
+                style={{ ...s.saveBtn, opacity: (!hasAnyInput || saving) ? 0.45 : 1 }}
+                disabled={!hasAnyInput || saving}
+                onClick={handleSave}
+              >
+                {saving ? "Saving…" : saved ? "Update reflection" : "Save reflection"}
+              </button>
+            )}
 
           </div>
         )}
@@ -293,6 +314,11 @@ const s: Record<string, React.CSSProperties> = {
     background: "#0a1e0a", border: "1px solid var(--good)44", color: "var(--good)",
     borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600,
   },
+  readOnlyBanner: {
+    background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)",
+    borderRadius: 8, padding: "10px 12px", fontSize: 13, lineHeight: 1.5,
+  },
+  textareaReadOnly: { background: "var(--panel)", color: "var(--mute)", cursor: "default" },
   body: {
     overflowY: "auto", padding: "14px 18px 32px",
     display: "flex", flexDirection: "column", gap: 20,
