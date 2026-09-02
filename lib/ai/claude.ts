@@ -9,8 +9,12 @@
 //  - haiku-4-5 → high-volume plumbing that's only glanced at (per-session
 //    recap, tiny structured parses). ~1/3 the cost, fastest model.
 //
-// Raw fetch (not the SDK) to match the rest of the codebase; no
-// temperature/thinking/budget params (sonnet-5 rejects those anyway).
+// Raw fetch (not the SDK) to match the rest of the codebase. No
+// temperature/top_p (Sonnet 5 rejects those). Thinking is explicitly
+// DISABLED — Sonnet 5 runs adaptive thinking when the param is omitted,
+// and every route here wants fast deterministic output (structured JSON
+// or a short summary), not reasoning that burns the max_tokens budget
+// and lands a thinking block ahead of the text.
 
 export const AI_MODEL = {
   report: "claude-sonnet-5", // training-report-ai
@@ -50,6 +54,9 @@ function buildBody(o: CallOpts, stream: boolean) {
   return {
     model: o.model,
     max_tokens: o.maxTokens,
+    // See the file header: adaptive thinking is on by default on Sonnet 5
+    // and not wanted here.
+    thinking: { type: "disabled" as const },
     // Cache-control marker kept on the system block: a no-op below the
     // model's cacheable-prefix minimum, self-activating for free above it.
     system: [{ type: "text", text: o.system, cache_control: { type: "ephemeral" as const } }],
@@ -82,8 +89,21 @@ export async function callClaude(o: CallOpts): Promise<CallResult> {
     return { ok: false, status: 502, error: `AI request failed (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ""}` };
   }
   const data = await res.json().catch(() => null);
-  const text: string = data?.content?.[0]?.text ?? "";
+  const text: string = textFromContent(data);
   return { ok: true, text };
+}
+
+// Concatenate every text block. Never assume content[0] is text — a
+// thinking / redacted_thinking / tool block can come first, and there
+// can be more than one text block.
+function textFromContent(data: unknown): string {
+  const content = (data as { content?: unknown })?.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((b): b is { type: string; text: string } =>
+      !!b && typeof b === "object" && (b as { type?: unknown }).type === "text" && typeof (b as { text?: unknown }).text === "string")
+    .map((b) => b.text)
+    .join("");
 }
 
 /**
