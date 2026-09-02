@@ -13,6 +13,7 @@ import { RAG_COLOR, RAG_LABEL, type TestReportView, type RatingScope } from "@/l
 import type { RagStatus } from "@/types";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
+import { REPORT_CREDIT_TEXT } from "@/lib/report-branding";
 
 const ASYM_COLOR: Record<string, string> = { normal: "#2E9E5B", monitor: "#FB8C00", concern: "#E53935" };
 
@@ -186,6 +187,11 @@ export default function TestReportBody({
           )}
         </>
       )}
+
+      <div style={s.credit}>
+        <span style={s.creditMark}>VIS BUILD</span>
+        <span>{REPORT_CREDIT_TEXT}</span>
+      </div>
     </div>
   );
 }
@@ -209,6 +215,8 @@ const s: Record<string, React.CSSProperties> = {
   brandRow: { marginBottom: 12 },
   brand: { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 22, letterSpacing: 2 },
   logo: { height: 28, objectFit: "contain" },
+  credit: { marginTop: 28, paddingTop: 9, borderTop: "1px solid #d8dde3", display: "flex", alignItems: "center", gap: 6, fontSize: 9.5, color: "#6b7684" },
+  creditMark: { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "1.5px", color: "#1f6fd6" },
   athleteLine: { fontSize: 13, fontWeight: 600, marginTop: 2 },
   metaBar: { display: "flex", gap: 8, background: "#f7f8fa", border: "1px solid #d8dde3", borderRadius: 10, padding: "10px 8px", marginBottom: 12, flexWrap: "wrap" },
   metaCell: { flex: 1, minWidth: 90, textAlign: "center" },

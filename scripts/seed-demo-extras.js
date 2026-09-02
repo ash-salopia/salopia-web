@@ -15,6 +15,7 @@
 //   • a couple of Sport / Other sessions on a healthy athlete
 //   • documents (video links)
 //   • Coach Forum threads, replies and votes across the rooms
+//   • Community leaderboards turned on (strength lifts + testing metrics)
 //
 // Known gaps it does NOT cover: Power/Speed sprint/jump sessions (fiddly
 // rep-result model — VBT velocity profiles already demo that side), the
@@ -137,8 +138,21 @@ async function main() {
     const members = athletes
       .filter((a) => groupByName.has(a.group))
       .map((a) => ({ group_id: groupByName.get(a.group), athlete_id: a.id }));
+
+    // A larger cross-squad group so the Squads leaderboard view (top 5 +
+    // "Show all") has something meaty to show.
+    const { data: perfGroup } = await sb.from("groups")
+      .insert({ organisation_id: org.id, name: "Performance Squad", colour: "#EF4444", description: "Performance Squad — demo group" })
+      .select().single();
+    if (perfGroup) {
+      groupByName.set("Performance Squad", perfGroup.id);
+      for (const a of athletes.slice(0, Math.min(10, athletes.length))) {
+        members.push({ group_id: perfGroup.id, athlete_id: a.id });
+      }
+    }
+
     await sb.from("group_members").insert(members);
-    console.log(`Groups: ${groups.length} with ${members.length} members.`);
+    console.log(`Groups: ${(groups ?? []).length + (perfGroup ? 1 : 0)} with ${members.length} members.`);
 
     // Group chat
     if (await tableExists("group_messages")) {
@@ -513,6 +527,32 @@ async function main() {
       if (todaySess.data) await sb.from("session_exercises").insert(mkRows(todaySess.data.id, false));
     }
     console.log(`Live Group: ${liveAthletes.length} athletes with progress + pause hints today${hasPauseCol ? "" : " (pause skipped — 0090 not applied)"}.`);
+  }
+
+  // ── Community leaderboards ───────────────────────────────────────────────
+  {
+    const { data: o } = await sb.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = o?.settings ?? {};
+    // Put ~6 varied testing metrics on the board (leave the rest off) to show
+    // the per-test picker; null here would mean "every eligible metric".
+    const { data: mets } = await sb.from("test_metrics")
+      .select("id, name, is_bilateral").eq("organisation_id", org.id).eq("is_bilateral", false);
+    const wanted = ["10m Sprint", "20m Sprint", "Countermovement Jump", "CMJ", "Broad Jump", "Isometric Mid-Thigh Pull", "IMTP", "Sit and Reach", "Yo-Yo IR1"];
+    const pickedMetrics = (mets ?? [])
+      .filter((m) => wanted.some((w) => m.name.toLowerCase().includes(w.toLowerCase())))
+      .map((m) => m.id);
+    settings.leaderboards_enabled = true;
+    settings.leaderboards = {
+      strength_exercises: [
+        { name: "Barbell Back Squat", relative: true, absolute: true },
+        { name: "Barbell Bench Press", relative: true, absolute: true },
+        { name: "Romanian Deadlift", relative: true, absolute: false },
+        { name: "Barbell Overhead Press", relative: false, absolute: true },
+      ],
+      test_metrics: pickedMetrics.length ? pickedMetrics : null,
+    };
+    await sb.from("organisations").update({ settings }).eq("id", org.id);
+    console.log(`Leaderboards: enabled — 4 strength lifts (per-exercise ×BW/kg) + ${pickedMetrics.length || "all"} testing metrics.`);
   }
 
   console.log(`\n✓ Demo extras seeded in "${DEMO_ORG_NAME}".`);

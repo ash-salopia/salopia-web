@@ -8,6 +8,8 @@ import PushNotificationToggle from "@/components/PushNotificationToggle";
 
 import { useState, useEffect, useRef } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
+import { listOrgPbExerciseNames } from "@/lib/data/leaderboards";
+import { listTestMetrics } from "@/lib/data/testing";
 import { FORMULAS, type OneRMFormula, type WeightUnit } from "@/lib/one-rm";
 import { CHECKIN_CONDITIONS, CHECKIN_RULE_OPTIONS, DEFAULT_CHECKIN_RULES, type CheckInAction, type CheckInRules } from "@/lib/checkin";
 import type { OrgSettings, OneRMSource } from "@/lib/data/settings";
@@ -31,6 +33,16 @@ export default function SettingsPage() {
   const [coachAvatarUrl, setCoachAvatarUrl] = useState<string | null>(null);
   const [coachRole, setCoachRole] = useState<"owner" | "coach">("owner");
   const [coachSeatLimit, setCoachSeatLimit] = useState<number | null>(null);
+  const [pbExerciseNames, setPbExerciseNames] = useState<string[]>([]);
+  const [newLbExercise, setNewLbExercise] = useState("");
+  const [lbTestMetrics, setLbTestMetrics] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    listOrgPbExerciseNames().then(setPbExerciseNames).catch(() => {});
+    listTestMetrics()
+      .then((ms) => setLbTestMetrics(ms.filter((m) => !m.is_bilateral).map((m) => ({ id: m.id, name: m.name }))))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     getOrgSettings()
@@ -947,6 +959,135 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      <CollapsibleSection title="Community leaderboards">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Enable leaderboards</div>
+              <div style={s.cardDesc}>
+                Adds a <b>Leaderboards</b> tab to Community (yours and the athletes&apos;). Age-banded and split
+                by boys / girls, for your testing metrics and the strength lifts you pick below. Age bands
+                match your testing norms, with 16&ndash;17 and 18+ on top.
+              </div>
+            </div>
+            <button
+              style={{ ...s.toggleSwitch, background: settings.leaderboards_enabled ? "var(--accent)" : "var(--panel2)" }}
+              onClick={() => setSettings((prev) => ({ ...prev, leaderboards_enabled: !prev.leaderboards_enabled }))}
+            >
+              <div style={{ ...s.toggleThumb, transform: settings.leaderboards_enabled ? "translateX(20px)" : "translateX(0)" }} />
+            </button>
+          </div>
+
+          {settings.leaderboards_enabled && (
+            <>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 4 }}>
+                <div style={s.cardLabel}>Strength lifts</div>
+                <div style={s.cardDesc}>
+                  Which lifts get a board. Athletes&apos; best PB for each is ranked. Tick <b>×BW</b> for a
+                  relative board (weight ÷ bodyweight &mdash; fairer across sizes; athletes with no bodyweight
+                  recorded are left off it), <b>kg</b> for an absolute board (raw weight on the bar), or both.
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginTop: 10 }}>
+                {settings.leaderboards.strength_exercises.map((ex, i) => (
+                  <div key={ex.name} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px" }}>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ex.name}</span>
+                    {(["relative", "absolute"] as const).map((mode) => (
+                      <label key={mode} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--mute)", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={ex[mode]}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSettings((prev) => ({
+                              ...prev,
+                              leaderboards: {
+                                ...prev.leaderboards,
+                                strength_exercises: prev.leaderboards.strength_exercises.map((x, xi) =>
+                                  xi === i
+                                    ? { ...x, [mode]: checked, ...(!checked && !x[mode === "relative" ? "absolute" : "relative"] ? { [mode === "relative" ? "absolute" : "relative"]: true } : {}) }
+                                    : x
+                                ),
+                              },
+                            }));
+                          }}
+                        />
+                        {mode === "relative" ? "×BW" : "kg"}
+                      </label>
+                    ))}
+                    <button
+                      style={{ background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 13, lineHeight: 1 }}
+                      onClick={() => setSettings((prev) => ({ ...prev, leaderboards: { ...prev.leaderboards, strength_exercises: prev.leaderboards.strength_exercises.filter((_, xi) => xi !== i) } }))}
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input
+                  list="lb-exercise-names"
+                  value={newLbExercise}
+                  onChange={(e) => setNewLbExercise(e.target.value)}
+                  placeholder="Exercise name (e.g. Back Squat)"
+                  style={{ ...s.metricInput, flex: 1 }}
+                />
+                <datalist id="lb-exercise-names">
+                  {pbExerciseNames.map((n) => <option key={n} value={n} />)}
+                </datalist>
+                <button
+                  style={s.addRuleBtn}
+                  onClick={() => {
+                    const v = newLbExercise.trim();
+                    if (!v || settings.leaderboards.strength_exercises.some((x) => x.name.toLowerCase() === v.toLowerCase())) return;
+                    setSettings((prev) => ({ ...prev, leaderboards: { ...prev.leaderboards, strength_exercises: [...prev.leaderboards.strength_exercises, { name: v, relative: true, absolute: true }] } }));
+                    setNewLbExercise("");
+                  }}
+                >+ Add lift</button>
+              </div>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, marginTop: 14 }}>
+                <div style={s.cardLabel}>Testing metrics</div>
+                <div style={s.cardDesc}>
+                  Which tests get a board &mdash; ranked on each athlete&apos;s best recorded value (some are
+                  already per-kg). Per-side / bilateral metrics can&apos;t be ranked and aren&apos;t listed.
+                </div>
+                {lbTestMetrics.length === 0 ? (
+                  <div style={{ ...s.cardDesc, marginTop: 8 }}>No eligible testing metrics yet.</div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 6 }}>
+                      <button style={s.linkBtn} onClick={() => setSettings((prev) => ({ ...prev, leaderboards: { ...prev.leaderboards, test_metrics: lbTestMetrics.map((m) => m.id) } }))}>Select all</button>
+                      <button style={s.linkBtn} onClick={() => setSettings((prev) => ({ ...prev, leaderboards: { ...prev.leaderboards, test_metrics: [] } }))}>Clear</button>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                      {lbTestMetrics.map((m) => {
+                        const picked = settings.leaderboards.test_metrics;
+                        const on = picked === null || picked.includes(m.id);
+                        return (
+                          <label key={m.id} style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", fontSize: 13, color: "var(--text)" }}>
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSettings((prev) => {
+                                  const cur = prev.leaderboards.test_metrics ?? lbTestMetrics.map((x) => x.id);
+                                  const next = checked ? Array.from(new Set([...cur, m.id])) : cur.filter((x) => x !== m.id);
+                                  return { ...prev, leaderboards: { ...prev.leaderboards, test_metrics: next } };
+                                });
+                              }}
+                            />
+                            {m.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </CollapsibleSection>
+
       </fieldset>
 
       {orgId && (
@@ -1016,6 +1157,7 @@ const s: Record<string, React.CSSProperties> = {
   customTextarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 12, resize: "vertical" as const, fontFamily: "inherit" },
   removeBtn: { background: "transparent", border: "1px solid var(--line)", color: "#FF6B6B", borderRadius: 6, padding: "6px 8px", fontSize: 12, cursor: "pointer", flexShrink: 0 },
   addRuleBtn: { background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", width: "100%", marginTop: 4 },
+  linkBtn: { background: "transparent", border: "none", color: "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 },
   ruleRow: { display: "flex", alignItems: "center", gap: 16, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 14px" },
   ruleLabel: { fontSize: 14, fontWeight: 600, color: "var(--text)" },
   ruleDesc: { fontSize: 11, color: "var(--mute)", marginTop: 2 },

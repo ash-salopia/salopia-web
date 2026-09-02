@@ -7,6 +7,7 @@
 
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
+import CreditFooter from "@/components/reports/pdf/pdf-credit-footer";
 import { RAG_COLOR, RAG_LABEL, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
@@ -37,6 +38,7 @@ export default function TestReportPdf({
   return (
     <Document title={`${athleteName} - Physical Testing Report`}>
       <Page size="A4" style={s.page} wrap>
+        <CreditFooter />
         <View style={s.brandRow}>
           <BrandHeader branding={branding} />
           <Text style={s.athleteLine}>{athleteName}{athleteGroup ? ` · ${athleteGroup}` : ""} — Physical Testing Report</Text>
@@ -162,7 +164,7 @@ function RagBadge({ rag }: { rag: RagStatus }) {
 }
 
 const s = StyleSheet.create({
-  page: { padding: 34, fontFamily: "Helvetica", fontSize: 9, color: "#16202a" },
+  page: { padding: 34, paddingBottom: 46, fontFamily: "Helvetica", fontSize: 9, color: "#16202a" },
   brandRow: { marginBottom: 10 },
   athleteLine: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 3 },
   metaBar: { flexDirection: "row", flexWrap: "wrap", gap: 6, backgroundColor: "#f7f8fa", border: "1 solid #d8dde3", borderRadius: 6, padding: 8, marginBottom: 8 },

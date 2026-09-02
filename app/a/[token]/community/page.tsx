@@ -6,6 +6,8 @@ import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed"
 import { formatPBValue } from "@/lib/data/personal-bests";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
+import LeaderboardsView from "@/components/LeaderboardsView";
+import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 
 async function uploadAthleteAudio(token: string, blob: Blob): Promise<{ path: string }> {
   const form = new FormData();
@@ -41,7 +43,8 @@ export default function AthleteCommunityPage() {
   const router = useRouter();
   const token = params?.token as string;
 
-  const [tab, setTab] = useState<"announcements" | "pbs" | "chat" | "coach" | "comps">("announcements");
+  const [tab, setTab] = useState<"announcements" | "pbs" | "chat" | "coach" | "comps" | "leaderboards">("announcements");
+  const [leaderboards, setLeaderboards] = useState<{ enabled: boolean; boards: any[]; bands: any[]; squads?: any[]; me?: any; branding?: ResolvedBranding } | null>(null);
   const [dmMessages, setDmMessages] = useState<any[]>([]);
   const [dmInput, setDmInput] = useState("");
   const [dmSending, setDmSending] = useState(false);
@@ -76,9 +79,11 @@ export default function AthleteCommunityPage() {
       safe(fetch(`/api/athlete-link/pbs?token=${token}`)),
       safe(fetch(`/api/athlete-link/chat?token=${token}`)),
       safe(fetch(`/api/athlete-link/competitions?token=${token}`)),
+      safe(fetch(`/api/athlete-link/leaderboards?token=${token}`)),
     ])
-      .then(([annData, pbData, chatData, compData]) => {
+      .then(([annData, pbData, chatData, compData, lbData]) => {
         if (compData?.competitions) setCompetitions(compData.competitions);
+        if (lbData && !lbData.error) setLeaderboards(lbData);
         const errors = [annData, pbData, chatData]
           .map((d: any) => d.error || d._fetchError)
           .filter(Boolean);
@@ -318,6 +323,12 @@ export default function AthleteCommunityPage() {
           onClick={() => setTab("comps")}>
           🏆 Comps
         </button>
+        {leaderboards?.enabled && (
+          <button style={{ ...s.tab, ...(tab === "leaderboards" ? s.tabActive : {}) }}
+            onClick={() => setTab("leaderboards")}>
+            🥇 Leaderboards
+          </button>
+        )}
       </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
@@ -373,6 +384,18 @@ export default function AthleteCommunityPage() {
           token={token as string}
           onUpdated={setCompetitions}
         />
+      )}
+      {tab === "leaderboards" && (
+        <div style={s.content}>
+          <LeaderboardsView
+            boards={leaderboards?.boards ?? []}
+            bands={leaderboards?.bands ?? []}
+            squads={leaderboards?.squads ?? []}
+            me={leaderboards?.me ?? null}
+            loading={!leaderboards}
+            branding={leaderboards?.branding ?? DEFAULT_BRANDING}
+          />
+        </div>
       )}
       {tab === "chat" && (
             <div style={s.chatPage}>

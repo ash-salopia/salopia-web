@@ -37,6 +37,8 @@ import AthleteDashboard from "@/components/AthleteDashboard";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
+import { getMyBranding } from "@/lib/data/branding";
+import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
@@ -127,6 +129,7 @@ export default function AthleteDetailPage() {
   const [libraryAccessOpen, setLibraryAccessOpen] = useState(false);
   const [calView, setCalView] = useState<"dashboard" | "month" | "week">("month");
   const [checkinEnabled, setCheckinEnabled] = useState(true);
+  const [branding, setBranding] = useState<ResolvedBranding>(DEFAULT_BRANDING);
   const [checkinRules, setCheckinRules] = useState<CheckInRules>(DEFAULT_CHECKIN_RULES);
   const [weekStart, setWeekStart] = useState<string>(() => {
     const d = new Date();
@@ -227,6 +230,7 @@ export default function AthleteDetailPage() {
       setCheckinEnabled(s.checkin_enabled !== false);
       if (s.checkin_rules) setCheckinRules(s.checkin_rules);
     }).catch(() => {});
+    getMyBranding().then(setBranding).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
 
@@ -1072,6 +1076,7 @@ export default function AthleteDetailPage() {
           aiSummary={aiReportSummary}
           aiLoading={aiReportLoading}
           squadComparison={squadComparison}
+          branding={branding}
           onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); }}
         />
       )}

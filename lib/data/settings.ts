@@ -167,6 +167,47 @@ export interface OrgSettings {
   load_spike_pct: number; // flag a weekly load this many % above the 4-week average
   acwr_low: number; // ACWR sweet-spot floor (below = possible detraining)
   acwr_high: number; // ACWR sweet-spot ceiling (above = injury risk climbs)
+  // Community leaderboards — age-banded, sex-split rankings for testing
+  // metrics + coach-picked strength lifts. Off by default.
+  leaderboards_enabled: boolean;
+  leaderboards: LeaderboardSettings;
+}
+
+// One picked strength lift + whether it gets a relative (÷BW) board, an
+// absolute (kg) board, or both.
+export interface LeaderboardStrengthExercise {
+  name: string; // matched case-insensitively against PBs
+  relative: boolean;
+  absolute: boolean;
+}
+
+export interface LeaderboardSettings {
+  strength_exercises: LeaderboardStrengthExercise[];
+  // Which testing metrics get a board. null = every eligible metric (the
+  // legacy default, and what a fresh org gets); an array = only those metric ids.
+  test_metrics: string[] | null;
+}
+
+export const DEFAULT_LEADERBOARDS: LeaderboardSettings = {
+  strength_exercises: [],
+  test_metrics: null,
+};
+
+// Tolerates the old shape (string[] + org-level show_relative/show_absolute)
+// so settings stored before the per-exercise change still load.
+function normaliseLeaderboards(raw: unknown): LeaderboardSettings {
+  const r = (raw ?? {}) as { strength_exercises?: unknown; show_relative?: boolean; show_absolute?: boolean; test_metrics?: unknown };
+  const rel = r.show_relative !== false;
+  const abs = r.show_absolute !== false;
+  const list = Array.isArray(r.strength_exercises) ? r.strength_exercises : [];
+  return {
+    strength_exercises: list.map((e) =>
+      typeof e === "string"
+        ? { name: e, relative: rel, absolute: abs }
+        : { name: String((e as LeaderboardStrengthExercise).name ?? ""), relative: (e as LeaderboardStrengthExercise).relative !== false, absolute: (e as LeaderboardStrengthExercise).absolute !== false }
+    ).filter((e) => e.name),
+    test_metrics: Array.isArray(r.test_metrics) ? r.test_metrics.map(String) : null,
+  };
 }
 
 // 0088 — individually toggleable elements of the load-monitoring feature.
@@ -215,6 +256,8 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   load_spike_pct: 50,
   acwr_low: 0.8,
   acwr_high: 1.3,
+  leaderboards_enabled: false,
+  leaderboards: DEFAULT_LEADERBOARDS,
 };
 
 // Merge stored org settings over the defaults. A plain spread replaces nested
@@ -227,6 +270,7 @@ export function mergeOrgSettings(stored: Partial<OrgSettings> | null | undefined
     ...DEFAULT_SETTINGS,
     ...s,
     load_monitoring: { ...DEFAULT_LOAD_MONITORING, ...(s.load_monitoring ?? {}) },
+    leaderboards: normaliseLeaderboards(s.leaderboards),
   };
 }
 

@@ -21,6 +21,7 @@ import type { ReportOptions } from "@/lib/report-options";
 import { FORMULAS } from "@/lib/one-rm";
 import { LineChart, type LineSeries } from "@/components/reports/pdf/pdf-line-chart";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
+import CreditFooter from "@/components/reports/pdf/pdf-credit-footer";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
@@ -142,7 +143,7 @@ function buildRadarGeometry(exercises: RadarExercise[], limit: number, size = 22
 // ── Styles ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  page: { padding: 32, fontFamily: "Helvetica", fontSize: 9, color: C.text, backgroundColor: "#ffffff" },
+  page: { padding: 32, paddingBottom: 46, fontFamily: "Helvetica", fontSize: 9, color: C.text, backgroundColor: "#ffffff" },
   athleteLine: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 2 },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
   metaLine: { fontSize: 8, color: C.mute, marginTop: 2 },
@@ -345,6 +346,7 @@ export default function AthleteReportPdf({
   return (
     <Document title={`${athleteName} - Training Load Report`}>
       <Page size="A4" style={s.page} wrap>
+        <CreditFooter />
         <View>
           <View style={s.brandRow}>
             <BrandHeader branding={branding} />

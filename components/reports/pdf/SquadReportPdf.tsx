@@ -21,6 +21,7 @@ import {
 } from "@/lib/squad-report";
 import { LineChart } from "@/components/reports/pdf/pdf-line-chart";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
+import CreditFooter from "@/components/reports/pdf/pdf-credit-footer";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 
 const C = {
@@ -42,7 +43,7 @@ function pctColor(pct: number): string {
 }
 
 const s = StyleSheet.create({
-  page: { padding: 32, fontFamily: "Helvetica", fontSize: 9, color: C.text, backgroundColor: "#ffffff" },
+  page: { padding: 32, paddingBottom: 46, fontFamily: "Helvetica", fontSize: 9, color: C.text, backgroundColor: "#ffffff" },
   titleLine: { fontSize: 13, fontFamily: "Helvetica-Bold", marginTop: 4 },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   metaLine: { fontSize: 8, color: C.mute, marginTop: 2 },
@@ -192,6 +193,7 @@ function MatrixSheet({
   const headerRows = buildHeaderRows(columns);
   return (
     <Page size="A4" orientation="landscape" style={s.page} wrap>
+      <CreditFooter />
       <View style={s.brandRow}>
         <BrandHeader branding={branding} />
         <Text style={[s.titleLine, { marginTop: 0 }]}>{groupName} · {title}{pageLabel ? ` (${pageLabel})` : ""}</Text>
@@ -342,6 +344,7 @@ function AthleteTrendPage({
     <>
       {pages.map((charts, pageIdx) => (
         <Page key={pageIdx} size="A4" orientation="landscape" style={s.page} wrap>
+          <CreditFooter />
           <View style={s.brandRow}>
             <BrandHeader branding={branding} />
             <Text style={[s.titleLine, { marginTop: 0 }]}>
@@ -430,6 +433,7 @@ export default function SquadReportPdf({
   return (
     <Document title={`${groupName} - Squad Report`}>
       <Page size="A4" style={s.page} wrap>
+        <CreditFooter />
         <View style={s.brandRow}>
           <BrandHeader branding={branding} />
           <Text style={[s.titleLine, { marginTop: 0 }]}>{groupName} · Squad Report</Text>

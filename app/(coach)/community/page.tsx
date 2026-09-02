@@ -14,9 +14,13 @@ import {
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
+import { getMyBranding } from "@/lib/data/branding";
+import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
+import { getLeaderboards, type LeaderboardsData } from "@/lib/data/leaderboards";
+import LeaderboardsView from "@/components/LeaderboardsView";
 import GroupChat from "@/components/GroupChat";
 
-type Tab = "groups" | "announcements" | "feed" | "chat" | "comps";
+type Tab = "groups" | "announcements" | "feed" | "chat" | "comps" | "leaderboards";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +40,7 @@ const GROUP_COLOURS = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const VALID_TABS: Tab[] = ["groups", "announcements", "feed", "chat", "comps"];
+const VALID_TABS: Tab[] = ["groups", "announcements", "feed", "chat", "comps", "leaderboards"];
 
 export default function CommunityPage() {
   const searchParams = useSearchParams();
@@ -54,7 +58,10 @@ export default function CommunityPage() {
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
   const [pbEnabled, setPbEnabled] = useState(true);
+  const [leaderboardsEnabled, setLeaderboardsEnabled] = useState(false);
+  const [leaderboards, setLeaderboards] = useState<LeaderboardsData | null>(null);
   const [orgAthletes, setOrgAthletes] = useState<{ id: string; name: string }[]>([]);
+  const [branding, setBranding] = useState<ResolvedBranding>(DEFAULT_BRANDING);
 
   useEffect(() => {
     const supabase = createClient();
@@ -69,9 +76,13 @@ export default function CommunityPage() {
       });
     });
     loadAll();
+    getMyBranding().then(setBranding).catch(() => {});
     getOrgSettings().then((s) => {
       setPbEnabled(s.pb_enabled !== false);
       if (s.pb_enabled === false) setTab((t) => (t === "feed" ? "groups" : t));
+      setLeaderboardsEnabled(s.leaderboards_enabled === true);
+      if (s.leaderboards_enabled !== true) setTab((t) => (t === "leaderboards" ? "groups" : t));
+      else getLeaderboards().then(setLeaderboards).catch(() => {});
     }).catch(() => {});
   }, []);
 
@@ -109,7 +120,9 @@ export default function CommunityPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["groups", "announcements", "feed", "chat", "comps"] as Tab[]).filter((t) => t !== "feed" || pbEnabled).map((t) => (
+        {(["groups", "announcements", "feed", "chat", "comps", "leaderboards"] as Tab[])
+          .filter((t) => (t !== "feed" || pbEnabled) && (t !== "leaderboards" || leaderboardsEnabled))
+          .map((t) => (
           <button
             key={t}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
@@ -119,6 +132,7 @@ export default function CommunityPage() {
              t === "announcements" ? `📢 Announcements` :
              t === "feed" ? `🏆 PB Feed` :
              t === "comps" ? `🏁 Competitions` :
+             t === "leaderboards" ? `🥇 Leaderboards` :
              `💬 Chat`}
           </button>
         ))}
@@ -160,6 +174,15 @@ export default function CommunityPage() {
               coachId={coachId}
               coachName={coachName}
               athletes={orgAthletes}
+            />
+          )}
+          {tab === "leaderboards" && (
+            <LeaderboardsView
+              boards={leaderboards?.boards ?? []}
+              bands={leaderboards?.bands ?? []}
+              squads={leaderboards?.squads ?? []}
+              loading={!leaderboards}
+              branding={branding}
             />
           )}
         </>

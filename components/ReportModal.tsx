@@ -13,6 +13,8 @@ import RadarSnapshot, { type RadarExercise } from "@/components/reports/RadarSna
 import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
 import type { SquadComparisonContext, SquadComparisonMetric } from "@/lib/squad-comparison";
+import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
+import { brandHeaderHtml, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
 
 function fmtDate(iso: string): string {
   try {
@@ -145,6 +147,7 @@ export default function ReportModal({
   aiSummary,
   aiLoading,
   squadComparison,
+  branding = DEFAULT_BRANDING,
   onClose,
 }: {
   data: ReportData;
@@ -154,6 +157,7 @@ export default function ReportModal({
   aiSummary?: { summary: string; themes: string } | null;
   aiLoading?: boolean;
   squadComparison?: SquadComparisonContext[] | null;
+  branding?: ResolvedBranding;
   onClose: () => void;
 }) {
   const {
@@ -312,8 +316,8 @@ export default function ReportModal({
 </style>
 </head>
 <body>
-  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--accent);letter-spacing:2px;">VIS BUILD</div>
-  <div style="font-size:13px;font-weight:600;margin-top:2px;">${esc(athleteName)}${athleteGroup ? ` · ${esc(athleteGroup)}` : ""}, Training Load Report</div>
+  ${brandHeaderHtml(branding)}
+  <div style="font-size:13px;font-weight:600;margin-top:4px;">${esc(athleteName)}${athleteGroup ? ` · ${esc(athleteGroup)}` : ""}, Training Load Report</div>
   <div style="font-size:11px;color:var(--mute);${options.e1rm ? "margin-bottom:2px;" : "margin-bottom:20px;"}">Generated ${esc(generated)}${rangeStart && rangeEnd ? ` · ${esc(rangeStart)} to ${esc(rangeEnd)}` : " · All time"}</div>
   ${options.e1rm ? `<div style="font-size:11px;color:var(--mute);margin-bottom:20px;">e1RM formula: ${esc(formulaName)} · Mode: ${esc(oneRmSource === "fixed" ? "Fixed (vs reference max)" : "Rolling")}</div>` : ""}
   ${clone.innerHTML}
@@ -331,7 +335,11 @@ export default function ReportModal({
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <div>
-            <div style={styles.brand}>VIS BUILD</div>
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.displayName} style={styles.brandLogo} />
+            ) : (
+              <div style={{ ...styles.brand, color: branding.primaryColor || "var(--accent)" }}>{branding.displayName}</div>
+            )}
             <div style={styles.athleteLine}>
               {athleteName}
               {athleteGroup ? ` · ${athleteGroup}` : ""}, Training Load Report
@@ -1284,6 +1292,11 @@ export default function ReportModal({
               )}
             </div>
           )}
+
+          <div style={styles.credit}>
+            <span style={styles.creditMark}>VIS BUILD</span>
+            <span>{REPORT_CREDIT_TEXT}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1326,6 +1339,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 22,
     color: "var(--accent)",
     letterSpacing: 2,
+  },
+  brandLogo: { height: 34, maxWidth: 230, objectFit: "contain", display: "block" },
+  credit: {
+    marginTop: 28,
+    paddingTop: 9,
+    borderTop: "1px solid var(--line)",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 9.5,
+    color: "var(--mute)",
+  },
+  creditMark: {
+    fontFamily: "'Barlow Condensed', sans-serif",
+    fontWeight: 700,
+    letterSpacing: "1.5px",
+    color: "#1f6fd6",
   },
   athleteLine: { fontSize: 13, color: "var(--text)", fontWeight: 600 },
   generatedLine: { fontSize: 11, color: "var(--mute)" },
