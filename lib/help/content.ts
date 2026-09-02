@@ -325,7 +325,6 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["close account", "delete account", "cancel", "leave", "shut down"],
     body: [
       { type: "p", text: `To close an organisation, email **${SUPPORT}** from the owner's address. We'll cancel any subscription and confirm the data-deletion timeline with you.` },
-      { type: "p", text: "If you only want to stop being billed but keep the data, cancel the subscription in Settings → Billing instead — the account goes read-only but nothing is deleted." },
     ],
   },
 
@@ -499,12 +498,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "archive-vs-delete",
     category: "athletes",
     title: "Archive vs delete an athlete",
-    summary: "Archive is reversible and frees a seat. Delete is permanent.",
-    keywords: ["archive", "delete", "remove athlete", "seat", "restore"],
+    summary: "Archive is reversible. Delete is permanent.",
+    keywords: ["archive", "delete", "remove athlete", "restore"],
     body: [
-      { type: "p", text: "**Archive** (the **📦** button) hides the athlete from your roster, the Dashboard and every assignment picker. Nothing is deleted and it frees up a licence seat. Restore them any time from the **Archived** view." },
+      { type: "p", text: "**Archive** (the **📦** button) hides the athlete from your roster, the Dashboard and every assignment picker. Nothing is deleted. Restore them any time from the **Archived** view." },
       { type: "p", text: "**Permanently delete** (the **×** in the Archived view) removes the athlete and every session they ever had. It cannot be undone." },
-      { type: "tip", text: "At a seat limit? Archive an inactive athlete rather than deleting them." },
+      { type: "tip", text: "Not coaching someone right now? Archive them rather than deleting — you keep all their history and can bring them back later." },
     ],
   },
   {
@@ -1441,7 +1440,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**Print all — combined** — one print document, a page per athlete.",
         "**Download all as PDF ZIP** — one PDF per athlete, zipped.",
       ] },
-      { type: "note", text: "These are plan-gated: Athlete reports need Starter or above, Squad summary needs Pro or above, Print all / ZIP need Unlimited. Locked items show a 🔒 tag." },
+      { type: "note", text: "All four are available free while VIS BUILD is in preview. Some may become plan-gated once paid plans launch — a 🔒 tag will show on anything your plan doesn't include." },
     ],
   },
   {
@@ -2245,126 +2244,13 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     id: "billing",
     category: "billing",
-    title: "Plans & billing overview",
-    summary: "Trial, Starter, Pro, Unlimited — seat limits and how to subscribe.",
-    keywords: ["billing", "plan", "subscription", "stripe", "seats", "upgrade", "trial", "payment"],
+    title: "Pricing & the free preview",
+    summary: "VIS BUILD is free while in preview — full access, no card, no limits.",
+    keywords: ["billing", "plan", "plans", "pricing", "price", "cost", "how much", "subscription", "stripe", "trial", "free", "payment", "seats", "upgrade", "tiers"],
     body: [
-      { type: "p", text: "Plans and their athlete seat limits: **Trial** (unlimited, full features), **Starter** (15), **Pro** (40), **Unlimited** (no cap)." },
-      { type: "steps", items: [
-        "**Settings → 💳 Billing**.",
-        "With no subscription: choose **Monthly** or **Annual**, then **Subscribe** on a tier — this opens Stripe Checkout.",
-        "With a subscription: **Manage billing** opens the Stripe portal to change card, plan or cancel.",
-      ] },
-      { type: "note", text: "Owner only. Athlete seats count non-archived athletes; archiving frees a seat." },
-    ],
-  },
-  {
-    id: "trial-explained",
-    category: "billing",
-    title: "The free trial",
-    summary: "Full access, no card, no athlete cap. Currently free while VIS BUILD is in trial.",
-    keywords: ["trial", "free", "how long", "trial length", "expires", "no card"],
-    body: [
-      { type: "p", text: "New organisations start on **Trial**: every feature is unlocked (including the reports that are otherwise plan-gated), there's no athlete limit, and no card is required." },
-      { type: "p", text: "There's no countdown in the app — VIS BUILD is currently free while in trial. When paid plans begin you'll be given notice and can subscribe in Settings → Billing." },
-    ],
-  },
-  {
-    id: "plan-tiers-detail",
-    category: "billing",
-    title: "What's in each plan",
-    summary: "Seat limits and which reports are included.",
-    keywords: ["starter", "pro", "unlimited", "tiers", "features", "comparison", "seats"],
-    body: [
-      { type: "steps", items: [
-        "**Starter** — up to 15 athletes. Individual athlete reports (training load + testing).",
-        "**Pro** — up to 40 athletes. Adds the group testing **Squad summary** report.",
-        "**Unlimited** — no athlete cap. Adds **Print all — combined** and **Download all as PDF ZIP** for group testing.",
-        "**Trial** — everything, no cap (while in trial).",
-      ] },
-      { type: "p", text: "All coaching features — programming, Live group, community, challenges, documents, individual testing, and training-load / return-to-play monitoring — are on every plan. The tiers differ on seat count and the bulk/squad report options." },
-    ],
-  },
-  {
-    id: "subscribe-steps",
-    category: "billing",
-    title: "Subscribing to a plan",
-    summary: "Settings → Billing → choose Monthly/Annual → Subscribe → Stripe Checkout.",
-    keywords: ["subscribe", "pay", "checkout", "start subscription", "stripe"],
-    body: [
-      {
-        type: "steps",
-        items: [
-          "**Settings → 💳 Billing** (owner only).",
-          "Toggle **Monthly** or **Annual**.",
-          "Click **Subscribe** on the tier you want.",
-          "Complete payment in **Stripe Checkout**. Your plan and seat limit update automatically when payment succeeds.",
-        ],
-      },
-    ],
-  },
-  {
-    id: "change-plan",
-    category: "billing",
-    title: "Upgrading or downgrading",
-    summary: "Manage billing → change plan in the Stripe portal. Stripe prorates the difference.",
-    keywords: ["upgrade", "downgrade", "change plan", "switch tier", "proration"],
-    body: [
-      { type: "p", text: "**Settings → Billing → Manage billing** opens the Stripe portal, where you can move between tiers. Stripe handles proration — you're credited/charged the difference for the rest of the period." },
-      { type: "note", text: "Downgrading to a plan with fewer seats needs your active athlete count to be at or below that plan's limit first — archive athletes to get under it." },
-    ],
-  },
-  {
-    id: "cancel-subscription",
-    category: "billing",
-    title: "Cancelling your subscription",
-    summary: "Manage billing → cancel in the Stripe portal. The account goes read-only; data is kept.",
-    keywords: ["cancel", "stop subscription", "end plan", "unsubscribe"],
-    body: [
-      { type: "p", text: "**Settings → Billing → Manage billing** → cancel. When the subscription ends, the account becomes **read-only** — you and your athletes can still view everything, but you can't add or edit. Nothing is deleted." },
-      { type: "p", text: "Resubscribe any time from Settings → Billing to restore full access." },
-    ],
-  },
-  {
-    id: "payment-failed",
-    category: "billing",
-    title: "\"Payment failed\" — what happens",
-    summary: "A 7-day grace period with a banner; update your card to clear it.",
-    keywords: ["payment failed", "card declined", "past due", "grace period", "update card"],
-    body: [
-      { type: "p", text: "If a renewal payment fails, a banner appears across the top of the app with the days remaining. You have **7 days** to fix it before the account goes read-only." },
-      { type: "p", text: "Owner: click the banner (or **Settings → Billing → Update payment details**) to update your card in the Stripe portal. Once payment clears, full access returns immediately." },
-    ],
-  },
-  {
-    id: "read-only-mode",
-    category: "billing",
-    title: "What read-only mode means",
-    summary: "Everything is visible; nothing can be added or changed until billing is resolved.",
-    keywords: ["read only", "locked", "can't edit", "cancelled account", "restricted"],
-    body: [
-      { type: "p", text: "In read-only mode (after cancellation, or 7 days past a failed payment) you and your athletes keep full visibility of all data — calendars, history, reports, PBs. Creating and editing is blocked: no new sessions, no logging, no roster changes." },
-      { type: "p", text: "Fix billing (resubscribe or update the card) and everything unlocks with no data loss." },
-    ],
-  },
-  {
-    id: "invoices-receipts",
-    category: "billing",
-    title: "Invoices, receipts & VAT",
-    summary: "All in the Stripe billing portal — Manage billing.",
-    keywords: ["invoice", "receipt", "vat", "tax", "billing history", "download invoice"],
-    body: [
-      { type: "p", text: "**Settings → Billing → Manage billing** opens the Stripe portal, where you can download every invoice/receipt, update your billing address and VAT/tax ID, and change your payment method. Stripe emails a receipt on each successful charge." },
-    ],
-  },
-  {
-    id: "annual-vs-monthly",
-    category: "billing",
-    title: "Monthly vs annual billing",
-    summary: "Choose at checkout with the Monthly / Annual toggle. Switch later in the Stripe portal.",
-    keywords: ["annual", "monthly", "yearly", "billing interval", "discount"],
-    body: [
-      { type: "p", text: "The **Monthly** / **Annual** toggle on the Billing page sets your billing interval before you subscribe. Annual is billed once for the year. You can change interval later via **Manage billing**." },
+      { type: "p", text: "**VIS BUILD is currently free while in preview.** Every feature is unlocked, there's no athlete limit, and no card is required — there's nothing to set up in **Settings → 💳 Billing**." },
+      { type: "p", text: "Paid plans and pricing are still being finalised. When they're ready we'll announce them and give you plenty of notice — nothing about your account changes until then, and you won't be charged without opting in." },
+      { type: "note", text: "Got a question about pricing for a larger squad or a multi-site setup? Email " + SUPPORT + "." },
     ],
   },
   {
@@ -2375,27 +2261,6 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["refund", "money back", "overcharged", "billing dispute"],
     body: [
       { type: "p", text: `For a refund or a billing query — a charge you didn't expect, a double charge, cancelling within a cooling-off period — email **${SUPPORT}** with your organisation name and the invoice date. We'll look into it.` },
-    ],
-  },
-  {
-    id: "seat-limit-billing",
-    category: "billing",
-    title: "\"You've reached the athlete limit\"",
-    summary: "Archive an inactive athlete (frees a seat) or upgrade a tier.",
-    keywords: ["seat limit", "athlete limit", "full", "can't add athlete", "upgrade seats"],
-    body: [
-      { type: "p", text: "Starter caps at 15 active athletes, Pro at 40. **Archive** athletes you're not currently coaching — archived athletes don't use a seat — or upgrade in **Settings → Billing**. Trial and Unlimited have no cap." },
-      { type: "p", text: "Coach seats are separate and not self-serve — contact support to add coach seats." },
-    ],
-  },
-  {
-    id: "pricing",
-    category: "billing",
-    title: "Where do I see pricing?",
-    summary: "Settings → Billing shows the tiers and prices for your account.",
-    keywords: ["price", "cost", "how much", "pricing", "fees"],
-    body: [
-      { type: "p", text: "Current prices are shown on the tier cards in **Settings → Billing** (with the Monthly / Annual toggle). While VIS BUILD is in trial there's nothing to pay. For a bespoke quote (large squads, multi-site), email " + SUPPORT + "." },
     ],
   },
 
@@ -2792,16 +2657,6 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
-    id: "faq-seat-limit",
-    category: "faq",
-    title: "\"You've reached the athlete limit for your current plan\"",
-    summary: "Archive an inactive athlete, or upgrade.",
-    keywords: ["seat limit", "athlete limit", "can't add athlete", "upgrade", "full"],
-    body: [
-      { type: "p", text: "Your plan caps active athletes (Starter 15, Pro 40; Trial and Unlimited have no cap). **Archive** an athlete you're not currently coaching — archived athletes don't count — or upgrade in **Settings → Billing**." },
-    ],
-  },
-  {
     id: "faq-cant-change-settings",
     category: "faq",
     title: "I can't change a setting / billing / branding",
@@ -3132,10 +2987,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "ts-billing-banner",
     category: "troubleshooting",
     title: "There's a billing warning banner across the top",
-    summary: "A payment failed or the subscription was cancelled. The owner needs to act.",
+    summary: "A payment on an existing subscription failed or was cancelled. The owner needs to act.",
     keywords: ["billing banner", "payment failed banner", "account read only", "warning bar"],
     body: [
-      { type: "p", text: "Tap the banner to go to **Settings → Billing**. If it's a failed payment, the owner updates the card (7-day grace before read-only). If cancelled, the owner resubscribes to restore full access. Nothing is deleted in either state." },
+      { type: "p", text: "This only appears for an organisation that already has a paid subscription (it never shows during the free preview). Tap the banner to go to **Settings → Billing**: a failed payment gives the owner a 7-day grace period to update the card via the Stripe portal; for anything else, email support. Nothing is deleted in either state." },
     ],
   },
   {
