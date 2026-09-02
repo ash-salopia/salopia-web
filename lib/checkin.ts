@@ -197,13 +197,14 @@ export function flaggedConditions(
 ): string[] {
   const { energy = 3, soreness = 3, sleep = 3, fatigue, stress, pain_score } = answers;
   const flags: string[] = [];
+  // 0088 — pain leads the list: for an injured / RTP athlete it's the
+  // first thing a coach needs to see when scanning the dashboard.
+  if (pain_score != null && pain_score >= 4) {
+    flags.push(pain_score >= 7 ? `High pain (${pain_score}/10)` : `Pain ${pain_score}/10`);
+  }
   if (energy <= 2 && rules.low_energy !== "proceed") flags.push("Low energy");
   if (sleep <= 2 && rules.poor_sleep !== "proceed") flags.push("Poor sleep");
   if (soreness >= 4 && rules.high_soreness !== "proceed") flags.push("High soreness");
-  // 0088 — wellness/pain flags (fixed thresholds, only when the field was asked)
-  if (pain_score != null && pain_score >= 4) {
-    flags.push(pain_score >= 7 ? "High pain" : "Pain reported");
-  }
   if (fatigue != null && fatigue >= 4) flags.push("High fatigue");
   if (stress != null && stress >= 4) flags.push("High stress");
   return flags;

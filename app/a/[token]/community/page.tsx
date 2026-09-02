@@ -6,6 +6,7 @@ import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed"
 import { formatPBValue } from "@/lib/data/personal-bests";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
+import AthletePageHeading from "@/components/AthletePageHeading";
 import LeaderboardsView from "@/components/LeaderboardsView";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 
@@ -297,6 +298,8 @@ export default function AthleteCommunityPage() {
           Back
         </button>
       </div>
+
+      <AthletePageHeading emoji="💬" title="Community" />
 
       <div style={s.tabs}>
         <button style={{ ...s.tab, ...(tab === "announcements" ? s.tabActive : {}) }}

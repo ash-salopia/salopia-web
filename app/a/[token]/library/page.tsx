@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Template } from "@/types";
+import AthletePageHeading from "@/components/AthletePageHeading";
 
 export default function AthleteLibraryPage() {
   const params = useParams();
@@ -52,9 +53,7 @@ export default function AthleteLibraryPage() {
         <div style={s.brand}>VIS BUILD</div>
         <div style={{ width: 60 }} />
       </div>
-      <div style={{ padding: "12px 16px 0", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
-        📚 Session Library
-      </div>
+      <AthletePageHeading emoji="📚" title="Session Library" />
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}

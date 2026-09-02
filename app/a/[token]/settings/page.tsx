@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
 import type { ComputedZone } from "@/lib/training-zones";
 import { rtpMeta } from "@/lib/rtp";
+import AthletePageHeading from "@/components/AthletePageHeading";
 
 export default function AthleteSettingsPage() {
   const params = useParams();
@@ -89,8 +90,9 @@ export default function AthleteSettingsPage() {
         </button>
       </div>
 
+      <AthletePageHeading emoji="🔒" title="Privacy" />
+
       <div style={s.content}>
-        <div style={s.pageTitle}>🔒 Privacy</div>
         <div style={s.pageSubtitle}>
           Controls how you appear to other athletes in the Community feed. Your coach can
           always see everything, regardless of these settings.
@@ -104,7 +106,7 @@ export default function AthleteSettingsPage() {
           const m = rtpMeta(availability.status);
           return (
             <>
-              <div style={{ ...s.pageTitle, marginTop: 28 }}>🩹 Your availability</div>
+              <AthletePageHeading emoji="🩹" title="Your availability" style={{ padding: "24px 0 4px" }} />
               <div style={s.pageSubtitle}>Set by your coach. Follow this until they change it.</div>
               <div style={{ ...s.card, border: `1px solid ${m.color}66`, background: `${m.color}12` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
@@ -162,7 +164,7 @@ export default function AthleteSettingsPage() {
         )}
 
         {zoneData?.enabled !== false && <>
-        <div style={{ ...s.pageTitle, marginTop: 28 }}>🫀 Training zones</div>
+        <AthletePageHeading emoji="🫀" title="Training zones" style={{ padding: "24px 0 4px" }} />
         <div style={s.pageSubtitle}>
           Your heart-rate and pace targets for each conditioning zone. Set by your coach.
         </div>

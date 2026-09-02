@@ -169,4 +169,15 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
     .from("personal_bests")
     .upsert(row, { onConflict: "athlete_id,exercise_name,session_id" });
   if (upsertErr) console.error("[detectPB coach] upsert failed", upsertErr);
+
+  // 0092 — a genuine new PB un-hides an exercise the coach previously
+  // deleted the PB for. (Silently skipped if 0092 isn't applied.)
+  try {
+    const { data: ath } = await supabase.from("athletes").select("pb_hidden").eq("id", athleteId).maybeSingle();
+    const hidden: string[] = (ath as { pb_hidden?: string[] } | null)?.pb_hidden ?? [];
+    const lower = exData.name.toLowerCase();
+    if (hidden.some((h) => h.toLowerCase() === lower)) {
+      await supabase.from("athletes").update({ pb_hidden: hidden.filter((h) => h.toLowerCase() !== lower) }).eq("id", athleteId);
+    }
+  } catch { /* column may not exist yet */ }
 }

@@ -267,6 +267,18 @@ export default function AthleteDashboard({
                     <span>· {relTime(c.created_at)}</span>
                   </div>
                   <div style={st.scoreRow}>
+                    {/* Pain leads for a monitored / injured athlete so the row
+                        is scannable at a glance. */}
+                    {c.pain_score != null && (
+                      <span style={{
+                        ...st.scorePill, fontWeight: 700,
+                        ...(c.pain_score > 0
+                          ? { borderColor: "#E53935", color: "#E53935" }
+                          : { borderColor: "#2E9E5B", color: "#2E9E5B" }),
+                      }}>
+                        🩹 Pain {c.pain_score}/10{c.pain_location ? ` · ${c.pain_location}` : ""}
+                      </span>
+                    )}
                     {CHECKIN_QUESTIONS.map((q) => {
                       const v = c[q.key as keyof CheckIn] as number;
                       return (
@@ -276,18 +288,13 @@ export default function AthleteDashboard({
                       );
                     })}
                   </div>
-                  {(c.pain_score != null || c.fatigue != null || c.stress != null) && (
+                  {(c.fatigue != null || c.stress != null) && (
                     <div style={st.scoreRow}>
                       {c.fatigue != null && (
                         <span style={{ ...st.scorePill, borderColor: SCORE_COLOR("soreness", c.fatigue), color: SCORE_COLOR("soreness", c.fatigue) }}>Fatigue {c.fatigue}</span>
                       )}
                       {c.stress != null && (
                         <span style={{ ...st.scorePill, borderColor: SCORE_COLOR("soreness", c.stress), color: SCORE_COLOR("soreness", c.stress) }}>Stress {c.stress}</span>
-                      )}
-                      {c.pain_score != null && c.pain_score > 0 && (
-                        <span style={{ ...st.scorePill, borderColor: "#E53935", color: "#E53935" }}>
-                          Pain {c.pain_score}/10{c.pain_location ? ` · ${c.pain_location}` : ""}
-                        </span>
                       )}
                     </div>
                   )}

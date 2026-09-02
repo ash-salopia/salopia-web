@@ -190,6 +190,17 @@ async function detectPB(athleteId: string, exerciseId: string, sessionId: string
       .upsert(row, { onConflict: "athlete_id,exercise_name,session_id" });
     if (upsertErr) { console.error("[detectPB] upsert failed", upsertErr); return null; }
 
+    // 0092 — a genuine new PB un-hides an exercise the coach previously
+    // deleted the PB for. (Silently skipped if 0092 isn't applied.)
+    try {
+      const { data: ath } = await supabase.from("athletes").select("pb_hidden").eq("id", athleteId).maybeSingle();
+      const hidden: string[] = (ath as { pb_hidden?: string[] } | null)?.pb_hidden ?? [];
+      const lower = exData.name.toLowerCase();
+      if (hidden.some((h) => h.toLowerCase() === lower)) {
+        await supabase.from("athletes").update({ pb_hidden: hidden.filter((h) => h.toLowerCase() !== lower) }).eq("id", athleteId);
+      }
+    } catch { /* column may not exist yet */ }
+
     // The row is always kept in sync above, but only celebrate when
     // this save genuinely raised the bar over what this session
     // already had on record — otherwise re-saving/tying an

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import AthletePageHeading from "@/components/AthletePageHeading";
 import { MetricBoxes } from "@/components/MetricBoxes";
 import ChallengeLeaderboard, { type ChallengeLeaderboardGroup } from "@/components/ChallengeLeaderboard";
 import { METRIC_META, parseMetricNumber, type MetricValues } from "@/lib/cardio-metrics";
@@ -77,8 +78,9 @@ export default function AthleteChallengesPage() {
         </button>
       </div>
 
+      <AthletePageHeading emoji="🏆" title="Challenges" />
+
       <div style={s.content}>
-        <div style={s.pageTitle}>🏆 Challenges</div>
 
         {error && <div style={s.errorBox}>{error}</div>}
         {flash && <div style={s.flashBox}>{flash}</div>}

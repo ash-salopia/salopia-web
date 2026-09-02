@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { updatePB, deletePB, createManualPB, formatPBValue } from "@/lib/data/personal-bests";
+import { updatePB, deletePBsForExercise, createManualPB, formatPBValue } from "@/lib/data/personal-bests";
 import { listLibrary } from "@/lib/data/library";
 import { archiveAthlete, updateAthleteRtpStatus } from "@/lib/data/athletes";
 import { RTP_STATUSES } from "@/lib/rtp";
@@ -276,8 +276,12 @@ export default function AthleteProfilePage() {
         }
       }
 
-      // Also scan session_exercises logs to catch coach-logged sessions -       // weighted only (bodyweight PBs are reliably captured by detectPB
-      // itself now, via the personal_bests table above).
+      // Also scan session_exercises logs — but ONLY to surface exercises
+      // that have no stored personal_bests row at all (old data, or a
+      // detectPB miss). A stored row is authoritative and never overwritten
+      // here: that's what makes "Delete PB" stick even when a heavier set is
+      // still logged in a session (detectPB now runs from the athlete app,
+      // the session builder AND Live Group, so the stored row stays current).
       for (const ex of exerciseData ?? []) {
         const log: any[] = ex.log ?? [];
         const session = Array.isArray(ex.sessions) ? ex.sessions[0] : ex.sessions as any;
@@ -291,19 +295,11 @@ export default function AthleteProfilePage() {
           const r = parseInt(String(set.reps)) || prescribedReps;
           const key = ex.name.toLowerCase();
           const existing = bestPerExercise.get(key);
-          // Only ever overwrites an existing WEIGHTED record - a
-          // bodyweight PB (null weight_kg) is left alone here; it
-          // came from the real detectPB flow via personal_bests
-          // above and isn't comparable to a stray logged weight.
-          if (!existing || (existing.weight_kg != null && w > existing.weight_kg)) {
-            bestPerExercise.set(key, {
-              id: existing?.id ?? "",  // keep real PB id if exists
-              exercise_name: ex.name,
-              weight_kg: w,
-              reps: r,
-              time_seconds: null,
-              date: sessionDate,
-            });
+          if (!existing) {
+            bestPerExercise.set(key, { id: "", exercise_name: ex.name, weight_kg: w, reps: r, time_seconds: null, date: sessionDate });
+          } else if (!existing.id && existing.weight_kg != null && w > existing.weight_kg) {
+            // Both from the scan (no stored row) — keep the heaviest.
+            bestPerExercise.set(key, { id: "", exercise_name: ex.name, weight_kg: w, reps: r, time_seconds: null, date: sessionDate });
           }
         }
       }
@@ -1295,12 +1291,16 @@ export default function AthleteProfilePage() {
                         <button
                           style={{ ...p.dangerBtn, fontSize: 12, padding: "5px 10px" }}
                           onClick={async () => {
-                            if (!confirm(`Delete PB for ${pb.exercise_name}? It won't show again unless you add it back manually.`)) return;
+                            if (!confirm(`Delete PB for ${pb.exercise_name}? A later heavier set will set a new one — or add it back manually.`)) return;
                             const key = pb.exercise_name.toLowerCase();
                             try {
-                              if (pb.id) await deletePB(pb.id);
-                              // Hide the exercise so a value re-derived from a
-                              // logged session doesn't just reappear next load.
+                              // Clear every stored PB row for this exercise so the
+                              // next logged set is a PB from zero, not from the
+                              // second-best row.
+                              await deletePBsForExercise(athleteId, pb.exercise_name);
+                              // Hide it so a value re-derived from a logged session
+                              // doesn't just reappear next load. Cleared again the
+                              // moment a genuine new PB is detected, or on manual add.
                               const supabase = createClient();
                               const nextHidden = Array.from(new Set([
                                 ...(((athlete as any)?.pb_hidden ?? []) as string[]).map(s => s.toLowerCase()),

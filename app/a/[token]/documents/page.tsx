@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import AthletePageHeading from "@/components/AthletePageHeading";
 
 interface AthleteDocument {
   id: string;
@@ -88,9 +89,7 @@ export default function AthleteDocumentsPage() {
         <div style={s.brand}>VIS BUILD</div>
         <div style={{ width: 60 }} />
       </div>
-      <div style={{ padding: "12px 16px 0", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
-        📁 Documents
-      </div>
+      <AthletePageHeading emoji="📁" title="Documents" />
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}

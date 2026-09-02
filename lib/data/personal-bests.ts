@@ -111,6 +111,19 @@ export async function deletePB(pbId: string): Promise<void> {
   if (error) throw error;
 }
 
+// Deletes every stored PB row for one exercise (there can be several —
+// one per session, see 0039). Used by "Delete PB" on the profile so the
+// next logged set is a PB from zero, not from the second-best row.
+export async function deletePBsForExercise(athleteId: string, exerciseName: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("personal_bests")
+    .delete()
+    .eq("athlete_id", athleteId)
+    .ilike("exercise_name", exerciseName);
+  if (error) throw error;
+}
+
 export async function updatePB(
   pbId: string,
   patch: { weight_kg?: number | null; reps?: number | null; date?: string }
