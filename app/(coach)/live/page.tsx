@@ -52,6 +52,12 @@ function fmtDate(iso: string): string {
 // when it's a single clean number ("8") - a range ("8-12") has no one
 // value that's obviously "what was done", so it's left for the coach
 // to type explicitly.
+// Any value entered in a set's boxes (used to protect a logged set from
+// the "remove set" undo).
+function setHasData(set: SetLog): boolean {
+  return [set.weight, set.reps, set.time, set.velocity, set.pause].some((v) => (v ?? "").trim().length > 0);
+}
+
 function singleRepValue(prescribedReps?: string): string | null {
   const t = (prescribedReps ?? "").trim();
   return /^\d+$/.test(t) ? t : null;
@@ -260,6 +266,23 @@ export default function LiveGroupPage() {
     const ex = sess?.exercises?.find((e) => e.id === exerciseId);
     if (!ex) return;
     const newLog: SetLog[] = [...(ex.log ?? []), { weight: "", reps: "", done: false }];
+    setSessions((prev) => prev.map((s) => s.id !== sessionId ? s : {
+      ...s,
+      exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog }),
+    }));
+    try { await updateExerciseLog(exerciseId, newLog); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
+  // Undo an add — only ever drops a trailing set that's still empty and
+  // not ticked done, so a logged set can never be silently discarded.
+  const handleRemoveLastSet = async (sessionId: string, exerciseId: string) => {
+    const sess = sessions.find((s) => s.id === sessionId);
+    const ex = sess?.exercises?.find((e) => e.id === exerciseId);
+    const log = ex?.log ?? [];
+    const last = log[log.length - 1];
+    if (!ex || log.length <= 1 || !last || last.done || setHasData(last)) return;
+    const newLog = log.slice(0, -1);
     setSessions((prev) => prev.map((s) => s.id !== sessionId ? s : {
       ...s,
       exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog }),
@@ -917,13 +940,31 @@ export default function LiveGroupPage() {
                                 </button>
                               </div>
                             ))}
-                            <button
-                              onClick={() => handleAddSet(activeSess.id, ex.id)}
-                              style={s.addSetBtn}
-                              title="Add another set"
-                            >
-                              <span style={s.addSetPlus}>＋</span> Add set
-                            </button>
+                            {(() => {
+                              const log = ex.log ?? [];
+                              const last = log[log.length - 1];
+                              const canRemove = log.length > 1 && !!last && !last.done && !setHasData(last);
+                              return (
+                                <div style={s.addRemoveRow}>
+                                  <button
+                                    onClick={() => handleAddSet(activeSess.id, ex.id)}
+                                    style={s.addSetBtn}
+                                    title="Add another set"
+                                  >
+                                    <span style={s.addSetPlus}>＋</span> Add set
+                                  </button>
+                                  {canRemove && (
+                                    <button
+                                      onClick={() => handleRemoveLastSet(activeSess.id, ex.id)}
+                                      style={s.removeSetBtn}
+                                      title="Remove the empty last set"
+                                    >
+                                      − Remove
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
@@ -1170,8 +1211,10 @@ const s: Record<string, React.CSSProperties> = {
   // whose predecessor is itself still empty.
   repeatBtn:    { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 0", fontSize: 15, cursor: "pointer", width: "100%", textAlign: "center" as const },
   repeatBtnDisabled: { opacity: 0.3, cursor: "default" as const },
-  addSetBtn:    { display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginTop: 2 },
+  addRemoveRow: { display: "flex", gap: 6, marginTop: 2 },
+  addSetBtn:    { display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   addSetPlus:   { color: "var(--accent)", fontSize: 15, lineHeight: 1 },
+  removeSetBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   noteOverlay:  { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 },
   notePanel:    { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: 18, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column" as const, gap: 10 },
   noteTitle:    { fontSize: 15, fontWeight: 700, color: "var(--text)" },
