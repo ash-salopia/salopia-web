@@ -11,6 +11,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { LibraryEntry } from "@/types";
+import { saveLibraryEntry } from "@/lib/data/library";
+import LibraryEntryForm from "@/components/LibraryEntryForm";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -121,6 +123,8 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const [showLog, setShowLog] = useState(false);
   const [nameQuery, setNameQuery] = useState(exercise.name);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addError, setAddError] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Local state prevents dropdown/log flickering on parent re-renders
@@ -153,7 +157,8 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const doneSets = localLog.filter(s => s.done).length;
 
   // Library autocomplete - Power/Speed exercises first
-  const libraryMatches = nameQuery.trim().length > 0
+  const trimmedName = nameQuery.trim();
+  const libraryMatches = trimmedName.length > 0
     ? library
         .filter(e => e.name.toLowerCase().includes(nameQuery.toLowerCase()))
         .sort((a, b) => {
@@ -165,6 +170,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         })
         .slice(0, 8)
     : [];
+  const hasExactMatch = library.some(e => e.name.toLowerCase() === trimmedName.toLowerCase());
 
   function update(fields: Partial<PSExercise>) {
     // Compute new values first
@@ -233,6 +239,17 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
     update({ name: entry.name });
   }
 
+  async function handleAddToLibrary(entry: Partial<LibraryEntry> & { name: string }) {
+    setAddError("");
+    try {
+      const saved = await saveLibraryEntry(entry);
+      setAddOpen(false);
+      selectLibraryEntry(saved);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Could not save to library");
+    }
+  }
+
   return (
     <div style={card.wrap}>
       {/* ── Header ── */}
@@ -269,7 +286,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
             placeholder="Exercise name…"
             style={card.nameInput}
           />
-          {showDropdown && libraryMatches.length > 0 && (
+          {showDropdown && trimmedName.length > 0 && (libraryMatches.length > 0 || !hasExactMatch) && (
             <div style={card.dropdown}>
               {libraryMatches.map(e => (
                 <button
@@ -283,6 +300,14 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                   )}
                 </button>
               ))}
+              {!hasExactMatch && (
+                <button
+                  style={card.dropdownAdd}
+                  onMouseDown={ev => { ev.preventDefault(); setAddOpen(true); }}
+                >
+                  + Add &quot;{trimmedName}&quot; to library
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -450,6 +475,22 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           ))}
         </div>
       )}
+
+      {addOpen && (
+        <div style={card.addOverlay} onClick={() => setAddOpen(false)}>
+          <div onClick={e => e.stopPropagation()}>
+            {addError && <div style={card.addError}>{addError}</div>}
+            <LibraryEntryForm
+              entry={null}
+              initialName={trimmedName}
+              initialTypes={["Power/Speed"]}
+              title={`Add "${trimmedName}" to library`}
+              onSave={handleAddToLibrary}
+              onClose={() => setAddOpen(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -475,6 +516,9 @@ const card: Record<string, React.CSSProperties> = {
   nameInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 14, fontWeight: 700 },
   dropdown: { position: "absolute" as const, top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 10, padding: 4, maxHeight: 200, overflowY: "auto" as const, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
   dropdownItem: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "7px 10px", border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
+  dropdownAdd: { display: "block", width: "100%", padding: "8px 10px", marginTop: 4, borderRadius: 7, border: "1px dashed var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" as const },
+  addOverlay: { position: "fixed" as const, inset: 0, background: "rgba(6,9,12,.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 16 },
+  addError: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 8 },
   badge: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 7px", flexShrink: 0 },
   deleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", padding: 4, flexShrink: 0 },
   measureSelect: { background: "var(--ink)", border: "1px solid var(--accent)44", color: "var(--accent)", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
