@@ -789,6 +789,8 @@ export default function AthleteSessionView({
                                 const patch: Partial<SetLog> = { done: true };
                                 if (showWeight) patch.weight = prevSet!.weight;
                                 if (timeMode) patch.time = prevSet!.time; else patch.reps = prevSet!.reps;
+                                if (showVelocity && (prevSet!.velocity ?? "").trim()) patch.velocity = prevSet!.velocity;
+                                if (showPause && (prevSet!.pause ?? "").trim()) patch.pause = prevSet!.pause;
                                 handleSetUpdate(ex.id, i, patch);
                               }}
                               title="Copy the previous set"

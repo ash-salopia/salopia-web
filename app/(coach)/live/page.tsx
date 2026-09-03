@@ -926,6 +926,8 @@ export default function LiveGroupPage() {
                                         if (showWeight) patch.weight = prev.weight;
                                         if (timeMode) patch.time = prev.time;
                                         else patch.reps = prev.reps;
+                                        if (showVelocity && (prev.velocity ?? "").trim()) patch.velocity = prev.velocity;
+                                        if (showPause && (prev.pause ?? "").trim()) patch.pause = prev.pause;
                                         handleLogChange(activeSess.id, ex.id, si, patch);
                                       }}
                                       style={{ ...s.repeatBtn, ...(hasPrev ? {} : s.repeatBtnDisabled) }}>
