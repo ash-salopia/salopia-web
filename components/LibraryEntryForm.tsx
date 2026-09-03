@@ -73,8 +73,17 @@ const SESSION_TYPES: { value: string; label: string }[] = [
   { value: "Hyrox", label: "Hybrid" },
 ];
 
-// Power/Speed per-rep measurement preset — mirrors PowerSpeedExerciseCard's
-// MeasurementType. "" = no preset (use the movement quality's default).
+// Power/Speed presets — mirror PowerSpeedExerciseCard's PSQuality /
+// MeasurementType. "" on the measurement = no preset (use the movement
+// quality's default).
+const PS_QUALITIES: { value: string; label: string }[] = [
+  { value: "", label: "General" },
+  { value: "acceleration", label: "Acceleration" },
+  { value: "max_velocity", label: "Max Velocity" },
+  { value: "plyometric", label: "Plyometric" },
+  { value: "cod", label: "COD" },
+  { value: "deceleration", label: "Deceleration" },
+];
 const PS_MEASUREMENTS: { value: string; label: string }[] = [
   { value: "", label: "No preset" },
   { value: "time_s", label: "Time" },
@@ -118,6 +127,8 @@ export default function LibraryEntryForm({
   const [equipment, setEquipment] = useState<EquipmentType | null>(entry?.equipment ?? null);
   const [defaultDistanceUnit, setDefaultDistanceUnit] = useState<DistanceUnit>(entry?.default_distance_unit ?? "km");
   const [defaultMeasurement, setDefaultMeasurement] = useState<string>(entry?.default_measurement_type ?? "");
+  const [defaultPsQuality, setDefaultPsQuality] = useState<string>(entry?.default_ps_quality ?? "");
+  const [defaultCompletionOnly, setDefaultCompletionOnly] = useState<boolean>(entry?.default_completion_only ?? false);
 
   const handleEquipmentChange = (next: EquipmentType | null) => {
     setEquipment(next);
@@ -163,6 +174,8 @@ export default function LibraryEntryForm({
       equipment: cardioFields ? equipment : null,
       default_distance_unit: cardioFields && defaultTrackedMetrics.includes("distance") ? defaultDistanceUnit : null,
       default_measurement_type: psFields && defaultMeasurement ? defaultMeasurement : null,
+      default_ps_quality: psFields && defaultPsQuality ? defaultPsQuality : null,
+      default_completion_only: psFields ? defaultCompletionOnly : false,
     } as Partial<LibraryEntry> & { name: string });
   };
 
@@ -267,29 +280,68 @@ export default function LibraryEntryForm({
         </>
       )}
       {psFields && (
-        <FieldRow label="Metric logging (Power/Speed)">
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {PS_MEASUREMENTS.map((m) => (
-              <button
-                key={m.value || "none-preset"}
-                type="button"
-                onClick={() => setDefaultMeasurement(m.value)}
-                style={{
-                  background: defaultMeasurement === m.value ? "var(--accent-dim)" : "var(--ink)",
-                  border: `1px solid ${defaultMeasurement === m.value ? "var(--accent)" : "var(--line)"}`,
-                  color: defaultMeasurement === m.value ? "var(--accent)" : "var(--mute)",
-                  borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
-            What each rep is measured against when this exercise is added to a Power/Speed session.
-            {" "}<b>None</b> = just tick the rep done. <b>No preset</b> falls back to the movement quality&rsquo;s default.
-          </div>
-        </FieldRow>
+        <>
+          <FieldRow label="Movement type (Power/Speed)">
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {PS_QUALITIES.map((q) => (
+                <button
+                  key={q.value || "general"}
+                  type="button"
+                  onClick={() => setDefaultPsQuality(q.value)}
+                  style={{
+                    background: defaultPsQuality === q.value ? "var(--accent-dim)" : "var(--ink)",
+                    border: `1px solid ${defaultPsQuality === q.value ? "var(--accent)" : "var(--line)"}`,
+                    color: defaultPsQuality === q.value ? "var(--accent)" : "var(--mute)",
+                    borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+              The quality set when this exercise is added to a Power/Speed session.
+            </div>
+          </FieldRow>
+          <FieldRow label="Completion only (Power/Speed)">
+            <label style={s.checkRow}>
+              <input
+                type="checkbox"
+                checked={defaultCompletionOnly}
+                onChange={(e) => setDefaultCompletionOnly(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+              <span style={{ color: defaultCompletionOnly ? "var(--accent)" : "var(--text)" }}>
+                No metric to log — just a done tick per set
+              </span>
+            </label>
+          </FieldRow>
+          {!defaultCompletionOnly && (
+            <FieldRow label="Metric logging (Power/Speed)">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {PS_MEASUREMENTS.map((m) => (
+                  <button
+                    key={m.value || "none-preset"}
+                    type="button"
+                    onClick={() => setDefaultMeasurement(m.value)}
+                    style={{
+                      background: defaultMeasurement === m.value ? "var(--accent-dim)" : "var(--ink)",
+                      border: `1px solid ${defaultMeasurement === m.value ? "var(--accent)" : "var(--line)"}`,
+                      color: defaultMeasurement === m.value ? "var(--accent)" : "var(--mute)",
+                      borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+                What each rep is measured against. <b>None</b> = tick the rep done.
+                {" "}<b>No preset</b> falls back to the movement type&rsquo;s default.
+              </div>
+            </FieldRow>
+          )}
+        </>
       )}
       {cardioFields && (
         <>

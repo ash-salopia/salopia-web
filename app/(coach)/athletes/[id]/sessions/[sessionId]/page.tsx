@@ -154,6 +154,7 @@ export default function SessionDetailPage() {
       order: ex.order ?? "",
       quality: ex.intensity_label ?? "",
       measurement_type: (["time_s","height_cm","distance_m","rsi","power_w","none"].includes(ex.tempo) ? ex.tempo : (ex.intensity_label === "plyometric" ? "height_cm" : "time_s")) as any,
+      completion_only: !!ex.completion_only,
       sets,
       reps,
       distance: ex.distance ?? "",
@@ -290,6 +291,7 @@ export default function SessionDetailPage() {
         contacts: updated.contacts,
         intensity_label: updated.quality,
         tempo: updated.measurement_type,   // measurement_type stored in tempo
+        completion_only: updated.completion_only,
         target_load: updated.surface,
         notes: updated.notes,
         log: updated.log as any,
@@ -306,6 +308,7 @@ export default function SessionDetailPage() {
         log: updated.log as any,
         tempo: updated.measurement_type,      // measurement_type stored in tempo
         intensity_label: updated.quality,     // quality stored in intensity_label
+        completion_only: updated.completion_only,
         distance: updated.distance,
         target_load: updated.surface,         // surface stored in target_load
         contacts: updated.contacts ?? null,

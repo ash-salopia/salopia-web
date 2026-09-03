@@ -88,6 +88,8 @@ export interface LibraryEntry {
   default_distance_unit: import("@/lib/cardio-metrics").DistanceUnit | null; // 0075 — Cardio/Hyrox only: starting unit for this exercise's distance box(es) when loaded into a session, e.g. an Erg defaults to metres, a Treadmill to km
   default_key_metrics: import("@/lib/cardio-metrics").MetricKey[]; // 0076 — Cardio/Hyrox only: up to 5 metrics shown by default (rest behind "More") when this entry is loaded into a session; independent of default_tracked_metrics
   default_measurement_type: string | null; // 0094 — Power/Speed only: pre-set per-rep measurement ("time_s"|"height_cm"|"distance_m"|"rsi"|"power_w"|"velocity_ms"|"none"), applied when this entry is loaded into a Power/Speed session; null = fall back to the movement quality's default
+  default_ps_quality: string | null; // 0095 — Power/Speed only: pre-set movement type ("acceleration"|"max_velocity"|"plyometric"|"cod"|"deceleration"|""), applied on load
+  default_completion_only: boolean; // 0095 — Power/Speed only: pre-set "completion only" (no metric, just a done tick) when loaded
 }
 
 // ------------------------------------------------------------

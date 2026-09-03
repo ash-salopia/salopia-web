@@ -46,6 +46,7 @@ export interface PSExercise {
   order: string;
   quality: PSQuality;
   measurement_type: MeasurementType;
+  completion_only: boolean;  // no metric to log — just a done tick per set
   sets: number;
   reps: number;             // number of reps per set (integer for P/S)
   distance: string;         // prescribed distance e.g. "10m"
@@ -154,6 +155,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const qMeta = QUALITY_META[exercise.quality] ?? QUALITY_META[""];
   const mMeta = MEASUREMENT_META[localMeasure] ?? MEASUREMENT_META.none;
   const isPlyo = exercise.quality === "plyometric";
+  const completionOnly = !!exercise.completion_only;
   const doneSets = localLog.filter(s => s.done).length;
 
   // Library autocomplete - Power/Speed exercises first
@@ -190,10 +192,12 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
     }));
     setLocalLog(newLog);
 
-    // Auto-set measurement type when quality changes
+    // Auto-set measurement type when quality changes — unless this same
+    // patch also sets measurement_type explicitly (a library preset with
+    // both quality AND measurement must keep its measurement).
     let newMeasure = localMeasure;
     if (fields.measurement_type !== undefined) { newMeasure = fields.measurement_type as MeasurementType; setLocalMeasure(newMeasure); }
-    if (fields.quality !== undefined) { newMeasure = (QUALITY_META[fields.quality]?.defaultMeasurement ?? "time_s") as MeasurementType; setLocalMeasure(newMeasure); }
+    else if (fields.quality !== undefined) { newMeasure = (QUALITY_META[fields.quality]?.defaultMeasurement ?? "time_s") as MeasurementType; setLocalMeasure(newMeasure); }
 
     const updated = { ...exercise, ...fields, sets: newSets, reps: newReps, measurement_type: newMeasure, log: newLog };
     onChange(updated);
@@ -233,16 +237,20 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
     onChange({ ...exercise, sets: localSets, reps: localReps, measurement_type: localMeasure, log: newLog2 });
   }
 
+  const validQualities: PSQuality[] = ["acceleration", "max_velocity", "plyometric", "cod", "deceleration", ""];
+
   function selectLibraryEntry(entry: LibraryEntry) {
     setNameQuery(entry.name);
     setShowDropdown(false);
+    // Library presets (0094/0095): movement type, per-rep measurement,
+    // and "completion only". A preset with both quality AND measurement
+    // keeps its measurement (see update()).
     const patch: Partial<PSExercise> = { name: entry.name };
-    // Library entries can pre-set the per-rep measurement (0094) — e.g.
-    // an "MB Throw" saved as "None" adds with no metric box.
+    const q = entry.default_ps_quality;
+    if (q != null && validQualities.includes(q as PSQuality)) patch.quality = q as PSQuality;
     const dm = entry.default_measurement_type;
-    if (dm && validMeasureTypes.includes(dm as MeasurementType)) {
-      patch.measurement_type = dm as MeasurementType;
-    }
+    if (dm && validMeasureTypes.includes(dm as MeasurementType)) patch.measurement_type = dm as MeasurementType;
+    if (entry.default_completion_only) patch.completion_only = true;
     update(patch);
   }
 
@@ -327,16 +335,18 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         )}
 
         {/* Measurement type - prominent in header so it's always visible */}
-        <select
-          value={localMeasure}
-          onChange={e => { setLocalMeasure(e.target.value as MeasurementType); update({ measurement_type: e.target.value as MeasurementType }); }}
-          style={card.measureSelect}
-          title="What are you measuring per rep?"
-        >
-          {Object.entries(MEASUREMENT_META).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
-          ))}
-        </select>
+        {!completionOnly && (
+          <select
+            value={localMeasure}
+            onChange={e => { setLocalMeasure(e.target.value as MeasurementType); update({ measurement_type: e.target.value as MeasurementType }); }}
+            style={card.measureSelect}
+            title="What are you measuring per rep?"
+          >
+            {Object.entries(MEASUREMENT_META).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
+            ))}
+          </select>
+        )}
 
         <button style={card.deleteBtn} onClick={onDelete}>×</button>
       </div>
@@ -349,43 +359,60 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
             onBlur={e => { if (!localSets || localSets < 1) { setLocalSets(1); update({ sets: 1 }); } }}
             style={card.miniInput} />
         </Field>
-        <Field label="Reps">
-          <input type="number" value={localReps || ""} min={1}
-            onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ reps: v }); else if (e.target.value === "") setLocalReps(0); }}
-            onBlur={e => { if (!localReps || localReps < 1) { setLocalReps(1); update({ reps: 1 }); } }}
-            style={card.miniInput} />
-        </Field>
-        <Field label="Distance">
-          <div style={{ display: "flex", gap: 2 }}>
-            <input value={exercise.distance} onChange={e => update({ distance: e.target.value })}
-              placeholder="10m" style={{ ...card.miniInput, flex: 1 }} />
-            <select value="" onChange={e => update({ distance: e.target.value })}
-              style={{ ...card.miniInput, width: 28, padding: "4px 2px" }}>
-              <option value="">↓</option>
-              {DISTANCE_PRESETS.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-        </Field>
+        {!completionOnly && (
+          <Field label="Reps">
+            <input type="number" value={localReps || ""} min={1}
+              onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ reps: v }); else if (e.target.value === "") setLocalReps(0); }}
+              onBlur={e => { if (!localReps || localReps < 1) { setLocalReps(1); update({ reps: 1 }); } }}
+              style={card.miniInput} />
+          </Field>
+        )}
+        {!completionOnly && (
+          <Field label="Distance">
+            <div style={{ display: "flex", gap: 2 }}>
+              <input value={exercise.distance} onChange={e => update({ distance: e.target.value })}
+                placeholder="10m" style={{ ...card.miniInput, flex: 1 }} />
+              <select value="" onChange={e => update({ distance: e.target.value })}
+                style={{ ...card.miniInput, width: 28, padding: "4px 2px" }}>
+                <option value="">↓</option>
+                {DISTANCE_PRESETS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          </Field>
+        )}
         <Field label="Rest">
           <input value={exercise.rest} onChange={e => update({ rest: e.target.value })}
             placeholder="3min" style={card.miniInput} />
         </Field>
-        {isPlyo && (
+        {isPlyo && !completionOnly && (
           <Field label="Contacts">
             <input type="number" value={exercise.contacts ?? ""}
               onChange={e => update({ contacts: parseInt(e.target.value) || null })}
               placeholder="20" style={card.miniInput} />
           </Field>
         )}
-        <Field label="Surface">
-          <select value={exercise.surface} onChange={e => update({ surface: e.target.value })}
-            style={card.miniInput}>
-            <option value=""> - </option>
-            {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </Field>
+        {!completionOnly && (
+          <Field label="Surface">
+            <select value={exercise.surface} onChange={e => update({ surface: e.target.value })}
+              style={card.miniInput}>
+              <option value=""> - </option>
+              {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </Field>
+        )}
 
       </div>
+
+      {/* ── Completion only ── */}
+      <label style={card.completionRow} title="No metric to log — the athlete just ticks each set done. Hides the per-rep boxes.">
+        <input
+          type="checkbox"
+          checked={completionOnly}
+          onChange={e => update({ completion_only: e.target.checked })}
+          style={{ accentColor: "var(--accent)" }}
+        />
+        <span style={{ color: completionOnly ? "var(--accent)" : "var(--mute)" }}>Completion only</span>
+      </label>
 
       {/* ── Coaching cues ── */}
       <button style={card.toggleBtn} onClick={() => setShowCues(v => !v)}>
@@ -404,7 +431,21 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         {showLog ? "▾ Hide log" : `▸ Log sets${doneSets > 0 ? ` (${doneSets}/${localLog.length})` : ""}`}
       </button>
 
-      {showLog && localMeasure !== "none" && (
+      {showLog && (completionOnly || localMeasure === "none") && (
+        <div style={card.logWrap}>
+          {localLog.map((set, si) => (
+            <div key={si} style={{ ...card.setBlock, ...(set.done ? card.setBlockDone : {}), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={card.setLabel}>Set {si + 1}</span>
+              <button
+                style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
+                onClick={() => updateSet(si, { done: !set.done })}
+              >✓</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showLog && !completionOnly && localMeasure !== "none" && (
         <div style={card.logWrap}>
           {localLog.map((set, si) => (
             <div key={si} style={{ ...card.setBlock, ...(set.done ? card.setBlockDone : {}) }}>
@@ -526,6 +567,7 @@ const card: Record<string, React.CSSProperties> = {
   dropdownAdd: { display: "block", width: "100%", padding: "8px 10px", marginTop: 4, borderRadius: 7, border: "1px dashed var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" as const },
   addOverlay: { position: "fixed" as const, inset: 0, background: "rgba(6,9,12,.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 16 },
   addError: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 8 },
+  completionRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", marginTop: 2 },
   badge: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 7px", flexShrink: 0 },
   deleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", padding: 4, flexShrink: 0 },
   measureSelect: { background: "var(--ink)", border: "1px solid var(--accent)44", color: "var(--accent)", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },

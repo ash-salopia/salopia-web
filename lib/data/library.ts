@@ -53,6 +53,8 @@ export async function saveLibraryEntry(
         default_distance_unit: entry.default_distance_unit !== undefined ? entry.default_distance_unit : existing.default_distance_unit,
         default_key_metrics: entry.default_key_metrics ?? existing.default_key_metrics ?? [],
         default_measurement_type: entry.default_measurement_type !== undefined ? entry.default_measurement_type : existing.default_measurement_type,
+        default_ps_quality: entry.default_ps_quality !== undefined ? entry.default_ps_quality : existing.default_ps_quality,
+        default_completion_only: entry.default_completion_only ?? existing.default_completion_only ?? false,
       })
       .eq("id", existing.id)
       .select()
@@ -85,6 +87,8 @@ export async function saveLibraryEntry(
       default_distance_unit: entry.default_distance_unit ?? null,
       default_key_metrics: entry.default_key_metrics ?? [],
       default_measurement_type: entry.default_measurement_type ?? null,
+      default_ps_quality: entry.default_ps_quality ?? null,
+      default_completion_only: entry.default_completion_only ?? false,
     })
     .select()
     .single();
