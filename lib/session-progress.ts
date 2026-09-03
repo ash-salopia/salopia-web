@@ -144,20 +144,29 @@ function pauseTieBreak(cur: number | null, prev: number | null): ProgressionSign
   return { direction: diff > 0 ? "up" : "down", label: `same, ${diff > 0 ? "+" : ""}${diff}s pause` };
 }
 
-// Total tonnage (Σ weight×reps across completed sets). Only meaningful
-// for a weighted, rep-based exercise.
-export function totalLoadValue(ex: SessionExercise | null): number | null {
-  if (!ex) return null;
+// Total work across completed sets:
+//   tonnage — Σ weight×reps, for a loaded exercise
+//   reps    — Σ reps, always (used when there's no load, e.g. pull-ups)
+// A bodyweight exercise done for more total reps over the same number of
+// sets still counts as progress even though the best single set didn't
+// move — that's what the Best signal alone would miss.
+function totalWork(ex: SessionExercise | null): { tonnage: number | null; reps: number | null } {
+  if (!ex) return { tonnage: null, reps: null };
   const done = (ex.log ?? []).filter((l) => l.done);
-  if (!done.length) return null;
-  let total = 0;
-  let counted = false;
+  let tonnage = 0, tonnageCounted = false;
+  let reps = 0, repsCounted = false;
   for (const l of done) {
     const w = parseFloat(l.weight ?? "");
     const r = parseInt(l.reps ?? "", 10);
-    if (isFinite(w) && isFinite(r)) { total += w * r; counted = true; }
+    if (isFinite(r)) { reps += r; repsCounted = true; }
+    if (isFinite(w) && isFinite(r)) { tonnage += w * r; tonnageCounted = true; }
   }
-  return counted ? total : null;
+  return { tonnage: tonnageCounted ? tonnage : null, reps: repsCounted ? reps : null };
+}
+
+// Total tonnage (Σ weight×reps). null for a bodyweight / no-load exercise.
+export function totalLoadValue(ex: SessionExercise | null): number | null {
+  return totalWork(ex).tonnage;
 }
 
 export function computeTotalLoadSignal(
@@ -165,12 +174,24 @@ export function computeTotalLoadSignal(
   prevEx: SessionExercise | null
 ): ProgressionSignal | null {
   if (!prevEx) return null;
-  const cur = totalLoadValue(currentEx);
-  const prev = totalLoadValue(prevEx);
-  if (cur == null || prev == null) return null;
-  const diff = Math.round((cur - prev) * 10) / 10;
-  if (diff === 0) return { direction: "same", label: "same" };
-  return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff}kg` };
+  const cur = totalWork(currentEx);
+  const prev = totalWork(prevEx);
+
+  // Loaded both times → total tonnage moved
+  if (cur.tonnage != null && prev.tonnage != null) {
+    const diff = Math.round((cur.tonnage - prev.tonnage) * 10) / 10;
+    if (diff === 0) return { direction: "same", label: "same" };
+    return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff}kg` };
+  }
+
+  // No load (or one side unweighted) → total reps across all sets
+  if (cur.reps != null && prev.reps != null) {
+    const diff = cur.reps - prev.reps;
+    if (diff === 0) return { direction: "same", label: "same" };
+    return { direction: diff > 0 ? "up" : "down", label: `${diff > 0 ? "+" : ""}${diff} reps` };
+  }
+
+  return null;
 }
 
 export function progressionArrow(direction: "up" | "down" | "same"): string {
