@@ -52,6 +52,7 @@ export async function saveLibraryEntry(
         equipment: entry.equipment !== undefined ? entry.equipment : existing.equipment,
         default_distance_unit: entry.default_distance_unit !== undefined ? entry.default_distance_unit : existing.default_distance_unit,
         default_key_metrics: entry.default_key_metrics ?? existing.default_key_metrics ?? [],
+        default_measurement_type: entry.default_measurement_type !== undefined ? entry.default_measurement_type : existing.default_measurement_type,
       })
       .eq("id", existing.id)
       .select()
@@ -83,6 +84,7 @@ export async function saveLibraryEntry(
       equipment: entry.equipment ?? null,
       default_distance_unit: entry.default_distance_unit ?? null,
       default_key_metrics: entry.default_key_metrics ?? [],
+      default_measurement_type: entry.default_measurement_type ?? null,
     })
     .select()
     .single();

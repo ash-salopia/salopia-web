@@ -73,6 +73,19 @@ const SESSION_TYPES: { value: string; label: string }[] = [
   { value: "Hyrox", label: "Hybrid" },
 ];
 
+// Power/Speed per-rep measurement preset — mirrors PowerSpeedExerciseCard's
+// MeasurementType. "" = no preset (use the movement quality's default).
+const PS_MEASUREMENTS: { value: string; label: string }[] = [
+  { value: "", label: "No preset" },
+  { value: "time_s", label: "Time" },
+  { value: "height_cm", label: "Height" },
+  { value: "distance_m", label: "Distance" },
+  { value: "rsi", label: "RSI" },
+  { value: "power_w", label: "Power" },
+  { value: "velocity_ms", label: "Velocity" },
+  { value: "none", label: "None" },
+];
+
 export default function LibraryEntryForm({
   entry,
   initialName,
@@ -104,6 +117,7 @@ export default function LibraryEntryForm({
   const [defaultKeyMetrics, setDefaultKeyMetrics] = useState<MetricKey[]>(entry?.default_key_metrics ?? []);
   const [equipment, setEquipment] = useState<EquipmentType | null>(entry?.equipment ?? null);
   const [defaultDistanceUnit, setDefaultDistanceUnit] = useState<DistanceUnit>(entry?.default_distance_unit ?? "km");
+  const [defaultMeasurement, setDefaultMeasurement] = useState<string>(entry?.default_measurement_type ?? "");
 
   const handleEquipmentChange = (next: EquipmentType | null) => {
     setEquipment(next);
@@ -122,6 +136,7 @@ export default function LibraryEntryForm({
   };
   const strengthFields = types.includes("Strength") || types.includes("Power/Speed");
   const cardioFields = types.includes("Cardio") || types.includes("Hyrox");
+  const psFields = types.includes("Power/Speed");
 
   const toggleType = (t: string) =>
     setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -147,6 +162,7 @@ export default function LibraryEntryForm({
       default_key_metrics: cardioFields ? defaultKeyMetrics : [],
       equipment: cardioFields ? equipment : null,
       default_distance_unit: cardioFields && defaultTrackedMetrics.includes("distance") ? defaultDistanceUnit : null,
+      default_measurement_type: psFields && defaultMeasurement ? defaultMeasurement : null,
     } as Partial<LibraryEntry> & { name: string });
   };
 
@@ -249,6 +265,31 @@ export default function LibraryEntryForm({
             </div>
           </FieldRow>
         </>
+      )}
+      {psFields && (
+        <FieldRow label="Metric logging (Power/Speed)">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {PS_MEASUREMENTS.map((m) => (
+              <button
+                key={m.value || "none-preset"}
+                type="button"
+                onClick={() => setDefaultMeasurement(m.value)}
+                style={{
+                  background: defaultMeasurement === m.value ? "var(--accent-dim)" : "var(--ink)",
+                  border: `1px solid ${defaultMeasurement === m.value ? "var(--accent)" : "var(--line)"}`,
+                  color: defaultMeasurement === m.value ? "var(--accent)" : "var(--mute)",
+                  borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+            What each rep is measured against when this exercise is added to a Power/Speed session.
+            {" "}<b>None</b> = just tick the rep done. <b>No preset</b> falls back to the movement quality&rsquo;s default.
+          </div>
+        </FieldRow>
       )}
       {cardioFields && (
         <>

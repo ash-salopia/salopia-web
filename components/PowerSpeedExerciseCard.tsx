@@ -236,7 +236,14 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   function selectLibraryEntry(entry: LibraryEntry) {
     setNameQuery(entry.name);
     setShowDropdown(false);
-    update({ name: entry.name });
+    const patch: Partial<PSExercise> = { name: entry.name };
+    // Library entries can pre-set the per-rep measurement (0094) — e.g.
+    // an "MB Throw" saved as "None" adds with no metric box.
+    const dm = entry.default_measurement_type;
+    if (dm && validMeasureTypes.includes(dm as MeasurementType)) {
+      patch.measurement_type = dm as MeasurementType;
+    }
+    update(patch);
   }
 
   async function handleAddToLibrary(entry: Partial<LibraryEntry> & { name: string }) {
