@@ -55,6 +55,7 @@ export async function saveLibraryEntry(
         default_measurement_type: entry.default_measurement_type !== undefined ? entry.default_measurement_type : existing.default_measurement_type,
         default_ps_quality: entry.default_ps_quality !== undefined ? entry.default_ps_quality : existing.default_ps_quality,
         default_completion_only: entry.default_completion_only ?? existing.default_completion_only ?? false,
+        default_ps_metrics: entry.default_ps_metrics ?? existing.default_ps_metrics ?? [],
       })
       .eq("id", existing.id)
       .select()
@@ -89,6 +90,7 @@ export async function saveLibraryEntry(
       default_measurement_type: entry.default_measurement_type ?? null,
       default_ps_quality: entry.default_ps_quality ?? null,
       default_completion_only: entry.default_completion_only ?? false,
+      default_ps_metrics: entry.default_ps_metrics ?? [],
     })
     .select()
     .single();

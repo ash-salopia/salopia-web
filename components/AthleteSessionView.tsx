@@ -12,6 +12,7 @@ import PBCelebrationModal from "@/components/PBCelebrationModal";
 import SessionSummaryModal from "@/components/SessionSummaryModal";
 import RecoverySessionAthleteView from "@/components/recovery/RecoverySessionAthleteView";
 import HyroxCardioAthleteView from "@/components/HyroxCardioAthleteView";
+import PowerSpeedAthleteView from "@/components/PowerSpeedAthleteView";
 import SportSessionAthleteView from "@/components/sport/SportSessionAthleteView";
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import { todayISO } from "@/lib/date-utils";
@@ -454,6 +455,19 @@ export default function AthleteSessionView({
         token={token}
         zones={zones}
         zonesEnabled={zonesEnabled}
+        onUpdated={refetchSession}
+        onBack={() => router.push(`/a/${token}`)}
+      />
+    );
+  }
+
+  // Power/Speed sessions log per-rep metric boxes (time/distance/height/…),
+  // not the generic weight/reps rows — dedicated view.
+  if (session.type === "power_speed") {
+    return (
+      <PowerSpeedAthleteView
+        session={session}
+        token={token}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}
       />

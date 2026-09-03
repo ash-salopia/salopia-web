@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { LibraryEntry } from "@/types";
 import { MetricToggles, DistanceUnitPills } from "@/components/MetricBoxes";
 import { METRIC_META, EQUIPMENT_ORDER, EQUIPMENT_META, metricsForEquipment, type MetricKey, type EquipmentType, type DistanceUnit } from "@/lib/cardio-metrics";
+import { PS_METRIC_META, PS_METRIC_ORDER, migrateMeasurementType, type PSMetricKey } from "@/lib/ps-metrics";
 
 const MAX_KEY_METRICS = 5;
 
@@ -73,9 +74,7 @@ const SESSION_TYPES: { value: string; label: string }[] = [
   { value: "Hyrox", label: "Hybrid" },
 ];
 
-// Power/Speed presets — mirror PowerSpeedExerciseCard's PSQuality /
-// MeasurementType. "" on the measurement = no preset (use the movement
-// quality's default).
+// Power/Speed movement type preset (mirrors PowerSpeedExerciseCard's PSQuality).
 const PS_QUALITIES: { value: string; label: string }[] = [
   { value: "", label: "General" },
   { value: "acceleration", label: "Acceleration" },
@@ -83,16 +82,6 @@ const PS_QUALITIES: { value: string; label: string }[] = [
   { value: "plyometric", label: "Plyometric" },
   { value: "cod", label: "COD" },
   { value: "deceleration", label: "Deceleration" },
-];
-const PS_MEASUREMENTS: { value: string; label: string }[] = [
-  { value: "", label: "No preset" },
-  { value: "time_s", label: "Time" },
-  { value: "height_cm", label: "Height" },
-  { value: "distance_m", label: "Distance" },
-  { value: "rsi", label: "RSI" },
-  { value: "power_w", label: "Power" },
-  { value: "velocity_ms", label: "Velocity" },
-  { value: "none", label: "None" },
 ];
 
 export default function LibraryEntryForm({
@@ -126,9 +115,18 @@ export default function LibraryEntryForm({
   const [defaultKeyMetrics, setDefaultKeyMetrics] = useState<MetricKey[]>(entry?.default_key_metrics ?? []);
   const [equipment, setEquipment] = useState<EquipmentType | null>(entry?.equipment ?? null);
   const [defaultDistanceUnit, setDefaultDistanceUnit] = useState<DistanceUnit>(entry?.default_distance_unit ?? "km");
-  const [defaultMeasurement, setDefaultMeasurement] = useState<string>(entry?.default_measurement_type ?? "");
   const [defaultPsQuality, setDefaultPsQuality] = useState<string>(entry?.default_ps_quality ?? "");
   const [defaultCompletionOnly, setDefaultCompletionOnly] = useState<boolean>(entry?.default_completion_only ?? false);
+  const [defaultPsMetrics, setDefaultPsMetrics] = useState<PSMetricKey[]>(() => {
+    const stored = entry?.default_ps_metrics;
+    if (Array.isArray(stored) && stored.length) return stored.filter((k): k is PSMetricKey => k in PS_METRIC_META);
+    return migrateMeasurementType(entry?.default_measurement_type); // one-time carry-over from the old single picker
+  });
+  const togglePsMetric = (k: PSMetricKey) =>
+    setDefaultPsMetrics((prev) => {
+      const next = prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k];
+      return PS_METRIC_ORDER.filter((x) => next.includes(x));
+    });
 
   const handleEquipmentChange = (next: EquipmentType | null) => {
     setEquipment(next);
@@ -173,9 +171,9 @@ export default function LibraryEntryForm({
       default_key_metrics: cardioFields ? defaultKeyMetrics : [],
       equipment: cardioFields ? equipment : null,
       default_distance_unit: cardioFields && defaultTrackedMetrics.includes("distance") ? defaultDistanceUnit : null,
-      default_measurement_type: psFields && defaultMeasurement ? defaultMeasurement : null,
       default_ps_quality: psFields && defaultPsQuality ? defaultPsQuality : null,
       default_completion_only: psFields ? defaultCompletionOnly : false,
+      default_ps_metrics: psFields && !defaultCompletionOnly ? defaultPsMetrics : [],
     } as Partial<LibraryEntry> & { name: string });
   };
 
@@ -317,27 +315,32 @@ export default function LibraryEntryForm({
             </label>
           </FieldRow>
           {!defaultCompletionOnly && (
-            <FieldRow label="Metric logging (Power/Speed)">
+            <FieldRow label="Metrics logged (Power/Speed)">
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {PS_MEASUREMENTS.map((m) => (
-                  <button
-                    key={m.value || "none-preset"}
-                    type="button"
-                    onClick={() => setDefaultMeasurement(m.value)}
-                    style={{
-                      background: defaultMeasurement === m.value ? "var(--accent-dim)" : "var(--ink)",
-                      border: `1px solid ${defaultMeasurement === m.value ? "var(--accent)" : "var(--line)"}`,
-                      color: defaultMeasurement === m.value ? "var(--accent)" : "var(--mute)",
-                      borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+                {PS_METRIC_ORDER.map((k) => {
+                  const m = PS_METRIC_META[k];
+                  const on = defaultPsMetrics.includes(k);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => togglePsMetric(k)}
+                      style={{
+                        background: on ? "var(--accent-dim)" : "var(--ink)",
+                        border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+                        color: on ? "var(--accent)" : "var(--mute)",
+                        borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      {m.label}{m.unit ? ` (${m.unit})` : ""}
+                      <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 4 }}>{m.scope === "set" ? "/set" : "/rep"}</span>
+                    </button>
+                  );
+                })}
               </div>
               <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
-                What each rep is measured against. <b>None</b> = tick the rep done.
-                {" "}<b>No preset</b> falls back to the movement type&rsquo;s default.
+                Which boxes show when this exercise is added to a session. <b>Load</b> / <b>Reps</b> are one value per set;
+                the rest one per rep. Leave empty for &ldquo;just tick done&rdquo;.
               </div>
             </FieldRow>
           )}

@@ -1,88 +1,30 @@
 "use client";
 
 // ============================================================
-// PowerSpeedExerciseCard - v2
-// Per-rep logging with measurement type selector.
-// Each set has an array of rep results. A "same for all reps"
-// toggle collapses to one value per set (useful for RSI scores
-// measured per set, not per rep).
-// Library autocomplete shows Power/Speed exercises first.
+// PowerSpeedExerciseCard — v3 (multi-metric)
+// A coach picks which metrics the exercise tracks (0096):
+//   • set metrics  (Load, Reps) — one value per set
+//   • rep metrics  (Time, Distance, Height, Velocity, Power, RSI, GCT)
+//     — one value per rep
+// e.g. a sled sprint = Load + Time + Distance; a med-ball throw =
+// Load + Reps + Distance. "Completion only" hides all boxes.
 // ============================================================
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import type { LibraryEntry } from "@/types";
 import { saveLibraryEntry } from "@/lib/data/library";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
+import {
+  PS_METRIC_META, PS_METRIC_ORDER, QUALITY_META,
+  buildPSLog, emptyPSSetLog, normalizePSLog,
+  type PSMetricKey, type PSQuality, type PSExercise, type PSSetLog,
+} from "@/lib/ps-metrics";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-export type PSQuality =
-  | "acceleration" | "max_velocity" | "plyometric"
-  | "cod" | "deceleration" | "";
-
-export type MeasurementType =
-  | "time_s"      // sprint time (lower = better)
-  | "height_cm"   // jump height
-  | "distance_m"  // broad jump / sprint distance result
-  | "rsi"         // reactive strength index
-  | "power_w"    // power in watts
-  | "velocity_ms" // bar/movement speed in m/s
-  | "none";       // just tick done
-
-export interface PSSetLog {
-  done: boolean;
-  rep_results: string[];    // one per rep — length matches exercise.reps
-  single_value: boolean;    // if true, only rep_results[0] is shown/used
-  contact_time: string;     // ms (plyometric)
-  rsi: string;              // auto-calculated or manual
-  rpe: string;              // 1–10
-  pain: string;             // 0–10
-  set_notes: string;
-}
-
-export interface PSExercise {
-  id: string;
-  name: string;
-  order: string;
-  quality: PSQuality;
-  measurement_type: MeasurementType;
-  completion_only: boolean;  // no metric to log — just a done tick per set
-  sets: number;
-  reps: number;             // number of reps per set (integer for P/S)
-  distance: string;         // prescribed distance e.g. "10m"
-  rest: string;
-  contacts: number | null;  // prescribed contacts (plyometric)
-  surface: string;
-  notes: string;            // coaching cues
-  log: PSSetLog[];
-  sort_order: number;
-}
-
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-export const QUALITY_META: Record<string, { label: string; color: string; icon: string; defaultMeasurement: MeasurementType }> = {
-  acceleration:  { label: "Acceleration",  color: "#F59E0B", icon: "⚡", defaultMeasurement: "time_s" },
-  max_velocity:  { label: "Max Velocity",  color: "#EF4444", icon: "🏃", defaultMeasurement: "time_s" },
-  plyometric:    { label: "Plyometric",    color: "#8B5CF6", icon: "🦘", defaultMeasurement: "height_cm" },
-  cod:           { label: "COD",           color: "#3B82F6", icon: "🔄", defaultMeasurement: "time_s" },
-  deceleration:  { label: "Deceleration",  color: "#10B981", icon: "🛑", defaultMeasurement: "time_s" },
-  "":            { label: "General",       color: "#6B7280", icon: "•",  defaultMeasurement: "none" },
-};
-
-const MEASUREMENT_META: Record<MeasurementType, { label: string; unit: string; placeholder: string }> = {
-  time_s:    { label: "Time",     unit: "s",   placeholder: "" },
-  height_cm: { label: "Height",   unit: "cm",  placeholder: "" },
-  distance_m:{ label: "Distance", unit: "m",   placeholder: "" },
-  rsi:       { label: "RSI",      unit: "",    placeholder: "" },
-  power_w:   { label: "Power",    unit: "W",   placeholder: "" },
-  velocity_ms:{ label: "Velocity", unit: "m/s", placeholder: "" },
-  none:      { label: "None",     unit: "",    placeholder: "-" },
-};
+export type { PSExercise, PSSetLog } from "@/lib/ps-metrics";
 
 const SURFACES = ["Grass", "Artificial Turf", "Track", "Gym Floor", "Sand", "Road", "Court"];
 const DISTANCE_PRESETS = ["5m", "10m", "15m", "20m", "30m", "40m", "60m", "100m"];
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+const VALID_QUALITIES: PSQuality[] = ["acceleration", "max_velocity", "plyometric", "cod", "deceleration", ""];
 
 function calcRSI(heightCm: string, contactMs: string): string {
   const h = parseFloat(heightCm);
@@ -91,33 +33,12 @@ function calcRSI(heightCm: string, contactMs: string): string {
   return ((h / 100) / (ct / 1000)).toFixed(2);
 }
 
-export function emptySetLog(reps: number): PSSetLog {
-  return {
-    done: false,
-    rep_results: Array(Math.max(1, reps)).fill(""),
-    single_value: false,
-    contact_time: "",
-    rsi: "",
-    rpe: "",
-    pain: "",
-    set_notes: "",
-  };
-}
-
-export function buildLog(sets: number, reps: number): PSSetLog[] {
-  return Array.from({ length: sets }, () => emptySetLog(reps));
-}
-
-// ── Props ──────────────────────────────────────────────────────────────────────
-
 interface Props {
   exercise: PSExercise;
   onChange: (updated: PSExercise) => void;
   onDelete: () => void;
   library?: LibraryEntry[];
 }
-
-// ── Component ──────────────────────────────────────────────────────────────────
 
 export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, library = [] }: Props) {
   const [showCues, setShowCues] = useState(!!exercise.notes);
@@ -128,151 +49,145 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   const [addError, setAddError] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
 
-  // Local state prevents dropdown/log flickering on parent re-renders
-  const validMeasureTypes: MeasurementType[] = ["time_s","height_cm","distance_m","rsi","power_w","velocity_ms","none"];
-  const initMeasure: MeasurementType = validMeasureTypes.includes(exercise.measurement_type as any)
-    ? exercise.measurement_type as MeasurementType
-    : "time_s";
-  const [localMeasure, setLocalMeasure] = useState<MeasurementType>(initMeasure);
   const [localSets, setLocalSets] = useState(exercise.sets || 3);
   const [localReps, setLocalReps] = useState(exercise.reps || 4);
-
-  // Build log from exercise or create fresh
-  const initLog = (): PSSetLog[] => {
-    const sets = exercise.sets || 3;
-    const reps = exercise.reps || 4;
-    if (Array.isArray(exercise.log) && exercise.log.length > 0 && 'rep_results' in exercise.log[0]) {
-      // Ensure rep_results length matches reps
-      return exercise.log.map(s => ({
-        ...s,
-        rep_results: Array.from({ length: reps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
-      }));
-    }
-    return buildLog(sets, reps);
-  };
-  const [localLog, setLocalLog] = useState<PSSetLog[]>(initLog);
+  const [localLog, setLocalLog] = useState<PSSetLog[]>(
+    () => normalizePSLog(exercise.log, exercise.reps || 4, exercise.tracked_metrics),
+  );
+  const [showMetricPicker, setShowMetricPicker] = useState(false);
 
   const qMeta = QUALITY_META[exercise.quality] ?? QUALITY_META[""];
-  const mMeta = MEASUREMENT_META[localMeasure] ?? MEASUREMENT_META.none;
-  const isPlyo = exercise.quality === "plyometric";
   const completionOnly = !!exercise.completion_only;
-  const doneSets = localLog.filter(s => s.done).length;
+  const tracked = exercise.tracked_metrics ?? [];
+  const setMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "set");
+  const repMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "rep");
+  const isPlyo = exercise.quality === "plyometric";
+  const doneSets = localLog.filter((s) => s.done).length;
 
-  // Library autocomplete - Power/Speed exercises first
+  // ── Library autocomplete ──────────────────────────────────────────────────
   const trimmedName = nameQuery.trim();
   const libraryMatches = trimmedName.length > 0
     ? library
-        .filter(e => e.name.toLowerCase().includes(nameQuery.toLowerCase()))
+        .filter((e) => e.name.toLowerCase().includes(nameQuery.toLowerCase()))
         .sort((a, b) => {
           const aPS = (a.types ?? []).includes("Power/Speed");
           const bPS = (b.types ?? []).includes("Power/Speed");
-          if (aPS && !bPS) return -1;
-          if (!aPS && bPS) return 1;
-          return 0;
+          return aPS === bPS ? 0 : aPS ? -1 : 1;
         })
         .slice(0, 8)
     : [];
-  const hasExactMatch = library.some(e => e.name.toLowerCase() === trimmedName.toLowerCase());
+  const hasExactMatch = library.some((e) => e.name.toLowerCase() === trimmedName.toLowerCase());
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  function commit(fields: Partial<PSExercise>, log: PSSetLog[]) {
+    onChange({ ...exercise, sets: localSets, reps: localReps, ...fields, log });
+  }
 
   function update(fields: Partial<PSExercise>) {
-    // Compute new values first
     const newSets = fields.sets ?? localSets;
     const newReps = fields.reps ?? localReps;
-
-    // Update local counters immediately
     if (fields.sets !== undefined) setLocalSets(newSets);
     if (fields.reps !== undefined) setLocalReps(newReps);
 
-    // Resize log from localLog (not exercise.log which may be stale)
+    // Resize the log grid from localLog (parent state can be stale)
     const log = [...localLog];
-    while (log.length < newSets) log.push(emptySetLog(newReps));
-    const newLog = log.slice(0, newSets).map(s => ({
-      ...s,
-      rep_results: Array.from({ length: newReps }, (_, i) => (s.rep_results ?? [])[i] ?? ""),
-    }));
-    setLocalLog(newLog);
-
-    // Auto-set measurement type when quality changes — unless this same
-    // patch also sets measurement_type explicitly (a library preset with
-    // both quality AND measurement must keep its measurement).
-    let newMeasure = localMeasure;
-    if (fields.measurement_type !== undefined) { newMeasure = fields.measurement_type as MeasurementType; setLocalMeasure(newMeasure); }
-    else if (fields.quality !== undefined) { newMeasure = (QUALITY_META[fields.quality]?.defaultMeasurement ?? "time_s") as MeasurementType; setLocalMeasure(newMeasure); }
-
-    const updated = { ...exercise, ...fields, sets: newSets, reps: newReps, measurement_type: newMeasure, log: newLog };
-    onChange(updated);
-  }
-
-  function updateSet(si: number, patch: Partial<PSSetLog>) {
-    const newLog = localLog.map((s, idx) => {
-      if (idx !== si) return s;
-      const updated = { ...s, ...patch };
-      // Auto-calc RSI for plyometric
-      if (isPlyo && (patch.contact_time !== undefined || patch.rep_results !== undefined)) {
-        const firstResult = updated.rep_results[0] ?? "";
-        const rsi = calcRSI(firstResult, updated.contact_time);
-        if (rsi) updated.rsi = rsi;
-      }
-      return updated;
+    while (log.length < newSets) log.push(emptyPSSetLog(newReps));
+    const newLog = log.slice(0, Math.max(1, newSets)).map((s) => {
+      const rm = s.rep_metrics.slice(0, Math.max(1, newReps)).map((r) => ({ ...r }));
+      while (rm.length < Math.max(1, newReps)) rm.push({});
+      return { ...s, rep_metrics: rm };
     });
     setLocalLog(newLog);
-    onChange({ ...exercise, sets: localSets, reps: localReps, measurement_type: localMeasure, log: newLog });
+    onChange({ ...exercise, ...fields, sets: newSets, reps: newReps, log: newLog });
   }
 
-  function updateRep(si: number, ri: number, value: string) {
-    const newLog2 = localLog.map((s, idx) => {
-      if (idx !== si) return s;
-      const rep_results = s.rep_results.map((r, i) => i === ri ? value : r);
-      const updated = { ...s, rep_results };
-      // Mark set done if any rep has a result
-      updated.done = rep_results.some(r => r.trim().length > 0);
-      // Auto-calc RSI from first result
-      if (isPlyo && ri === 0) {
-        const rsi = calcRSI(value, s.contact_time);
-        if (rsi) updated.rsi = rsi;
-      }
-      return updated;
+  function toggleMetric(key: PSMetricKey) {
+    const next = tracked.includes(key) ? tracked.filter((k) => k !== key) : [...tracked, key];
+    // keep in canonical order
+    update({ tracked_metrics: PS_METRIC_ORDER.filter((k) => next.includes(k)) });
+  }
+
+  function setDone(si: number, done: boolean) {
+    const newLog = localLog.map((s, i) => (i === si ? { ...s, done } : s));
+    setLocalLog(newLog);
+    commit({}, newLog);
+  }
+
+  function updateSetField(si: number, patch: Partial<PSSetLog>) {
+    const newLog = localLog.map((s, i) => (i === si ? { ...s, ...patch } : s));
+    setLocalLog(newLog);
+    commit({}, newLog);
+  }
+
+  function updateSetMetric(si: number, key: PSMetricKey, value: string) {
+    const newLog = localLog.map((s, i) => {
+      if (i !== si) return s;
+      const set_metrics = { ...s.set_metrics, [key]: value };
+      const anyVal = anyLogged({ ...s, set_metrics });
+      return { ...s, set_metrics, done: anyVal || s.done };
     });
-    setLocalLog(newLog2);
-    onChange({ ...exercise, sets: localSets, reps: localReps, measurement_type: localMeasure, log: newLog2 });
+    setLocalLog(newLog);
+    commit({}, newLog);
   }
 
-  const validQualities: PSQuality[] = ["acceleration", "max_velocity", "plyometric", "cod", "deceleration", ""];
+  function updateRepMetric(si: number, ri: number, key: PSMetricKey, value: string) {
+    const newLog = localLog.map((s, i) => {
+      if (i !== si) return s;
+      const rep_metrics = s.rep_metrics.map((r, idx) => (idx === ri ? { ...r, [key]: value } : r));
+      // auto-RSI when height + contact time are both present and RSI is tracked
+      if (tracked.includes("rsi") && (key === "height" || key === "contact_time")) {
+        const rep = rep_metrics[ri];
+        const rsi = calcRSI(rep.height ?? "", rep.contact_time ?? "");
+        if (rsi) rep_metrics[ri] = { ...rep, rsi };
+      }
+      const updated = { ...s, rep_metrics };
+      return { ...updated, done: anyLogged(updated) || s.done };
+    });
+    setLocalLog(newLog);
+    commit({}, newLog);
+  }
+
+  function handleAddToLibrary(entry: Partial<LibraryEntry> & { name: string }) {
+    setAddError("");
+    saveLibraryEntry(entry)
+      .then((saved) => { setAddOpen(false); selectLibraryEntry(saved); })
+      .catch((e) => setAddError(e instanceof Error ? e.message : "Could not save to library"));
+  }
 
   function selectLibraryEntry(entry: LibraryEntry) {
     setNameQuery(entry.name);
     setShowDropdown(false);
-    // Library presets (0094/0095): movement type, per-rep measurement,
-    // and "completion only". A preset with both quality AND measurement
-    // keeps its measurement (see update()).
     const patch: Partial<PSExercise> = { name: entry.name };
     const q = entry.default_ps_quality;
-    if (q != null && validQualities.includes(q as PSQuality)) patch.quality = q as PSQuality;
-    const dm = entry.default_measurement_type;
-    if (dm && validMeasureTypes.includes(dm as MeasurementType)) patch.measurement_type = dm as MeasurementType;
+    if (q != null && VALID_QUALITIES.includes(q as PSQuality)) patch.quality = q as PSQuality;
+    const metrics = Array.isArray(entry.default_ps_metrics)
+      ? entry.default_ps_metrics.filter((k): k is PSMetricKey => k in PS_METRIC_META)
+      : [];
+    if (metrics.length) patch.tracked_metrics = PS_METRIC_ORDER.filter((k) => metrics.includes(k));
+    else if (entry.default_measurement_type) {
+      const legacy = { time_s: "time", height_cm: "height", distance_m: "distance", rsi: "rsi", power_w: "power", velocity_ms: "velocity", none: null } as Record<string, PSMetricKey | null>;
+      const m = legacy[entry.default_measurement_type];
+      patch.tracked_metrics = m ? [m] : [];
+    }
     if (entry.default_completion_only) patch.completion_only = true;
     update(patch);
-  }
-
-  async function handleAddToLibrary(entry: Partial<LibraryEntry> & { name: string }) {
-    setAddError("");
-    try {
-      const saved = await saveLibraryEntry(entry);
-      setAddOpen(false);
-      selectLibraryEntry(saved);
-    } catch (e) {
-      setAddError(e instanceof Error ? e.message : "Could not save to library");
-    }
   }
 
   return (
     <div style={card.wrap}>
       {/* ── Header ── */}
       <div style={card.header}>
-        {/* Quality selector */}
         <select
           value={exercise.quality}
-          onChange={e => update({ quality: e.target.value as PSQuality })}
+          onChange={(e) => {
+            const nextQ = e.target.value as PSQuality;
+            const patch: Partial<PSExercise> = { quality: nextQ };
+            // seed metrics from the quality default only when nothing's tracked yet
+            if (tracked.length === 0) {
+              patch.tracked_metrics = QUALITY_META[nextQ]?.defaultMetrics ?? [];
+            }
+            update(patch);
+          }}
           style={{ ...card.qualityChip, background: qMeta.color + "22", color: qMeta.color, border: `1px solid ${qMeta.color}55` }}
         >
           {Object.entries(QUALITY_META).filter(([k]) => k !== "").map(([k, v]) => (
@@ -281,21 +196,20 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           <option value="">• General</option>
         </select>
 
-        {/* Order */}
         <input
           value={exercise.order}
-          onChange={e => update({ order: e.target.value })}
+          onChange={(e) => update({ order: e.target.value })}
           placeholder="#"
-          title="1, 1A/1B for superset, Complex A for French Contrast"
+          title="1, 1A/1B for a superset, Complex A for French Contrast"
           style={card.orderInput}
         />
 
-        {/* Name with autocomplete */}
+        {/* Name + autocomplete */}
         <div style={{ flex: 1, position: "relative" as const }}>
           <input
             ref={nameRef}
             value={nameQuery}
-            onChange={e => { setNameQuery(e.target.value); update({ name: e.target.value }); setShowDropdown(true); }}
+            onChange={(e) => { setNameQuery(e.target.value); update({ name: e.target.value }); setShowDropdown(true); }}
             onFocus={() => setShowDropdown(true)}
             onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
             placeholder="Exercise name…"
@@ -303,12 +217,9 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           />
           {showDropdown && trimmedName.length > 0 && (libraryMatches.length > 0 || !hasExactMatch) && (
             <div style={card.dropdown}>
-              {libraryMatches.map(e => (
-                <button
-                  key={e.id}
-                  style={card.dropdownItem}
-                  onMouseDown={ev => { ev.preventDefault(); selectLibraryEntry(e); }}
-                >
+              {libraryMatches.map((e) => (
+                <button key={e.id} style={card.dropdownItem}
+                  onMouseDown={(ev) => { ev.preventDefault(); selectLibraryEntry(e); }}>
                   <span>{e.name}</span>
                   {(e.types ?? []).includes("Power/Speed") && (
                     <span style={{ fontSize: 10, color: "#A855F7", marginLeft: 6 }}>P/S</span>
@@ -316,10 +227,8 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                 </button>
               ))}
               {!hasExactMatch && (
-                <button
-                  style={card.dropdownAdd}
-                  onMouseDown={ev => { ev.preventDefault(); setAddOpen(true); }}
-                >
+                <button style={card.dropdownAdd}
+                  onMouseDown={(ev) => { ev.preventDefault(); setAddOpen(true); }}>
                   + Add &quot;{trimmedName}&quot; to library
                 </button>
               )}
@@ -327,198 +236,206 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           )}
         </div>
 
-        {/* Done badge */}
         {localLog.length > 0 && (
           <span style={{ ...card.badge, background: doneSets === localLog.length ? "#10B98122" : "var(--ink)", color: doneSets === localLog.length ? "#10B981" : "var(--mute)" }}>
             {doneSets}/{localLog.length}
           </span>
         )}
 
-        {/* Measurement type - prominent in header so it's always visible */}
-        {!completionOnly && (
-          <select
-            value={localMeasure}
-            onChange={e => { setLocalMeasure(e.target.value as MeasurementType); update({ measurement_type: e.target.value as MeasurementType }); }}
-            style={card.measureSelect}
-            title="What are you measuring per rep?"
-          >
-            {Object.entries(MEASUREMENT_META).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}{v.unit ? ` (${v.unit})` : ""}</option>
-            ))}
-          </select>
-        )}
-
         <button style={card.deleteBtn} onClick={onDelete}>×</button>
       </div>
+
+      {/* ── Metrics tracked ── */}
+      {!completionOnly && (
+        <div>
+          <button style={card.metricSummary} onClick={() => setShowMetricPicker((v) => !v)}>
+            {showMetricPicker ? "▾" : "▸"} Metrics:{" "}
+            {tracked.length
+              ? tracked.map((k) => PS_METRIC_META[k].short).join(" · ")
+              : <span style={{ color: "var(--mute)" }}>none — just tick done</span>}
+          </button>
+          {showMetricPicker && (
+            <div style={card.metricPicker}>
+              {PS_METRIC_ORDER.map((key) => {
+                const m = PS_METRIC_META[key];
+                const on = tracked.includes(key);
+                return (
+                  <button key={key} type="button" onClick={() => toggleMetric(key)}
+                    style={{
+                      ...card.metricChip,
+                      background: on ? "var(--accent-dim)" : "var(--ink)",
+                      borderColor: on ? "var(--accent)" : "var(--line)",
+                      color: on ? "var(--accent)" : "var(--mute)",
+                    }}>
+                    {m.label}{m.unit ? ` (${m.unit})` : ""}
+                    <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 4 }}>{m.scope === "set" ? "per set" : "per rep"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Prescribed fields ── */}
       <div style={card.fields}>
         <Field label="Sets">
           <input type="number" value={localSets || ""} min={1}
-            onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ sets: v }); else if (e.target.value === "") setLocalSets(0); }}
-            onBlur={e => { if (!localSets || localSets < 1) { setLocalSets(1); update({ sets: 1 }); } }}
+            onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ sets: v }); else if (e.target.value === "") setLocalSets(0); }}
+            onBlur={() => { if (!localSets || localSets < 1) { setLocalSets(1); update({ sets: 1 }); } }}
             style={card.miniInput} />
         </Field>
         {!completionOnly && (
           <Field label="Reps">
             <input type="number" value={localReps || ""} min={1}
-              onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ reps: v }); else if (e.target.value === "") setLocalReps(0); }}
-              onBlur={e => { if (!localReps || localReps < 1) { setLocalReps(1); update({ reps: 1 }); } }}
+              onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) update({ reps: v }); else if (e.target.value === "") setLocalReps(0); }}
+              onBlur={() => { if (!localReps || localReps < 1) { setLocalReps(1); update({ reps: 1 }); } }}
               style={card.miniInput} />
           </Field>
         )}
         {!completionOnly && (
           <Field label="Distance">
             <div style={{ display: "flex", gap: 2 }}>
-              <input value={exercise.distance} onChange={e => update({ distance: e.target.value })}
+              <input value={exercise.distance} onChange={(e) => update({ distance: e.target.value })}
                 placeholder="10m" style={{ ...card.miniInput, flex: 1 }} />
-              <select value="" onChange={e => update({ distance: e.target.value })}
+              <select value="" onChange={(e) => update({ distance: e.target.value })}
                 style={{ ...card.miniInput, width: 28, padding: "4px 2px" }}>
                 <option value="">↓</option>
-                {DISTANCE_PRESETS.map(d => <option key={d} value={d}>{d}</option>)}
+                {DISTANCE_PRESETS.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
           </Field>
         )}
         <Field label="Rest">
-          <input value={exercise.rest} onChange={e => update({ rest: e.target.value })}
+          <input value={exercise.rest} onChange={(e) => update({ rest: e.target.value })}
             placeholder="3min" style={card.miniInput} />
         </Field>
         {isPlyo && !completionOnly && (
           <Field label="Contacts">
             <input type="number" value={exercise.contacts ?? ""}
-              onChange={e => update({ contacts: parseInt(e.target.value) || null })}
+              onChange={(e) => update({ contacts: parseInt(e.target.value) || null })}
               placeholder="20" style={card.miniInput} />
           </Field>
         )}
         {!completionOnly && (
           <Field label="Surface">
-            <select value={exercise.surface} onChange={e => update({ surface: e.target.value })}
-              style={card.miniInput}>
+            <select value={exercise.surface} onChange={(e) => update({ surface: e.target.value })} style={card.miniInput}>
               <option value=""> - </option>
-              {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
+              {SURFACES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
         )}
-
       </div>
 
-      {/* ── Completion only ── */}
-      <label style={card.completionRow} title="No metric to log — the athlete just ticks each set done. Hides the per-rep boxes.">
-        <input
-          type="checkbox"
-          checked={completionOnly}
-          onChange={e => update({ completion_only: e.target.checked })}
-          style={{ accentColor: "var(--accent)" }}
-        />
+      <label style={card.completionRow} title="No metric to log — the athlete just ticks each set done.">
+        <input type="checkbox" checked={completionOnly}
+          onChange={(e) => update({ completion_only: e.target.checked })}
+          style={{ accentColor: "var(--accent)" }} />
         <span style={{ color: completionOnly ? "var(--accent)" : "var(--mute)" }}>Completion only</span>
       </label>
 
       {/* ── Coaching cues ── */}
-      <button style={card.toggleBtn} onClick={() => setShowCues(v => !v)}>
+      <button style={card.toggleBtn} onClick={() => setShowCues((v) => !v)}>
         {showCues ? "▾ Hide cues" : "▸ Coaching cues"}
       </button>
       {showCues && (
-        <textarea value={exercise.notes} onChange={e => update({ notes: e.target.value })}
+        <textarea value={exercise.notes} onChange={(e) => update({ notes: e.target.value })}
           placeholder="Technical focus, progressions, constraints…" rows={2} style={card.cuesInput} />
       )}
 
       {/* ── Live log ── */}
       <button
         style={{ ...card.toggleBtn, color: doneSets > 0 ? "#10B981" : "var(--mute)" }}
-        onClick={() => setShowLog(v => !v)}
+        onClick={() => setShowLog((v) => !v)}
       >
         {showLog ? "▾ Hide log" : `▸ Log sets${doneSets > 0 ? ` (${doneSets}/${localLog.length})` : ""}`}
       </button>
 
-      {showLog && (completionOnly || localMeasure === "none") && (
-        <div style={card.logWrap}>
-          {localLog.map((set, si) => (
-            <div key={si} style={{ ...card.setBlock, ...(set.done ? card.setBlockDone : {}), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={card.setLabel}>Set {si + 1}</span>
-              <button
-                style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
-                onClick={() => updateSet(si, { done: !set.done })}
-              >✓</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showLog && !completionOnly && localMeasure !== "none" && (
+      {showLog && (
         <div style={card.logWrap}>
           {localLog.map((set, si) => (
             <div key={si} style={{ ...card.setBlock, ...(set.done ? card.setBlockDone : {}) }}>
-              {/* Set header */}
               <div style={card.setHeader}>
                 <span style={card.setLabel}>Set {si + 1}</span>
-
-                {/* Single value toggle */}
-                <label style={card.toggleLabel}>
-                  <input
-                    type="checkbox"
-                    checked={set.single_value}
-                    onChange={e => updateSet(si, { single_value: e.target.checked })}
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  <span style={{ fontSize: 11, color: "var(--mute)" }}>One {mMeta.label.toLowerCase()} for all reps</span>
-                </label>
-
-                {/* RPE + Pain */}
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {!completionOnly && repMetrics.length > 0 && (
+                  <label style={card.toggleLabel}>
+                    <input type="checkbox" checked={set.single_value}
+                      onChange={(e) => updateSetField(si, { single_value: e.target.checked })}
+                      style={{ accentColor: "var(--accent)" }} />
+                    <span style={{ fontSize: 11, color: "var(--mute)" }}>One value for all reps</span>
+                  </label>
+                )}
+                <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: "auto" }}>
                   <span style={card.metaLabel}>RPE</span>
-                  <input value={set.rpe} onChange={e => updateSet(si, { rpe: e.target.value })}
+                  <input value={set.rpe} onChange={(e) => updateSetField(si, { rpe: e.target.value })}
                     placeholder="-" inputMode="numeric" style={card.metaInput} />
                   <span style={card.metaLabel}>Pain</span>
-                  <input value={set.pain} onChange={e => updateSet(si, { pain: e.target.value })}
+                  <input value={set.pain} onChange={(e) => updateSetField(si, { pain: e.target.value })}
                     placeholder="-" inputMode="numeric" style={card.metaInput} />
-                  <button
-                    style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
-                    onClick={() => updateSet(si, { done: !set.done })}
-                  >✓</button>
+                  <button style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
+                    onClick={() => setDone(si, !set.done)}>✓</button>
                 </div>
               </div>
 
-              {/* Rep results */}
-              {set.single_value ? (
-                /* Single value for all reps */
-                <div style={card.singleValueRow}>
-                  <span style={card.repLabel}>All reps</span>
-                  <input
-                    value={set.rep_results[0] ?? ""}
-                    onChange={e => updateSet(si, { rep_results: Array(exercise.reps).fill(e.target.value), done: e.target.value.trim().length > 0 })}
-                    placeholder={mMeta.placeholder}
-                    inputMode="decimal"
-                    style={card.repInput}
-                  />
-                  <span style={card.unitLabel}>{mMeta.unit}</span>
-                </div>
-              ) : (
-                /* Per-rep inputs */
-                <div style={card.repGrid}>
-                  {set.rep_results.map((result, ri) => (
-                    <div key={ri} style={card.repRow}>
-                      <span style={card.repLabel}>R{ri + 1}</span>
-                      <input
-                        value={result}
-                        onChange={e => updateRep(si, ri, e.target.value)}
-                        placeholder={mMeta.placeholder}
-                        inputMode="decimal"
-                        style={card.repInput}
-                      />
-                      <span style={card.unitLabel}>{mMeta.unit}</span>
+              {/* Set-level metric boxes (Load / Reps) */}
+              {!completionOnly && setMetrics.length > 0 && (
+                <div style={card.setMetricRow}>
+                  {setMetrics.map((key) => (
+                    <div key={key} style={card.setMetricBox}>
+                      <span style={card.repLabelWide}>{PS_METRIC_META[key].label}{PS_METRIC_META[key].unit ? ` (${PS_METRIC_META[key].unit})` : ""}</span>
+                      <input value={set.set_metrics[key] ?? ""}
+                        onChange={(e) => updateSetMetric(si, key, e.target.value)}
+                        placeholder={PS_METRIC_META[key].placeholder}
+                        inputMode="decimal" style={card.repInput} />
                     </div>
                   ))}
                 </div>
               )}
 
+              {/* Per-rep metric boxes */}
+              {!completionOnly && repMetrics.length > 0 && (
+                set.single_value ? (
+                  <div style={card.repGrid}>
+                    <span style={card.repLabel}>All</span>
+                    {repMetrics.map((key) => (
+                      <div key={key} style={card.repRow}>
+                        <input value={set.rep_metrics[0]?.[key] ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            // write to every rep
+                            const newLog = localLog.map((s, i) => {
+                              if (i !== si) return s;
+                              const rm = s.rep_metrics.map((r) => ({ ...r, [key]: v }));
+                              return { ...s, rep_metrics: rm, done: v.trim().length > 0 || s.done };
+                            });
+                            setLocalLog(newLog); commit({}, newLog);
+                          }}
+                          placeholder={PS_METRIC_META[key].placeholder}
+                          inputMode="decimal" style={card.repInput} />
+                        <span style={card.unitLabel}>{PS_METRIC_META[key].short}{PS_METRIC_META[key].unit ? ` ${PS_METRIC_META[key].unit}` : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  Array.from({ length: Math.max(1, set.rep_metrics.length) }).map((_, ri) => (
+                    <div key={ri} style={card.repGrid}>
+                      <span style={card.repLabel}>R{ri + 1}</span>
+                      {repMetrics.map((key) => (
+                        <div key={key} style={card.repRow}>
+                          <input value={set.rep_metrics[ri]?.[key] ?? ""}
+                            onChange={(e) => updateRepMetric(si, ri, key, e.target.value)}
+                            placeholder={PS_METRIC_META[key].placeholder}
+                            inputMode="decimal" style={card.repInput} />
+                          <span style={card.unitLabel}>{PS_METRIC_META[key].short}{PS_METRIC_META[key].unit ? ` ${PS_METRIC_META[key].unit}` : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )
+              )}
 
-
-              {/* Set notes */}
-              <input value={set.set_notes}
-                onChange={e => updateSet(si, { set_notes: e.target.value })}
-                placeholder="Set notes…"
-                style={card.setNotesInput} />
+              <input value={set.set_notes} onChange={(e) => updateSetField(si, { set_notes: e.target.value })}
+                placeholder="Set notes…" style={card.setNotesInput} />
             </div>
           ))}
         </div>
@@ -526,7 +443,7 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
 
       {addOpen && (
         <div style={card.addOverlay} onClick={() => setAddOpen(false)}>
-          <div onClick={e => e.stopPropagation()}>
+          <div onClick={(e) => e.stopPropagation()}>
             {addError && <div style={card.addError}>{addError}</div>}
             <LibraryEntryForm
               entry={null}
@@ -543,7 +460,11 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// Any logged metric value in the set (used to auto-mark it done)
+function anyLogged(set: PSSetLog): boolean {
+  if (Object.values(set.set_metrics).some((v) => (v ?? "").trim().length > 0)) return true;
+  return set.rep_metrics.some((r) => Object.values(r).some((v) => (v ?? "").trim().length > 0));
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -553,8 +474,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
-
-// ── Styles ─────────────────────────────────────────────────────────────────────
 
 const card: Record<string, React.CSSProperties> = {
   wrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 },
@@ -570,7 +489,9 @@ const card: Record<string, React.CSSProperties> = {
   completionRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", marginTop: 2 },
   badge: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 7px", flexShrink: 0 },
   deleteBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer", padding: 4, flexShrink: 0 },
-  measureSelect: { background: "var(--ink)", border: "1px solid var(--accent)44", color: "var(--accent)", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
+  metricSummary: { background: "transparent", border: "none", color: "var(--text)", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "2px 0", textAlign: "left" as const },
+  metricPicker: { display: "flex", flexWrap: "wrap" as const, gap: 5, marginTop: 6, padding: 8, background: "var(--ink)", borderRadius: 8 },
+  metricChip: { display: "flex", alignItems: "center", border: "1px solid", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
   fields: { display: "flex", gap: 8, flexWrap: "wrap" as const },
   miniInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 7px", fontSize: 13 },
   toggleBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "2px 0", textAlign: "left" as const },
@@ -580,17 +501,18 @@ const card: Record<string, React.CSSProperties> = {
   setBlockDone: { boxShadow: "inset 0 0 0 1px #10B98144" },
   setHeader: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const },
   setLabel: { fontSize: 12, fontWeight: 700, color: "var(--mute)", flexShrink: 0 },
-  toggleLabel: { display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flex: 1 },
+  toggleLabel: { display: "flex", alignItems: "center", gap: 4, cursor: "pointer" },
   metaLabel: { fontSize: 10, color: "var(--mute)", fontWeight: 600, textTransform: "uppercase" as const, flexShrink: 0 },
   metaInput: { width: 44, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "4px 6px", fontSize: 12, textAlign: "center" as const },
   doneBtn: { width: 26, height: 26, borderRadius: 5, border: "1px solid var(--line)", background: "transparent", color: "var(--mute)", cursor: "pointer", flexShrink: 0, fontSize: 12 },
   doneBtnOn: { background: "#10B98122", color: "#10B981", borderColor: "#10B981" },
-  repGrid: { display: "flex", flexWrap: "wrap" as const, gap: 6 },
-  repRow: { display: "flex", alignItems: "center", gap: 4 },
-  singleValueRow: { display: "flex", alignItems: "center", gap: 6 },
+  setMetricRow: { display: "flex", flexWrap: "wrap" as const, gap: 8 },
+  setMetricBox: { display: "flex", flexDirection: "column" as const, gap: 2 },
+  repGrid: { display: "flex", flexWrap: "wrap" as const, gap: 6, alignItems: "center" },
+  repRow: { display: "flex", alignItems: "center", gap: 3 },
   repLabel: { fontSize: 10, color: "var(--mute)", fontWeight: 700, width: 22, flexShrink: 0 },
+  repLabelWide: { fontSize: 10, color: "var(--mute)", fontWeight: 700, textTransform: "uppercase" as const },
   repInput: { width: 64, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "5px 7px", fontSize: 13, fontWeight: 700 },
   unitLabel: { fontSize: 10, color: "var(--mute)", flexShrink: 0 },
-  plyoRow: { display: "flex", alignItems: "center", gap: 6 },
   setNotesInput: { width: "100%", background: "transparent", border: "none", borderTop: "1px solid var(--line)", color: "var(--mute)", padding: "6px 0 0", fontSize: 11, fontStyle: "italic" as const },
 };

@@ -17,6 +17,16 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings, type PowerSpeedBenchmarkDef } from "@/lib/data/settings";
+import { resolveTrackedMetrics, normalizePSLog, bestPSValue, type PSMetricKey } from "@/lib/ps-metrics";
+
+// Map a benchmark def to the P/S metric its numbers come from.
+function benchmarkMetric(def: PowerSpeedBenchmarkDef): PSMetricKey {
+  if (def.key === "dj_rsi") return "rsi";
+  if (def.unit === "s") return "time";
+  if (def.unit === "cm") return "height";
+  if (def.unit === "m") return "distance";
+  return "time";
+}
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -101,7 +111,7 @@ export default function PowerSpeedDashboard() {
       if (psSessionIds.length > 0) {
         const { data: exData, error: exErr } = await supabase
           .from("session_exercises")
-          .select("name, log, session_id")
+          .select("name, log, session_id, reps, tempo, intensity_label, ps_tracked_metrics")
           .in("session_id", psSessionIds);
         if (exErr) throw exErr;
         exercises = (exData ?? []).map((e: any) => ({
@@ -119,26 +129,16 @@ export default function PowerSpeedDashboard() {
 
         const history: { date: string; value: number }[] = [];
 
+        const metricKey = benchmarkMetric(def);
         for (const ex of matches) {
           const date = ex.sessions?.date ?? "";
-          const log: any[] = ex.log ?? [];
+          const tracked = resolveTrackedMetrics(ex.ps_tracked_metrics, ex.tempo, ex.intensity_label);
+          const reps = parseInt(String(ex.reps ?? "")) || 4;
+          const log = normalizePSLog(ex.log, reps, tracked.includes(metricKey) ? tracked : [...tracked, metricKey]);
           for (const set of log) {
             if (!set.done) continue;
-            // For RSI benchmarks, use the rsi field; otherwise take the
-            // best (min for time, max otherwise) of that set's
-            // rep_results - PowerSpeedExerciseCard.tsx logs per-rep
-            // results into that array, there's no single "result" field.
-            if (def.key === "dj_rsi") {
-              const val = parseFloat(set.rsi);
-              if (!isNaN(val) && val > 0) history.push({ date, value: val });
-              continue;
-            }
-            const repVals = (set.rep_results ?? [])
-              .map((r: string) => parseFloat(r))
-              .filter((v: number) => !isNaN(v) && v > 0);
-            if (!repVals.length) continue;
-            const best = def.lowerIsBetter ? Math.min(...repVals) : Math.max(...repVals);
-            history.push({ date, value: best });
+            const v = bestPSValue(set, metricKey);
+            if (v != null && v > 0) history.push({ date, value: v });
           }
         }
 

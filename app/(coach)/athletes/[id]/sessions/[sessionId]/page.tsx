@@ -37,6 +37,7 @@ import PowerSpeedSummaryBar from "@/components/PowerSpeedSummaryBar";
 import RecoverySessionEditor from "@/components/recovery/RecoverySessionEditor";
 import { saveRecoveryPreset } from "@/lib/data/recovery";
 import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
+import { resolveTrackedMetrics, normalizePSLog } from "@/lib/ps-metrics";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import SportSessionEditor from "@/components/sport/SportSessionEditor";
 import SessionCompareModal from "@/components/SessionCompareModal";
@@ -133,27 +134,13 @@ export default function SessionDetailPage() {
   const toPSExercise = (ex: any): PSExercise => {
     const sets = ex.sets ?? 3;
     const reps = parseInt(String(ex.reps ?? "")) || 4;  // default 4 reps for P/S
-    // Detect if log already has the new per-rep shape
-    const hasNewShape = Array.isArray(ex.log) && ex.log.length > 0 &&
-      typeof ex.log[0] === 'object' && 'rep_results' in ex.log[0];
-    const log = hasNewShape
-      ? ex.log
-      : Array.from({ length: sets }, () => ({
-          done: false,
-          rep_results: Array(reps).fill(""),
-          single_value: false,
-          contact_time: "",
-          rsi: "",
-          rpe: "",
-          pain: "",
-          set_notes: "",
-        }));
+    const tracked_metrics = resolveTrackedMetrics(ex.ps_tracked_metrics, ex.tempo, ex.intensity_label);
     return {
       id: ex.id,
       name: ex.name ?? "",
       order: ex.order ?? "",
       quality: ex.intensity_label ?? "",
-      measurement_type: (["time_s","height_cm","distance_m","rsi","power_w","none"].includes(ex.tempo) ? ex.tempo : (ex.intensity_label === "plyometric" ? "height_cm" : "time_s")) as any,
+      tracked_metrics,
       completion_only: !!ex.completion_only,
       sets,
       reps,
@@ -162,7 +149,7 @@ export default function SessionDetailPage() {
       contacts: ex.contacts ?? null,
       surface: ex.target_load ?? "",
       notes: ex.notes ?? "",
-      log,
+      log: normalizePSLog(ex.log, reps, tracked_metrics),
       sort_order: ex.sort_order ?? 0,
     };
   };
@@ -290,7 +277,7 @@ export default function SessionDetailPage() {
         rest: updated.rest,
         contacts: updated.contacts,
         intensity_label: updated.quality,
-        tempo: updated.measurement_type,   // measurement_type stored in tempo
+        ps_tracked_metrics: updated.tracked_metrics,
         completion_only: updated.completion_only,
         target_load: updated.surface,
         notes: updated.notes,
@@ -306,7 +293,7 @@ export default function SessionDetailPage() {
         rest: updated.rest,
         notes: updated.notes,
         log: updated.log as any,
-        tempo: updated.measurement_type,      // measurement_type stored in tempo
+        ps_tracked_metrics: updated.tracked_metrics,
         intensity_label: updated.quality,     // quality stored in intensity_label
         completion_only: updated.completion_only,
         distance: updated.distance,

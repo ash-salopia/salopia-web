@@ -6,6 +6,7 @@
 import type { Session } from "@/types";
 import { METRIC_ORDER, METRIC_META, parseMetricNumber, distanceToKm, type MetricKey, type MetricValues } from "@/lib/cardio-metrics";
 import { estimateOneRMFromPoint } from "@/lib/velocity-profile";
+import { PS_METRIC_META, resolveTrackedMetrics, normalizePSLog, bestPSValue } from "@/lib/ps-metrics";
 
 export interface ReportRow {
   date: string;
@@ -689,57 +690,39 @@ function collectSessionTypeStats(allSessions: Session[]): Record<string, Session
   return stats;
 }
 
-// Power/speed logs don't use the generic {weight,reps,done,time} SetLog
-// shape - PowerSpeedExerciseCard.tsx writes its own PSSetLog shape
-// (rep_results: string[], rsi, etc.), and the exercise's measurement
-// type (what those numbers actually mean) rides in the `tempo` column
-// (see toPSExercise/handlePSExerciseChange in the session detail page -
-// "measurement_type stored in tempo"). Mirrored here rather than
-// imported since PSSetLog/MeasurementType live in a "use client"
-// component file this Supabase-free module can't depend on.
-const PS_UNIT: Record<string, string> = {
-  time_s: "s", height_cm: "cm", distance_m: "m", rsi: "", power_w: "W", velocity_ms: "m/s", none: "",
-};
-function psLowerBetter(measurementType: string): boolean {
-  return measurementType === "time_s";
-}
-
+// Power/speed logs use their own PSSetLog shape (see lib/ps-metrics.ts).
+// A P/S exercise can track several metrics at once (0096) — each metric
+// becomes its own trend line, keyed "<exercise> · <Metric>".
 function collectPowerSpeed(powerSpeedSessions: Session[]): { exMap: PowerSpeedMap; summaries: PowerSpeedSummary[] } {
   const exMap: PowerSpeedMap = {};
   for (const sess of powerSpeedSessions) {
     if (sess.is_primer) continue;
     for (const ex of sess.exercises ?? []) {
-      if (!ex.name || ex.is_primer) continue;
-      const measurementType = (ex as any).tempo || "time_s";
-      if (measurementType === "none") continue;
-      const unit = PS_UNIT[measurementType] ?? "";
-      const lowerBetter = psLowerBetter(measurementType);
+      if (!ex.name || ex.is_primer || (ex as any).completion_only) continue;
+      const tracked = resolveTrackedMetrics((ex as any).ps_tracked_metrics, (ex as any).tempo, (ex as any).intensity_label);
+      if (!tracked.length) continue;
+      const log = normalizePSLog(ex.log, parseInt(String(ex.reps ?? "")) || 4, tracked);
 
-      const values: number[] = [];
-      for (const set of (ex.log ?? []) as any[]) {
-        if (!set?.done) continue;
-        if (measurementType === "rsi") {
-          const v = parseFloat(set.rsi);
-          if (isFinite(v)) values.push(v);
-          continue;
+      for (const key of tracked) {
+        const meta = PS_METRIC_META[key];
+        const perSetBest: number[] = [];
+        for (const set of log) {
+          if (!set.done) continue;
+          const b = bestPSValue(set, key);
+          if (b != null) perSetBest.push(b);
         }
-        for (const raw of set.rep_results ?? []) {
-          const v = parseFloat(raw);
-          if (isFinite(v)) values.push(v);
-        }
+        if (!perSetBest.length) continue;
+        const best = meta.lowerBetter ? Math.min(...perSetBest) : Math.max(...perSetBest);
+        const rowKey = `${ex.name} · ${meta.label}`;
+        (exMap[rowKey] ??= []).push({ date: sess.date, sessName: sess.name, value: best, unit: meta.unit });
       }
-      if (!values.length) continue;
-
-      const best = lowerBetter ? Math.min(...values) : Math.max(...values);
-      if (!exMap[ex.name]) exMap[ex.name] = [];
-      exMap[ex.name].push({ date: sess.date, sessName: sess.name, value: best, unit });
     }
   }
 
   const summaries: PowerSpeedSummary[] = Object.entries(exMap)
     .map(([name, entries]) => {
       const unit = entries[0].unit;
-      const direction: "lower" | "higher" = unit === "s" ? "lower" : "higher";
+      const direction: "lower" | "higher" = unit === "s" || unit === "ms" ? "lower" : "higher";
       const first = entries[0];
       const last = entries[entries.length - 1];
       const overallPct =
