@@ -252,6 +252,22 @@ export default function LiveGroupPage() {
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
   };
 
+  // Append a blank set to an exercise's log (the coach ran an extra
+  // working set). Doesn't touch ex.sets — that's the prescription; the
+  // athlete-side "add set" works the same way (see AthleteSessionView).
+  const handleAddSet = async (sessionId: string, exerciseId: string) => {
+    const sess = sessions.find((s) => s.id === sessionId);
+    const ex = sess?.exercises?.find((e) => e.id === exerciseId);
+    if (!ex) return;
+    const newLog: SetLog[] = [...(ex.log ?? []), { weight: "", reps: "", done: false }];
+    setSessions((prev) => prev.map((s) => s.id !== sessionId ? s : {
+      ...s,
+      exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog }),
+    }));
+    try { await updateExerciseLog(exerciseId, newLog); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
   // Live Group logs sets straight to session_exercises.log — it doesn't go
   // through the athlete-link log route, so PB detection has to be triggered
   // here too (the same /api/athlete-link/detect-pb the session builder uses).
@@ -901,6 +917,13 @@ export default function LiveGroupPage() {
                                 </button>
                               </div>
                             ))}
+                            <button
+                              onClick={() => handleAddSet(activeSess.id, ex.id)}
+                              style={s.addSetBtn}
+                              title="Add another set"
+                            >
+                              <span style={s.addSetPlus}>＋</span> Add set
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1147,6 +1170,8 @@ const s: Record<string, React.CSSProperties> = {
   // whose predecessor is itself still empty.
   repeatBtn:    { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 0", fontSize: 15, cursor: "pointer", width: "100%", textAlign: "center" as const },
   repeatBtnDisabled: { opacity: 0.3, cursor: "default" as const },
+  addSetBtn:    { display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginTop: 2 },
+  addSetPlus:   { color: "var(--accent)", fontSize: 15, lineHeight: 1 },
   noteOverlay:  { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 },
   notePanel:    { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: 18, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column" as const, gap: 10 },
   noteTitle:    { fontSize: 15, fontWeight: 700, color: "var(--text)" },
