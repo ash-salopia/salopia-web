@@ -341,6 +341,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         type: "steps",
         items: [
           "**★ / ☆** on a card adds or removes the athlete from your **Live group** starred list.",
+          "**☆ Clear live group (N)**, top right, unstars everyone at once — shows only once at least one athlete is starred.",
           "**📦** archives the athlete — they leave your active roster (and free up a seat) but nothing is deleted.",
           "**Archived (N)** switches to the archived list, where you can **Restore** or permanently delete.",
           "**Export all** downloads a data export for every athlete.",

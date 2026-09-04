@@ -11,6 +11,7 @@ import {
   archiveAthlete,
   unarchiveAthlete,
   toggleLiveGroup,
+  clearLiveGroup,
 } from "@/lib/data/athletes";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
@@ -96,6 +97,19 @@ export default function AthletesPage() {
     } catch (err) {
       setAthletes((prev) => prev.map((a) => (a.id === athlete.id ? { ...a, in_live_group: !next } : a)));
       setError(err instanceof Error ? err.message : "Could not update live group");
+    }
+  };
+
+  const handleClearLiveGroup = async () => {
+    const starred = athletes.filter((a) => a.in_live_group);
+    if (!starred.length) return;
+    if (!confirm(`Clear the live group? ${starred.length} athlete${starred.length === 1 ? "" : "s"} will be unstarred.`)) return;
+    setAthletes((prev) => prev.map((a) => (a.in_live_group ? { ...a, in_live_group: false } : a)));
+    try {
+      await clearLiveGroup();
+    } catch (err) {
+      setAthletes((prev) => prev.map((a) => (starred.some((s) => s.id === a.id) ? { ...a, in_live_group: true } : a)));
+      setError(err instanceof Error ? err.message : "Could not clear the live group");
     }
   };
 
@@ -186,6 +200,11 @@ export default function AthletesPage() {
       <div style={styles.headerRow}>
         <h1 style={styles.title}>Athletes</h1>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {!showArchived && athletes.some((a) => a.in_live_group) && (
+            <button style={styles.ghostBtn} onClick={handleClearLiveGroup} title="Unstar every athlete currently in the live group">
+              ☆ Clear live group ({athletes.filter((a) => a.in_live_group).length})
+            </button>
+          )}
           <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
             Export all
           </button>

@@ -186,6 +186,15 @@ export async function toggleLiveGroup(id: string, inLiveGroup: boolean): Promise
   if (error) throw error;
 }
 
+// Unstars every currently-starred athlete in one go (RLS scopes this to
+// the coach's own org) — for clearing out a stale live group roster
+// instead of unstarring each athlete one at a time.
+export async function clearLiveGroup(): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("athletes").update({ in_live_group: false }).eq("in_live_group", true);
+  if (error) throw error;
+}
+
 export async function listLiveGroupAthletes(): Promise<Athlete[]> {
   const supabase = createClient();
   const { data, error } = await supabase
