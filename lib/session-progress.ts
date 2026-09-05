@@ -56,6 +56,10 @@ export function formatPrevSets(ex: SessionExercise | null): string | null {
       if (!showWeight) return l.reps?.trim() ? withPause(`×${l.reps}`, l) : null;
       if (l.weight?.trim() && l.reps?.trim()) return withPause(`${l.weight}kg×${l.reps}`, l);
       if (l.weight?.trim()) return withPause(`${l.weight}kg`, l);
+      // No load entered (not flagged bodyweight, just no weight this set) —
+      // same reps-only fallback the bodyweight branch above gets, so a
+      // pull-up logged with reps and no weight still shows in "Last:".
+      if (l.reps?.trim()) return withPause(`×${l.reps}`, l);
       return null;
     })
     .filter((v): v is string => !!v);
