@@ -909,7 +909,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "p", text: "Tap **Metrics** on the card and tick what this exercise logs — you can pick several at once. **Load (kg)** and **Reps** are one value per set; **Time, Distance, Height, Velocity, Power, RSI, Contact time** are one value per rep. Examples: a sled sprint = Load + Time + Distance; a med-ball throw = Load + Reps + Distance; a drop jump = Height + Contact time (RSI fills in automatically). Movement type (Acceleration / Plyometric / …) seeds a sensible default set." },
       { type: "p", text: "**Completion only** hides all boxes — the athlete just ticks each set done." },
       { type: "p", text: "Set these as defaults on a library exercise (**Library → edit → Metrics logged**) so they apply every time you add it." },
-      { type: "note", text: "Athletes logging a Power/Speed session now get these same metric boxes, per set and per rep." },
+      { type: "note", text: "Athletes logging a Power/Speed session get these same metric boxes, per set and per rep — and so does the coach in **Live group** (expand an exercise row)." },
       { type: "p", text: "Results feed the athlete's **⚡ Power / Speed** page and the Power/Speed sections of reports (one trend line per metric). The red/amber/green ratings there come from Settings → Power/Speed Benchmarks." },
     ],
   },
@@ -1172,12 +1172,13 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "steps", items: [
         "Tap a **set dot** to mark it done. On a %1RM exercise this captures the suggested kg.",
-        "**✏️** — quick-edit the exercise (swap name, sets, reps/time, rest, load).",
+        "**✏️** — quick-edit the exercise (swap name, sets, reps/time, rest, load). Strength only.",
         "**📝** — add a coaching-cue note on the exercise.",
         "**👍** / **👎** — mark whether the athlete could progress this next time. Tap again to clear.",
-        "Expand a row for the full per-set editor (weight, reps/time, bar speed, copy-previous, done toggle).",
+        "Expand a row for the full per-set editor. Strength: weight, reps/time, bar speed, copy-previous, ＋ Add set. Power/Speed: a box per tracked metric (Load / Reps per set; Time / Distance / Height / … per rep).",
       ] },
       { type: "note", text: "The **👍 / 👎** call writes to the same field the athlete's own \"could you have progressed this?\" prompt uses — so you and they are updating one shared signal." },
+      { type: "note", text: "Strength and Power/Speed sessions log inline here. Hybrid / Cardio show the structure and metric boxes; Recovery and Sport use **Open full session →**." },
     ],
   },
   {

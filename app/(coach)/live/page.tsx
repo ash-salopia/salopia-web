@@ -17,6 +17,10 @@ import type { Athlete, Session, SessionType, SetLog, SessionExercise, LibraryEnt
 import {
   findPreviousExercise, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal, progressionArrow,
 } from "@/lib/session-progress";
+import {
+  PS_METRIC_META, resolveTrackedMetrics, normalizePSLog, emptyPSSetLog, bestPSValue,
+  type PSSetLog, type PSMetricKey,
+} from "@/lib/ps-metrics";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -289,6 +293,31 @@ export default function LiveGroupPage() {
     }));
     try { await updateExerciseLog(exerciseId, newLog); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
+  // ── Power/Speed logging (multi-metric PSSetLog shape) ────────────────────
+  const savePSLog = async (sessionId: string, exerciseId: string, newLog: PSSetLog[]) => {
+    setSessions((prev) => prev.map((s) => s.id !== sessionId ? s : {
+      ...s,
+      exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog as any }),
+    }));
+    try { await updateExerciseLog(exerciseId, newLog as any); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+  };
+
+  const psSetHasData = (set: PSSetLog): boolean =>
+    Object.values(set.set_metrics).some((v) => (v ?? "").trim()) ||
+    set.rep_metrics.some((r) => Object.values(r).some((v) => (v ?? "").trim()));
+
+  const psAnyLogged = psSetHasData;
+
+  const handlePSAddSet = (sessionId: string, exerciseId: string, curLog: PSSetLog[], reps: number) => {
+    savePSLog(sessionId, exerciseId, [...curLog, emptyPSSetLog(reps)]);
+  };
+  const handlePSRemoveLastSet = (sessionId: string, exerciseId: string, curLog: PSSetLog[]) => {
+    const last = curLog[curLog.length - 1];
+    if (curLog.length <= 1 || !last || last.done || psSetHasData(last)) return;
+    savePSLog(sessionId, exerciseId, curLog.slice(0, -1));
   };
 
   // Live Group logs sets straight to session_exercises.log — it doesn't go
@@ -990,7 +1019,167 @@ export default function LiveGroupPage() {
                 />
               )}
 
-              {activeSess && activeSess.type !== "strength" && activeSess.type !== "hyrox" && activeSess.type !== "cardio" && (
+              {activeSess && activeSess.type === "power_speed" && (
+                <div style={s.exList}>
+                  {(activeSess.exercises ?? []).length === 0 && (
+                    <div style={s.noEx}>No exercises in this session yet.</div>
+                  )}
+                  {(activeSess.exercises ?? []).map((ex) => {
+                    const isExpanded = expandedEx === ex.id;
+                    const tracked = resolveTrackedMetrics((ex as any).ps_tracked_metrics, (ex as any).tempo, (ex as any).intensity_label);
+                    const reps = parseInt(String(ex.reps ?? "")) || 4;
+                    const completionOnly = !!ex.completion_only;
+                    const log = normalizePSLog(ex.log, reps, tracked);
+                    const setMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "set");
+                    const repMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "rep");
+                    const doneSets = log.filter((l) => l.done).length;
+
+                    // "Last:" — best per tracked metric from the previous P/S
+                    // session with this exercise name.
+                    const prevEx = findPreviousExercise(sessions, activeAthlete.id, ex.name, activeSess.date);
+                    const prevBest = (() => {
+                      if (!prevEx || !tracked.length) return null;
+                      const pTracked = resolveTrackedMetrics((prevEx as any).ps_tracked_metrics, (prevEx as any).tempo, (prevEx as any).intensity_label);
+                      const pLog = normalizePSLog(prevEx.log, parseInt(String(prevEx.reps ?? "")) || 4, pTracked);
+                      const bits = tracked.map((key) => {
+                        const meta2 = PS_METRIC_META[key];
+                        const vals = pLog.filter((st) => st.done).map((st) => bestPSValue(st, key)).filter((v): v is number => v != null);
+                        if (!vals.length) return null;
+                        const b = meta2.lowerBetter ? Math.min(...vals) : Math.max(...vals);
+                        return `${meta2.short} ${b}${meta2.unit}`;
+                      }).filter(Boolean);
+                      return bits.length ? bits.join(" · ") : null;
+                    })();
+
+                    const setPSDone = (si: number, done: boolean) =>
+                      savePSLog(activeSess.id, ex.id, log.map((st, i) => (i === si ? { ...st, done } : st)));
+                    const setSM = (si: number, key: PSMetricKey, v: string) =>
+                      savePSLog(activeSess.id, ex.id, log.map((st, i) => {
+                        if (i !== si) return st;
+                        const u = { ...st, set_metrics: { ...st.set_metrics, [key]: v } };
+                        return { ...u, done: psAnyLogged(u) || st.done };
+                      }));
+                    const setRM = (si: number, ri: number, key: PSMetricKey, v: string) =>
+                      savePSLog(activeSess.id, ex.id, log.map((st, i) => {
+                        if (i !== si) return st;
+                        const rm = st.rep_metrics.map((r, idx) => (idx === ri ? { ...r, [key]: v } : r));
+                        const u = { ...st, rep_metrics: rm };
+                        return { ...u, done: psAnyLogged(u) || st.done };
+                      }));
+
+                    return (
+                      <div key={ex.id} style={s.exBlock}>
+                        <div style={s.exRow} onClick={() => setExpandedEx(isExpanded ? null : ex.id)}>
+                          <span style={s.exOrder}>{ex.order || "-"}</span>
+                          <div style={s.exMeta}>
+                            <span style={s.exName}>{ex.name || "-"}</span>
+                            <span style={s.exPrescription}>
+                              {ex.sets}×{reps}{(ex as any).distance ? ` · ${(ex as any).distance}` : ""}
+                              {!completionOnly && tracked.length ? ` · ${tracked.map((k) => PS_METRIC_META[k].short).join(" / ")}` : ""}
+                              {completionOnly ? " · completion" : ""}
+                            </span>
+                            {prevBest && <span style={s.exPrevLine}>Last: {prevBest}</span>}
+                          </div>
+                          <div style={{ ...s.exRight, ...(isMobile ? s.exRightMobile : {}) }}>
+                            <div style={s.dotsRow}>
+                              <div style={s.dots}>
+                                {log.map((set, si) => (
+                                  <button key={si} title={`Set ${si + 1}`}
+                                    onClick={(e) => { e.stopPropagation(); setPSDone(si, !set.done); }}
+                                    style={{ ...s.dot, ...(set.done ? s.dotOn : {}) }} />
+                                ))}
+                              </div>
+                              <span style={s.setCount}>{doneSets}/{log.length}</span>
+                              {!isMobile && <span style={s.chevron}>{isExpanded ? "▴" : "▾"}</span>}
+                            </div>
+                            <div style={s.thumbRow} onClick={(e) => e.stopPropagation()}>
+                              <button title={ex.notes?.trim() ? "Edit exercise note" : "Add exercise note"}
+                                onClick={() => openExerciseNote(activeSess.id, ex)}
+                                style={{ ...s.thumbBtn, ...(ex.notes?.trim() ? s.thumbBtnNoted : {}) }}>📝</button>
+                              <button title="Athlete could progress this next time"
+                                onClick={() => handleSetProgress(activeSess.id, ex.id, "yes")}
+                                style={{ ...s.thumbBtn, ...(ex.progress === "yes" ? s.thumbBtnYes : {}) }}>👍</button>
+                              <button title="Not ready to progress this yet"
+                                onClick={() => handleSetProgress(activeSess.id, ex.id, "no")}
+                                style={{ ...s.thumbBtn, ...(ex.progress === "no" ? s.thumbBtnNo : {}) }}>👎</button>
+                              {isMobile && <span style={s.chevron}>{isExpanded ? "▴" : "▾"}</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div style={s.setEditor}>
+                            {log.map((set, si) => (
+                              <div key={si} style={s.psSetBlock}>
+                                <div style={s.psSetHead}>
+                                  <span style={s.setNum}>Set {si + 1}</span>
+                                  <button onClick={() => setPSDone(si, !set.done)}
+                                    style={{ ...s.psDoneBtn, ...(set.done ? s.doneBtnOn : {}) }}>
+                                    {set.done ? "✓" : "○"}
+                                  </button>
+                                </div>
+                                {!completionOnly && setMetrics.length > 0 && (
+                                  <div style={s.psBoxRow}>
+                                    {setMetrics.map((key) => (
+                                      <label key={key} style={s.psBox}>
+                                        <span style={s.psBoxLabel}>{PS_METRIC_META[key].label}{PS_METRIC_META[key].unit ? ` (${PS_METRIC_META[key].unit})` : ""}</span>
+                                        <input
+                                          key={`sm-${ex.id}-${si}-${key}-${set.set_metrics[key] ?? ""}`}
+                                          defaultValue={set.set_metrics[key] ?? ""}
+                                          inputMode="decimal" placeholder={PS_METRIC_META[key].placeholder}
+                                          style={s.setInput}
+                                          onBlur={(e) => { if (e.target.value !== (set.set_metrics[key] ?? "")) setSM(si, key, e.target.value); }}
+                                        />
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                                {!completionOnly && repMetrics.length > 0 && (
+                                  Array.from({ length: Math.max(1, set.rep_metrics.length) }).map((_, ri) => (
+                                    <div key={ri} style={s.psRepRow}>
+                                      <span style={s.repLabelPS}>R{ri + 1}</span>
+                                      {repMetrics.map((key) => (
+                                        <label key={key} style={s.psRepBox}>
+                                          <input
+                                            key={`rm-${ex.id}-${si}-${ri}-${key}-${set.rep_metrics[ri]?.[key] ?? ""}`}
+                                            defaultValue={set.rep_metrics[ri]?.[key] ?? ""}
+                                            inputMode="decimal" placeholder={PS_METRIC_META[key].placeholder}
+                                            style={s.setInput}
+                                            onBlur={(e) => { if (e.target.value !== (set.rep_metrics[ri]?.[key] ?? "")) setRM(si, ri, key, e.target.value); }}
+                                          />
+                                          <span style={s.psRepUnit}>{PS_METRIC_META[key].short}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            ))}
+                            {(() => {
+                              const last = log[log.length - 1];
+                              const canRemove = log.length > 1 && !!last && !last.done && !psSetHasData(last);
+                              return (
+                                <div style={s.addRemoveRow}>
+                                  <button onClick={() => handlePSAddSet(activeSess.id, ex.id, log, reps)} style={s.addSetBtn} title="Add another set">
+                                    <span style={s.addSetPlus}>＋</span> Add set
+                                  </button>
+                                  {canRemove && (
+                                    <button onClick={() => handlePSRemoveLastSet(activeSess.id, ex.id, log)} style={s.removeSetBtn} title="Remove the empty last set">
+                                      − Remove
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {activeSess && activeSess.type !== "strength" && activeSess.type !== "hyrox" && activeSess.type !== "cardio" && activeSess.type !== "power_speed" && (
                 <div style={s.noEx}>
                   {meta.label} session - use "Open full session" above for the timer &amp; log.
                 </div>
@@ -1206,6 +1395,16 @@ const s: Record<string, React.CSSProperties> = {
   setInput:     { background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 7, padding: "6px 8px", fontSize: 14, fontWeight: 600, width: "100%", boxSizing: "border-box" as const },
   doneBtn:      { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 7, padding: "6px 0", fontSize: 16, cursor: "pointer", width: "100%", textAlign: "center" as const },
   doneBtnOn:    { background: "var(--good-dim)", color: "var(--good)", borderColor: "var(--good)" },
+  psSetBlock:   { background: "var(--panel)", borderRadius: 8, padding: 8, display: "flex", flexDirection: "column" as const, gap: 6 },
+  psSetHead:    { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  psDoneBtn:    { width: 30, height: 30, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--mute)", cursor: "pointer", fontSize: 13, flexShrink: 0 },
+  psBoxRow:     { display: "flex", flexWrap: "wrap" as const, gap: 8 },
+  psBox:        { display: "flex", flexDirection: "column" as const, gap: 2, flex: "1 1 90px" },
+  psBoxLabel:   { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const },
+  psRepRow:     { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const },
+  repLabelPS:   { fontSize: 11, fontWeight: 700, color: "var(--mute)", width: 24, flexShrink: 0 },
+  psRepBox:     { display: "flex", alignItems: "center", gap: 3, width: 92 },
+  psRepUnit:    { fontSize: 10, color: "var(--mute)" },
   // Copies the previous set's weight/reps (or time) into this one and
   // marks it done - straight sets (same weight/reps across sets) are
   // the common case, so this saves re-typing the same numbers for set
