@@ -950,7 +950,7 @@ export default function AthleteSessionView({
       </button>
 
       {summaryOpen && (
-        <SessionSummaryModal session={session} allSessions={allSessions} onClose={() => setSummaryOpen(false)} />
+        <SessionSummaryModal session={session} allSessions={allSessions} token={token} onClose={() => setSummaryOpen(false)} />
       )}
 
       {videoModal && (

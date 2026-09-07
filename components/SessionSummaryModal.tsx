@@ -1,17 +1,29 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Session, SessionExercise } from "@/types";
 import {
   findPreviousExercise, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal,
   progressionArrow, type ProgressionSignal,
 } from "@/lib/session-progress";
+import { formatPBValue } from "@/lib/data/personal-bests";
 
 interface Props {
   session: Session;
   // The athlete's full session history — enables the "vs last time"
   // Best / Total-load signals, the same ones Live Group shows the coach.
   allSessions?: Session[];
+  // Athlete share token — when set, the modal fetches the PBs logged in
+  // this session for the 🏆 stat.
+  token?: string;
   onClose: () => void;
+}
+
+interface SessionPB {
+  exercise_name: string;
+  weight_kg: number | null;
+  reps: number | null;
+  time_seconds: number | null;
 }
 
 function signalColor(direction: "up" | "down" | "same"): string {
@@ -104,7 +116,19 @@ function summariseExercise(ex: SessionExercise, ctx?: ProgressCtx): ExerciseSumm
   };
 }
 
-export default function SessionSummaryModal({ session, allSessions, onClose }: Props) {
+export default function SessionSummaryModal({ session, allSessions, token, onClose }: Props) {
+  const [sessionPBs, setSessionPBs] = useState<SessionPB[] | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    fetch(`/api/athlete-link/session-pbs?token=${token}&sessionId=${session.id}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (alive && !d.error) setSessionPBs(d.pbs ?? []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [token, session.id]);
+
   const ctx: ProgressCtx | undefined = allSessions && allSessions.length
     ? { allSessions, athleteId: session.athlete_id, beforeDate: session.date }
     : undefined;
@@ -150,7 +174,25 @@ export default function SessionSummaryModal({ session, allSessions, onClose }: P
               <div style={s.statLabel}>RPE</div>
             </div>
           )}
+          {!!sessionPBs?.length && (
+            <div style={{ ...s.stat, borderColor: "var(--good)", background: "var(--good-dim)" }}>
+              <div style={{ ...s.statValue, color: "var(--good)" }}>🏆 {sessionPBs.length}</div>
+              <div style={s.statLabel}>{sessionPBs.length === 1 ? "New PB" : "New PBs"}</div>
+            </div>
+          )}
         </div>
+
+        {!!sessionPBs?.length && (
+          <div style={s.pbBox}>
+            <div style={s.pbLabel}>New personal best{sessionPBs.length === 1 ? "" : "s"}</div>
+            {sessionPBs.map((pb) => (
+              <div key={pb.exercise_name} style={s.pbRow}>
+                <span style={s.pbName}>{pb.exercise_name}</span>
+                <span style={s.pbValue}>{formatPBValue(pb)}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={s.exList}>
           {exSummaries.map((e) => {
@@ -218,6 +260,11 @@ const s: Record<string, React.CSSProperties> = {
   },
   statValue: { fontSize: 17, fontWeight: 800, color: "var(--accent)" },
   statLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginTop: 2 },
+  pbBox: { background: "var(--good-dim)", border: "1px solid var(--good)", borderRadius: 10, padding: "10px 12px", marginBottom: 16 },
+  pbLabel: { fontSize: 10, fontWeight: 700, color: "var(--good)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 6 },
+  pbRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "3px 0" },
+  pbName: { fontSize: 13, fontWeight: 700, color: "var(--text)" },
+  pbValue: { fontSize: 12, fontWeight: 700, color: "var(--good)", whiteSpace: "nowrap" as const, flexShrink: 0 },
   exList: { display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 12 },
   exRow: {
     display: "flex", flexDirection: "column" as const, gap: 4,
