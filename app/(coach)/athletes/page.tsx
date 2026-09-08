@@ -208,6 +208,9 @@ export default function AthletesPage() {
           <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
             Export all
           </button>
+          <button style={styles.ghostBtn} onClick={() => router.push("/import")}>
+            Import
+          </button>
           <button style={styles.ghostBtn} onClick={handleShowArchivedToggle}>
             {showArchived ? "← Back to active" : `Archived (${archivedAthletes.length})`}
           </button>
@@ -294,7 +297,19 @@ export default function AthletesPage() {
         <div style={styles.empty}>Loading…</div>
       ) : !visibleList.length ? (
         <div style={styles.empty}>
-          {showArchived ? "No archived athletes." : "No athletes yet. Add your first one above."}
+          {showArchived ? "No archived athletes." : (
+            <>
+              No athletes yet. Add your first one above
+              {" — or "}
+              <button
+                onClick={() => router.push("/import")}
+                style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", font: "inherit", padding: 0, textDecoration: "underline" }}
+              >
+                import your roster
+              </button>
+              {" from another app."}
+            </>
+          )}
         </div>
       ) : !filtered.length ? (
         <div style={styles.empty}>No athletes match &quot;{query}&quot;.</div>
