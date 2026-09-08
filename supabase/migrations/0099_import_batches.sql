@@ -17,7 +17,7 @@
 -- there — nothing here depends on it.
 -- ============================================================
 
-create table import_batches (
+create table if not exists import_batches (
   id               uuid primary key default gen_random_uuid(),
   organisation_id  uuid not null references organisations(id) on delete cascade,
   created_by       uuid references coaches(id) on delete set null,
@@ -35,10 +35,11 @@ create table import_batches (
   reverted_at      timestamptz
 );
 
-create index import_batches_org_idx on import_batches(organisation_id, created_at desc);
+create index if not exists import_batches_org_idx on import_batches(organisation_id, created_at desc);
 
 alter table import_batches enable row level security;
 
+drop policy if exists "Coaches manage own org import batches" on import_batches;
 create policy "Coaches manage own org import batches" on import_batches
   for all
   using (organisation_id = my_organisation_id())
