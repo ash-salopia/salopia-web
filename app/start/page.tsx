@@ -41,10 +41,11 @@ export default function StartPage() {
         <div style={s.title}>VIS BUILD</div>
         <div style={s.tagline}>Coaching software for coaches who train people, not spreadsheets.</div>
         <p style={s.subtext}>
-          Everything below, in one place. Currently free while in trial.
+          Everything below, in one place. Free while in preview — no card, no limits.
         </p>
         <div style={s.ctaRow}>
-          <a href="/login?signup=1" style={s.primaryBtn}>Start your free trial</a>
+          <a href="/login?signup=1" style={s.primaryBtn}>Get started free</a>
+          <a href="/demo" style={s.ghostBtn}>Try the live demo</a>
           <a href="/login" style={s.ghostBtn}>Already have an account? Sign in</a>
         </div>
       </div>
