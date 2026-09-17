@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function GlobalError({
   error,
   reset,
@@ -7,6 +9,24 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Stopgap visibility until real error monitoring is wired up — logs
+  // to Vercel's Runtime Logs server-side, not just this one browser's
+  // console, so a crash a beta coach hits doesn't just disappear.
+  // Fire-and-forget: a logging failure must never block the error UI.
+  useEffect(() => {
+    fetch("/api/client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: error.name,
+        message: error.message,
+        digest: error.digest,
+        stack: error.stack,
+        url: typeof window !== "undefined" ? window.location.href : undefined,
+      }),
+    }).catch(() => {});
+  }, [error]);
+
   return (
     <div style={{
       minHeight: "100vh",
