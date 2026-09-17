@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   // Fetch doc to get storage path
   const { data: doc } = await supabase
-    .from("athlete_documents")
+    .from("documents")
     .select("file_path")
     .eq("id", id)
     .single();

@@ -6,7 +6,6 @@ import { useState, useEffect, useRef } from "react";
 
 interface AthleteDocument {
   id: string;
-  athlete_id: string;
   title: string;
   doc_type: "file" | "video_link";
   file_url: string | null;
@@ -129,7 +128,7 @@ export default function DocumentsManager({ athleteId, athleteName, onClose }: Pr
     setFileError("");
 
     const fd = new FormData();
-    fd.append("athlete_id", athleteId);
+    fd.append("athlete_ids", JSON.stringify([athleteId]));
     fd.append("title", fileTitle.trim());
     fd.append("notes", fileNotes.trim());
     fd.append("file", selectedFile);
@@ -160,7 +159,7 @@ export default function DocumentsManager({ athleteId, athleteName, onClose }: Pr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          athlete_id: athleteId,
+          athlete_ids: [athleteId],
           title: linkTitle.trim(),
           video_url: linkUrl.trim(),
           notes: linkNotes.trim(),
