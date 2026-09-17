@@ -21,7 +21,7 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [orgName, setOrgName] = useState("");
-  // Lets /start's "Start free trial" button deep-link straight into
+  // Lets /start's "Get started free" button deep-link straight into
   // signup mode instead of landing on sign-in and making them find
   // the "First time?" toggle themselves.
   const [showSignupFields, setShowSignupFields] = useState(() => searchParams.get("signup") === "1");

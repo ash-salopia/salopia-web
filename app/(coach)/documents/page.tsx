@@ -6,19 +6,20 @@ import { listGroups, listGroupMembers, type Group } from "@/lib/data/groups";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface AthleteDoc {
+interface DocAthlete { id: string; name: string }
+
+interface Doc {
   id: string;
-  athlete_id: string;
   title: string;
   doc_type: "file" | "video_link";
-  file_url: string | null;
   file_name: string | null;
   file_size: number | null;
   mime_type: string | null;
   video_url: string | null;
   notes: string | null;
   created_at: string;
-  athlete?: { id: string; name: string };
+  athletes: DocAthlete[];
+  athlete_ids: string[];
 }
 
 interface Athlete {
@@ -56,10 +57,23 @@ function formatDate(iso: string): string {
   });
 }
 
+// Short "who can see this" label for the doc list. "Everyone" only
+// while the access list still covers every currently-active athlete —
+// it's a snapshot of who was granted access, not a live "all athletes"
+// flag, so it stops reading as "Everyone" the moment the roster grows
+// past it. That's deliberate: access is an explicit, editable list.
+function audienceLabel(doc: Doc, totalActive: number): string {
+  const n = doc.athletes.length;
+  if (n === 0) return "No one";
+  if (n === totalActive && totalActive > 0) return `Everyone (${n})`;
+  if (n <= 2) return doc.athletes.map((a) => a.name).join(", ");
+  return `${doc.athletes[0].name}, ${doc.athletes[1].name} +${n - 2} more`;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DocumentsPage() {
-  const [docs, setDocs] = useState<AthleteDoc[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +109,13 @@ export default function DocumentsPage() {
   const [addTargetGroupId, setAddTargetGroupId] = useState("");
   const [addAthleteSearch, setAddAthleteSearch] = useState("");
 
+  // Edit-access panel
+  const [editingDoc, setEditingDoc] = useState<Doc | null>(null);
+  const [editSelectedIds, setEditSelectedIds] = useState<Set<string>>(new Set());
+  const [editSearch, setEditSearch] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const load = async () => {
     setLoading(true);
     setError("");
@@ -120,9 +141,11 @@ export default function DocumentsPage() {
   // ── Derived filtered docs ─────────────────────────────────────────────────
 
   const filteredDocs = docs.filter((doc) => {
-    if (filterMode === "athlete" && selectedAthleteId) return doc.athlete_id === selectedAthleteId;
-    if (filterMode === "group" && selectedGroupId && groupMemberIds.size > 0) return groupMemberIds.has(doc.athlete_id);
-    if (filterMode === "group" && selectedGroupId && groupMemberIds.size === 0) return false;
+    if (filterMode === "athlete" && selectedAthleteId) return doc.athlete_ids.includes(selectedAthleteId);
+    if (filterMode === "group" && selectedGroupId) {
+      if (groupMemberIds.size === 0) return false;
+      return doc.athlete_ids.some((id) => groupMemberIds.has(id));
+    }
     return true;
   });
 
@@ -146,18 +169,20 @@ export default function DocumentsPage() {
     if (!fileTitle) setFileTitle(f.name.replace(/\.[^.]+$/, ""));
   };
 
-  // ── Submit file for single athlete ────────────────────────────────────────
+  // ── Submit (file or link) to a resolved list of athletes ───────────────────
+  // One request, one upload, regardless of how many athletes are targeted —
+  // this is the fix for the old "50 rows for 50 athletes" behaviour.
 
-  const handleFileSubmit = async (athleteId: string) => {
-    if (!selectedFile || !fileTitle.trim() || !athleteId) return;
+  const submitFile = async (athleteIds: string[]) => {
+    if (!selectedFile || !fileTitle.trim() || !athleteIds.length) return;
     setSaving(true);
     setFileError("");
-    const fd = new FormData();
-    fd.append("athlete_id", athleteId);
-    fd.append("title", fileTitle.trim());
-    fd.append("notes", fileNotes.trim());
-    fd.append("file", selectedFile);
     try {
+      const fd = new FormData();
+      fd.append("athlete_ids", JSON.stringify(athleteIds));
+      fd.append("title", fileTitle.trim());
+      fd.append("notes", fileNotes.trim());
+      fd.append("file", selectedFile);
       const r = await fetch("/api/documents", { method: "POST", body: fd });
       const d = await r.json();
       if (d.error) throw new Error(d.error);
@@ -170,70 +195,14 @@ export default function DocumentsPage() {
     }
   };
 
-  // ── Submit file to all athletes in a group ────────────────────────────────
-
-  const handleGroupFileSubmit = async (groupId: string) => {
-    if (!selectedFile || !fileTitle.trim() || !groupId) return;
-    setSaving(true);
-    setFileError("");
-    try {
-      const members = await listGroupMembers(groupId);
-      if (members.length === 0) throw new Error("No athletes in this group");
-      await Promise.all(members.map(async (m) => {
-        const fd = new FormData();
-        fd.append("athlete_id", m.athlete_id);
-        fd.append("title", fileTitle.trim());
-        fd.append("notes", fileNotes.trim());
-        fd.append("file", selectedFile!);
-        const r = await fetch("/api/documents", { method: "POST", body: fd });
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-      }));
-      await load();
-      resetForms();
-    } catch (e: any) {
-      setFileError(e.message ?? "Upload failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ── Submit file to every active athlete ───────────────────────────────────
-
-  const handleEveryoneFileSubmit = async () => {
-    if (!selectedFile || !fileTitle.trim() || athletes.length === 0) return;
-    setSaving(true);
-    setFileError("");
-    try {
-      await Promise.all(athletes.map(async (a) => {
-        const fd = new FormData();
-        fd.append("athlete_id", a.id);
-        fd.append("title", fileTitle.trim());
-        fd.append("notes", fileNotes.trim());
-        fd.append("file", selectedFile!);
-        const r = await fetch("/api/documents", { method: "POST", body: fd });
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-      }));
-      await load();
-      resetForms();
-    } catch (e: any) {
-      setFileError(e.message ?? "Upload failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ── Submit link for single athlete ────────────────────────────────────────
-
-  const handleLinkSubmit = async (athleteId: string) => {
-    if (!linkTitle.trim() || !linkUrl.trim() || !athleteId) return;
+  const submitLink = async (athleteIds: string[]) => {
+    if (!linkTitle.trim() || !linkUrl.trim() || !athleteIds.length) return;
     setSaving(true);
     try {
       const r = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ athlete_id: athleteId, title: linkTitle.trim(), video_url: linkUrl.trim(), notes: linkNotes.trim() }),
+        body: JSON.stringify({ athlete_ids: athleteIds, title: linkTitle.trim(), video_url: linkUrl.trim(), notes: linkNotes.trim() }),
       });
       const d = await r.json();
       if (d.error) throw new Error(d.error);
@@ -246,54 +215,24 @@ export default function DocumentsPage() {
     }
   };
 
-  // ── Submit link to all athletes in a group ────────────────────────────────
-
-  const handleGroupLinkSubmit = async (groupId: string) => {
-    if (!linkTitle.trim() || !linkUrl.trim() || !groupId) return;
-    setSaving(true);
-    try {
-      const members = await listGroupMembers(groupId);
-      if (members.length === 0) throw new Error("No athletes in this group");
-      await Promise.all(members.map(async (m) => {
-        const r = await fetch("/api/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ athlete_id: m.athlete_id, title: linkTitle.trim(), video_url: linkUrl.trim(), notes: linkNotes.trim() }),
-        });
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-      }));
-      await load();
-      resetForms();
-    } catch (e: any) {
-      setError(e.message ?? "Could not save link");
-    } finally {
-      setSaving(false);
+  // Resolves the current add-form target into a concrete athlete-id list.
+  const resolveTargetIds = async (): Promise<string[]> => {
+    if (addMode === "everyone-file" || addMode === "everyone-link") return athletes.map((a) => a.id);
+    if (addMode === "group-file" || addMode === "group-link") {
+      if (!addTargetGroupId) return [];
+      const members = await listGroupMembers(addTargetGroupId);
+      return members.map((m) => m.athlete_id);
     }
+    return addTargetAthleteId ? [addTargetAthleteId] : [];
   };
 
-  // ── Submit link to every active athlete ───────────────────────────────────
-
-  const handleEveryoneLinkSubmit = async () => {
-    if (!linkTitle.trim() || !linkUrl.trim() || athletes.length === 0) return;
-    setSaving(true);
-    try {
-      await Promise.all(athletes.map(async (a) => {
-        const r = await fetch("/api/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ athlete_id: a.id, title: linkTitle.trim(), video_url: linkUrl.trim(), notes: linkNotes.trim() }),
-        });
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-      }));
-      await load();
-      resetForms();
-    } catch (e: any) {
-      setError(e.message ?? "Could not save link");
-    } finally {
-      setSaving(false);
+  const handleSave = async () => {
+    const ids = await resolveTargetIds();
+    if (!ids.length) {
+      (isFileMode ? setFileError : setError)("No athletes to share with.");
+      return;
     }
+    if (isFileMode) await submitFile(ids); else await submitLink(ids);
   };
 
   const resetForms = () => {
@@ -305,7 +244,7 @@ export default function DocumentsPage() {
 
   // ── Open file ─────────────────────────────────────────────────────────────
 
-  const handleOpen = async (doc: AthleteDoc) => {
+  const handleOpen = async (doc: Doc) => {
     if (doc.doc_type === "video_link" && doc.video_url) {
       window.open(doc.video_url, "_blank", "noopener");
       return;
@@ -340,11 +279,64 @@ export default function DocumentsPage() {
     }
   };
 
+  // ── Edit access ───────────────────────────────────────────────────────────
+
+  const openEditAccess = (doc: Doc) => {
+    setEditingDoc(doc);
+    setEditSelectedIds(new Set(doc.athlete_ids));
+    setEditSearch("");
+    setEditError("");
+  };
+
+  const toggleEditAthlete = (id: string) => {
+    setEditSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const applyGroupToEdit = async (groupId: string) => {
+    if (!groupId) return;
+    const members = await listGroupMembers(groupId);
+    setEditSelectedIds((prev) => {
+      const next = new Set(prev);
+      members.forEach((m) => next.add(m.athlete_id));
+      return next;
+    });
+  };
+
+  const saveEditAccess = async () => {
+    if (!editingDoc) return;
+    if (editSelectedIds.size === 0) { setEditError("At least one athlete needs access."); return; }
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const r = await fetch(`/api/documents?id=${editingDoc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athlete_ids: [...editSelectedIds] }),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      await load();
+      setEditingDoc(null);
+    } catch (e: any) {
+      setEditError(e.message ?? "Could not update access");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   // ── Athlete search matches ────────────────────────────────────────────────
 
   const athleteMatches = addAthleteSearch.trim()
     ? athletes.filter((a) => a.name.toLowerCase().includes(addAthleteSearch.toLowerCase())).slice(0, 8)
     : [];
+
+  const editMatches = editSearch.trim()
+    ? athletes.filter((a) => a.name.toLowerCase().includes(editSearch.toLowerCase()))
+    : athletes;
 
   const isFileMode = addMode === "file" || addMode === "group-file" || addMode === "everyone-file";
   const isGroupMode = addMode === "group-file" || addMode === "group-link";
@@ -356,7 +348,7 @@ export default function DocumentsPage() {
     <div style={s.page}>
       <div style={s.headRow}>
         <h1 style={s.title}>Documents</h1>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
           <button style={s.addBtn} onClick={() => setAddMode("file")}>⬆ Upload to athlete</button>
           <button style={s.addBtn} onClick={() => setAddMode("group-file")}>⬆ Upload to group</button>
           <button style={s.addBtn} onClick={() => setAddMode("everyone-file")}>⬆ Upload to everyone</button>
@@ -383,7 +375,7 @@ export default function DocumentsPage() {
           {/* Target selector */}
           {isEveryoneMode ? (
             <div style={s.targetHint}>
-              Will be shared with all {athletes.length} active athlete{athletes.length === 1 ? "" : "s"}
+              One document, shared with all {athletes.length} active athlete{athletes.length === 1 ? "" : "s"}
             </div>
           ) : isGroupMode ? (
             <div>
@@ -400,7 +392,7 @@ export default function DocumentsPage() {
               </select>
               {addTargetGroupId && (
                 <div style={s.targetHint}>
-                  Will be shared with all athletes in {groups.find(g => g.id === addTargetGroupId)?.name}
+                  One document, shared with everyone in {groups.find(g => g.id === addTargetGroupId)?.name}
                 </div>
               )}
             </div>
@@ -493,14 +485,7 @@ export default function DocumentsPage() {
                 (isEveryoneMode && athletes.length === 0) ||
                 (!isGroupMode && !isEveryoneMode && !addTargetAthleteId)
               }
-              onClick={() => {
-                if (addMode === "file") handleFileSubmit(addTargetAthleteId);
-                if (addMode === "group-file") handleGroupFileSubmit(addTargetGroupId);
-                if (addMode === "everyone-file") handleEveryoneFileSubmit();
-                if (addMode === "link") handleLinkSubmit(addTargetAthleteId);
-                if (addMode === "group-link") handleGroupLinkSubmit(addTargetGroupId);
-                if (addMode === "everyone-link") handleEveryoneLinkSubmit();
-              }}
+              onClick={handleSave}
             >
               {saving
                 ? (isGroupMode ? "Sending to group…" : isEveryoneMode ? "Sending to everyone…" : "Saving…")
@@ -585,7 +570,7 @@ export default function DocumentsPage() {
               <div style={s.docInfo}>
                 <div style={s.docTitle}>{doc.title}</div>
                 <div style={s.docMeta}>
-                  <span style={s.athleteTag}>{doc.athlete?.name ?? "Unknown athlete"}</span>
+                  <span style={s.athleteTag}>{audienceLabel(doc, athletes.length)}</span>
                   {doc.doc_type === "file" && doc.file_name && (
                     <span> · {doc.file_name}{doc.file_size ? ` (${formatBytes(doc.file_size)})` : ""}</span>
                   )}
@@ -595,6 +580,9 @@ export default function DocumentsPage() {
                 {doc.notes && <div style={s.docNotes}>{doc.notes}</div>}
               </div>
               <div style={s.docActions}>
+                <button style={s.editAccessBtn} onClick={() => openEditAccess(doc)} title="Edit who can see this">
+                  ✎ Access
+                </button>
                 <button style={s.openBtn} onClick={() => handleOpen(doc)} disabled={openingId === doc.id}>
                   {openingId === doc.id ? "…" : "Open"}
                 </button>
@@ -604,6 +592,69 @@ export default function DocumentsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Edit access panel ── */}
+      {editingDoc && (
+        <div style={s.overlay} onClick={() => !editSaving && setEditingDoc(null)}>
+          <div style={s.editPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={s.editHeader}>
+              <div>
+                <div style={s.addFormTitle}>Who can see this?</div>
+                <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>{editingDoc.title}</div>
+              </div>
+              <button style={s.cancelBtn} onClick={() => setEditingDoc(null)} disabled={editSaving}>Cancel</button>
+            </div>
+
+            {editError && <div style={s.errorBox}>{editError}</div>}
+
+            <div style={s.editQuickRow}>
+              <button style={s.chipBtn} onClick={() => setEditSelectedIds(new Set(athletes.map((a) => a.id)))}>Select all</button>
+              <button style={s.chipBtn} onClick={() => setEditSelectedIds(new Set())}>Clear all</button>
+              {groups.length > 0 && (
+                <select style={{ ...s.select, width: "auto", flex: 1 }} value="" onChange={(e) => { if (e.target.value) applyGroupToEdit(e.target.value); }}>
+                  <option value="">+ Add a group…</option>
+                  {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              )}
+            </div>
+
+            <input
+              style={s.input}
+              value={editSearch}
+              onChange={(e) => setEditSearch(e.target.value)}
+              placeholder="Search athletes…"
+            />
+
+            <div style={s.editList}>
+              {editMatches.map((a) => (
+                <label key={a.id} style={s.editRow}>
+                  <input
+                    type="checkbox"
+                    checked={editSelectedIds.has(a.id)}
+                    onChange={() => toggleEditAthlete(a.id)}
+                  />
+                  <span>{a.name}</span>
+                  {a.group && <span style={s.editRowGroup}>{a.group}</span>}
+                </label>
+              ))}
+              {editMatches.length === 0 && <div style={{ fontSize: 13, color: "var(--mute)", padding: "8px 0" }}>No athletes match.</div>}
+            </div>
+
+            <div style={s.formBtns}>
+              <div style={{ flex: 1, fontSize: 12, color: "var(--mute)", alignSelf: "center" }}>
+                {editSelectedIds.size} athlete{editSelectedIds.size === 1 ? "" : "s"} selected
+              </div>
+              <button
+                style={{ ...s.saveBtn, opacity: editSaving || editSelectedIds.size === 0 ? 0.5 : 1 }}
+                disabled={editSaving || editSelectedIds.size === 0}
+                onClick={saveEditAccess}
+              >
+                {editSaving ? "Saving…" : "Save access"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -630,7 +681,7 @@ const s: Record<string, React.CSSProperties> = {
   dropZone: { border: "2px dashed var(--line)", borderRadius: 10, padding: "20px", display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 6, cursor: "pointer" },
   dropZoneActive: { borderColor: "var(--accent)", background: "var(--accent-dim)" },
   fieldError: { fontSize: 12, color: "#FF6B6B", background: "#2a0c0c", border: "1px solid #FF6B6B44", borderRadius: 6, padding: "6px 10px" },
-  formBtns: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 },
+  formBtns: { display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", marginTop: 4 },
   cancelBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "10px 18px", fontSize: 13, cursor: "pointer" },
   saveBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   filterBar: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" as const, alignItems: "center" },
@@ -646,7 +697,17 @@ const s: Record<string, React.CSSProperties> = {
   docMeta: { fontSize: 11, color: "var(--mute)" },
   athleteTag: { fontWeight: 700, color: "var(--accent)" },
   docNotes: { fontSize: 12, color: "var(--mute)", marginTop: 3, fontStyle: "italic" as const },
-  docActions: { display: "flex", gap: 6, alignItems: "center", flexShrink: 0 },
+  docActions: { display: "flex", gap: 6, alignItems: "center", flexShrink: 0, flexWrap: "wrap" as const, justifyContent: "flex-end" },
+  editAccessBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   openBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--accent)", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   deleteBtn: { background: "transparent", border: "1px solid var(--line)", color: "#FF6B6B", borderRadius: 6, padding: "5px 8px", fontSize: 12, cursor: "pointer" },
+  // Edit-access panel
+  overlay: { position: "fixed", inset: 0, background: "rgba(6,9,12,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 16 },
+  editPanel: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16, padding: 20, width: "100%", maxWidth: 440, maxHeight: "85vh", display: "flex", flexDirection: "column" as const, gap: 10 },
+  editHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
+  editQuickRow: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const },
+  chipBtn: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  editList: { overflowY: "auto" as const, display: "flex", flexDirection: "column" as const, gap: 2, border: "1px solid var(--line)", borderRadius: 8, padding: 8, background: "var(--ink)", flex: 1, minHeight: 120 },
+  editRow: { display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", fontSize: 13, color: "var(--text)", cursor: "pointer", borderRadius: 6 },
+  editRowGroup: { marginLeft: "auto", fontSize: 11, color: "var(--mute)" },
 };

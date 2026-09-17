@@ -1,12 +1,41 @@
 "use client";
 
-export default function GlobalError({
+// Named ErrorBoundary (not GlobalError) to avoid confusion with the
+// separate app/global-error.tsx, which is a different Next.js
+// convention — this one catches errors within the root layout's
+// content; that one catches errors in the root layout itself.
+
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
+
+export default function ErrorBoundary({
   error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Sentry.captureException is a no-op with no DSN configured — real
+  // error monitoring once NEXT_PUBLIC_SENTRY_DSN is set. The
+  // /api/client-error POST is a zero-config fallback that works either
+  // way, logging to Vercel's Runtime Logs so a crash a beta coach hits
+  // doesn't just disappear into their own browser console. Both are
+  // fire-and-forget: a logging failure must never block the error UI.
+  useEffect(() => {
+    Sentry.captureException(error);
+    fetch("/api/client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: error.name,
+        message: error.message,
+        digest: error.digest,
+        stack: error.stack,
+        url: typeof window !== "undefined" ? window.location.href : undefined,
+      }),
+    }).catch(() => {});
+  }, [error]);
+
   return (
     <div style={{
       minHeight: "100vh",

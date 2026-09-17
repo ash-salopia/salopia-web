@@ -536,11 +536,20 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "bulk-add-athletes",
     category: "athletes",
     title: "Adding lots of athletes at once",
-    summary: "Athletes are added individually. Contact support for a bulk import of a large squad.",
-    keywords: ["bulk import", "import athletes", "csv athletes", "add many", "upload roster"],
+    summary: "Athletes → Import: upload a CSV roster and match up the columns.",
+    keywords: ["bulk import", "import athletes", "csv athletes", "add many", "upload roster", "switching from another app", "migrate"],
     body: [
-      { type: "p", text: "There's no self-serve bulk athlete import — add them one at a time with **+ Add athlete**. It's quick: only the name is required." },
-      { type: "p", text: `Onboarding a large existing squad from a spreadsheet? Email **${SUPPORT}** with the list and we can help load it.` },
+      { type: "p", text: "Switching from another platform, or onboarding an existing squad from a spreadsheet? Use **Athletes → Import** rather than adding them one by one." },
+      {
+        type: "steps",
+        items: [
+          "Export your roster as a CSV from wherever it lives now (or use the **Download a template** link on the Import page).",
+          "Upload the file — any column names are fine, you match them up on the next screen (name is the only required one; group, sex, date of birth, bodyweight and HR/MAS fields are all optional).",
+          "Review the preview — it flags anything it couldn't read and any name that looks like a duplicate — then click **Import**.",
+        ],
+      },
+      { type: "note", text: "Each import is tracked as a batch on the Import page, with an **Undo** that removes exactly those athletes (and anything logged against them since) if something looks wrong." },
+      { type: "p", text: `Need a hand with a messier export, or importing more than your plan's athlete limit allows? Email **${SUPPORT}**.` },
     ],
   },
   {
@@ -1953,6 +1962,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
         ],
       },
       { type: "p", text: "Athletes see these under **📁 Docs** in their app — **Open** for files, **Watch** for video links." },
+      { type: "p", text: "Uploading to a group or everyone still only stores the file once — it's one document shared with several athletes, not a separate copy per athlete." },
+      { type: "tip", text: "Changed your mind about who should see something? Click **✎ Access** on any document to add or remove athletes without re-uploading it." },
     ],
   },
   {

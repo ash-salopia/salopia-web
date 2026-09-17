@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
-import { createClient } from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-service";
 
+// GET /api/athlete-link/documents/signed-url?token=xxx&id=xxx
+// Service-role client throughout — see the note in ../route.ts. Access
+// is verified via document_athletes membership (not a documents.athlete_id
+// column, which no longer exists — a document can have many recipients).
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const id = req.nextUrl.searchParams.get("id");
@@ -11,27 +14,21 @@ export async function GET(req: NextRequest) {
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
-  // Verify this document belongs to this athlete
-  const { data: doc } = await supabase
-    .from("athlete_documents")
-    .select("file_path, athlete_id")
-    .eq("id", id)
+  const { data: access } = await supabase
+    .from("document_athletes")
+    .select("document:documents(file_path)")
+    .eq("document_id", id)
     .eq("athlete_id", athlete.id)
-    .single();
+    .maybeSingle();
 
-  if (!doc?.file_path) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const filePath = (access?.document as any)?.file_path;
+  if (!filePath) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const storageSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { cookies: { get: () => undefined } }
-  );
-
-  const { data, error } = await storageSupabase.storage
+  const { data, error } = await supabase.storage
     .from("athlete-documents")
-    .createSignedUrl(doc.file_path, 60 * 60);
+    .createSignedUrl(filePath, 60 * 60);
 
   if (error || !data) return NextResponse.json({ error: "Could not generate URL" }, { status: 500 });
   return NextResponse.json({ url: data.signedUrl });
