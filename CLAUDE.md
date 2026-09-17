@@ -91,6 +91,28 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
 
 ## Reliability infrastructure (in place as of this session)
 
+- **Error monitoring (Sentry, dormant by default)**: `@sentry/nextjs`
+  installed, `sentry.{client,server,edge}.config.ts` + `instrumentation.ts`
+  wired up (classic pattern — this repo is Next 14/webpack, not
+  Turbopack/Next 15, so `instrumentation-client.ts` doesn't apply yet).
+  `next.config.js` has `experimental.instrumentationHook: true` (required
+  on Next 14 for `instrumentation.ts` to run at all) and is wrapped with
+  `withSentryConfig`. Everything reads one `NEXT_PUBLIC_SENTRY_DSN` env
+  var (DSNs are public, not secret) and is a genuine no-op — confirmed via
+  `npm run build` — until it's set. `app/error.tsx` (renamed component
+  `ErrorBoundary`, not `GlobalError`) and the new `app/global-error.tsx`
+  (root-layout crashes — didn't exist before, Next requires it define its
+  own `<html>/<body>`) both call `Sentry.captureException` AND POST to
+  `/api/client-error`, which `console.error`s server-side so a crash
+  shows up in Vercel's Runtime Logs even with no Sentry DSN configured at
+  all — that fallback has no dependency on Sentry being set up.
+  `SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN` are build-time-only
+  (source-map upload); the build succeeds identically without them.
+  **To activate:** create a Sentry project, paste its DSN into
+  `NEXT_PUBLIC_SENTRY_DSN` in Vercel env vars, redeploy.
+- **`.env.example`** exists now (README referenced it for years; it was
+  never actually committed) — every env var this app reads, with a note
+  on which are required vs. which features silently no-op without theirs.
 - **Husky pre-push hook** runs `tsc --noEmit` automatically before every
   push (installed via `npm install`, hook lives in `.husky/pre-push`).
   If a push is blocked and you're certain it's a false positive, bypass
