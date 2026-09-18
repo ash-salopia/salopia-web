@@ -14,7 +14,7 @@ import { isReadOnlyRestricted } from "@/lib/billing/access";
 // - API routes NEVER get redirected to /login. Redirecting an API call
 //   returns HTML to a fetch() that expected JSON, which surfaces as
 //   confusing parse errors client-side. They get a 401 JSON response.
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // These never look at `user` at all (auth callback, the athlete
@@ -26,6 +26,7 @@ export async function middleware(request: NextRequest) {
   // below to redirect an already-signed-in visitor away.
   const skipsAuthCheck =
     path.startsWith("/auth") ||
+    path === "/api/health" ||             // infrastructure health check; returns no customer data
     path.startsWith("/a/") ||               // athlete share-link pages
     path.startsWith("/g/") ||               // public Home Programme links (0058) — share-code-validated in the route itself, no identity at all
     path.startsWith("/api/athlete-link/") || // athlete APIs — token-validated in each handler

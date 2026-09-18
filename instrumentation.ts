@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/nextjs";
+
 // Next.js's instrumentation hook — runs once when each server runtime
 // boots, before it starts handling requests. This is how the two
 // server-side Sentry configs actually get loaded; sentry.client.config.ts
@@ -10,3 +12,5 @@ export async function register() {
     await import("./sentry.edge.config");
   }
 }
+
+export const onRequestError = Sentry.captureRequestError;

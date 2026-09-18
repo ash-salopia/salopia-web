@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "prepare": "husky"
@@ -15,21 +15,22 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "jszip": "^3.10.1",
-    "next": "14.2.15",
+    "nanoid": "^3.3.18",
+    "next": "^16.3.5",
     "papaparse": "^5.4.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "read-excel-file": "^9.3.10",
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "stripe": "^22.4.0",
-    "web-push": "^3.6.7",
-    "xlsx": "^0.18.5"
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
     "@types/papaparse": "^5.3.14",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/web-push": "^3.6.4",
     "husky": "^9.1.7",
     "typescript": "^5.5.3"

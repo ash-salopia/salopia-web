@@ -3,13 +3,9 @@ const { withSentryConfig } = require("@sentry/nextjs/config");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    // Required on Next.js 14 for instrumentation.ts to actually run —
-    // this is what loads sentry.server.config.ts / sentry.edge.config.ts.
-    // Stable (no flag needed) from Next 15 onward; harmless to leave in
-    // if/when this repo upgrades.
-    instrumentationHook: true,
-  },
+  // Keep the application portable. AWS ECS/Fargate and Azure App Service can
+  // run the self-contained Node server emitted by this build mode.
+  output: "standalone",
 };
 
 module.exports = withSentryConfig(nextConfig, {

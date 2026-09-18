@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
     organisationId = (athlete as any).organisation_id;
   } else {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

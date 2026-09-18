@@ -59,27 +59,17 @@ async function readTextFile(file: File): Promise<string> {
 }
 
 async function readXlsxFile(file: File): Promise<string> {
-  let XLSX: typeof import("xlsx");
-  try { XLSX = await import("xlsx"); } catch {
-    throw new Error('Run "npm install xlsx" in your project root first');
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array" });
-        const text = wb.SheetNames.map((name) => {
-          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name]);
-          if (!csv.replace(/,/g, "").trim()) return "";
-          return `Sheet: ${name}\n${csv}`;
-        }).filter(Boolean).join("\n\n");
-        resolve(text);
-      } catch { reject(new Error("Could not parse Excel file - check it isn't password protected")); }
-    };
-    reader.onerror = () => reject(new Error("Could not read file"));
-    reader.readAsArrayBuffer(file);
+  const { default: parseXlsx } = await import("read-excel-file/browser");
+  const sheets = await parseXlsx(file);
+  const sections = sheets.map(({ sheet: name, data: rows }) => {
+    const csv = rows.map((row) => row.map((cell) => {
+      if (cell === null || cell === undefined) return "";
+      const value = String(cell);
+      return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+    }).join(",")).join("\n");
+    return csv.replace(/,/g, "").trim() ? `Sheet: ${name}\n${csv}` : "";
   });
+  return sections.filter(Boolean).join("\n\n");
 }
 
 async function readPdfFileAsBase64(file: File): Promise<string> {
@@ -127,7 +117,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
         return;
       }
       let text: string;
-      if (ext === "xlsx" || ext === "xls") text = await readXlsxFile(file);
+      if (ext === "xlsx") text = await readXlsxFile(file);
       else if (ext === "txt" || ext === "csv") text = await readTextFile(file);
       else { setError("Unsupported file type - upload a .txt, .xlsx, or .pdf file"); return; }
       if (!text.trim()) { setError("File appears to be empty"); return; }
@@ -292,7 +282,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           {phase === "input" && (
             <>
               <p style={s.hint}>Paste coaching notes, a training plan, or upload an Excel spreadsheet or a PDF (e.g. a printed or scanned session sheet). Claude will detect how many sessions are described and structure them ready to review.</p>
-              <input ref={fileRef} type="file" accept=".txt,.xlsx,.xls,.csv,.pdf" style={{ display: "none" }}
+              <input ref={fileRef} type="file" accept=".txt,.xlsx,.csv,.pdf" style={{ display: "none" }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
               <div style={s.uploadRow}>
                 <button style={s.uploadBtn} onClick={() => fileRef.current?.click()}>📎 Upload .txt, .xlsx, or .pdf</button>

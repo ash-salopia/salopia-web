@@ -239,15 +239,7 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
   middleware-specific CVEs here is likely narrower than their raw
   severity rating suggests — worth keeping in mind when scoping how
   urgently to schedule this, but it should still get dedicated time
-  soon, not sit indefinitely. `postcss` (also flagged, high) is a
-  transitive dependency of `next` and resolves itself once `next` is
-  upgraded — no independent action needed. `xlsx` (also flagged, high
-  — Prototype Pollution + ReDoS) has **no available npm fix at all**:
-  SheetJS stopped publishing security patches to the public npm
-  package and moved them to their own CDN instead. Used client-side in
-  `components/NotesSessionModal.tsx` to parse a coach-uploaded
-  `.xlsx`/`.xls` file for session-notes import — real but bounded
-  exposure (a coach's own file in their own browser tab, not
-  server-side parsing of internet-facing input). Options if this needs
-  closing: switch to SheetJS's CDN-hosted build, swap to a different
-  xlsx-parsing library, or accept the risk given the bounded exposure.
+  soon, not sit indefinitely. The AWS migration branch upgrades Next.js
+  and replaces the vulnerable `xlsx` package with the maintained
+  `read-excel-file` package. Session-note imports accept modern `.xlsx`
+  files; legacy `.xls` parsing is intentionally excluded.

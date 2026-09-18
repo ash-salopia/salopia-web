@@ -6,8 +6,8 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 const FILE_SIZE_LIMIT = 2 * 1024 * 1024; // 2 MB, matches the "max 2MB" copy in BrandingSettings.tsx
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml", "image/gif"]);
 
-function getSupabase() {
-  const cookieStore = cookies();
+async function getSupabase() {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -27,7 +27,7 @@ function getSupabase() {
 // service-role client, which bypasses RLS entirely, so it needs its
 // own explicit role check rather than inheriting that policy.
 export async function POST(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 

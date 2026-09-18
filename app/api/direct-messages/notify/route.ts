@@ -10,7 +10,7 @@ import { notifyAthleteOfMessage } from "@/lib/push/send";
 // purely to trigger that side effect after a successful send - not to
 // do the write.
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
