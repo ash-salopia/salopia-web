@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { ensureCoachProvisioned } from "@/lib/auth/ensure-coach-provisioned";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 // Supabase redirects here after the coach clicks the magic-link in their
 // email. We exchange the one-time code for a real session, then — if
@@ -16,7 +17,8 @@ import { ensureCoachProvisioned } from "@/lib/auth/ensure-coach-provisioned";
 // triggered by the org owner, not the invited coach's own browser, so
 // there's no PKCE code-verifier cookie waiting on their device.
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getRequestOrigin(request);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
 
