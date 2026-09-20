@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase-server";
 import { ensureCoachProvisioned } from "@/lib/auth/ensure-coach-provisioned";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 // Handles Supabase's token_hash-style auth links — used by the coach
 // invite email (see app/api/coaches/invite/route.ts), which is the
@@ -17,7 +18,8 @@ import { ensureCoachProvisioned } from "@/lib/auth/ensure-coach-provisioned";
 // hosted verify URL — Magic Link/Confirm Signup templates are
 // unaffected and keep using the working PKCE path.
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getRequestOrigin(request);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   // NOT a fallback source for `next`: Supabase's redirect_to param here

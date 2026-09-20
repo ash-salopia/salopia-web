@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
 import { getPlanTier, type BillingInterval } from "@/lib/billing/plans";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -22,7 +23,7 @@ async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
 // organisation) a Checkout Session for the requested tier/interval.
 // Only the org owner can change billing -- same gate as invite/archive.
 export async function POST(req: NextRequest) {
-  const { origin } = new URL(req.url);
+  const origin = getRequestOrigin(req);
   const supabase = await createClient();
   const owner = await getOwner(supabase);
   if (!owner) {

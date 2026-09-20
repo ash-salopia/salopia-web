@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -17,7 +18,7 @@ async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
 }
 
 export async function POST(req: NextRequest) {
-  const { origin } = new URL(req.url);
+  const origin = getRequestOrigin(req);
   const supabase = await createClient();
   const owner = await getOwner(supabase);
   if (!owner) {

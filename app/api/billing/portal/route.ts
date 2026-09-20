@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -20,7 +21,7 @@ async function getOwner(supabase: Awaited<ReturnType<typeof createClient>>) {
 // Self-serve card update / cancel / invoice history, all handled by
 // Stripe's hosted Billing Portal -- no custom UI needed for any of it.
 export async function POST(req: NextRequest) {
-  const { origin } = new URL(req.url);
+  const origin = getRequestOrigin(req);
   const supabase = await createClient();
   const owner = await getOwner(supabase);
   if (!owner) {
