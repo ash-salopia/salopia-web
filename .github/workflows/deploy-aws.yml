@@ -1,6 +1,9 @@
 name: Deploy VIS BUILD to AWS London
 
 on:
+  push:
+    branches:
+      - aws-london-migration
   workflow_dispatch:
 
 permissions:
