@@ -1,0 +1,114 @@
+name: Deploy VIS BUILD to AWS London
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-2
+  ECR_REPOSITORY: vis-build-app
+  ECS_SERVICE_NAME: vis-build-app
+  AWS_SECRET_ID: vis-build/production
+  AWS_SECRET_ARN: arn:aws:secretsmanager:eu-west-2:489470371748:secret:vis-build/production-zOd0KH
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: aws-london
+
+    steps:
+      - name: Check out the application
+        uses: actions/checkout@v4
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::489470371748:role/GitHubActionsVisBuildDeploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read public build configuration from AWS Secrets Manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          SECRET_JSON="$(aws secretsmanager get-secret-value \
+            --secret-id "$AWS_SECRET_ID" \
+            --query SecretString \
+            --output text)"
+
+          for KEY in \
+            NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            NEXT_PUBLIC_VAPID_PUBLIC_KEY
+          do
+            VALUE="$(jq -r --arg key "$KEY" '.[$key] // empty' <<< "$SECRET_JSON")"
+            if [ -z "$VALUE" ]; then
+              echo "Required build configuration is missing: $KEY" >&2
+              exit 1
+            fi
+            echo "::add-mask::$VALUE"
+            echo "$KEY=$VALUE" >> "$GITHUB_ENV"
+          done
+
+      - name: Sign in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the application image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+            --build-arg NEXT_PUBLIC_VAPID_PUBLIC_KEY="$NEXT_PUBLIC_VAPID_PUBLIC_KEY" \
+            -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "IMAGE_URI=$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_ENV"
+
+      - name: Deploy to ECS Express Mode
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-express-service@v1.2.2
+        with:
+          service-name: ${{ env.ECS_SERVICE_NAME }}
+          image: ${{ env.IMAGE_URI }}
+          execution-role-arn: arn:aws:iam::489470371748:role/ecsTaskExecutionRole
+          infrastructure-role-arn: arn:aws:iam::489470371748:role/ecsInfrastructureRoleForExpressServices
+          container-port: 3000
+          health-check-path: /api/health
+          cpu: 512
+          memory: 1024
+          min-task-count: 1
+          max-task-count: 4
+          auto-scaling-metric: AVERAGE_CPU
+          auto-scaling-target-value: 60
+          secrets: |
+            [
+              {"name":"NEXT_PUBLIC_SUPABASE_URL","valueFrom":"${{ env.AWS_SECRET_ARN }}:NEXT_PUBLIC_SUPABASE_URL::"},
+              {"name":"NEXT_PUBLIC_SUPABASE_ANON_KEY","valueFrom":"${{ env.AWS_SECRET_ARN }}:NEXT_PUBLIC_SUPABASE_ANON_KEY::"},
+              {"name":"SUPABASE_SERVICE_ROLE_KEY","valueFrom":"${{ env.AWS_SECRET_ARN }}:SUPABASE_SERVICE_ROLE_KEY::"},
+              {"name":"ANTHROPIC_API_KEY","valueFrom":"${{ env.AWS_SECRET_ARN }}:ANTHROPIC_API_KEY::"},
+              {"name":"OPENAI_API_KEY","valueFrom":"${{ env.AWS_SECRET_ARN }}:OPENAI_API_KEY::"},
+              {"name":"NEXT_PUBLIC_VAPID_PUBLIC_KEY","valueFrom":"${{ env.AWS_SECRET_ARN }}:NEXT_PUBLIC_VAPID_PUBLIC_KEY::"},
+              {"name":"VAPID_PRIVATE_KEY","valueFrom":"${{ env.AWS_SECRET_ARN }}:VAPID_PRIVATE_KEY::"},
+              {"name":"VAPID_SUBJECT","valueFrom":"${{ env.AWS_SECRET_ARN }}:VAPID_SUBJECT::"},
+              {"name":"CRON_SECRET","valueFrom":"${{ env.AWS_SECRET_ARN }}:CRON_SECRET::"},
+              {"name":"DEMO_COACH_EMAIL","valueFrom":"${{ env.AWS_SECRET_ARN }}:DEMO_COACH_EMAIL::"},
+              {"name":"DEMO_COACH_PASSWORD","valueFrom":"${{ env.AWS_SECRET_ARN }}:DEMO_COACH_PASSWORD::"}
+            ]
+          tags: |
+            Application=VIS BUILD
+            Environment=staging
+            DataRegion=London
+
+      - name: Verify the deployed health endpoint
+        env:
+          ENDPOINT: ${{ steps.deploy.outputs.endpoint }}
+        run: |
+          curl --fail --show-error --silent \
+            --retry 12 --retry-delay 10 \
+            "$ENDPOINT/api/health"
+          echo "AWS_ENDPOINT=$ENDPOINT" >> "$GITHUB_STEP_SUMMARY"
