@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 // A public, credential-less entry point for demoing the app to a
 // prospective coach — signs the visitor straight into a fixed,
@@ -11,7 +12,7 @@ import { createClient } from "@/lib/supabase-server";
 export async function GET(request: Request) {
   const email = process.env.DEMO_COACH_EMAIL;
   const password = process.env.DEMO_COACH_PASSWORD;
-  const { origin } = new URL(request.url);
+  const origin = getRequestOrigin(request);
 
   if (!email || !password) {
     return NextResponse.redirect(`${origin}/login?error=demo_unavailable`);
