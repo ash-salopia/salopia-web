@@ -1,0 +1,295 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VIS BUILD AWS London schedules, monitoring, and budget guardrails
+
+Parameters:
+  AppBaseUrl:
+    Type: String
+    Default: https://vi-da89f9fe9e404164951013e1d6e20d8b.ecs.eu-west-2.on.aws
+    AllowedPattern: ^https://[A-Za-z0-9.-]+$
+    Description: Public HTTPS origin for the VIS BUILD app, without a trailing slash
+  RuntimeSecretId:
+    Type: String
+    Default: vis-build/production
+    Description: Secrets Manager secret containing CRON_SECRET
+  AlertEmail:
+    Type: String
+    Default: hello@visbuild.co.uk
+    Description: Address that receives operational and budget alerts
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 25
+    MinValue: 1
+    Description: Monthly AWS budget in USD
+  ScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: Keep disabled while Vercel cron jobs are active; enable at AWS cutover
+
+Resources:
+  OperationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: vis-build-operations
+      DisplayName: VIS BUILD AWS operations
+
+  OperationsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+      TopicArn: !Ref OperationsTopic
+
+  SchedulerDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: vis-build-scheduler-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  CronInvokerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vis-build-cron-invoker
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadRuntimeSecretAndWriteLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${RuntimeSecretId}*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+
+  CronInvokerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: vis-build-cron-invoker
+      Description: Securely invokes VIS BUILD scheduled notification endpoints
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt CronInvokerRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          APP_BASE_URL: !Ref AppBaseUrl
+          RUNTIME_SECRET_ID: !Ref RuntimeSecretId
+      Code:
+        ZipFile: |
+          const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+
+          const secrets = new SecretsManagerClient({});
+          let secretPromise;
+
+          async function getCronSecret() {
+            if (!secretPromise) {
+              secretPromise = secrets
+                .send(new GetSecretValueCommand({ SecretId: process.env.RUNTIME_SECRET_ID }))
+                .then((result) => JSON.parse(result.SecretString || "{}").CRON_SECRET);
+            }
+            const value = await secretPromise;
+            if (!value) throw new Error("CRON_SECRET is missing from the runtime secret");
+            return value;
+          }
+
+          exports.handler = async (event) => {
+            const allowedPaths = new Set([
+              "/api/cron/morning-reminder",
+              "/api/cron/notifications",
+            ]);
+            const path = event && event.path;
+            if (!allowedPaths.has(path)) throw new Error("Unrecognised cron path");
+
+            const cronSecret = await getCronSecret();
+            const response = await fetch(`${process.env.APP_BASE_URL}${path}`, {
+              method: "GET",
+              headers: { Authorization: `Bearer ${cronSecret}` },
+              signal: AbortSignal.timeout(55000),
+            });
+            const body = await response.text();
+            if (!response.ok) {
+              throw new Error(`Cron endpoint ${path} returned ${response.status}: ${body.slice(0, 500)}`);
+            }
+            console.log(JSON.stringify({ path, status: response.status, response: body.slice(0, 1000) }));
+            return { statusCode: response.status, body };
+          };
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vis-build-scheduler
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeCronFunction
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt CronInvokerFunction.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt SchedulerDeadLetterQueue.Arn
+
+  MorningReminderSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: vis-build-morning-reminders
+      Description: Check every 15 minutes for athlete-configured morning reminders
+      ScheduleExpression: cron(0/15 * * * ? *)
+      ScheduleExpressionTimezone: UTC
+      FlexibleTimeWindow:
+        Mode: OFF
+      State: !Ref ScheduleState
+      Target:
+        Arn: !GetAtt CronInvokerFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"path":"/api/cron/morning-reminder"}'
+        RetryPolicy:
+          MaximumEventAgeInSeconds: 3600
+          MaximumRetryAttempts: 2
+        DeadLetterConfig:
+          Arn: !GetAtt SchedulerDeadLetterQueue.Arn
+
+  EveningNotificationSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: vis-build-evening-notifications
+      Description: Daily missed-session and RPE reminders
+      ScheduleExpression: cron(0 19 * * ? *)
+      ScheduleExpressionTimezone: UTC
+      FlexibleTimeWindow:
+        Mode: OFF
+      State: !Ref ScheduleState
+      Target:
+        Arn: !GetAtt CronInvokerFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"path":"/api/cron/notifications"}'
+        RetryPolicy:
+          MaximumEventAgeInSeconds: 3600
+          MaximumRetryAttempts: 2
+        DeadLetterConfig:
+          Arn: !GetAtt SchedulerDeadLetterQueue.Arn
+
+  CronFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: vis-build-cron-failures
+      AlarmDescription: A VIS BUILD scheduled notification invocation failed
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CronInvokerFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OperationsTopic
+
+  EcsHighCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: vis-build-ecs-high-cpu
+      AlarmDescription: VIS BUILD ECS CPU has remained above 80 percent
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: ClusterName
+          Value: default
+        - Name: ServiceName
+          Value: vis-build-app
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OperationsTopic
+
+  EcsHighMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: vis-build-ecs-high-memory
+      AlarmDescription: VIS BUILD ECS memory has remained above 80 percent
+      Namespace: AWS/ECS
+      MetricName: MemoryUtilization
+      Dimensions:
+        - Name: ClusterName
+          Value: default
+        - Name: ServiceName
+          Value: vis-build-app
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OperationsTopic
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: vis-build-monthly-aws
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        BudgetType: COST
+        TimeUnit: MONTHLY
+      NotificationsWithSubscribers:
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: FORECASTED
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref AlertEmail
+              SubscriptionType: EMAIL
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref AlertEmail
+              SubscriptionType: EMAIL
+
+Outputs:
+  OperationsTopicArn:
+    Value: !Ref OperationsTopic
+  CronInvokerFunctionName:
+    Value: !Ref CronInvokerFunction
+  MorningReminderScheduleName:
+    Value: !Ref MorningReminderSchedule
+  EveningNotificationScheduleName:
+    Value: !Ref EveningNotificationSchedule
