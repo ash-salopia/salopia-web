@@ -160,7 +160,7 @@ Resources:
       ScheduleExpression: cron(0/15 * * * ? *)
       ScheduleExpressionTimezone: UTC
       FlexibleTimeWindow:
-        Mode: OFF
+        Mode: "OFF"
       State: !Ref ScheduleState
       Target:
         Arn: !GetAtt CronInvokerFunction.Arn
@@ -180,7 +180,7 @@ Resources:
       ScheduleExpression: cron(0 19 * * ? *)
       ScheduleExpressionTimezone: UTC
       FlexibleTimeWindow:
-        Mode: OFF
+        Mode: "OFF"
       State: !Ref ScheduleState
       Target:
         Arn: !GetAtt CronInvokerFunction.Arn
