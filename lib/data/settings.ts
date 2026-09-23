@@ -276,6 +276,21 @@ export function mergeOrgSettings(stored: Partial<OrgSettings> | null | undefined
     ...s,
     load_monitoring: { ...DEFAULT_LOAD_MONITORING, ...(s.load_monitoring ?? {}) },
     leaderboards: normaliseLeaderboards(s.leaderboards),
+    // Beta launch, 2026-09-23 — hard-forced off regardless of what's stored,
+    // pending resolution of the Supabase/Vercel health-data hosting question
+    // (see the AWS migration's docs/DATA_RESIDENCY_DECISION.md). This is the
+    // single chokepoint every reader of org settings goes through
+    // (coach-side getOrgSettings, athlete-side getOrgSettingsForAthlete), so
+    // forcing it here — rather than hiding it per-screen — genuinely stops
+    // RTP status, wellness questions and pain tracking from being entered
+    // anywhere, not just hides the button. Whatever an org has stored for
+    // this is left untouched in the database; only what's read out is
+    // overridden, so flipping this back on later needs no data migration —
+    // just remove this line. See app/(coach)/settings/page.tsx for the
+    // matching "coming in a later release" UI treatment, and
+    // app/api/athlete-link/checkin/route.ts for the belt-and-braces
+    // server-side rejection of the same fields even if somehow posted.
+    load_monitoring_enabled: false,
   };
 }
 

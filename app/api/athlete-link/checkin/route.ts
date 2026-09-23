@@ -21,14 +21,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Only forward wellness/pain keys that were actually supplied so an
-  // upsert never nulls a column the athlete didn't answer.
+  // Beta launch, 2026-09-23 — wellness/pain fields are rejected outright,
+  // never persisted, regardless of what a client posts. This is deliberate
+  // defense-in-depth: the athlete-side UI already hides these questions
+  // (CheckInModal's wellnessEnabled/painEnabled props both derive from
+  // org.load_monitoring_enabled, forced false in mergeOrgSettings — see
+  // lib/data/settings.ts), but that's a client-side gate a stale client or
+  // a hand-crafted request could bypass. This route accepting the fields
+  // unconditionally was the actual gap; closing it here means no RTP/pain/
+  // wellness data can reach the database through this endpoint at all
+  // while the health-data hosting question is unresolved (see the AWS
+  // migration's docs/DATA_RESIDENCY_DECISION.md), not just hidden from view.
   const answers: CheckInAnswers = { energy, sleep, soreness, volume };
-  if (body.fatigue != null) answers.fatigue = body.fatigue;
-  if (body.stress != null) answers.stress = body.stress;
-  if (body.pain_score != null) answers.pain_score = body.pain_score;
-  if (body.pain_location != null && body.pain_location.trim()) answers.pain_location = body.pain_location.trim();
-  if (body.wellness_notes != null && body.wellness_notes.trim()) answers.wellness_notes = body.wellness_notes.trim();
 
   try {
     const athlete = await getAthleteByShareToken(token);

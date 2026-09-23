@@ -904,20 +904,29 @@ export default function SettingsPage() {
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={s.cardLabel}>Track additional training load &amp; rehab data</div>
+              <div style={s.cardLabel}>
+                Track additional training load &amp; rehab data
+                <span style={s.comingSoonTag}>Coming in a later release</span>
+              </div>
               <div style={s.cardDesc}>
                 For physios and multi-disciplinary teams: session load (RPE &times; duration), acute:chronic
                 workload ratio (ACWR), load-spike and monotony flags, a daily wellness &amp; pain check-in,
                 and a return-to-play status per athlete. Adds a &ldquo;Sport / Other&rdquo; session type for
-                logging non-gym training. Leave off if you only do strength &amp; conditioning &mdash; nothing
-                changes anywhere.
+                logging non-gym training.
+              </div>
+              <div style={{ ...s.cardDesc, marginTop: 6 }}>
+                Temporarily unavailable during the beta while we finalise where wellness and rehab data is
+                hosted &mdash; it&apos;ll switch back on for everyone once that&apos;s settled, no setup
+                needed on your end.
               </div>
             </div>
             <button
-              style={{ ...s.toggleSwitch, background: settings.load_monitoring_enabled ? "var(--accent)" : "var(--panel2)" }}
-              onClick={() => setSettings((prev) => ({ ...prev, load_monitoring_enabled: !prev.load_monitoring_enabled }))}
+              style={{ ...s.toggleSwitch, background: "var(--panel2)", opacity: 0.4, cursor: "not-allowed" }}
+              onClick={() => {}}
+              disabled
+              title="Coming in a later release"
             >
-              <div style={{ ...s.toggleThumb, transform: settings.load_monitoring_enabled ? "translateX(20px)" : "translateX(0)" }} />
+              <div style={{ ...s.toggleThumb, transform: "translateX(0)" }} />
             </button>
           </div>
 
@@ -1149,6 +1158,7 @@ const s: Record<string, React.CSSProperties> = {
   addMetricBtn: { background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 0", fontSize: 13, cursor: "pointer" },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 18, display: "flex", flexDirection: "column", gap: 14 },
   cardLabel: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
+  comingSoonTag: { display: "inline-block", marginLeft: 10, fontSize: 10, fontWeight: 700, color: "var(--warn)", background: "var(--panel2)", border: "1px solid var(--warn)66", borderRadius: 20, padding: "3px 9px", textTransform: "uppercase" as const, letterSpacing: "0.04em", verticalAlign: "middle" },
   cardDesc: { fontSize: 13, color: "var(--mute)", lineHeight: 1.5 },
   // Formula cards
   formulaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8 },
