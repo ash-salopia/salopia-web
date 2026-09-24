@@ -72,8 +72,8 @@ Response format:
       "date": "2026-06-26",
       "dayOffset": 0,
       "weekNumber": 1,
-      "warmupNotes": "5 min bike, band pull-aparts x15, bodyweight squats x10",
-      "cooldownNotes": "5 min easy row, hamstring + hip flexor stretch",
+      "warmupNotes": "5 min bike\nBand pull-aparts x15\nBodyweight squats x10",
+      "cooldownNotes": "5 min easy row\nHamstring stretch\nHip flexor stretch",
       "exercises": [
         {
           "name": "Exercise name",
@@ -127,7 +127,9 @@ Session detection rules:
 Warm-up and cool-down:
 - A session often opens with general prep (mobility, activation, an easy bike/row, band work) and/or closes with a cool-down (easy cardio, stretching) — these are NOT part of the tracked training block.
 - Do NOT add warm-up or cool-down movements to "exercises" — nobody logs sets/reps/load history against them, so turning each one into a tracked exercise just clutters the session.
-- Instead, write a short, coach-readable summary of the warm-up into "warmupNotes" (e.g. "5 min bike, band pull-aparts x15, bodyweight squats x10") and the cool-down into "cooldownNotes", each as one field of free text — not a JSON list, just a natural sentence or comma-separated summary a coach would actually write in a notes box.
+- Instead, list them as plain text in "warmupNotes" / "cooldownNotes" — ONE ITEM PER LINE, separated by a literal "\n" in the JSON string, the same vertical list shape the source shows them in. Do NOT collapse them into one comma-separated sentence or paragraph — a coach reading this in the app should see the same list they'd see on the original page, e.g.:
+  "warmupNotes": "5 min bike\nBand pull-aparts x15\nBodyweight squats x10\nWorld's greatest stretch x5 each side"
+  If the source gives a set/rep/duration for a warm-up or cool-down item, keep it on that line (e.g. "Band pull-aparts x15"), exactly as it's written there — don't drop the detail just because it's not a tracked exercise.
 - If a session has no warm-up or no cool-down described, use an empty string "" for that field — never omit it, and never guess one that wasn't in the source.
 - Only the genuinely tracked working sets (the main lifts, conditioning pieces, plyo/speed work etc. the coach actually prescribed sets/reps/load for) go into "exercises".
 
