@@ -123,7 +123,7 @@ const s: Record<string, React.CSSProperties> = {
   icon: { fontSize: 14 },
   label: { fontSize: 13, fontWeight: 600, color: "var(--mute)" },
   badge: { fontSize: 10, background: "var(--accent-dim)", color: "var(--accent)", borderRadius: 4, padding: "2px 6px", fontWeight: 700 },
-  chevron: { fontSize: 12, color: "var(--mute)", transition: "transform 0.2s" },
+  chevron: { fontSize: 22, color: "var(--mute)", transition: "transform 0.2s" },
   body: { background: "var(--panel)", padding: "10px 14px 14px", display: "flex", flexDirection: "column" as const, gap: 8 },
   templateRow: { position: "relative" as const },
   templateBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },

@@ -1386,7 +1386,7 @@ const s: Record<string, React.CSSProperties> = {
   dot:          { width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--line)", background: "transparent", cursor: "pointer", padding: 0, flexShrink: 0 },
   dotOn:        { background: "var(--good)", borderColor: "var(--good)" },
   setCount:     { fontSize: 11, color: "var(--mute)", minWidth: 24 },
-  chevron:      { fontSize: 10, color: "var(--mute)", marginLeft: 2 },
+  chevron:      { fontSize: 22, color: "var(--mute)", marginLeft: 2 },
   setEditor:    { borderTop: "1px solid var(--line)", padding: "10px 12px", display: "flex", flexDirection: "column" as const, gap: 6 },
   setHeaderRow: { display: "grid", gridTemplateColumns: "32px 1fr 1fr 44px", gap: 8, paddingBottom: 4 },
   setColLabel:  { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.05em" },
