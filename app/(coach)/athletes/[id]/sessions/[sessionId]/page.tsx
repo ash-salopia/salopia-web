@@ -314,6 +314,15 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleCooldownNotesChange = async (cooldown_notes: string) => {
+    setSession((prev) => (prev ? { ...prev, cooldown_notes } : prev));
+    try {
+      await updateSession(sessionId, { cooldown_notes } as any);
+    } catch (e) {
+      console.error("Could not save cool-down notes:", e);
+    }
+  };
+
   const handleNameChange = async (name: string) => {
     setSession((prev) => (prev ? { ...prev, name } : prev));
     try {
@@ -1061,6 +1070,14 @@ export default function SessionDetailPage() {
           zonesEnabled={zonesEnabled}
         />
       )}
+
+      <SessionNotesBlock
+        value={(session as any).cooldown_notes ?? ""}
+        onChange={handleCooldownNotesChange}
+        sessionType={session.type}
+        label="Cool-down"
+        icon="🧊"
+      />
 
       {voiceOpen && (
         <VoiceSessionModal

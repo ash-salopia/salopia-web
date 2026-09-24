@@ -933,6 +933,14 @@ export default function AthleteSessionView({
       )}
       </div>
 
+      <SessionNotesBlock
+        value={(session as any).cooldown_notes ?? ""}
+        onChange={() => {}}
+        readOnly={true}
+        label="Cool-down"
+        icon="🧊"
+      />
+
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
 
       <SessionNotesBlock

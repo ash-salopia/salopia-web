@@ -30,6 +30,13 @@ export interface ParsedSession {
   date?: string;       // ISO date YYYY-MM-DD if a specific date was mentioned
   dayOffset: number;   // 0=Mon, 1=Tue … relative offset if no specific date
   weekNumber: number;  // 1-based
+  // Warm-up/cool-down movements, summarised as free text rather than
+  // added to `exercises` as individually-tracked lifts — see the system
+  // prompt's "Warm-up and cool-down" section. Land in session_notes
+  // (top of session) / cooldown_notes (bottom) respectively; empty
+  // string when the source had none.
+  warmupNotes?: string;
+  cooldownNotes?: string;
 }
 
 interface RouteBody {
@@ -65,6 +72,8 @@ Response format:
       "date": "2026-06-26",
       "dayOffset": 0,
       "weekNumber": 1,
+      "warmupNotes": "5 min bike, band pull-aparts x15, bodyweight squats x10",
+      "cooldownNotes": "5 min easy row, hamstring + hip flexor stretch",
       "exercises": [
         {
           "name": "Exercise name",
@@ -115,6 +124,13 @@ Session detection rules:
   - If no day info: space 1 day apart (0, 1, 2…)
 - weekNumber: 1-based (Week 1=1, Week 2=2…); always 1 for single-week content
 
+Warm-up and cool-down:
+- A session often opens with general prep (mobility, activation, an easy bike/row, band work) and/or closes with a cool-down (easy cardio, stretching) — these are NOT part of the tracked training block.
+- Do NOT add warm-up or cool-down movements to "exercises" — nobody logs sets/reps/load history against them, so turning each one into a tracked exercise just clutters the session.
+- Instead, write a short, coach-readable summary of the warm-up into "warmupNotes" (e.g. "5 min bike, band pull-aparts x15, bodyweight squats x10") and the cool-down into "cooldownNotes", each as one field of free text — not a JSON list, just a natural sentence or comma-separated summary a coach would actually write in a notes box.
+- If a session has no warm-up or no cool-down described, use an empty string "" for that field — never omit it, and never guess one that wasn't in the source.
+- Only the genuinely tracked working sets (the main lifts, conditioning pieces, plyo/speed work etc. the coach actually prescribed sets/reps/load for) go into "exercises".
+
 Exercise field rules:
 - sets: integer, default 3 if unclear
 - reps: string - "8", "8-10", "AMRAP". Empty if none
@@ -135,6 +151,11 @@ Exercise ordering rules:
 - Exercises within the same session must be in order (1A before 1B, 2A before 2B etc.)
 
 When handling a correction: update only what was mentioned, return the COMPLETE updated sessions array.
+
+Splitting or merging sessions during a correction:
+- If asked to split one session into multiple (e.g. "split the first 3 exercises into a plyo/speed session and the rest into strength"), the response MUST contain one entry in "sessions" per resulting session — this is a structural change to the array itself, not a relabelling of exercises within a single session. Each new session needs its own accurate "type" (the plyo/speed one should be "power_speed", not "strength", unless told otherwise), its own "name", and inherits the original "date"/"dayOffset"/"weekNumber" unless the coach specifies otherwise for one of them. Move each mentioned exercise into its new session's "exercises" array — do not duplicate it into both.
+- If asked to merge multiple sessions into one, the opposite applies: return exactly one session entry containing every exercise from all the merged sessions, in a sensible combined order, with "type" set to whichever makes sense for the merged content (ask yourself what the majority of the content is, don't just keep the first session's type by default).
+- After a split or merge, re-count "exercises" across the result and confirm every exercise from before the correction still appears exactly once, in exactly one session, unless the coach explicitly asked for one to be removed.
 `.trim();
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -201,6 +222,8 @@ export async function POST(
     date: s.date ?? undefined,
     dayOffset: typeof s.dayOffset === "number" ? s.dayOffset : 0,
     weekNumber: typeof s.weekNumber === "number" ? Math.max(1, s.weekNumber) : 1,
+    warmupNotes: typeof s.warmupNotes === "string" ? s.warmupNotes : "",
+    cooldownNotes: typeof s.cooldownNotes === "string" ? s.cooldownNotes : "",
     exercises: (s.exercises ?? []).map((e) => ({
       name: e.name ?? "",
       order: String(e.order ?? ""),

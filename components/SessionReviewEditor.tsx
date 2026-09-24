@@ -45,6 +45,14 @@ export interface ReviewSession {
   dayOffset: number;
   weekNumber: number;
   exercises: ReviewExercise[];
+  // Optional — only ever populated by the notes/PDF parse flow, when the
+  // source described a warm-up or cool-down that got summarised instead
+  // of added as individual exercises. warmupNotes lands in the session's
+  // session_notes (renders at the top); cooldownNotes in cooldown_notes
+  // (bottom). Undefined for VoiceSessionModal's sessions, which never
+  // sets these — both render conditionally so that's a no-op there.
+  warmupNotes?: string;
+  cooldownNotes?: string;
 }
 
 export const SESSION_TYPE_META: Record<string, { label: string; color: string }> = {
@@ -362,6 +370,23 @@ export default function SessionReviewEditor({
               </select>
             </div>
           </div>
+
+          {/* Warm-up — only shown when the parse actually populated it
+              (undefined for VoiceSessionModal sessions, which never set
+              this field at all). Lands in session_notes on save, which
+              already renders at the top of a session. */}
+          {session.warmupNotes !== undefined && (
+            <div style={s.notesBlock}>
+              <div style={s.notesLabel}>🔥 Warm-up (top of session)</div>
+              <textarea
+                value={session.warmupNotes}
+                onChange={(e) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, warmupNotes: e.target.value } : sess))}
+                placeholder="e.g. 5 min bike, band pull-aparts x15, bodyweight squats x10"
+                style={s.notesTextarea}
+                rows={2}
+              />
+            </div>
+          )}
 
           {session.exercises.length === 0 && (
             <div style={s.empty}>No exercises in this session</div>
@@ -705,6 +730,19 @@ export default function SessionReviewEditor({
               </div>
             );
           })}
+
+          {session.cooldownNotes !== undefined && (
+            <div style={s.notesBlock}>
+              <div style={s.notesLabel}>🧊 Cool-down (bottom of session)</div>
+              <textarea
+                value={session.cooldownNotes}
+                onChange={(e) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, cooldownNotes: e.target.value } : sess))}
+                placeholder="e.g. 5 min easy row, hamstring + hip flexor stretch"
+                style={s.notesTextarea}
+                rows={2}
+              />
+            </div>
+          )}
         </div>
         );
       })}
@@ -835,6 +873,28 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--mute)",
     fontStyle: "italic",
     padding: "8px 0",
+  },
+  notesBlock: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 4,
+    marginBottom: 8,
+  },
+  notesLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--mute)",
+  },
+  notesTextarea: {
+    width: "100%",
+    background: "var(--ink)",
+    border: "1px solid var(--line)",
+    color: "var(--text)",
+    borderRadius: 8,
+    padding: "8px 10px",
+    fontSize: 12,
+    fontFamily: "inherit",
+    resize: "vertical" as const,
   },
   exCard: {
     background: "var(--ink)",

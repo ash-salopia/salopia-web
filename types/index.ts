@@ -433,6 +433,7 @@ export interface Session {
   created_at: string;
   updated_at: string;
   session_notes: string | null;
+  cooldown_notes: string | null; // 0103 — shown at the bottom of the session, session_notes' counterpart (which renders at the top)
   athlete_notes: string | null; // 0033 — athlete's own note on the session, separate from the coach's session_notes
   athlete_notes_acknowledged: boolean; // 0036 — coach has dismissed this note off the dashboard
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation

@@ -202,13 +202,26 @@ export async function createSession(
   type: SessionType,
   date: string,
   name: string,
-  exercises: NewExerciseInput[]
+  exercises: NewExerciseInput[],
+  // Optional — populated when building from a parsed PDF/notes programme
+  // whose warm-up/cool-down sections collapsed into free text rather than
+  // individual exercises (see NotesSessionModal). Omitted by every other
+  // caller, which is why this stays a trailing optional param rather than
+  // widening every existing call site.
+  notes?: { sessionNotes?: string; cooldownNotes?: string }
 ): Promise<Session> {
   const supabase = createClient();
 
   const { data: session, error: sessionError } = await supabase
     .from("sessions")
-    .insert({ athlete_id: athleteId, type, date, name })
+    .insert({
+      athlete_id: athleteId,
+      type,
+      date,
+      name,
+      session_notes: notes?.sessionNotes?.trim() || null,
+      cooldown_notes: notes?.cooldownNotes?.trim() || null,
+    })
     .select()
     .single();
   if (sessionError) throw sessionError;
@@ -272,7 +285,7 @@ export async function addExercisesToSession(
 
 export async function updateSession(
   sessionId: string,
-  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes" | "duration_min" | "rpe" | "sport_config">>
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes" | "cooldown_notes" | "duration_min" | "rpe" | "sport_config">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);
@@ -515,7 +528,7 @@ export async function propagateFutureOccurrences(
   // Find future sessions that share this source
   const { data: futures, error: findErr } = await supabase
     .from("sessions")
-    .select("id, date, session_notes, session_exercises(*)")
+    .select("id, date, session_notes, cooldown_notes, session_exercises(*)")
     .eq("source_session_id", sourceId)
     .gt("date", session.date)
     .order("date", { ascending: true });
@@ -539,6 +552,13 @@ export async function propagateFutureOccurrences(
         .update({ session_notes: session.session_notes ?? "" })
         .eq("id", target.id);
       if (notesError) throw notesError;
+    }
+    if (!(target as any).cooldown_notes?.trim()) {
+      const { error: cooldownError } = await supabase
+        .from("sessions")
+        .update({ cooldown_notes: (session as any).cooldown_notes ?? "" })
+        .eq("id", target.id);
+      if (cooldownError) throw cooldownError;
     }
 
     const targetExercises: any[] = target.session_exercises ?? [];
@@ -730,6 +750,7 @@ export async function copySessionToDates(
         recovery_format: source.recovery_format ?? null,
         recovery_config: source.recovery_config ?? {},
         session_notes: source.session_notes ?? null,
+        cooldown_notes: (source as any).cooldown_notes ?? null,
         // Track which session this was copied from so the coach can
         // propagate exercise changes to all future occurrences later.
         source_session_id: source.source_session_id ?? source.id,

@@ -32,6 +32,8 @@ interface ParsedSessionFromAPI {
   date?: string;       // ISO date if AI detected a specific date in the notes
   dayOffset: number;
   weekNumber: number;
+  warmupNotes?: string;
+  cooldownNotes?: string;
 }
 
 interface Props {
@@ -145,6 +147,8 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       type: s.type ?? "strength",
       dayOffset: s.dayOffset,
       weekNumber: s.weekNumber,
+      warmupNotes: s.warmupNotes ?? "",
+      cooldownNotes: s.cooldownNotes ?? "",
       exercises: enrichWithLibrary(s.exercises, library),
     }));
 
@@ -257,7 +261,10 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,
           }));
         const sessionType = (s.type ?? "strength") as any;
-        const session = await createSession(athleteId, sessionType, date, name, exInputs);
+        const session = await createSession(athleteId, sessionType, date, name, exInputs, {
+          sessionNotes: s.warmupNotes,
+          cooldownNotes: s.cooldownNotes,
+        });
         created.push(session);
       }
       onCreated(created);
