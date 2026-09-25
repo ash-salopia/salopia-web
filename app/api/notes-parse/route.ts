@@ -30,7 +30,11 @@ export interface ParsedExerciseWithMatch {
   // (0104) — see the "Power/Speed exercise setup" system-prompt section.
   ps_quality?: string;          // "acceleration"|"max_velocity"|"plyometric"|"cod"|"deceleration"|""
   ps_distance?: string;         // prescribed distance e.g. "20m" (sprints/throws)
-  ps_contacts?: number | null;  // prescribed contacts per set (plyometric only)
+  // Plyometric-only contacts-PER-REP multiplier (the app calculates the
+  // total automatically as sets × reps) - null for the normal
+  // one-contact-per-rep case, a number only when one "rep" is actually
+  // several ground contacts (e.g. a rapid multi-hop drill).
+  ps_contacts?: number | null;
   ps_tracked_metrics?: string[]; // e.g. ["time","distance"] — which boxes the athlete logs
 }
 
@@ -170,7 +174,7 @@ Exercise ordering rules:
 Power/Speed exercise setup (only for exercises inside a "power_speed" session — leave ps_quality/ps_distance/ps_contacts/ps_tracked_metrics as "" / "" / null / [] for every strength/cardio/hyrox exercise):
 - ps_quality: classify each exercise into exactly one of "acceleration" (short sprints, starts, ~≤10-20m flat-out), "max_velocity" (flying sprints, top-speed segments, longer flat-out runs), "plyometric" (jumps, hops, bounds, depth jumps, throws/tosses — anything landing/absorbing force or explosively releasing an implement), "cod" (change of direction, agility, shuttle, 5-0-5-style drills), "deceleration" (drills explicitly about braking/stopping/landing control rather than producing force), or "" if none of those genuinely fit. Do not force a fit — "" (General) is correct for something that doesn't match any of them.
 - ps_distance: the prescribed distance for that exercise exactly as written (e.g. "20m", "220cm", "10m") — only for sprint/throw-type exercises that have one; "" if none is given.
-- ps_contacts: for "plyometric" exercises only, the prescribed number of ground contacts (jumps/hops/bounds) per set as a number — e.g. "Broad Jump x5" → 5, "10x Depth Jumps" → 10. null for every non-plyometric exercise, and null (not 0) if a plyometric exercise's contact count genuinely isn't stated.
+- ps_contacts: the app totals plyometric ground contacts automatically as sets × reps, so this is NOT the total contact count — leave it null for the normal case (e.g. "Broad Jump x5" is 5 reps of 1 contact each; leave ps_contacts null and let sets × reps give 5). Only set it, for "plyometric" exercises alone, when the source makes clear that ONE rep is itself several ground contacts (e.g. "5 sets of 3 continuous hops" where each rep/set is 3 quick hops in a row) — in that case set it to the contacts-per-rep count (3 here), not the grand total. null for every non-plyometric exercise and for every ordinary single-contact-per-rep plyometric.
 - ps_tracked_metrics: which of these the source actually gives a number for on this exercise, as an array of these exact keys only: "load" (an external weight/resistance), "reps" (a rep count logged per set, distinct from the prescribed "reps" field), "time" (a duration, e.g. sprint time), "distance" (a distance in METRES — sprint/flying-run distance), "distance_cm" (a distance in CENTIMETRES — jump/throw distance, e.g. broad jump), "height" (jump height in cm), "velocity" (a speed in m/s), "power" (watts), "rsi" (reactive strength index), "contact_time" (ground contact time in ms). Only include a key when the source genuinely gives that number to log against — do not guess extras just because the exercise "could" track them. A plain "Broad Jump x5" with no numbers beyond reps/contacts gets ps_tracked_metrics: [] (the athlete just ticks each set done); a "10m Sprint - record time" gets ["time"]; a timed sprint with a stated distance gets ["time","distance"].
 
 When handling a correction: update only what was mentioned, return the COMPLETE updated sessions array.

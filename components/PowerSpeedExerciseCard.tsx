@@ -310,13 +310,6 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           <input value={exercise.rest} onChange={(e) => update({ rest: e.target.value })}
             placeholder="3min" style={card.miniInput} />
         </Field>
-        {isPlyo && !completionOnly && (
-          <Field label="Contacts">
-            <input type="number" value={exercise.contacts ?? ""}
-              onChange={(e) => update({ contacts: parseInt(e.target.value) || null })}
-              placeholder="20" style={card.miniInput} />
-          </Field>
-        )}
         {!completionOnly && (
           <Field label="Surface">
             <select value={exercise.surface} onChange={(e) => update({ surface: e.target.value })} style={card.miniInput}>
@@ -333,6 +326,33 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
           style={{ accentColor: "var(--accent)" }} />
         <span style={{ color: completionOnly ? "var(--accent)" : "var(--mute)" }}>Completion only</span>
       </label>
+
+      {/* Plyo contacts are calculated automatically (sets × reps ×
+          done sets) - see PowerSpeedSummaryBar - rather than typed in
+          separately, which is what silently broke the "Plyo contacts"
+          session total for a PDF-imported session (nothing ever filled
+          the old standalone box in). This tickbox only needs to be used
+          when a single "rep" is actually several ground contacts (e.g.
+          a rapid multi-hop drill) - unticked, the multiplier is 1. */}
+      {isPlyo && (
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap" as const, gap: 8 }}>
+          <label style={card.completionRow} title="Ticked off, contacts total automatically as sets × reps. Tick this only if each rep itself is more than one ground contact.">
+            <input type="checkbox" checked={exercise.contacts != null}
+              onChange={(e) => update({ contacts: e.target.checked ? 1 : null })}
+              style={{ accentColor: "var(--accent)" }} />
+            <span style={{ color: exercise.contacts != null ? "var(--accent)" : "var(--mute)" }}>Additional contacts per rep</span>
+          </label>
+          {exercise.contacts != null && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--mute)" }}>
+              1 rep =
+              <input type="number" min={1} value={exercise.contacts}
+                onChange={(e) => update({ contacts: parseInt(e.target.value) || 1 })}
+                style={{ ...card.miniInput, width: 48 }} />
+              contacts
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── Coaching cues ── */}
       <button style={card.toggleBtn} onClick={() => setShowCues((v) => !v)}>

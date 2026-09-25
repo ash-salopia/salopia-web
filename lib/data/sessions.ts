@@ -69,7 +69,15 @@ export async function listSessionsForAthlete(athleteId: string): Promise<Session
     .from("sessions")
     .select("*, session_exercises(*)")
     .eq("athlete_id", athleteId)
-    .order("date", { ascending: true });
+    .order("date", { ascending: true })
+    // Same-day tiebreak the athlete app's getAthleteSessions already
+    // applies (added there in 0049) - without it, two sessions sharing a
+    // date have no defined order and different queries/query plans can
+    // legitimately return them in different orders, which is exactly
+    // what was reported live: a PDF-imported Plyo/Speed + Strength pair
+    // on the same day showed Plyo-first here but Strength-first on the
+    // athlete app (0104).
+    .order("sort_order", { ascending: true });
   if (error) throw error;
   // Supabase returns the joined rows under the relation name —
   // normalise to the `exercises` field our types/UI expect.
@@ -182,7 +190,10 @@ export interface NewExerciseInput {
   // matched (0104).
   quality?: string;            // -> intensity_label column
   distance?: string;           // prescribed distance e.g. "20m"
-  contacts?: number;           // prescribed plyometric contacts per set
+  // Plyometric contacts-per-rep multiplier only - total contacts is
+  // calculated automatically from sets × reps (PowerSpeedSummaryBar).
+  // Omit/leave undefined for the normal one-contact-per-rep case.
+  contacts?: number;
   tracked_metrics?: string[];  // -> ps_tracked_metrics column
   completion_only?: boolean;
 }
@@ -232,6 +243,22 @@ export async function createSession(
 ): Promise<Session> {
   const supabase = createClient();
 
+  // Same-day sessions are ordered by sort_order (0049), which defaults
+  // to 0 for every row - so without this, two sessions created back to
+  // back for the same athlete+date (e.g. the PDF-import flow creating a
+  // Power/Speed session then a Strength session) would both sit at 0,
+  // leaving their relative order undefined/query-plan-dependent instead
+  // of preserving creation order (0104). Mirrors addExercisesToSession's
+  // max+1 pattern below.
+  const { data: existingOnDay } = await supabase
+    .from("sessions")
+    .select("sort_order")
+    .eq("athlete_id", athleteId)
+    .eq("date", date)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const nextSortOrder = ((existingOnDay?.[0] as any)?.sort_order ?? -1) + 1;
+
   const { data: session, error: sessionError } = await supabase
     .from("sessions")
     .insert({
@@ -239,6 +266,7 @@ export async function createSession(
       type,
       date,
       name,
+      sort_order: nextSortOrder,
       session_notes: notes?.sessionNotes?.trim() || null,
       cooldown_notes: notes?.cooldownNotes?.trim() || null,
     })

@@ -49,12 +49,15 @@ export const PS_METRIC_META: Record<PSMetricKey, PSMetricMeta> = {
   // splits); "distance_cm" = centimetres (jumps, throws) (0104).
   // Label stays plain "Distance" (not "Distance (m)") - every render
   // site already appends "(unit)" itself, so baking it into the label
-  // too produced a literal "Distance (m) (m)" (reported live). The two
-  // entries' differing `unit` is what tells them apart wherever label +
-  // unit are shown together; `short` (below) is what tells them apart
-  // in the few spots that show only the short form with no unit.
+  // too produced a literal "Distance (m) (m)" (reported live). Same
+  // reasoning for `short` - both stay the plain "Dist" every other
+  // metric's short uses unadorned (no unit folded in, e.g. "Ht" not
+  // "HtCm"); a first attempt at "DistCm" here read as "DistCm cm"
+  // wherever short+unit are shown together (reported live) - the
+  // appended `unit` (m vs cm) is what actually disambiguates the two
+  // wherever it's shown alongside, in both the label and the short form.
   distance:     { key: "distance",     label: "Distance", short: "Dist", unit: "m",   placeholder: "20",   scope: "rep", lowerBetter: false },
-  distance_cm:  { key: "distance_cm",  label: "Distance", short: "DistCm", unit: "cm",  placeholder: "220",  scope: "rep", lowerBetter: false },
+  distance_cm:  { key: "distance_cm",  label: "Distance", short: "Dist", unit: "cm",  placeholder: "220",  scope: "rep", lowerBetter: false },
   height:       { key: "height",       label: "Height",       short: "Ht",   unit: "cm",  placeholder: "45",   scope: "rep", lowerBetter: false },
   velocity:     { key: "velocity",     label: "Velocity",     short: "Vel",  unit: "m/s", placeholder: "2.40", scope: "rep", lowerBetter: false },
   power:        { key: "power",        label: "Power",        short: "Pwr",  unit: "W",   placeholder: "800",  scope: "rep", lowerBetter: false },
@@ -92,7 +95,15 @@ export interface PSExercise {
   reps: number;             // prescribed reps per set
   distance: string;         // prescribed distance e.g. "10m"
   rest: string;
-  contacts: number | null;  // prescribed contacts (plyometric)
+  // Plyometric-only. Total contacts is auto-calculated as sets × reps
+  // (PowerSpeedSummaryBar) - this field is an optional per-rep
+  // multiplier for when one "rep" is actually several ground contacts
+  // (e.g. a rapid multi-hop drill), toggled via "Additional contacts
+  // per rep". null = not enabled = multiplier of 1 (0104 - previously
+  // held the whole prescribed contacts total, typed in separately;
+  // nothing ever populated it for a PDF-imported session, so the "Plyo
+  // contacts" total silently always read "-").
+  contacts: number | null;
   surface: string;
   notes: string;
   log: PSSetLog[];
