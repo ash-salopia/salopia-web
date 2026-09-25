@@ -11,7 +11,7 @@
 // same convention as SetLog / the cardio metric system.
 
 export type PSQuality =
-  | "acceleration" | "max_velocity" | "plyometric"
+  | "acceleration" | "max_velocity" | "power" | "plyometric"
   | "cod" | "deceleration" | "";
 
 // Legacy single-measurement selector (pre-0096). Kept for reading old
@@ -122,6 +122,16 @@ export interface PSExercise {
 export const QUALITY_META: Record<string, { label: string; color: string; icon: string; defaultMetrics: PSMetricKey[] }> = {
   acceleration:  { label: "Acceleration",  color: "#F59E0B", icon: "⚡", defaultMetrics: ["time"] },
   max_velocity:  { label: "Max Velocity",  color: "#EF4444", icon: "🏃", defaultMetrics: ["time"] },
+  // Distinct from "plyometric" (0104) - Power is ballistic/concentric-
+  // dominant explosive work (CMJ, broad jump, med ball throw, a loaded
+  // jump squat), not the fast reactive stretch-shortening-cycle work
+  // "plyometric" properly refers to (depth jumps, hurdle hops, repeated
+  // pogo bounds - short ground-contact time, elastic energy return).
+  // Not every jump is truly plyometric; this gives those a home that
+  // isn't "General". No default metrics - what's actually logged varies
+  // too much across Power exercises (height for a CMJ, distance for a
+  // broad jump, load for a jump squat) to guess one sensibly.
+  power:         { label: "Power",         color: "#EAB308", icon: "💥", defaultMetrics: [] },
   plyometric:    { label: "Plyometric",    color: "#8B5CF6", icon: "🦘", defaultMetrics: ["height", "contact_time"] },
   cod:           { label: "COD",           color: "#3B82F6", icon: "🔄", defaultMetrics: ["time"] },
   deceleration:  { label: "Deceleration",  color: "#10B981", icon: "🛑", defaultMetrics: ["time"] },

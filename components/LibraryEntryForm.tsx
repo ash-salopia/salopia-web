@@ -79,6 +79,7 @@ const PS_QUALITIES: { value: string; label: string }[] = [
   { value: "", label: "General" },
   { value: "acceleration", label: "Acceleration" },
   { value: "max_velocity", label: "Max Velocity" },
+  { value: "power", label: "Power" },
   { value: "plyometric", label: "Plyometric" },
   { value: "cod", label: "COD" },
   { value: "deceleration", label: "Deceleration" },

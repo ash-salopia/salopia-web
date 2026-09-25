@@ -24,7 +24,7 @@ export type { PSExercise, PSSetLog } from "@/lib/ps-metrics";
 
 const SURFACES = ["Grass", "Artificial Turf", "Track", "Gym Floor", "Sand", "Road", "Court"];
 const DISTANCE_PRESETS = ["5m", "10m", "15m", "20m", "30m", "40m", "60m", "100m"];
-const VALID_QUALITIES: PSQuality[] = ["acceleration", "max_velocity", "plyometric", "cod", "deceleration", ""];
+const VALID_QUALITIES: PSQuality[] = ["acceleration", "max_velocity", "power", "plyometric", "cod", "deceleration", ""];
 
 function calcRSI(heightCm: string, contactMs: string): string {
   const h = parseFloat(heightCm);
