@@ -37,6 +37,14 @@ export interface ReviewExercise {
   use_percent_1rm?: boolean;
   rpe?: number | null;
   percent_1rm?: number | null;
+  // Power/Speed-only — set by the notes/PDF parse for a "power_speed"
+  // session's exercises (see notes-parse route's "Power/Speed exercise
+  // setup" prompt section); undefined for every other session type and
+  // for VoiceSessionModal's sessions, which never set these.
+  ps_quality?: string;
+  ps_distance?: string;
+  ps_contacts?: number | null;
+  ps_tracked_metrics?: string[];
 }
 
 export interface ReviewSession {
@@ -113,6 +121,10 @@ export function enrichWithLibrary(
       use_percent_1rm: lib?.use_percent_1rm ?? false,
       rpe: e.rpe ?? null,
       percent_1rm: e.percent_1rm ?? null,
+      ps_quality: e.ps_quality ?? "",
+      ps_distance: e.ps_distance ?? "",
+      ps_contacts: e.ps_contacts ?? null,
+      ps_tracked_metrics: Array.isArray(e.ps_tracked_metrics) ? e.ps_tracked_metrics : [],
     };
   });
 }

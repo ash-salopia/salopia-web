@@ -85,6 +85,10 @@ export default function PowerSpeedAthleteView({
       ))}
       {exercises.length === 0 && <div style={s.empty}>No exercises in this session.</div>}
 
+      {(session as any).cooldown_notes && (
+        <div style={s.coachNote}><span style={s.coachNoteLabel}>Cool-down</span>{(session as any).cooldown_notes}</div>
+      )}
+
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}
@@ -192,7 +196,7 @@ const s: Record<string, React.CSSProperties> = {
   backLink: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 13, cursor: "pointer", padding: 0 },
   meta: { fontSize: 12, color: "var(--mute)", padding: "0 16px 12px" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
-  coachNote: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "var(--text)", marginBottom: 12, lineHeight: 1.5 },
+  coachNote: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "var(--text)", marginBottom: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" as const },
   coachNoteLabel: { display: "block", fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, marginBottom: 3 },
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "16px 0" },
   savingNote: { fontSize: 11, color: "var(--mute)" },

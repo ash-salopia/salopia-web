@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { listNoteTemplates, type NoteTemplate } from "@/lib/data/note-templates";
 import { linkify } from "@/lib/linkify";
 
@@ -76,25 +77,37 @@ export default function SessionNotesBlock({
 
       {isOpen && (
         <div style={s.body}>
-          {!readOnly && enableTemplates && relevantTemplates.length > 0 && (
-            <div style={s.templateRow}>
-              <button style={s.templateBtn} onClick={() => setShowTemplates(v => !v)}>
-                Load template ▾
-              </button>
-              {showTemplates && (
-                <div style={s.templateDropdown}>
-                  {relevantTemplates.map(t => (
-                    <button key={t.id} style={s.templateItem} onClick={() => applyTemplate(t.content)}>
-                      {t.name}
+          {!readOnly && enableTemplates && (
+            relevantTemplates.length > 0 ? (
+              <div style={s.templateRow}>
+                <button style={s.templateBtn} onClick={() => setShowTemplates(v => !v)}>
+                  Load template ▾
+                </button>
+                {showTemplates && (
+                  <div style={s.templateDropdown}>
+                    {relevantTemplates.map(t => (
+                      <button key={t.id} style={s.templateItem} onClick={() => applyTemplate(t.content)}>
+                        {t.name}
+                      </button>
+                    ))}
+                    <button style={{ ...s.templateItem, color: "var(--mute)", borderTop: "1px solid var(--line)" }}
+                      onClick={() => setShowTemplates(false)}>
+                      Close
                     </button>
-                  ))}
-                  <button style={{ ...s.templateItem, color: "var(--mute)", borderTop: "1px solid var(--line)" }}
-                    onClick={() => setShowTemplates(false)}>
-                    Close
-                  </button>
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // No templates saved yet (or none tagged for this session
+              // type) - without this, the whole template row just silently
+              // vanishes and there's no way to discover the feature exists
+              // at all (reported live: "no way to load a note template
+              // into a session"). Points straight at the management page
+              // rather than leaving a dead end.
+              <Link href="/templates" style={s.templateEmptyLink}>
+                + No note templates yet — create one
+              </Link>
+            )
           )}
 
           {readOnly ? (
@@ -127,6 +140,7 @@ const s: Record<string, React.CSSProperties> = {
   body: { background: "var(--panel)", padding: "10px 14px 14px", display: "flex", flexDirection: "column" as const, gap: 8 },
   templateRow: { position: "relative" as const },
   templateBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
+  templateEmptyLink: { fontSize: 11, fontWeight: 600, color: "var(--accent)", textDecoration: "none", alignSelf: "flex-start" as const },
   templateDropdown: { position: "absolute" as const, top: "calc(100% + 4px)", left: 0, zIndex: 20, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 8, padding: 4, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" as const },
   templateItem: { background: "transparent", border: "none", color: "var(--text)", padding: "8px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
   textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 16, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "monospace", minHeight: 120 },

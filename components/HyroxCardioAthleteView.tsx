@@ -98,6 +98,7 @@ export default function HyroxCardioAthleteView({
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly />
       {subType && <HyroxTimer session={session} color={color} />}
       <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} zonesEnabled={zonesEnabled} />
+      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" />
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}

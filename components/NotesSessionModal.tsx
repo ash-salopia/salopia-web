@@ -27,6 +27,10 @@ interface ParsedSessionFromAPI {
     notes: string;
     time: string;
     each_side: boolean;
+    ps_quality?: string;
+    ps_distance?: string;
+    ps_contacts?: number | null;
+    ps_tracked_metrics?: string[];
   }>;
   type?: string;       // detected session type
   date?: string;       // ISO date if AI detected a specific date in the notes
@@ -239,6 +243,10 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           is_bodyweight: e.is_bodyweight,
           use_percent_1rm: e.use_percent_1rm,
           video_url: e.video_url,
+          quality: e.ps_quality,
+          distance: e.ps_distance,
+          contacts: e.ps_contacts ?? undefined,
+          tracked_metrics: e.ps_tracked_metrics,
         }))
     );
 
@@ -273,6 +281,10 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             notes: e.notes,
             time: e.time, each_side: e.each_side, video_url: e.video_url,
             is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,
+            quality: e.ps_quality,
+            distance: e.ps_distance,
+            contacts: e.ps_contacts ?? undefined,
+            tracked_metrics: e.ps_tracked_metrics,
           }));
         const sessionType = (s.type ?? "strength") as any;
         const session = await createSession(athleteId, sessionType, date, name, exInputs, {

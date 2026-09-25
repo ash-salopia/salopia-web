@@ -369,9 +369,10 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
                   <span style={card.metaLabel}>RPE</span>
                   <input value={set.rpe} onChange={(e) => updateSetField(si, { rpe: e.target.value })}
                     placeholder="-" inputMode="numeric" style={card.metaInput} />
-                  <span style={card.metaLabel}>Pain</span>
-                  <input value={set.pain} onChange={(e) => updateSetField(si, { pain: e.target.value })}
-                    placeholder="-" inputMode="numeric" style={card.metaInput} />
+                  {/* Pain input hidden for the beta (pain/injury tracking is
+                      being held back app-wide alongside the health-data
+                      toggle) - `set.pain` stays in the data model untouched
+                      so nothing is lost, just not shown/loggable here. */}
                   <button style={{ ...card.doneBtn, ...(set.done ? card.doneBtnOn : {}) }}
                     onClick={() => setDone(si, !set.done)}>✓</button>
                 </div>

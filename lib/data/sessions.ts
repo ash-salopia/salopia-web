@@ -170,6 +170,21 @@ export interface NewExerciseInput {
   is_primer?: boolean;
   notes?: string;
   video_url?: string;
+  // Power/Speed-specific — all optional, and every non-P/S caller leaves
+  // them undefined so the columns stay null/false exactly as before
+  // these existed. Lets a "power_speed" session built by the AI parse
+  // pipeline (NotesSessionModal) arrive already configured — quality set,
+  // metrics ticked, contacts filled in — instead of every exercise
+  // needing that set up by hand after import, which is why a freshly
+  // imported plyo session's "Plyo contacts" total previously always read
+  // "-": nothing ever populated intensity_label/contacts on creation, so
+  // PowerSpeedSummaryBar's `ex.quality === "plyometric"` check never
+  // matched (0104).
+  quality?: string;            // -> intensity_label column
+  distance?: string;           // prescribed distance e.g. "20m"
+  contacts?: number;           // prescribed plyometric contacts per set
+  tracked_metrics?: string[];  // -> ps_tracked_metrics column
+  completion_only?: boolean;
 }
 
 // Mirrors the prototype's newExercise() defaults exactly.
@@ -194,6 +209,11 @@ function exerciseDefaults(over: NewExerciseInput) {
     progress: "" as const,
     progress_reminder: false,
     log: Array.from({ length: sets }, () => ({ weight: "", done: false, reps: "" })) as SetLog[],
+    distance: over.distance ?? null,
+    contacts: over.contacts ?? null,
+    intensity_label: over.quality ?? null,
+    ps_tracked_metrics: over.tracked_metrics ?? null,
+    completion_only: over.completion_only ?? false,
   };
 }
 

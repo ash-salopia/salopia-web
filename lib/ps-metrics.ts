@@ -47,14 +47,14 @@ export const PS_METRIC_META: Record<PSMetricKey, PSMetricMeta> = {
   // tracking one shouldn't have to convert or fight the other's
   // decimal-place precision. "distance" = metres (sprints, flying
   // splits); "distance_cm" = centimetres (jumps, throws) (0104).
-  // "distance" keeps its existing short ("Dist" — unchanged, so existing
-  // sessions/exercises tracking it don't see their label text shift).
-  // "distance_cm" gets a distinct short so the two don't collide in
-  // summary lines that join several metrics' shorts together with no
-  // unit alongside them (e.g. a session tracking both would otherwise
-  // read "Dist / Dist").
-  distance:     { key: "distance",     label: "Distance (m)", short: "Dist", unit: "m",   placeholder: "20",   scope: "rep", lowerBetter: false },
-  distance_cm:  { key: "distance_cm",  label: "Distance (cm)", short: "DistCm", unit: "cm",  placeholder: "220",  scope: "rep", lowerBetter: false },
+  // Label stays plain "Distance" (not "Distance (m)") - every render
+  // site already appends "(unit)" itself, so baking it into the label
+  // too produced a literal "Distance (m) (m)" (reported live). The two
+  // entries' differing `unit` is what tells them apart wherever label +
+  // unit are shown together; `short` (below) is what tells them apart
+  // in the few spots that show only the short form with no unit.
+  distance:     { key: "distance",     label: "Distance", short: "Dist", unit: "m",   placeholder: "20",   scope: "rep", lowerBetter: false },
+  distance_cm:  { key: "distance_cm",  label: "Distance", short: "DistCm", unit: "cm",  placeholder: "220",  scope: "rep", lowerBetter: false },
   height:       { key: "height",       label: "Height",       short: "Ht",   unit: "cm",  placeholder: "45",   scope: "rep", lowerBetter: false },
   velocity:     { key: "velocity",     label: "Velocity",     short: "Vel",  unit: "m/s", placeholder: "2.40", scope: "rep", lowerBetter: false },
   power:        { key: "power",        label: "Power",        short: "Pwr",  unit: "W",   placeholder: "800",  scope: "rep", lowerBetter: false },

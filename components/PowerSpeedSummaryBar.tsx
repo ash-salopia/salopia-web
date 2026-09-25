@@ -17,7 +17,6 @@ export default function PowerSpeedSummaryBar({ exercises }: Props) {
   let highSpeedEfforts = 0;
   let plyoContacts = 0;
   const rpeValues: number[] = [];
-  const painValues: number[] = [];
 
   for (const ex of exercises) {
     const dist = parseDistance(ex.distance);
@@ -36,22 +35,21 @@ export default function PowerSpeedSummaryBar({ exercises }: Props) {
       if (!set.done) continue;
       const rpe = parseFloat(set.rpe);
       if (!isNaN(rpe) && rpe > 0) rpeValues.push(rpe);
-      const pain = parseFloat(set.pain);
-      if (!isNaN(pain) && pain > 0) painValues.push(pain);
     }
   }
 
   const avgRpe = rpeValues.length
     ? (rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length).toFixed(1)
     : null;
-  const maxPain = painValues.length ? Math.max(...painValues) : null;
 
+  // "Max pain" stat removed for the beta alongside the Pain input itself
+  // (see PowerSpeedExerciseCard) - pain/injury tracking is being held
+  // back app-wide for now.
   const stats = [
     { label: "Sprint metres", value: sprintMetres > 0 ? `${Math.round(sprintMetres)}m` : "-", color: "#F59E0B" },
     { label: "High-speed efforts", value: highSpeedEfforts > 0 ? String(highSpeedEfforts) : "-", color: "#EF4444" },
     { label: "Plyo contacts", value: plyoContacts > 0 ? String(plyoContacts) : "-", color: "#8B5CF6" },
     { label: "Avg RPE", value: avgRpe ?? "-", color: avgRpe && parseFloat(avgRpe) >= 8 ? "#EF4444" : "#10B981" },
-    { label: "Max pain", value: maxPain !== null ? `${maxPain}/10` : "-", color: maxPain !== null && maxPain >= 5 ? "#EF4444" : maxPain !== null && maxPain >= 3 ? "#F59E0B" : "#10B981" },
   ];
 
   return (
