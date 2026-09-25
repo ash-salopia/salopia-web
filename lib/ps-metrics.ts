@@ -104,6 +104,13 @@ export interface PSExercise {
   // nothing ever populated it for a PDF-imported session, so the "Plyo
   // contacts" total silently always read "-").
   contacts: number | null;
+  // Plyometric-only. Whether this exercise's reps count toward the
+  // session's "Plyo contacts" total at all - default true (a jump/hop/
+  // bound genuinely is ground contacts), unticked for a plyometric
+  // movement with no landing impact (e.g. a Med Ball Rotational Throw)
+  // so its reps don't inflate a total that's meant to track landing
+  // load (0104).
+  count_contacts: boolean;
   surface: string;
   notes: string;
   log: PSSetLog[];

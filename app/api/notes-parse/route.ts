@@ -36,6 +36,11 @@ export interface ParsedExerciseWithMatch {
   // several ground contacts (e.g. a rapid multi-hop drill).
   ps_contacts?: number | null;
   ps_tracked_metrics?: string[]; // e.g. ["time","distance"] — which boxes the athlete logs
+  // Plyometric-only: whether this exercise's reps should count toward
+  // the session's "Plyo contacts" total - true for a landing movement
+  // (jump/hop/bound), false for a plyometric exercise with no ground
+  // contact (e.g. a med ball throw). true for everything else.
+  ps_count_contacts?: boolean;
 }
 
 export interface ParsedSession {
@@ -105,7 +110,8 @@ Response format:
           "ps_quality": "",
           "ps_distance": "",
           "ps_contacts": null,
-          "ps_tracked_metrics": []
+          "ps_tracked_metrics": [],
+          "ps_count_contacts": true
         }
       ]
     }
@@ -176,6 +182,7 @@ Power/Speed exercise setup (only for exercises inside a "power_speed" session �
 - ps_distance: the prescribed distance for that exercise exactly as written (e.g. "20m", "220cm", "10m") — only for sprint/throw-type exercises that have one; "" if none is given.
 - ps_contacts: the app totals plyometric ground contacts automatically as sets × reps, so this is NOT the total contact count — leave it null for the normal case (e.g. "Broad Jump x5" is 5 reps of 1 contact each; leave ps_contacts null and let sets × reps give 5). Only set it, for "plyometric" exercises alone, when the source makes clear that ONE rep is itself several ground contacts (e.g. "5 sets of 3 continuous hops" where each rep/set is 3 quick hops in a row) — in that case set it to the contacts-per-rep count (3 here), not the grand total. null for every non-plyometric exercise and for every ordinary single-contact-per-rep plyometric.
 - ps_tracked_metrics: which of these the source actually gives a number for on this exercise, as an array of these exact keys only: "load" (an external weight/resistance), "reps" (a rep count logged per set, distinct from the prescribed "reps" field), "time" (a duration, e.g. sprint time), "distance" (a distance in METRES — sprint/flying-run distance), "distance_cm" (a distance in CENTIMETRES — jump/throw distance, e.g. broad jump), "height" (jump height in cm), "velocity" (a speed in m/s), "power" (watts), "rsi" (reactive strength index), "contact_time" (ground contact time in ms). Only include a key when the source genuinely gives that number to log against — do not guess extras just because the exercise "could" track them. A plain "Broad Jump x5" with no numbers beyond reps/contacts gets ps_tracked_metrics: [] (the athlete just ticks each set done); a "10m Sprint - record time" gets ["time"]; a timed sprint with a stated distance gets ["time","distance"].
+- ps_count_contacts: for "plyometric" exercises only, true if the movement genuinely involves landing/ground contact (any jump, hop, bound, depth jump, skip) - this is the default and by far the more common case. Set it to false only for a plyometric-classified exercise with NO landing impact at all - almost always a throw/toss (med ball throw/slam/rotational throw, shot-style throw) where "reps" are throws, not ground contacts, and shouldn't inflate a landing-load total. true for every non-plyometric exercise (the field is meaningless there, but keep it true rather than omitting it).
 
 When handling a correction: update only what was mentioned, return the COMPLETE updated sessions array.
 
@@ -271,6 +278,7 @@ export async function POST(
       ps_distance: typeof e.ps_distance === "string" ? e.ps_distance : "",
       ps_contacts: typeof e.ps_contacts === "number" && e.ps_contacts > 0 ? e.ps_contacts : null,
       ps_tracked_metrics: Array.isArray(e.ps_tracked_metrics) ? e.ps_tracked_metrics.filter(isPSMetricKey) : [],
+      ps_count_contacts: typeof e.ps_count_contacts === "boolean" ? e.ps_count_contacts : true,
     })),
   }));
 

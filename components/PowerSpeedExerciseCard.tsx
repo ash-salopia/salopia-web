@@ -170,6 +170,12 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
       patch.tracked_metrics = m ? [m] : [];
     }
     if (entry.default_completion_only) patch.completion_only = true;
+    // Library default for "Count contacts" - lets a coach make the
+    // no-landing-impact call once per exercise (e.g. Med Ball Rotational
+    // Throw) rather than every time it's added to a session. Undefined
+    // on an older library row reads as true via the ?? below anyway, so
+    // this only needs setting when the library explicitly says false.
+    if (entry.default_count_contacts === false) patch.count_contacts = false;
     update(patch);
   }
 
@@ -320,39 +326,51 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
         )}
       </div>
 
-      <label style={card.completionRow} title="No metric to log — the athlete just ticks each set done.">
-        <input type="checkbox" checked={completionOnly}
-          onChange={(e) => update({ completion_only: e.target.checked })}
-          style={{ accentColor: "var(--accent)" }} />
-        <span style={{ color: completionOnly ? "var(--accent)" : "var(--mute)" }}>Completion only</span>
-      </label>
+      {/* One wrapping row rather than stacked ones - Additional contacts
+          per rep used to sit on its own line underneath, which forced
+          extra scrolling on every plyo exercise for a control most
+          exercises never need to touch (reported live). Contacts total
+          automatically as sets × reps (PowerSpeedSummaryBar); "Count
+          contacts" opts a plyometric exercise with no landing impact
+          (e.g. a med ball throw) out of that total entirely, and
+          "Additional contacts per rep" only matters when count_contacts
+          is on and a single rep is itself more than one ground contact
+          (e.g. a rapid multi-hop drill). */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap" as const, gap: 14 }}>
+        <label style={card.completionRow} title="No metric to log — the athlete just ticks each set done.">
+          <input type="checkbox" checked={completionOnly}
+            onChange={(e) => update({ completion_only: e.target.checked })}
+            style={{ accentColor: "var(--accent)" }} />
+          <span style={{ color: completionOnly ? "var(--accent)" : "var(--mute)" }}>Completion only</span>
+        </label>
 
-      {/* Plyo contacts are calculated automatically (sets × reps ×
-          done sets) - see PowerSpeedSummaryBar - rather than typed in
-          separately, which is what silently broke the "Plyo contacts"
-          session total for a PDF-imported session (nothing ever filled
-          the old standalone box in). This tickbox only needs to be used
-          when a single "rep" is actually several ground contacts (e.g.
-          a rapid multi-hop drill) - unticked, the multiplier is 1. */}
-      {isPlyo && (
-        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap" as const, gap: 8 }}>
+        {isPlyo && (
+          <label style={card.completionRow} title="On by default - a jump/hop/bound's reps count toward the session's Plyo contacts total. Untick for a plyometric exercise with no landing impact, e.g. a med ball throw.">
+            <input type="checkbox" checked={exercise.count_contacts}
+              onChange={(e) => update({ count_contacts: e.target.checked })}
+              style={{ accentColor: "var(--accent)" }} />
+            <span style={{ color: exercise.count_contacts ? "var(--accent)" : "var(--mute)" }}>Count contacts</span>
+          </label>
+        )}
+
+        {isPlyo && exercise.count_contacts && (
           <label style={card.completionRow} title="Ticked off, contacts total automatically as sets × reps. Tick this only if each rep itself is more than one ground contact.">
             <input type="checkbox" checked={exercise.contacts != null}
               onChange={(e) => update({ contacts: e.target.checked ? 1 : null })}
               style={{ accentColor: "var(--accent)" }} />
             <span style={{ color: exercise.contacts != null ? "var(--accent)" : "var(--mute)" }}>Additional contacts per rep</span>
           </label>
-          {exercise.contacts != null && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--mute)" }}>
-              1 rep =
-              <input type="number" min={1} value={exercise.contacts}
-                onChange={(e) => update({ contacts: parseInt(e.target.value) || 1 })}
-                style={{ ...card.miniInput, width: 48 }} />
-              contacts
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        {isPlyo && exercise.count_contacts && exercise.contacts != null && (
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--mute)" }}>
+            1 rep =
+            <input type="number" min={1} value={exercise.contacts}
+              onChange={(e) => update({ contacts: parseInt(e.target.value) || 1 })}
+              style={{ ...card.miniInput, width: 48 }} />
+            contacts
+          </span>
+        )}
+      </div>
 
       {/* ── Coaching cues ── */}
       <button style={card.toggleBtn} onClick={() => setShowCues((v) => !v)}>

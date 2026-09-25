@@ -31,6 +31,7 @@ interface ParsedSessionFromAPI {
     ps_distance?: string;
     ps_contacts?: number | null;
     ps_tracked_metrics?: string[];
+    ps_count_contacts?: boolean;
   }>;
   type?: string;       // detected session type
   date?: string;       // ISO date if AI detected a specific date in the notes
@@ -247,6 +248,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           distance: e.ps_distance,
           contacts: e.ps_contacts ?? undefined,
           tracked_metrics: e.ps_tracked_metrics,
+          count_contacts: e.ps_count_contacts,
         }))
     );
 
@@ -285,6 +287,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             distance: e.ps_distance,
             contacts: e.ps_contacts ?? undefined,
             tracked_metrics: e.ps_tracked_metrics,
+            count_contacts: e.ps_count_contacts,
           }));
         const sessionType = (s.type ?? "strength") as any;
         const session = await createSession(athleteId, sessionType, date, name, exInputs, {

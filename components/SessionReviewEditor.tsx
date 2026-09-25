@@ -45,6 +45,7 @@ export interface ReviewExercise {
   ps_distance?: string;
   ps_contacts?: number | null;
   ps_tracked_metrics?: string[];
+  ps_count_contacts?: boolean;
 }
 
 export interface ReviewSession {
@@ -125,6 +126,7 @@ export function enrichWithLibrary(
       ps_distance: e.ps_distance ?? "",
       ps_contacts: e.ps_contacts ?? null,
       ps_tracked_metrics: Array.isArray(e.ps_tracked_metrics) ? e.ps_tracked_metrics : [],
+      ps_count_contacts: e.ps_count_contacts ?? true,
     };
   });
 }

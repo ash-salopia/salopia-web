@@ -27,15 +27,23 @@ export default function PowerSpeedSummaryBar({ exercises }: Props) {
       if (dist >= 20) highSpeedEfforts += ex.reps * doneSets;
     }
 
-    // Contacts = sets × reps, done sets only - calculated automatically
+    // Contacts = prescribed sets × reps - calculated automatically
     // rather than relying on a separately-typed total (which previously
     // just never got filled in for a PDF-imported session, so this stat
-    // silently always read "-"). `ex.contacts` now only ever holds an
-    // optional per-rep multiplier (e.g. 3 for a rapid triple-hop "rep"),
-    // ticked on via "Additional contacts per rep" - null/unset means 1.
-    if (ex.quality === "plyometric") {
+    // silently always read "-"). Deliberately uses ex.sets (prescribed),
+    // not doneSets like the stats above - this is a session-load figure
+    // a coach wants to see as soon as an exercise is programmed, not one
+    // that should shrink to "only what's been ticked done so far" while
+    // building/reviewing a session (reported live: 3 sets × 10 reps was
+    // reading 10, not 30, because only one set happened to be ticked).
+    // "Count contacts" opts a no-landing-impact plyometric exercise
+    // (e.g. a med ball throw) out of the total entirely; `ex.contacts`
+    // is an optional per-rep multiplier (e.g. 3 for a rapid triple-hop
+    // "rep"), ticked on via "Additional contacts per rep" - null/unset
+    // means 1.
+    if (ex.quality === "plyometric" && ex.count_contacts) {
       const contactsPerRep = ex.contacts ?? 1;
-      plyoContacts += ex.reps * doneSets * contactsPerRep;
+      plyoContacts += ex.reps * ex.sets * contactsPerRep;
     }
 
     for (const set of ex.log) {

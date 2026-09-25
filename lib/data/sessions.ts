@@ -196,6 +196,12 @@ export interface NewExerciseInput {
   contacts?: number;
   tracked_metrics?: string[];  // -> ps_tracked_metrics column
   completion_only?: boolean;
+  // Whether this exercise's reps should count toward the session's
+  // "Plyo contacts" total (plyometric quality only) - undefined defaults
+  // to true (the column default) since most plyometric exercises
+  // genuinely are ground contacts; only false for a movement like a med
+  // ball throw that has no landing impact.
+  count_contacts?: boolean;
 }
 
 // Mirrors the prototype's newExercise() defaults exactly.
@@ -225,6 +231,7 @@ function exerciseDefaults(over: NewExerciseInput) {
     intensity_label: over.quality ?? null,
     ps_tracked_metrics: over.tracked_metrics ?? null,
     completion_only: over.completion_only ?? false,
+    count_contacts: over.count_contacts ?? true,
   };
 }
 

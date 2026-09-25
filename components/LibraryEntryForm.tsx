@@ -117,6 +117,7 @@ export default function LibraryEntryForm({
   const [defaultDistanceUnit, setDefaultDistanceUnit] = useState<DistanceUnit>(entry?.default_distance_unit ?? "km");
   const [defaultPsQuality, setDefaultPsQuality] = useState<string>(entry?.default_ps_quality ?? "");
   const [defaultCompletionOnly, setDefaultCompletionOnly] = useState<boolean>(entry?.default_completion_only ?? false);
+  const [defaultCountContacts, setDefaultCountContacts] = useState<boolean>(entry?.default_count_contacts ?? true);
   const [defaultPsMetrics, setDefaultPsMetrics] = useState<PSMetricKey[]>(() => {
     const stored = entry?.default_ps_metrics;
     if (Array.isArray(stored) && stored.length) return stored.filter((k): k is PSMetricKey => k in PS_METRIC_META);
@@ -174,6 +175,7 @@ export default function LibraryEntryForm({
       default_ps_quality: psFields && defaultPsQuality ? defaultPsQuality : null,
       default_completion_only: psFields ? defaultCompletionOnly : false,
       default_ps_metrics: psFields && !defaultCompletionOnly ? defaultPsMetrics : [],
+      default_count_contacts: psFields && defaultPsQuality === "plyometric" ? defaultCountContacts : true,
     } as Partial<LibraryEntry> & { name: string });
   };
 
@@ -301,6 +303,25 @@ export default function LibraryEntryForm({
               The quality set when this exercise is added to a Power/Speed session.
             </div>
           </FieldRow>
+          {defaultPsQuality === "plyometric" && (
+            <FieldRow label="Count contacts (Power/Speed)">
+              <label style={s.checkRow}>
+                <input
+                  type="checkbox"
+                  checked={defaultCountContacts}
+                  onChange={(e) => setDefaultCountContacts(e.target.checked)}
+                  style={{ accentColor: "var(--accent)" }}
+                />
+                <span style={{ color: defaultCountContacts ? "var(--accent)" : "var(--text)" }}>
+                  Reps count toward a session's "Plyo contacts" total
+                </span>
+              </label>
+              <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4 }}>
+                On for a genuine landing movement (jump/hop/bound). Turn off for a plyometric exercise
+                with no ground contact, e.g. a med ball throw, so its reps aren&apos;t counted as contacts.
+              </div>
+            </FieldRow>
+          )}
           <FieldRow label="Completion only (Power/Speed)">
             <label style={s.checkRow}>
               <input

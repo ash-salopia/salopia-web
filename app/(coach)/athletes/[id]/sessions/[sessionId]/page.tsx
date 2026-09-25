@@ -147,6 +147,7 @@ export default function SessionDetailPage() {
       distance: ex.distance ?? "",
       rest: ex.rest ?? "",
       contacts: ex.contacts ?? null,
+      count_contacts: ex.count_contacts ?? true,
       surface: ex.target_load ?? "",
       notes: ex.notes ?? "",
       log: normalizePSLog(ex.log, reps, tracked_metrics),
@@ -276,6 +277,7 @@ export default function SessionDetailPage() {
         distance: updated.distance,
         rest: updated.rest,
         contacts: updated.contacts,
+        count_contacts: updated.count_contacts,
         intensity_label: updated.quality,
         ps_tracked_metrics: updated.tracked_metrics,
         completion_only: updated.completion_only,
@@ -299,6 +301,7 @@ export default function SessionDetailPage() {
         distance: updated.distance,
         target_load: updated.surface,         // surface stored in target_load
         contacts: updated.contacts ?? null,
+        count_contacts: updated.count_contacts,
       } as any);
     } catch (e) {
       console.error("PS exercise update failed:", e);

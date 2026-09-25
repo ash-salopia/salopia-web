@@ -91,6 +91,7 @@ export interface LibraryEntry {
   default_ps_quality: string | null; // 0095 — Power/Speed only: pre-set movement type ("acceleration"|"max_velocity"|"plyometric"|"cod"|"deceleration"|""), applied on load
   default_completion_only: boolean; // 0095 — Power/Speed only: pre-set "completion only" (no metric, just a done tick) when loaded
   default_ps_metrics: import("@/lib/ps-metrics").PSMetricKey[]; // 0096 — Power/Speed only: which metrics the exercise tracks (load/reps/time/distance/height/…), applied on load. Supersedes default_measurement_type.
+  default_count_contacts: boolean; // 0104 — Power/Speed only, plyometric quality: whether this exercise's reps should count toward a session's "Plyo contacts" total when loaded — true for a landing movement (jump/hop/bound), false for a plyometric movement with no ground contact (e.g. a med ball throw)
 }
 
 // ------------------------------------------------------------
