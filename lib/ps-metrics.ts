@@ -21,7 +21,7 @@ export type MeasurementType =
 
 export type PSMetricKey =
   | "load" | "reps"
-  | "time" | "distance" | "height" | "velocity" | "power" | "rsi" | "contact_time";
+  | "time" | "distance" | "distance_cm" | "height" | "velocity" | "power" | "rsi" | "contact_time";
 
 export interface PSMetricMeta {
   key: PSMetricKey;
@@ -34,14 +34,27 @@ export interface PSMetricMeta {
 }
 
 export const PS_METRIC_ORDER: PSMetricKey[] = [
-  "load", "reps", "time", "distance", "height", "velocity", "power", "rsi", "contact_time",
+  "load", "reps", "time", "distance", "distance_cm", "height", "velocity", "power", "rsi", "contact_time",
 ];
 
 export const PS_METRIC_META: Record<PSMetricKey, PSMetricMeta> = {
   load:         { key: "load",         label: "Load",         short: "Load", unit: "kg",  placeholder: "40",   scope: "set", lowerBetter: false },
   reps:         { key: "reps",         label: "Reps",         short: "Reps", unit: "",    placeholder: "5",    scope: "set", lowerBetter: false },
   time:         { key: "time",         label: "Time",         short: "Time", unit: "s",   placeholder: "4.20", scope: "rep", lowerBetter: true },
-  distance:     { key: "distance",     label: "Distance",     short: "Dist", unit: "m",   placeholder: "20",   scope: "rep", lowerBetter: false },
+  // Two distance metrics, deliberately kept separate rather than one
+  // metric with a switchable unit: different P/S exercises need
+  // different scales (a 20m sprint vs. a 220cm broad jump), and a coach
+  // tracking one shouldn't have to convert or fight the other's
+  // decimal-place precision. "distance" = metres (sprints, flying
+  // splits); "distance_cm" = centimetres (jumps, throws) (0104).
+  // "distance" keeps its existing short ("Dist" — unchanged, so existing
+  // sessions/exercises tracking it don't see their label text shift).
+  // "distance_cm" gets a distinct short so the two don't collide in
+  // summary lines that join several metrics' shorts together with no
+  // unit alongside them (e.g. a session tracking both would otherwise
+  // read "Dist / Dist").
+  distance:     { key: "distance",     label: "Distance (m)", short: "Dist", unit: "m",   placeholder: "20",   scope: "rep", lowerBetter: false },
+  distance_cm:  { key: "distance_cm",  label: "Distance (cm)", short: "DistCm", unit: "cm",  placeholder: "220",  scope: "rep", lowerBetter: false },
   height:       { key: "height",       label: "Height",       short: "Ht",   unit: "cm",  placeholder: "45",   scope: "rep", lowerBetter: false },
   velocity:     { key: "velocity",     label: "Velocity",     short: "Vel",  unit: "m/s", placeholder: "2.40", scope: "rep", lowerBetter: false },
   power:        { key: "power",        label: "Power",        short: "Pwr",  unit: "W",   placeholder: "800",  scope: "rep", lowerBetter: false },

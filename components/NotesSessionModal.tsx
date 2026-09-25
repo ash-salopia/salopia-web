@@ -111,6 +111,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
   const [correctionText, setCorrectionText] = useState("");
   const [correcting, setCorrecting] = useState(false);
   const [error, setError] = useState("");
+  const [readingFile, setReadingFile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -119,6 +120,10 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
 
   const handleFile = async (file: File) => {
     setError("");
+    // A large scanned PDF (base64-encoded client-side) or spreadsheet can
+    // take a real moment to read — previously nothing at all showed while
+    // that happened, which reads as "the upload didn't work."
+    setReadingFile(true);
     const ext = file.name.split(".").pop()?.toLowerCase();
     try {
       if (ext === "pdf") {
@@ -137,6 +142,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       setNotes(text);
       setFileName(file.name);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file"); }
+    finally { setReadingFile(false); }
   };
 
   // Convert API response sessions into ReviewSession[] with library enrichment
@@ -249,7 +255,15 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       const created: Session[] = [];
       for (let i = 0; i < sessions.length; i++) {
         const s = sessions[i];
-        const date = (s as any).date ?? sessionDate(startDate, s.weekNumber, s.dayOffset);
+        // The coach's own "Programme start date" input is the source of
+        // truth here — never the AI's raw detected date (a specific date
+        // written on the source PDF/notes, possibly months old). That raw
+        // date only ever pre-fills startDate on first parse (see handleParse
+        // below); once the coach is looking at the review screen and can
+        // edit that field, it must always win — a bug reported live: the
+        // date picker was changed to today but saved sessions still landed
+        // on the PDF's original date because this line preferred s.date.
+        const date = sessionDate(startDate, s.weekNumber, s.dayOffset);
         const name = sessionNames[i]?.trim() || s.name || `Session ${sessionCount + i + 1}`;
         const exInputs = [...s.exercises]
           .sort((a, b) => String(a.order ?? "").localeCompare(String(b.order ?? ""), undefined, { numeric: true }))
@@ -302,8 +316,17 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
               <input ref={fileRef} type="file" accept=".txt,.xlsx,.xls,.csv,.pdf" style={{ display: "none" }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
               <div style={s.uploadRow}>
-                <button style={s.uploadBtn} onClick={() => fileRef.current?.click()}>📎 Upload .txt, .xlsx, or .pdf</button>
-                {fileName && (
+                <button style={{ ...s.uploadBtn, opacity: readingFile ? 0.6 : 1, cursor: readingFile ? "not-allowed" : "pointer" }}
+                  disabled={readingFile} onClick={() => fileRef.current?.click()}>
+                  📎 Upload .txt, .xlsx, or .pdf
+                </button>
+                {readingFile && (
+                  <span style={s.readingFile}>
+                    <span style={{ animation: "athletiq-spin 0.9s linear infinite", display: "inline-block" }}>⟳</span>
+                    Reading file…
+                  </span>
+                )}
+                {!readingFile && fileName && (
                   <span style={s.fileName}>{fileName}
                     <button style={s.clearFile} onClick={() => { setNotes(""); setFileName(""); setPdfBase64(null); }}>×</button>
                   </span>
@@ -313,8 +336,8 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
               <textarea value={notes} onChange={(e) => { setNotes(e.target.value); if (!pdfBase64) setFileName(""); }}
                 placeholder={pdfBase64 ? "Optional context for the PDF…" : "Paste your notes here…\n\ne.g.\nWeek 1 - Upper A\nBack Squat 4x6 @ 80kg, rest 3min\nBench Press 3x8 @ 60kg, rest 90s\n\nWeek 1 - Lower A\nDeadlift 4x4 @ 100kg, rest 3min"}
                 style={s.textarea} />
-              <button style={{ ...s.parseBtn, opacity: (!notes.trim() && !pdfBase64) || libraryLoading ? 0.5 : 1, cursor: (!notes.trim() && !pdfBase64) || libraryLoading ? "not-allowed" : "pointer" }}
-                disabled={(!notes.trim() && !pdfBase64) || libraryLoading} onClick={handleParse}>
+              <button style={{ ...s.parseBtn, opacity: (!notes.trim() && !pdfBase64) || libraryLoading || readingFile ? 0.5 : 1, cursor: (!notes.trim() && !pdfBase64) || libraryLoading || readingFile ? "not-allowed" : "pointer" }}
+                disabled={(!notes.trim() && !pdfBase64) || libraryLoading || readingFile} onClick={handleParse}>
                 {libraryLoading ? "Loading library…" : "✨ Generate sessions"}
               </button>
             </>
@@ -324,7 +347,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           {phase === "parsing" && (
             <div style={s.centre}>
               <div style={{ fontSize: 28, color: "var(--accent)", animation: "athletiq-spin 0.9s linear infinite", display: "inline-block" }}>⟳</div>
-              <div style={s.spinLabel}>Parsing your notes…</div>
+              <div style={s.spinLabel}>Building…</div>
             </div>
           )}
 
@@ -355,7 +378,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
                         style={s.sessionNameInput}
                       />
                       <span style={s.sessionDateLabel}>
-                        {(sess as any).date ?? sessionDate(startDate, sess.weekNumber, sess.dayOffset)}
+                        {sessionDate(startDate, sess.weekNumber, sess.dayOffset)}
                       </span>
                     </div>
                   ))}
@@ -424,6 +447,7 @@ const s: Record<string, React.CSSProperties> = {
   uploadRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" as const },
   uploadBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   fileName: { fontSize: 12, color: "var(--accent)", display: "flex", alignItems: "center", gap: 6 },
+  readingFile: { fontSize: 12, color: "var(--mute)", display: "flex", alignItems: "center", gap: 6 },
   clearFile: { background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 },
   textarea: { width: "100%", minHeight: 180, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 10, padding: "12px 14px", fontSize: 13, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "inherit" },
   parseBtn: { width: "100%", background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "13px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" },
