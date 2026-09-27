@@ -5,9 +5,10 @@ export interface NoteTemplate {
   organisation_id: string;
   name: string;
   content: string;
-  category: "general" | "warm_up" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
+  category: "general" | "warm_up" | "cool_down" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
   sort_order: number;
   created_at: string;
+  video_url: string; // 0106 — carried along when this template is loaded into a note block
 }
 
 export async function listNoteTemplates(): Promise<NoteTemplate[]> {
@@ -42,7 +43,7 @@ export async function saveNoteTemplate(
 
 export async function updateNoteTemplate(
   id: string,
-  patch: Partial<Pick<NoteTemplate, "name" | "content" | "category" | "sort_order">>
+  patch: Partial<Pick<NoteTemplate, "name" | "content" | "category" | "sort_order" | "video_url">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase

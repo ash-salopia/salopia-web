@@ -15,10 +15,11 @@ import {
 } from "@/lib/data/note-templates";
 import CollapsibleSection from "@/components/CollapsibleSection";
 
-const CATEGORIES: NoteTemplate["category"][] = ["general", "warm_up", "strength", "power_speed", "cardio", "hyrox", "sport", "recovery"];
+const CATEGORIES: NoteTemplate["category"][] = ["general", "warm_up", "cool_down", "strength", "power_speed", "cardio", "hyrox", "sport", "recovery"];
 const CATEGORY_LABELS: Record<NoteTemplate["category"], string> = {
   general: "General",
   warm_up: "Warm-Up",
+  cool_down: "Cool-Down",
   strength: "Strength",
   power_speed: "Power / Speed",
   cardio: "Cardio",
@@ -33,7 +34,7 @@ export default function NoteTemplatesManager() {
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", content: "", category: "general" as NoteTemplate["category"] });
+  const [form, setForm] = useState({ name: "", content: "", category: "general" as NoteTemplate["category"], video_url: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -52,10 +53,10 @@ export default function NoteTemplatesManager() {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const t = await saveNoteTemplate({ name: form.name.trim(), content: form.content, category: form.category, sort_order: templates.length });
+      const t = await saveNoteTemplate({ name: form.name.trim(), content: form.content, category: form.category, sort_order: templates.length, video_url: form.video_url.trim() });
       setTemplates(prev => [...prev, t]);
       setCreating(false);
-      setForm({ name: "", content: "", category: "general" });
+      setForm({ name: "", content: "", category: "general", video_url: "" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally { setSaving(false); }
@@ -64,7 +65,7 @@ export default function NoteTemplatesManager() {
   const handleUpdate = async (t: NoteTemplate) => {
     setSaving(true);
     try {
-      await updateNoteTemplate(t.id, { name: t.name, content: t.content, category: t.category });
+      await updateNoteTemplate(t.id, { name: t.name, content: t.content, category: t.category, video_url: t.video_url });
       setTemplates(prev => prev.map(x => x.id === t.id ? t : x));
       setEditingId(null);
     } catch (e) {
@@ -122,6 +123,9 @@ export default function NoteTemplatesManager() {
           <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
             placeholder="Paste or type your template content here…"
             rows={8} style={s.textarea} />
+          <div style={s.fieldLabel}>Video link (optional)</div>
+          <input value={form.video_url} onChange={e => setForm(f => ({ ...f, video_url: e.target.value }))}
+            placeholder="https://…" style={s.input} />
           <div style={s.formBtns}>
             <button style={s.cancelBtn} onClick={() => setCreating(false)}>Cancel</button>
             <button style={{ ...s.saveBtn, opacity: !form.name.trim() || saving ? 0.5 : 1 }}
@@ -166,6 +170,11 @@ export default function NoteTemplatesManager() {
                     }
                   >
                     <pre style={s.preview}>{t.content}</pre>
+                    {t.video_url && (
+                      <a href={t.video_url} target="_blank" rel="noopener noreferrer" style={s.videoLink}>
+                        ▸ Watch video
+                      </a>
+                    )}
                   </CollapsibleSection>
                 );
               })}
@@ -191,13 +200,19 @@ function EditForm({ template, saving, onSave, onCancel }: {
           style={s.input} />
         <select value={t.category} onChange={e => setT(x => ({ ...x, category: e.target.value as NoteTemplate["category"] }))}
           style={{ ...s.input, width: 140 }}>
-          {(["general", "warm_up", "strength", "power_speed", "cardio"] as const).map(c => (
+          {/* Was a separately hardcoded, shorter list than CATEGORIES
+              above (missing Hybrid/Sport/Recovery/Cool-Down entirely) -
+              editing an existing template couldn't retag it into any of
+              those, only creating a new one could pick them (0106). */}
+          {CATEGORIES.map(c => (
             <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
           ))}
         </select>
       </div>
       <textarea value={t.content} onChange={e => setT(x => ({ ...x, content: e.target.value }))}
         rows={8} style={s.textarea} />
+      <input value={t.video_url ?? ""} onChange={e => setT(x => ({ ...x, video_url: e.target.value }))}
+        placeholder="Video link (optional)" style={s.input} />
       <div style={{ display: "flex", gap: 8 }}>
         <button style={s.cancelBtn} onClick={onCancel}>Cancel</button>
         <button style={{ ...s.saveBtn, opacity: saving ? 0.5 : 1 }} disabled={saving} onClick={() => onSave(t)}>
@@ -220,6 +235,7 @@ const s: Record<string, React.CSSProperties> = {
   groupLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 8 },
   templateCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: 14, marginBottom: 8 },
   preview: { fontSize: 12, color: "var(--mute)", fontFamily: "monospace", whiteSpace: "pre-wrap" as const, margin: 0, lineHeight: 1.5 },
+  videoLink: { display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--accent)", textDecoration: "none" },
   editBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" },
   deleteBtn: { background: "transparent", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" },
   formCard: { background: "var(--panel)", border: "1px solid var(--accent)44", borderRadius: 12, padding: 16, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 10 },

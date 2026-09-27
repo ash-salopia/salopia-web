@@ -28,6 +28,15 @@ interface Props {
   // hide the field completely rather than show an always-empty one.
   videoUrl?: string;
   onVideoUrlChange?: (url: string) => void;
+  // Which block this is, for template filtering (0106) - "general" is
+  // the default so every existing caller (the main Session Notes box,
+  // athlete_notes, VoiceSessionModal) keeps its current behaviour
+  // unchanged. A "warm_up"/"cool_down"-tagged template is content
+  // specifically FOR that block, so it should only ever show up there -
+  // previously every block filtered by session type alone, so a
+  // warm-up template leaked into the general Session Notes and
+  // Cool-down pickers too (reported live).
+  noteKind?: "general" | "warmup" | "cooldown";
 }
 
 export default function SessionNotesBlock({
@@ -42,6 +51,7 @@ export default function SessionNotesBlock({
   enableTemplates = true,
   videoUrl,
   onVideoUrlChange,
+  noteKind = "general",
 }: Props) {
   const hasVideo = videoUrl !== undefined;
   const [isOpen, setIsOpen] = useState(!!value || !!videoUrl);
@@ -55,8 +65,9 @@ export default function SessionNotesBlock({
     }
   }, [readOnly, enableTemplates]);
 
-  function applyTemplate(content: string) {
-    onChange(value ? `${value}\n\n${content}` : content);
+  function applyTemplate(t: NoteTemplate) {
+    onChange(value ? `${value}\n\n${t.content}` : t.content);
+    if (t.video_url && onVideoUrlChange) onVideoUrlChange(t.video_url);
     setShowTemplates(false);
     setTimeout(() => textareaRef.current?.focus(), 50);
   }
@@ -65,17 +76,22 @@ export default function SessionNotesBlock({
 
   const lineCount = value ? value.split("\n").length : 0;
 
-  // Filter templates by session type if relevant
-  const relevantTemplates = templates.filter(t =>
-    t.category === "general" ||
-    t.category === "warm_up" ||
-    (sessionType === "power_speed" && t.category === "power_speed") ||
-    (sessionType === "strength" && t.category === "strength") ||
-    (sessionType === "cardio" && t.category === "cardio") ||
-    (sessionType === "hyrox" && t.category === "hyrox") ||
-    (sessionType === "sport" && t.category === "sport") ||
-    (sessionType === "recovery" && t.category === "recovery")
-  );
+  // Filter templates by which block this is first, then (for the
+  // general block only) by session type - "warm_up"/"cool_down" are
+  // content specifically for that block, not for session type at all.
+  const relevantTemplates = templates.filter(t => {
+    if (t.category === "general") return true;
+    if (noteKind === "warmup") return t.category === "warm_up";
+    if (noteKind === "cooldown") return t.category === "cool_down";
+    return (
+      (sessionType === "power_speed" && t.category === "power_speed") ||
+      (sessionType === "strength" && t.category === "strength") ||
+      (sessionType === "cardio" && t.category === "cardio") ||
+      (sessionType === "hyrox" && t.category === "hyrox") ||
+      (sessionType === "sport" && t.category === "sport") ||
+      (sessionType === "recovery" && t.category === "recovery")
+    );
+  });
 
   return (
     <div style={s.wrap}>
@@ -100,8 +116,8 @@ export default function SessionNotesBlock({
                 {showTemplates && (
                   <div style={s.templateDropdown}>
                     {relevantTemplates.map(t => (
-                      <button key={t.id} style={s.templateItem} onClick={() => applyTemplate(t.content)}>
-                        {t.name}
+                      <button key={t.id} style={s.templateItem} onClick={() => applyTemplate(t)}>
+                        {t.name}{t.video_url ? " 🎥" : ""}
                       </button>
                     ))}
                     <button style={{ ...s.templateItem, color: "var(--mute)", borderTop: "1px solid var(--line)" }}

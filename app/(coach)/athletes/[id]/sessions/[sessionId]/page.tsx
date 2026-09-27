@@ -1032,6 +1032,7 @@ export default function SessionDetailPage() {
           icon="🔥"
           videoUrl={(session as any).warmup_video_url ?? ""}
           onVideoUrlChange={handleWarmupVideoUrlChange}
+          noteKind="warmup"
         />
       ) : (
         <button style={styles.addNotesBtn} onClick={() => setWarmupOpen(true)}>
@@ -1153,6 +1154,7 @@ export default function SessionDetailPage() {
           icon="🧊"
           videoUrl={(session as any).cooldown_video_url ?? ""}
           onVideoUrlChange={handleCooldownVideoUrlChange}
+          noteKind="cooldown"
         />
       ) : (
         <button style={styles.addNotesBtn} onClick={() => setCooldownOpen(true)}>
