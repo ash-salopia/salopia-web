@@ -7,7 +7,7 @@
 // per-rep (Time/Distance/Height/…) — and saves the PSSetLog[] via the
 // same /api/athlete-link/log route the strength logger uses.
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { saveWithRetry } from "@/lib/save-queue";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
@@ -123,6 +123,11 @@ function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave:
   const reps = parseInt(String(ex.reps ?? "")) || 4;
   const completionOnly = !!ex.completion_only;
   const [log, setLog] = useState<PSSetLog[]>(() => normalizePSLog(ex.log, reps, tracked));
+  // Collapsed by default - independent per exercise, tap the header to
+  // open/close. A session with several P/S exercises was previously
+  // always fully expanded end to end, forcing a lot of scrolling to
+  // reach later exercises (reported live).
+  const [expanded, setExpanded] = useState(false);
 
   const setMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "set");
   const repMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "rep");
@@ -140,10 +145,18 @@ function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave:
       const updated = { ...st, set_metrics: { ...st.set_metrics, [key]: val } };
       return { ...updated, done: anyLogged(updated) || st.done };
     }));
+  // "single_value" (set by the coach - "One value for all reps") means
+  // every rep in this set shares one number, so a value entered anywhere
+  // broadcasts to every rep_metrics slot rather than just the tapped
+  // column - mirrors PowerSpeedExerciseCard's coach-side write. Was
+  // previously ignored entirely here (always one column per rep,
+  // whatever the coach had set).
   const repMetric = (si: number, ri: number, key: PSMetricKey, val: string) =>
     commit(log.map((st, i) => {
       if (i !== si) return st;
-      const rep_metrics = st.rep_metrics.map((r, idx) => (idx === ri ? { ...r, [key]: val } : r));
+      const rep_metrics = st.single_value
+        ? st.rep_metrics.map((r) => ({ ...r, [key]: val }))
+        : st.rep_metrics.map((r, idx) => (idx === ri ? { ...r, [key]: val } : r));
       const updated = { ...st, rep_metrics };
       return { ...updated, done: anyLogged(updated) || st.done };
     }));
@@ -152,56 +165,81 @@ function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave:
 
   return (
     <div style={s.exCard}>
-      <div style={s.exHead}>
+      <button style={s.exHead} onClick={() => setExpanded((v) => !v)}>
         <span style={s.exName}>{ex.order ? `${ex.order}. ` : ""}{ex.name}</span>
-        <span style={s.exBadge}>{done}/{log.length}</span>
-      </div>
-      <div style={s.exPresc}>
-        {ex.sets}×{reps}
-        {ex.distance ? ` · ${ex.distance}` : ""}
-        {ex.rest ? ` · rest ${ex.rest}` : ""}
-        {!completionOnly && tracked.length ? ` · ${tracked.map((k) => PS_METRIC_META[k].short).join(" / ")}` : ""}
-      </div>
-      {ex.notes && <div style={s.exCues}>{ex.notes}</div>}
-      {saving && <div style={s.savingNote}>Saving…</div>}
+        <span style={s.exHeadRight}>
+          <span style={s.exBadge}>{done}/{log.length}</span>
+          <span style={{ ...s.exChevron, transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+        </span>
+      </button>
 
-      {log.map((set, si) => (
-        <div key={si} style={{ ...s.set, ...(set.done ? s.setDone : {}) }}>
-          <div style={s.setTop}>
-            <span style={s.setLabel}>Set {si + 1}</span>
-            <button style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }} onClick={() => setDone(si, !set.done)}>✓</button>
+      {expanded && (
+        <>
+          <div style={s.exPresc}>
+            {ex.sets}×{reps}
+            {ex.distance ? ` · ${ex.distance}` : ""}
+            {ex.rest ? ` · rest ${ex.rest}` : ""}
+            {!completionOnly && tracked.length ? ` · ${tracked.map((k) => PS_METRIC_META[k].short).join(" / ")}` : ""}
           </div>
+          {ex.notes && <div style={s.exCues}>{ex.notes}</div>}
+          {saving && <div style={s.savingNote}>Saving…</div>}
 
-          {!completionOnly && setMetrics.length > 0 && (
-            <div style={s.boxRow}>
-              {setMetrics.map((key) => (
-                <label key={key} style={s.box}>
-                  <span style={s.boxLabel}>{PS_METRIC_META[key].label}{PS_METRIC_META[key].unit ? ` (${PS_METRIC_META[key].unit})` : ""}</span>
-                  <input value={set.set_metrics[key] ?? ""} inputMode="decimal"
-                    placeholder={PS_METRIC_META[key].placeholder}
-                    onChange={(e) => setMetric(si, key, e.target.value)} style={s.input} />
-                </label>
-              ))}
-            </div>
-          )}
+          {log.map((set, si) => {
+            // Column count for the rep grid below - 1 column when the
+            // coach has flagged this set as "one value for all reps",
+            // otherwise one column per prescribed rep.
+            const colCount = set.single_value ? 1 : Math.max(1, set.rep_metrics.length);
+            return (
+              <div key={si} style={{ ...s.set, ...(set.done ? s.setDone : {}) }}>
+                <div style={s.setTop}>
+                  <span style={s.setLabel}>Set {si + 1}</span>
+                  <button style={{ ...s.doneBtn, ...(set.done ? s.doneBtnOn : {}) }} onClick={() => setDone(si, !set.done)}>✓</button>
+                </div>
 
-          {!completionOnly && repMetrics.length > 0 && (
-            Array.from({ length: Math.max(1, set.rep_metrics.length) }).map((_, ri) => (
-              <div key={ri} style={s.repRow}>
-                <span style={s.repLabel}>R{ri + 1}</span>
-                {repMetrics.map((key) => (
-                  <label key={key} style={s.repBox}>
-                    <input value={set.rep_metrics[ri]?.[key] ?? ""} inputMode="decimal"
-                      placeholder={PS_METRIC_META[key].placeholder}
-                      onChange={(e) => repMetric(si, ri, key, e.target.value)} style={s.input} />
-                    <span style={s.repUnit}>{PS_METRIC_META[key].short}</span>
-                  </label>
-                ))}
+                {!completionOnly && setMetrics.length > 0 && (
+                  <div style={s.boxRow}>
+                    {setMetrics.map((key) => (
+                      <label key={key} style={s.box}>
+                        <span style={s.boxLabel}>{PS_METRIC_META[key].label}{PS_METRIC_META[key].unit ? ` (${PS_METRIC_META[key].unit})` : ""}</span>
+                        <input value={set.set_metrics[key] ?? ""} inputMode="decimal"
+                          placeholder={PS_METRIC_META[key].placeholder}
+                          onChange={(e) => setMetric(si, key, e.target.value)} style={s.input} />
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {/* Rep-level metrics: a compact grid - one row per
+                    tracked metric, one narrow column per rep (or a
+                    single "All" column when single_value is on) -
+                    instead of the old one-row-per-rep layout, which
+                    turned a 5-rep, 2-metric set into 5 separate rows. */}
+                {!completionOnly && repMetrics.length > 0 && (
+                  <div style={s.repGridWrap}>
+                    <div style={{ ...s.repGrid, gridTemplateColumns: `40px repeat(${colCount}, minmax(44px, 1fr))` }}>
+                      <div />
+                      {Array.from({ length: colCount }).map((_, ci) => (
+                        <div key={ci} style={s.repColHeader}>{set.single_value ? "All" : `R${ci + 1}`}</div>
+                      ))}
+                      {repMetrics.map((key) => (
+                        <Fragment key={key}>
+                          <div style={s.repRowLabel} title={PS_METRIC_META[key].label}>{PS_METRIC_META[key].short}</div>
+                          {Array.from({ length: colCount }).map((_, ci) => (
+                            <input key={ci} value={set.rep_metrics[ci]?.[key] ?? ""} inputMode="decimal"
+                              placeholder={PS_METRIC_META[key].placeholder}
+                              onChange={(e) => repMetric(si, ci, key, e.target.value)}
+                              style={s.repGridInput} />
+                          ))}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            ))
-          )}
-        </div>
-      ))}
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
@@ -217,9 +255,11 @@ const s: Record<string, React.CSSProperties> = {
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "16px 0" },
   savingNote: { fontSize: 11, color: "var(--mute)" },
   exCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column" as const, gap: 8 },
-  exHead: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  exHead: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" as const },
   exName: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
+  exHeadRight: { display: "flex", alignItems: "center", gap: 8 },
   exBadge: { fontSize: 11, fontWeight: 700, color: "var(--mute)", background: "var(--ink)", borderRadius: 6, padding: "2px 7px" },
+  exChevron: { fontSize: 22, color: "var(--mute)", transition: "transform 0.2s" },
   exPresc: { fontSize: 12, color: "var(--mute)" },
   exCues: { fontSize: 12, color: "var(--mute)", fontStyle: "italic" as const, lineHeight: 1.5 },
   set: { background: "var(--ink)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column" as const, gap: 8 },
@@ -231,9 +271,15 @@ const s: Record<string, React.CSSProperties> = {
   boxRow: { display: "flex", flexWrap: "wrap" as const, gap: 8 },
   box: { display: "flex", flexDirection: "column" as const, gap: 3, flex: "1 1 90px" },
   boxLabel: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const },
-  repRow: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const },
-  repLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", width: 24, flexShrink: 0 },
-  repBox: { display: "flex", alignItems: "center", gap: 3 },
-  repUnit: { fontSize: 10, color: "var(--mute)" },
+  // Rep-metric grid: one row per tracked metric, one narrow column per
+  // rep (or a single "All" column for a single_value set) - replaces
+  // the old one-row-per-rep layout. Horizontally scrollable so a high
+  // rep count never squeezes columns unreadably narrow or breaks the
+  // page's own layout.
+  repGridWrap: { overflowX: "auto" as const },
+  repGrid: { display: "grid", gap: 4, alignItems: "center" },
+  repColHeader: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const },
+  repRowLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
+  repGridInput: { width: "100%", boxSizing: "border-box" as const, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "6px 4px", fontSize: 13, fontWeight: 700, textAlign: "center" as const },
   input: { width: 72, boxSizing: "border-box" as const, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "8px 9px", fontSize: 15, fontWeight: 700 },
 };
