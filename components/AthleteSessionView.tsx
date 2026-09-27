@@ -537,6 +537,16 @@ export default function AthleteSessionView({
         value={session.session_notes ?? ""}
         onChange={() => {}}
         readOnly={true}
+        videoUrl={(session as any).session_notes_video_url ?? ""}
+      />
+
+      <SessionNotesBlock
+        value={(session as any).warmup_notes ?? ""}
+        onChange={() => {}}
+        readOnly={true}
+        label="Warm-up"
+        icon="🔥"
+        videoUrl={(session as any).warmup_video_url ?? ""}
       />
 
       <div style={styles.exerciseListWrap}>
@@ -939,6 +949,7 @@ export default function AthleteSessionView({
         readOnly={true}
         label="Cool-down"
         icon="🧊"
+        videoUrl={(session as any).cooldown_video_url ?? ""}
       />
 
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />

@@ -5,7 +5,7 @@ export interface NoteTemplate {
   organisation_id: string;
   name: string;
   content: string;
-  category: "general" | "warm_up" | "strength" | "power_speed" | "cardio";
+  category: "general" | "warm_up" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
   sort_order: number;
   created_at: string;
 }

@@ -21,6 +21,13 @@ interface Props {
   // with a 401 on every open, silently swallowed but still a real
   // failed request. Coach-side callers keep the default (true).
   enableTemplates?: boolean;
+  // Optional video link (demo/technique clip) attached to this note
+  // block (0105) - shown as a "▸ Watch video" link when read-only, or
+  // an editable URL field alongside the notes textarea otherwise.
+  // Omit both props entirely (as VoiceSessionModal's callers do) to
+  // hide the field completely rather than show an always-empty one.
+  videoUrl?: string;
+  onVideoUrlChange?: (url: string) => void;
 }
 
 export default function SessionNotesBlock({
@@ -33,8 +40,11 @@ export default function SessionNotesBlock({
   icon = "📋",
   placeholder = "Warm-up protocol, coaching cues, drill progressions…",
   enableTemplates = true,
+  videoUrl,
+  onVideoUrlChange,
 }: Props) {
-  const [isOpen, setIsOpen] = useState(!!value);
+  const hasVideo = videoUrl !== undefined;
+  const [isOpen, setIsOpen] = useState(!!value || !!videoUrl);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,7 +61,7 @@ export default function SessionNotesBlock({
     setTimeout(() => textareaRef.current?.focus(), 50);
   }
 
-  if (readOnly && !value) return null;
+  if (readOnly && !value && !videoUrl) return null;
 
   const lineCount = value ? value.split("\n").length : 0;
 
@@ -61,7 +71,10 @@ export default function SessionNotesBlock({
     t.category === "warm_up" ||
     (sessionType === "power_speed" && t.category === "power_speed") ||
     (sessionType === "strength" && t.category === "strength") ||
-    (sessionType === "cardio" && t.category === "cardio")
+    (sessionType === "cardio" && t.category === "cardio") ||
+    (sessionType === "hyrox" && t.category === "hyrox") ||
+    (sessionType === "sport" && t.category === "sport") ||
+    (sessionType === "recovery" && t.category === "recovery")
   );
 
   return (
@@ -71,6 +84,7 @@ export default function SessionNotesBlock({
           <span style={s.icon}>{icon}</span>
           <span style={s.label}>{label}</span>
           {value && <span style={s.badge}>{lineCount} line{lineCount !== 1 ? "s" : ""}</span>}
+          {!value && videoUrl && <span style={s.badge}>🎥 video</span>}
         </span>
         <span style={{ ...s.chevron, transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
       </button>
@@ -111,17 +125,35 @@ export default function SessionNotesBlock({
           )}
 
           {readOnly ? (
-            <pre style={s.readOnlyText}>{linkify(value)}</pre>
+            <>
+              {value && <pre style={s.readOnlyText}>{linkify(value)}</pre>}
+              {videoUrl && (
+                <a href={videoUrl} target="_blank" rel="noopener noreferrer" style={s.videoLink}>
+                  ▸ Watch video
+                </a>
+              )}
+            </>
           ) : (
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={e => onChange(e.target.value)}
-              onBlur={onBlur}
-              placeholder={placeholder}
-              rows={6}
-              style={s.textarea}
-            />
+            <>
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onBlur={onBlur}
+                placeholder={placeholder}
+                rows={6}
+                style={s.textarea}
+              />
+              {hasVideo && (
+                <input
+                  value={videoUrl}
+                  onChange={e => onVideoUrlChange?.(e.target.value)}
+                  onBlur={onBlur}
+                  placeholder="🎥 Paste a video link (optional)"
+                  style={s.videoInput}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -145,4 +177,6 @@ const s: Record<string, React.CSSProperties> = {
   templateItem: { background: "transparent", border: "none", color: "var(--text)", padding: "8px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
   textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 16, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "monospace", minHeight: 120 },
   readOnlyText: { fontSize: 13, color: "var(--mute)", whiteSpace: "pre-wrap" as const, fontFamily: "inherit", lineHeight: 1.6, margin: 0 },
+  videoInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 12px", fontSize: 13 },
+  videoLink: { fontSize: 13, fontWeight: 600, color: "var(--accent)", textDecoration: "none", alignSelf: "flex-start" as const },
 };

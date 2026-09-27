@@ -57,7 +57,8 @@ export interface ReviewSession {
   // Optional — only ever populated by the notes/PDF parse flow, when the
   // source described a warm-up or cool-down that got summarised instead
   // of added as individual exercises. warmupNotes lands in the session's
-  // session_notes (renders at the top); cooldownNotes in cooldown_notes
+  // own warmup_notes column (renders near the top, separate from the
+  // general session_notes box — 0105); cooldownNotes in cooldown_notes
   // (bottom). Undefined for VoiceSessionModal's sessions, which never
   // sets these — both render conditionally so that's a no-op there.
   warmupNotes?: string;

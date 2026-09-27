@@ -95,10 +95,11 @@ export default function HyroxCardioAthleteView({
       </div>
       {error && <div style={styles.errorBox}>{error}</div>}
       {saving && <div style={styles.savingNote}>Saving…</div>}
-      <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly />
+      <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly videoUrl={(session as any).session_notes_video_url ?? ""} />
+      <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" icon="🔥" videoUrl={(session as any).warmup_video_url ?? ""} />
       {subType && <HyroxTimer session={session} color={color} />}
       <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} zonesEnabled={zonesEnabled} />
-      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" />
+      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" videoUrl={(session as any).cooldown_video_url ?? ""} />
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}

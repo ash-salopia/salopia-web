@@ -434,7 +434,11 @@ export interface Session {
   created_at: string;
   updated_at: string;
   session_notes: string | null;
-  cooldown_notes: string | null; // 0103 — shown at the bottom of the session, session_notes' counterpart (which renders at the top)
+  warmup_notes: string | null; // 0105 — shown near the top of the session, separate from the general session_notes above (which previously doubled as warm-up)
+  cooldown_notes: string | null; // 0103 — shown at the bottom of the session, warmup_notes' counterpart
+  session_notes_video_url: string | null; // 0105 — optional video link on the Session Notes block
+  warmup_video_url: string | null; // 0105 — optional video link on the Warm-up block
+  cooldown_video_url: string | null; // 0105 — optional video link on the Cool-down block
   athlete_notes: string | null; // 0033 — athlete's own note on the session, separate from the coach's session_notes
   athlete_notes_acknowledged: boolean; // 0036 — coach has dismissed this note off the dashboard
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation

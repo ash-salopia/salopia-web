@@ -15,13 +15,16 @@ import {
 } from "@/lib/data/note-templates";
 import CollapsibleSection from "@/components/CollapsibleSection";
 
-const CATEGORIES: NoteTemplate["category"][] = ["general", "warm_up", "strength", "power_speed", "cardio"];
+const CATEGORIES: NoteTemplate["category"][] = ["general", "warm_up", "strength", "power_speed", "cardio", "hyrox", "sport", "recovery"];
 const CATEGORY_LABELS: Record<NoteTemplate["category"], string> = {
   general: "General",
   warm_up: "Warm-Up",
   strength: "Strength",
   power_speed: "Power / Speed",
   cardio: "Cardio",
+  hyrox: "Hybrid",
+  sport: "Sport",
+  recovery: "Recovery",
 };
 
 export default function NoteTemplatesManager() {

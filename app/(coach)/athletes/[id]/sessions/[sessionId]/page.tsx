@@ -64,6 +64,22 @@ export default function SessionDetailPage() {
   const sessionRef = useRef<Session | null>(null);
   useEffect(() => { sessionRef.current = session; }, [session]);
 
+  // Warm-up/Cool-down start hidden behind a "+ Add" button rather than
+  // always showing an empty collapsed box (0105) - once opened (or
+  // already has content/a video link from a previous save) they stay
+  // showing. Only need to seed this from the first load, not every
+  // re-fetch, hence the ref guard.
+  const [warmupOpen, setWarmupOpen] = useState(false);
+  const [cooldownOpen, setCooldownOpen] = useState(false);
+  const notesOpenSeeded = useRef(false);
+  useEffect(() => {
+    if (session && !notesOpenSeeded.current) {
+      notesOpenSeeded.current = true;
+      if ((session as any).warmup_notes?.trim() || (session as any).warmup_video_url) setWarmupOpen(true);
+      if ((session as any).cooldown_notes?.trim() || (session as any).cooldown_video_url) setCooldownOpen(true);
+    }
+  }, [session]);
+
   useEffect(() => {
     if (!athleteId) return;
     const supabase = createClient();
@@ -317,12 +333,48 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleWarmupNotesChange = async (warmup_notes: string) => {
+    setSession((prev) => (prev ? { ...prev, warmup_notes } : prev));
+    try {
+      await updateSession(sessionId, { warmup_notes } as any);
+    } catch (e) {
+      console.error("Could not save warm-up notes:", e);
+    }
+  };
+
   const handleCooldownNotesChange = async (cooldown_notes: string) => {
     setSession((prev) => (prev ? { ...prev, cooldown_notes } : prev));
     try {
       await updateSession(sessionId, { cooldown_notes } as any);
     } catch (e) {
       console.error("Could not save cool-down notes:", e);
+    }
+  };
+
+  const handleSessionNotesVideoUrlChange = async (session_notes_video_url: string) => {
+    setSession((prev) => (prev ? { ...prev, session_notes_video_url } : prev));
+    try {
+      await updateSession(sessionId, { session_notes_video_url } as any);
+    } catch (e) {
+      console.error("Could not save session notes video link:", e);
+    }
+  };
+
+  const handleWarmupVideoUrlChange = async (warmup_video_url: string) => {
+    setSession((prev) => (prev ? { ...prev, warmup_video_url } : prev));
+    try {
+      await updateSession(sessionId, { warmup_video_url } as any);
+    } catch (e) {
+      console.error("Could not save warm-up video link:", e);
+    }
+  };
+
+  const handleCooldownVideoUrlChange = async (cooldown_video_url: string) => {
+    setSession((prev) => (prev ? { ...prev, cooldown_video_url } : prev));
+    try {
+      await updateSession(sessionId, { cooldown_video_url } as any);
+    } catch (e) {
+      console.error("Could not save cool-down video link:", e);
     }
   };
 
@@ -967,7 +1019,25 @@ export default function SessionDetailPage() {
         value={(session as any).session_notes ?? ""}
         onChange={handleSessionNotesChange}
         sessionType={session.type}
+        videoUrl={(session as any).session_notes_video_url ?? ""}
+        onVideoUrlChange={handleSessionNotesVideoUrlChange}
       />
+
+      {warmupOpen ? (
+        <SessionNotesBlock
+          value={(session as any).warmup_notes ?? ""}
+          onChange={handleWarmupNotesChange}
+          sessionType={session.type}
+          label="Warm-up"
+          icon="🔥"
+          videoUrl={(session as any).warmup_video_url ?? ""}
+          onVideoUrlChange={handleWarmupVideoUrlChange}
+        />
+      ) : (
+        <button style={styles.addNotesBtn} onClick={() => setWarmupOpen(true)}>
+          + Add warm-up notes
+        </button>
+      )}
 
       {session.athlete_notes && (
         <SessionNotesBlock
@@ -1074,13 +1144,21 @@ export default function SessionDetailPage() {
         />
       )}
 
-      <SessionNotesBlock
-        value={(session as any).cooldown_notes ?? ""}
-        onChange={handleCooldownNotesChange}
-        sessionType={session.type}
-        label="Cool-down"
-        icon="🧊"
-      />
+      {cooldownOpen ? (
+        <SessionNotesBlock
+          value={(session as any).cooldown_notes ?? ""}
+          onChange={handleCooldownNotesChange}
+          sessionType={session.type}
+          label="Cool-down"
+          icon="🧊"
+          videoUrl={(session as any).cooldown_video_url ?? ""}
+          onVideoUrlChange={handleCooldownVideoUrlChange}
+        />
+      ) : (
+        <button style={styles.addNotesBtn} onClick={() => setCooldownOpen(true)}>
+          + Add cool-down notes
+        </button>
+      )}
 
       {voiceOpen && (
         <VoiceSessionModal
@@ -1235,6 +1313,17 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     padding: "12px 0",
     fontSize: 14,
+    cursor: "pointer",
+  },
+  addNotesBtn: {
+    marginBottom: 12,
+    width: "100%",
+    background: "transparent",
+    border: "1px dashed var(--line)",
+    color: "var(--mute)",
+    borderRadius: 10,
+    padding: "10px 0",
+    fontSize: 13,
     cursor: "pointer",
   },
   empty: { color: "var(--mute)", fontSize: 14, padding: "40px 0", textAlign: "center" },

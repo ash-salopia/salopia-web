@@ -291,7 +291,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           }));
         const sessionType = (s.type ?? "strength") as any;
         const session = await createSession(athleteId, sessionType, date, name, exInputs, {
-          sessionNotes: s.warmupNotes,
+          warmupNotes: s.warmupNotes,
           cooldownNotes: s.cooldownNotes,
         });
         created.push(session);
