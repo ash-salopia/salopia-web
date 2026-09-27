@@ -38,9 +38,22 @@ interface Props {
   onChange: (updated: PSExercise) => void;
   onDelete: () => void;
   library?: LibraryEntry[];
+  // Reordering - optional so nothing breaks if a caller doesn't wire
+  // them up, but the coach session builder always does (0107 - P/S
+  // exercises previously had no way to reorder at all, unlike the
+  // strength builder's ExerciseCard, which this mirrors).
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
-export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, library = [] }: Props) {
+export default function PowerSpeedExerciseCard({
+  exercise, onChange, onDelete, library = [],
+  onMoveUp, onMoveDown, onDragStart, onDragOver, onDragLeave, onDrop,
+}: Props) {
   const [showCues, setShowCues] = useState(!!exercise.notes);
   const [showLog, setShowLog] = useState(false);
   const [nameQuery, setNameQuery] = useState(exercise.name);
@@ -180,9 +193,14 @@ export default function PowerSpeedExerciseCard({ exercise, onChange, onDelete, l
   }
 
   return (
-    <div style={card.wrap}>
+    <div style={card.wrap} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       {/* ── Header ── */}
       <div style={card.header}>
+        <span draggable onDragStart={onDragStart} style={card.dragHandle} title="Drag to reorder">⠿</span>
+        <div style={card.moveBtnCol}>
+          <button style={{ ...card.moveBtn, opacity: onMoveUp ? 1 : 0.25 }} onClick={onMoveUp} disabled={!onMoveUp} title="Move up">▴</button>
+          <button style={{ ...card.moveBtn, opacity: onMoveDown ? 1 : 0.25 }} onClick={onMoveDown} disabled={!onMoveDown} title="Move down">▾</button>
+        </div>
         <select
           value={exercise.quality}
           onChange={(e) => {
@@ -517,6 +535,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const card: Record<string, React.CSSProperties> = {
   wrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 },
   header: { display: "flex", alignItems: "center", gap: 6 },
+  dragHandle: { cursor: "grab", color: "var(--mute)", fontSize: 16, lineHeight: 1, flexShrink: 0, padding: "4px 2px", userSelect: "none" as const },
+  moveBtnCol: { display: "flex", flexDirection: "column" as const, flexShrink: 0, gap: 2 },
+  moveBtn: { background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "4px 8px" },
   qualityChip: { borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
   orderInput: { width: 32, textAlign: "center" as const, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "6px 2px", fontSize: 12, fontWeight: 700, flexShrink: 0 },
   nameInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 14, fontWeight: 700 },

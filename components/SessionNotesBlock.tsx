@@ -80,16 +80,17 @@ export default function SessionNotesBlock({
   // general block only) by session type - "warm_up"/"cool_down" are
   // content specifically for that block, not for session type at all.
   const relevantTemplates = templates.filter(t => {
-    if (t.category === "general") return true;
-    if (noteKind === "warmup") return t.category === "warm_up";
-    if (noteKind === "cooldown") return t.category === "cool_down";
+    const cats = t.categories ?? [];
+    if (cats.includes("general")) return true;
+    if (noteKind === "warmup") return cats.includes("warm_up");
+    if (noteKind === "cooldown") return cats.includes("cool_down");
     return (
-      (sessionType === "power_speed" && t.category === "power_speed") ||
-      (sessionType === "strength" && t.category === "strength") ||
-      (sessionType === "cardio" && t.category === "cardio") ||
-      (sessionType === "hyrox" && t.category === "hyrox") ||
-      (sessionType === "sport" && t.category === "sport") ||
-      (sessionType === "recovery" && t.category === "recovery")
+      (sessionType === "power_speed" && cats.includes("power_speed")) ||
+      (sessionType === "strength" && cats.includes("strength")) ||
+      (sessionType === "cardio" && cats.includes("cardio")) ||
+      (sessionType === "hyrox" && cats.includes("hyrox")) ||
+      (sessionType === "sport" && cats.includes("sport")) ||
+      (sessionType === "recovery" && cats.includes("recovery"))
     );
   });
 

@@ -1,11 +1,17 @@
 import { createClient } from "@/lib/supabase-browser";
 
+export type NoteCategory = "general" | "warm_up" | "cool_down" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
+
 export interface NoteTemplate {
   id: string;
   organisation_id: string;
   name: string;
   content: string;
-  category: "general" | "warm_up" | "cool_down" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
+  // 0107 — was a single category; a note is often relevant to more than
+  // one session type (e.g. a generic mobility warm-up fits Strength AND
+  // Power/Speed), so this is now a tag array. "general" still means
+  // "show everywhere" regardless of what else is ticked.
+  categories: NoteCategory[];
   sort_order: number;
   created_at: string;
   video_url: string; // 0106 — carried along when this template is loaded into a note block
@@ -16,7 +22,6 @@ export async function listNoteTemplates(): Promise<NoteTemplate[]> {
   const { data, error } = await supabase
     .from("session_note_templates")
     .select("*")
-    .order("category")
     .order("sort_order");
   if (error) throw error;
   return data ?? [];
@@ -43,7 +48,7 @@ export async function saveNoteTemplate(
 
 export async function updateNoteTemplate(
   id: string,
-  patch: Partial<Pick<NoteTemplate, "name" | "content" | "category" | "sort_order" | "video_url">>
+  patch: Partial<Pick<NoteTemplate, "name" | "content" | "categories" | "sort_order" | "video_url">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase

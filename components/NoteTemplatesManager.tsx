@@ -11,12 +11,12 @@ import { useState, useEffect } from "react";
 import {
   listNoteTemplates, saveNoteTemplate,
   updateNoteTemplate, deleteNoteTemplate,
-  type NoteTemplate,
+  type NoteTemplate, type NoteCategory,
 } from "@/lib/data/note-templates";
 import CollapsibleSection from "@/components/CollapsibleSection";
 
-const CATEGORIES: NoteTemplate["category"][] = ["general", "warm_up", "cool_down", "strength", "power_speed", "cardio", "hyrox", "sport", "recovery"];
-const CATEGORY_LABELS: Record<NoteTemplate["category"], string> = {
+const CATEGORIES: NoteCategory[] = ["general", "warm_up", "cool_down", "strength", "power_speed", "cardio", "hyrox", "sport", "recovery"];
+const CATEGORY_LABELS: Record<NoteCategory, string> = {
   general: "General",
   warm_up: "Warm-Up",
   cool_down: "Cool-Down",
@@ -28,13 +28,40 @@ const CATEGORY_LABELS: Record<NoteTemplate["category"], string> = {
   recovery: "Recovery",
 };
 
+// Shared tickable-chip category picker (0107) - a template is often
+// relevant to more than one session type (e.g. a generic mobility
+// warm-up fits Strength AND Power/Speed), so this replaced a single
+// dropdown. "General" alone still means "show everywhere".
+function CategoryPicker({ selected, onChange }: { selected: NoteCategory[]; onChange: (next: NoteCategory[]) => void }) {
+  const toggle = (cat: NoteCategory) =>
+    onChange(selected.includes(cat) ? selected.filter(c => c !== cat) : [...selected, cat]);
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+      {CATEGORIES.map(cat => {
+        const on = selected.includes(cat);
+        return (
+          <button key={cat} type="button" onClick={() => toggle(cat)}
+            style={{
+              background: on ? "var(--accent-dim)" : "var(--ink)",
+              border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+              color: on ? "var(--accent)" : "var(--mute)",
+              borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>
+            {CATEGORY_LABELS[cat]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function NoteTemplatesManager() {
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", content: "", category: "general" as NoteTemplate["category"], video_url: "" });
+  const [form, setForm] = useState({ name: "", content: "", categories: ["general"] as NoteCategory[], video_url: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -53,10 +80,10 @@ export default function NoteTemplatesManager() {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const t = await saveNoteTemplate({ name: form.name.trim(), content: form.content, category: form.category, sort_order: templates.length, video_url: form.video_url.trim() });
+      const t = await saveNoteTemplate({ name: form.name.trim(), content: form.content, categories: form.categories, sort_order: templates.length, video_url: form.video_url.trim() });
       setTemplates(prev => [...prev, t]);
       setCreating(false);
-      setForm({ name: "", content: "", category: "general", video_url: "" });
+      setForm({ name: "", content: "", categories: ["general"], video_url: "" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally { setSaving(false); }
@@ -65,7 +92,7 @@ export default function NoteTemplatesManager() {
   const handleUpdate = async (t: NoteTemplate) => {
     setSaving(true);
     try {
-      await updateNoteTemplate(t.id, { name: t.name, content: t.content, category: t.category, video_url: t.video_url });
+      await updateNoteTemplate(t.id, { name: t.name, content: t.content, categories: t.categories, video_url: t.video_url });
       setTemplates(prev => prev.map(x => x.id === t.id ? t : x));
       setEditingId(null);
     } catch (e) {
@@ -83,8 +110,10 @@ export default function NoteTemplatesManager() {
     }
   };
 
+  // A template tagged with several categories appears under each of
+  // its groups here - same idea as any tag-based filter list.
   const grouped = CATEGORIES.reduce((acc, cat) => {
-    acc[cat] = templates.filter(t => t.category === cat);
+    acc[cat] = templates.filter(t => (t.categories ?? []).includes(cat));
     return acc;
   }, {} as Record<string, NoteTemplate[]>);
 
@@ -106,19 +135,11 @@ export default function NoteTemplatesManager() {
       {creating && (
         <div style={s.formCard}>
           <div style={s.formTitle}>New note template</div>
-          <div style={s.formRow}>
-            <div style={{ flex: 2 }}>
-              <div style={s.fieldLabel}>Name</div>
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Sprint Warm-Up Protocol" style={s.input} autoFocus />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={s.fieldLabel}>Category</div>
-              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as NoteTemplate["category"] }))} style={s.input}>
-                {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-              </select>
-            </div>
-          </div>
+          <div style={s.fieldLabel}>Name</div>
+          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder="e.g. Sprint Warm-Up Protocol" style={s.input} autoFocus />
+          <div style={s.fieldLabel}>Categories</div>
+          <CategoryPicker selected={form.categories} onChange={categories => setForm(f => ({ ...f, categories }))} />
           <div style={s.fieldLabel}>Content</div>
           <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
             placeholder="Paste or type your template content here…"
@@ -195,20 +216,9 @@ function EditForm({ template, saving, onSave, onCancel }: {
   const [t, setT] = useState(template);
   return (
     <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input value={t.name} onChange={e => setT(x => ({ ...x, name: e.target.value }))}
-          style={s.input} />
-        <select value={t.category} onChange={e => setT(x => ({ ...x, category: e.target.value as NoteTemplate["category"] }))}
-          style={{ ...s.input, width: 140 }}>
-          {/* Was a separately hardcoded, shorter list than CATEGORIES
-              above (missing Hybrid/Sport/Recovery/Cool-Down entirely) -
-              editing an existing template couldn't retag it into any of
-              those, only creating a new one could pick them (0106). */}
-          {CATEGORIES.map(c => (
-            <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
-          ))}
-        </select>
-      </div>
+      <input value={t.name} onChange={e => setT(x => ({ ...x, name: e.target.value }))}
+        style={s.input} />
+      <CategoryPicker selected={t.categories ?? []} onChange={categories => setT(x => ({ ...x, categories }))} />
       <textarea value={t.content} onChange={e => setT(x => ({ ...x, content: e.target.value }))}
         rows={8} style={s.textarea} />
       <input value={t.video_url ?? ""} onChange={e => setT(x => ({ ...x, video_url: e.target.value }))}
@@ -240,7 +250,6 @@ const s: Record<string, React.CSSProperties> = {
   deleteBtn: { background: "transparent", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" },
   formCard: { background: "var(--panel)", border: "1px solid var(--accent)44", borderRadius: 12, padding: 16, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 10 },
   formTitle: { fontSize: 14, fontWeight: 700, color: "var(--text)" },
-  formRow: { display: "flex", gap: 10 },
   fieldLabel: { fontSize: 11, color: "var(--mute)", fontWeight: 600, textTransform: "uppercase" as const, marginBottom: 4 },
   input: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 },
   textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 12, fontFamily: "monospace", resize: "vertical" as const, minHeight: 160 },

@@ -1110,13 +1110,38 @@ export default function SessionDetailPage() {
         <>
           <PowerSpeedSummaryBar exercises={exercises.map(toPSExercise)} />
           <div style={styles.exerciseList}>
-            {exercises.map((ex) => (
+            {exercises.map((ex, i) => (
               <PowerSpeedExerciseCard
                 key={ex.id}
                 exercise={toPSExercise(ex)}
                 onChange={handlePSExerciseChange}
                 onDelete={() => handleRemoveExercise(ex.id)}
                 library={library}
+                onMoveUp={i > 0 ? () => handleReorderExercise(ex.id, i) : undefined}
+                onMoveDown={i < exercises.length - 1 ? () => handleReorderExercise(ex.id, i + 2) : undefined}
+                onDragStart={(e) => {
+                  draggedExerciseIndexRef.current = i;
+                  e.dataTransfer.setData("text/plain", String(i));
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  (e.currentTarget as HTMLElement).style.outline = "1px solid var(--accent)";
+                }}
+                onDragLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.outline = "none";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLElement).style.outline = "none";
+                  const fromIdx = draggedExerciseIndexRef.current;
+                  draggedExerciseIndexRef.current = null;
+                  if (fromIdx == null || fromIdx === i) return;
+                  const draggedId = exercises[fromIdx]?.id;
+                  if (!draggedId) return;
+                  handleReorderExercise(draggedId, i + 1);
+                }}
               />
             ))}
           </div>
