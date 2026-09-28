@@ -407,7 +407,7 @@ const s: Record<string, React.CSSProperties> = {
   // Sets/reps summary, inline next to the name now rather than only
   // showing once expanded (0109).
   exPrescInline: { fontSize: 12, color: "var(--mute)", flexShrink: 0 },
-  exHeadRight: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: "auto" },
+  exHeadRight: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
   exBadge: { fontSize: 11, fontWeight: 700, color: "var(--mute)", background: "var(--ink)", borderRadius: 6, padding: "2px 7px" },
   exChevronBtn: { background: "transparent", border: "none", padding: 0, cursor: "pointer" },
   exChevron: { fontSize: 22, color: "var(--mute)", transition: "transform 0.2s" },
@@ -415,8 +415,11 @@ const s: Record<string, React.CSSProperties> = {
   // Video/history/swap/notes action row (0108) - inline next to the
   // name now rather than only showing once expanded (0109); expand is
   // purely for the set-logging boxes now, so these need their own
-  // stopPropagation to avoid toggling it when tapped.
-  actionRow: { display: "flex", gap: 6, flexShrink: 0 },
+  // stopPropagation to avoid toggling it when tapped. marginLeft: auto
+  // groups it with exHeadRight over on the row's right side (name/presc
+  // stay left) - the done-badge+chevron in exHeadRight still ends up
+  // the very rightmost, immediately after these (0110).
+  actionRow: { display: "flex", gap: 6, flexShrink: 0, marginLeft: "auto" },
   actionBtn: { width: 34, height: 34, borderRadius: 8, border: "1px solid var(--line)", background: "var(--ink)", color: "var(--mute)", cursor: "pointer", fontSize: 14, flexShrink: 0 },
   actionBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)44", color: "var(--accent)" },
   swappedNote: { fontSize: 11, color: "var(--accent)", fontWeight: 600 },
