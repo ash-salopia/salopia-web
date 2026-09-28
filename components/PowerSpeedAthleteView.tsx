@@ -227,69 +227,79 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
 
   return (
     <div style={s.exCard}>
+      {/* Sets/reps and the video/history/swap/note buttons are always
+          visible here now, inline with the name - previously hidden
+          behind expand, which meant checking what's prescribed or
+          swapping/skipping needed opening the card first (reported
+          live). Expand/collapse (the chevron + done badge) now only
+          ever reveals the actual set-logging boxes underneath. */}
       <div style={s.exHead}>
         <button style={s.exHeadClick} onClick={() => setExpanded((v) => !v)}>
           {ex.order && <span style={s.orderBadge}>{ex.order}</span>}
           <span style={s.exName}>{ex.name}</span>
         </button>
+
+        {!ex.opted_out && (
+          <span style={s.exPrescInline}>
+            {ex.sets}×{reps}
+            {ex.distance ? ` · ${ex.distance}` : ""}
+            {ex.rest ? ` · rest ${ex.rest}` : ""}
+            {!completionOnly && tracked.length ? ` · ${tracked.map((k) => PS_METRIC_META[k].short).join(" / ")}` : ""}
+          </span>
+        )}
+
+        <span style={s.actionRow}>
+          {ex.name.trim() && (
+            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setHistoryOpen(true); }} title="View history & PB">📈</button>
+          )}
+          {!ex.opted_out && (
+            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setSwapOpen(true); }} title="Swap or skip this exercise">🔀</button>
+          )}
+          <button
+            style={{ ...s.actionBtn, ...(ex.athlete_exercise_notes ? s.actionBtnActive : {}) }}
+            onClick={(e) => { e.stopPropagation(); setNotesOpen((v) => !v); }}
+            title="Note on this exercise"
+          >
+            📝
+          </button>
+          {ex.video_url && (
+            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }} title="Watch demo video">▶</button>
+          )}
+        </span>
+
         <span style={s.exHeadRight}>
           <span style={s.exBadge}>{done}/{log.length}</span>
-          <button style={s.exChevronBtn} onClick={() => setExpanded((v) => !v)}>
+          <button style={s.exChevronBtn} onClick={() => setExpanded((v) => !v)} title="Show/hide set-logging boxes">
             <span style={{ ...s.exChevron, transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
           </button>
         </span>
       </div>
 
-      {expanded && (
+      {ex.swapped_from && (
+        <div style={s.swappedNote}>🔀 Swapped from &quot;{ex.swapped_from}&quot;</div>
+      )}
+
+      {notesOpen && (
+        <textarea
+          value={ex.athlete_exercise_notes ?? ""}
+          onChange={(e) => onNotesChange(e.target.value)}
+          onBlur={() => onSaveNotes(ex.athlete_exercise_notes ?? "")}
+          placeholder="Anything to note about this exercise - how it felt, form cues, niggles…"
+          style={s.notesTextarea}
+        />
+      )}
+
+      {ex.opted_out && (
+        <div style={s.optedOutRow}>
+          <span style={s.optedOutLabel}>⏭ Skipped for this session</span>
+          <button style={s.undoSkipBtn} onClick={handleUndoOptOut} disabled={undoingOptOut}>
+            {undoingOptOut ? "…" : "↩ Undo"}
+          </button>
+        </div>
+      )}
+
+      {expanded && !ex.opted_out && (
         <>
-          <div style={s.actionRow}>
-            {ex.name.trim() && (
-              <button style={s.actionBtn} onClick={() => setHistoryOpen(true)} title="View history & PB">📈</button>
-            )}
-            {!ex.opted_out && (
-              <button style={s.actionBtn} onClick={() => setSwapOpen(true)} title="Swap or skip this exercise">🔀</button>
-            )}
-            <button
-              style={{ ...s.actionBtn, ...(ex.athlete_exercise_notes ? s.actionBtnActive : {}) }}
-              onClick={() => setNotesOpen((v) => !v)}
-              title="Note on this exercise"
-            >
-              📝
-            </button>
-            {ex.video_url && (
-              <button style={s.watchBtn} onClick={() => setVideoOpen(true)}>▶ Watch</button>
-            )}
-          </div>
-
-          {ex.swapped_from && (
-            <div style={s.swappedNote}>🔀 Swapped from &quot;{ex.swapped_from}&quot;</div>
-          )}
-
-          {notesOpen && (
-            <textarea
-              value={ex.athlete_exercise_notes ?? ""}
-              onChange={(e) => onNotesChange(e.target.value)}
-              onBlur={() => onSaveNotes(ex.athlete_exercise_notes ?? "")}
-              placeholder="Anything to note about this exercise - how it felt, form cues, niggles…"
-              style={s.notesTextarea}
-            />
-          )}
-
-          {ex.opted_out ? (
-            <div style={s.optedOutRow}>
-              <span style={s.optedOutLabel}>⏭ Skipped for this session</span>
-              <button style={s.undoSkipBtn} onClick={handleUndoOptOut} disabled={undoingOptOut}>
-                {undoingOptOut ? "…" : "↩ Undo"}
-              </button>
-            </div>
-          ) : (
-          <>
-          <div style={s.exPresc}>
-            {ex.sets}×{reps}
-            {ex.distance ? ` · ${ex.distance}` : ""}
-            {ex.rest ? ` · rest ${ex.rest}` : ""}
-            {!completionOnly && tracked.length ? ` · ${tracked.map((k) => PS_METRIC_META[k].short).join(" / ")}` : ""}
-          </div>
           {ex.notes && <div style={s.exCues}>{ex.notes}</div>}
           {saving && <div style={s.savingNote}>Saving…</div>}
 
@@ -347,8 +357,6 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
               </div>
             );
           })}
-          </>
-          )}
         </>
       )}
 
@@ -385,25 +393,32 @@ const s: Record<string, React.CSSProperties> = {
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "16px 0" },
   savingNote: { fontSize: 11, color: "var(--mute)" },
   exCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column" as const, gap: 8 },
-  exHead: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" },
-  exHeadClick: { display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" as const },
+  // flexWrap so a narrow phone gets a clean second line instead of
+  // squeezing name/presc/buttons unreadably - name+order stays first,
+  // done-badge+chevron gets pushed to the row's end (marginLeft: auto)
+  // whenever there's room, wrapping under it otherwise.
+  exHead: { display: "flex", flexWrap: "wrap" as const, alignItems: "center", rowGap: 6, columnGap: 10, width: "100%" },
+  exHeadClick: { display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" as const },
   // Same format as the strength athlete view's order badge - purple
   // instead of the generic accent colour, matching this app's
   // Power/Speed brand colour used everywhere else (#A855F7) (0108).
   orderBadge: { fontSize: 12, fontWeight: 800, color: "#A855F7", background: "#A855F722", borderRadius: 6, padding: "2px 7px", flexShrink: 0, fontFamily: "'Barlow Condensed', sans-serif" },
   exName: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
-  exHeadRight: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
+  // Sets/reps summary, inline next to the name now rather than only
+  // showing once expanded (0109).
+  exPrescInline: { fontSize: 12, color: "var(--mute)", flexShrink: 0 },
+  exHeadRight: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: "auto" },
   exBadge: { fontSize: 11, fontWeight: 700, color: "var(--mute)", background: "var(--ink)", borderRadius: 6, padding: "2px 7px" },
   exChevronBtn: { background: "transparent", border: "none", padding: 0, cursor: "pointer" },
   exChevron: { fontSize: 22, color: "var(--mute)", transition: "transform 0.2s" },
-  exPresc: { fontSize: 12, color: "var(--mute)" },
   exCues: { fontSize: 12, color: "var(--mute)", fontStyle: "italic" as const, lineHeight: 1.5 },
-  // Video/history/swap/notes action row (0108) - same button set the
-  // strength athlete view already has.
-  actionRow: { display: "flex", gap: 6 },
-  actionBtn: { width: 34, height: 34, borderRadius: 8, border: "1px solid var(--line)", background: "var(--ink)", color: "var(--mute)", cursor: "pointer", fontSize: 14 },
+  // Video/history/swap/notes action row (0108) - inline next to the
+  // name now rather than only showing once expanded (0109); expand is
+  // purely for the set-logging boxes now, so these need their own
+  // stopPropagation to avoid toggling it when tapped.
+  actionRow: { display: "flex", gap: 6, flexShrink: 0 },
+  actionBtn: { width: 34, height: 34, borderRadius: 8, border: "1px solid var(--line)", background: "var(--ink)", color: "var(--mute)", cursor: "pointer", fontSize: 14, flexShrink: 0 },
   actionBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)44", color: "var(--accent)" },
-  watchBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)44", color: "var(--accent)", borderRadius: 8, padding: "0 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   swappedNote: { fontSize: 11, color: "var(--accent)", fontWeight: 600 },
   notesTextarea: { width: "100%", boxSizing: "border-box" as const, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 14, lineHeight: 1.5, resize: "vertical" as const, minHeight: 60 },
   optedOutRow: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--ink)", borderRadius: 8, padding: "10px 12px" },
