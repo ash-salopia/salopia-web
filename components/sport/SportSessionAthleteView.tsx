@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
+import SessionNotesBlock from "@/components/SessionNotesBlock";
 import { saveWithRetry } from "@/lib/save-queue";
 import type { Session } from "@/types";
 
@@ -73,7 +74,13 @@ export default function SportSessionAthleteView({
         <div style={s.meta}>{session.date}</div>
       </div>
 
-      {session.session_notes && <div style={s.notesBox}>{session.session_notes}</div>}
+      {/* Was a plain always-expanded div with no hide/unhide control,
+          unlike every other session type's athlete view - fixed for
+          consistency after the same gap was reported live for
+          Power/Speed (0109). Sport sessions don't have a Warm-up/
+          Cool-down split (out of scope, per an earlier deliberate
+          decision), just the one general note. */}
+      <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly />
 
       {planned && (planned.duration_min != null || planned.rpe != null) && (
         <div style={s.planRow}>
@@ -122,7 +129,6 @@ const s: Record<string, React.CSSProperties> = {
   badge: { display: "inline-block", background: "#F59E0B22", color: "#F59E0B", borderRadius: 5, padding: "3px 8px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 },
   name: { fontSize: 20, fontWeight: 700, color: "var(--text)" },
   meta: { fontSize: 12, color: "var(--mute)", marginTop: 2 },
-  notesBox: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "var(--text)", lineHeight: 1.5, marginBottom: 12 },
   planRow: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 },
   planLabel: { fontSize: 12, color: "var(--mute)", fontWeight: 700 },
   planChip: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "var(--text)" },

@@ -90,8 +90,13 @@ export default function PowerSpeedAthleteView({
       <div style={s.meta}>{session.date} · Power / Speed</div>
 
       {error && <div style={s.errorBox}>{error}</div>}
-      <NoteBox label="Session Notes" text={session.session_notes} videoUrl={(session as any).session_notes_video_url} />
-      <NoteBox label="Warm-up" text={(session as any).warmup_notes} videoUrl={(session as any).warmup_video_url} />
+      {/* Was a bespoke, always-expanded plain-div renderer (NoteBox)
+          with no collapse/expand control at all - every other session
+          type's athlete view (strength, hyrox/cardio) uses the real
+          SessionNotesBlock here, which has one (reported live: "not
+          showing a hide/unhide option", Power/Speed only) (0109). */}
+      <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly videoUrl={(session as any).session_notes_video_url ?? ""} />
+      <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" icon="🔥" videoUrl={(session as any).warmup_video_url ?? ""} />
 
       {exercises.map((ex) => (
         <ExerciseLog
@@ -113,7 +118,7 @@ export default function PowerSpeedAthleteView({
       ))}
       {exercises.length === 0 && <div style={s.empty}>No exercises in this session.</div>}
 
-      <NoteBox label="Cool-down" text={(session as any).cooldown_notes} videoUrl={(session as any).cooldown_video_url} />
+      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" videoUrl={(session as any).cooldown_video_url ?? ""} />
 
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
@@ -125,24 +130,6 @@ export default function PowerSpeedAthleteView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
-    </div>
-  );
-}
-
-// Shared read-only note box for Session Notes / Warm-up / Cool-down
-// (0105) - self-hides when there's neither text nor a video link, so
-// call sites don't each need their own conditional.
-function NoteBox({ label, text, videoUrl }: { label: string; text?: string | null; videoUrl?: string | null }) {
-  if (!text && !videoUrl) return null;
-  return (
-    <div style={s.coachNote}>
-      <span style={s.coachNoteLabel}>{label}</span>
-      {text}
-      {videoUrl && (
-        <a href={videoUrl} target="_blank" rel="noopener noreferrer" style={s.coachNoteVideo}>
-          ▸ Watch video
-        </a>
-      )}
     </div>
   );
 }
@@ -387,9 +374,6 @@ const s: Record<string, React.CSSProperties> = {
   backLink: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 13, cursor: "pointer", padding: 0 },
   meta: { fontSize: 12, color: "var(--mute)", padding: "0 16px 12px" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
-  coachNote: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "var(--text)", marginBottom: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" as const },
-  coachNoteLabel: { display: "block", fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, marginBottom: 3 },
-  coachNoteVideo: { display: "block", marginTop: 6, fontSize: 13, fontWeight: 600, color: "var(--accent)", textDecoration: "none" },
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "16px 0" },
   savingNote: { fontSize: 11, color: "var(--mute)" },
   exCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column" as const, gap: 8 },
