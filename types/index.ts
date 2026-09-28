@@ -451,6 +451,7 @@ export interface Session {
   recovery_format: RecoveryFormat | null; // 0046
   recovery_config: RecoveryConfig; // 0046
   sort_order: number; // 0049 — position among same-day sessions, set by the coach's drag-to-reorder
+  time_of_day: "am" | "pm" | null; // 0108 — optional two-a-day designation; null = no specific time (the default)
   is_primer?: boolean; // 0053 — coach-set: whole session is primer/activation (e.g. a pre-match wake-up), excluded from reports and the rolling %1RM estimate. Equivalent to flagging every exercise in it
   exercises?: SessionExercise[];
 }

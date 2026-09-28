@@ -411,14 +411,25 @@ export default function AthleteLinkShell({
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
                       return (
                         <button key={session.id}
-                          style={{ background: meta.color + "18", border: "1px solid " + meta.color + "44", borderLeft: "3px solid " + meta.color, borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left" as const, width: "100%" }}
+                          style={{ background: meta.color + "18", border: "1px solid " + meta.color + "44", borderLeft: "3px solid " + meta.color, borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left" as const, width: "100%", display: "flex", alignItems: "flex-start", gap: 8 }}
                           onClick={() => router.push("/a/" + token + "/sessions/" + session.id)}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const, marginBottom: 2 }}>{meta.label}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{session.name}</div>
-                          {session.type === "recovery" ? (
-                            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{recoverySessionCardLine(session)}</div>
-                          ) : session.exercises && session.exercises.length > 0 && (
-                            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const, marginBottom: 2 }}>{meta.label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{session.name}</div>
+                            {session.type === "recovery" ? (
+                              <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{recoverySessionCardLine(session)}</div>
+                            ) : session.exercises && session.exercises.length > 0 && (
+                              <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 2 }}>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</div>
+                            )}
+                          </div>
+                          {/* Optional two-a-day designation (0108) - only
+                              shows when the coach has actually specified
+                              one; day-only scheduling (the default) shows
+                              nothing here. */}
+                          {(session as any).time_of_day && (
+                            <span style={{ fontSize: 10, fontWeight: 800, color: meta.color, background: meta.color + "22", border: "1px solid " + meta.color + "55", borderRadius: 6, padding: "2px 6px", flexShrink: 0 }}>
+                              {(session as any).time_of_day.toUpperCase()}
+                            </span>
                           )}
                         </button>
                       );

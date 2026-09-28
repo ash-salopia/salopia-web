@@ -399,6 +399,16 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleTimeOfDayChange = async (value: string) => {
+    const time_of_day = (value === "am" || value === "pm") ? value : null;
+    setSession((prev) => (prev ? { ...prev, time_of_day } as any : prev));
+    try {
+      await updateSession(sessionId, { time_of_day } as any);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save");
+    }
+  };
+
   const handlePrimerChange = async (is_primer: boolean) => {
     setSession((prev) => (prev ? { ...prev, is_primer } : prev));
     try {
@@ -846,6 +856,16 @@ export default function SessionDetailPage() {
           onChange={(e) => handleDateChange(e.target.value)}
           style={styles.dateInput}
         />
+        <select
+          value={(session as any).time_of_day ?? ""}
+          onChange={(e) => handleTimeOfDayChange(e.target.value)}
+          title="Optional - only needed for a two-a-day (e.g. AM strength, PM conditioning). Shows on the right of this session in the athlete's week view."
+          style={styles.dateInput}
+        >
+          <option value="">No specific time</option>
+          <option value="am">AM</option>
+          <option value="pm">PM</option>
+        </select>
       </div>
 
       {session.type === "strength" && (

@@ -345,7 +345,7 @@ export async function addExercisesToSession(
 
 export async function updateSession(
   sessionId: string,
-  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes" | "warmup_notes" | "cooldown_notes" | "session_notes_video_url" | "warmup_video_url" | "cooldown_video_url" | "duration_min" | "rpe" | "sport_config">>
+  patch: Partial<Pick<Session, "name" | "date" | "type" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "is_primer" | "session_notes" | "warmup_notes" | "cooldown_notes" | "session_notes_video_url" | "warmup_video_url" | "cooldown_video_url" | "duration_min" | "rpe" | "sport_config" | "time_of_day">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("sessions").update(patch).eq("id", sessionId);
@@ -822,6 +822,7 @@ export async function copySessionToDates(
         session_notes_video_url: (source as any).session_notes_video_url ?? null,
         warmup_video_url: (source as any).warmup_video_url ?? null,
         cooldown_video_url: (source as any).cooldown_video_url ?? null,
+        time_of_day: (source as any).time_of_day ?? null,
         // Track which session this was copied from so the coach can
         // propagate exercise changes to all future occurrences later.
         source_session_id: source.source_session_id ?? source.id,

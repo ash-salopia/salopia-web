@@ -75,6 +75,12 @@ export default function SessionNotesBlock({
   if (readOnly && !value && !videoUrl) return null;
 
   const lineCount = value ? value.split("\n").length : 0;
+  // Brief one-line preview shown on the collapsed header (0109) -
+  // previously a collapsed block gave no hint at all of what it
+  // contained, just a line count. First non-blank line, trimmed short;
+  // full text is still only ever a tap away via the dropdown itself.
+  const previewSource = value.split("\n").find((l) => l.trim()) ?? "";
+  const preview = previewSource.length > 50 ? previewSource.slice(0, 50) + "…" : previewSource;
 
   // Filter templates by which block this is first, then (for the
   // general block only) by session type - "warm_up"/"cool_down" are
@@ -100,6 +106,7 @@ export default function SessionNotesBlock({
         <span style={s.headerLeft}>
           <span style={s.icon}>{icon}</span>
           <span style={s.label}>{label}</span>
+          {!isOpen && preview && <span style={s.preview}>{preview}</span>}
           {value && <span style={s.badge}>{lineCount} line{lineCount !== 1 ? "s" : ""}</span>}
           {!value && videoUrl && <span style={s.badge}>🎥 video</span>}
         </span>
@@ -180,11 +187,12 @@ export default function SessionNotesBlock({
 
 const s: Record<string, React.CSSProperties> = {
   wrap: { border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 12 },
-  header: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--ink)", border: "none", padding: "10px 14px", cursor: "pointer", color: "var(--text)" },
-  headerLeft: { display: "flex", alignItems: "center", gap: 8 },
-  icon: { fontSize: 14 },
-  label: { fontSize: 13, fontWeight: 600, color: "var(--mute)" },
-  badge: { fontSize: 10, background: "var(--accent-dim)", color: "var(--accent)", borderRadius: 4, padding: "2px 6px", fontWeight: 700 },
+  header: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--ink)", border: "none", padding: "10px 14px", cursor: "pointer", color: "var(--text)", gap: 10 },
+  headerLeft: { display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
+  icon: { fontSize: 14, flexShrink: 0 },
+  label: { fontSize: 13, fontWeight: 600, color: "var(--mute)", flexShrink: 0 },
+  preview: { fontSize: 12, color: "var(--mute)", opacity: 0.75, fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, minWidth: 0 },
+  badge: { fontSize: 10, background: "var(--accent-dim)", color: "var(--accent)", borderRadius: 4, padding: "2px 6px", fontWeight: 700, flexShrink: 0 },
   chevron: { fontSize: 22, color: "var(--mute)", transition: "transform 0.2s" },
   body: { background: "var(--panel)", padding: "10px 14px 14px", display: "flex", flexDirection: "column" as const, gap: 8 },
   templateRow: { position: "relative" as const },
