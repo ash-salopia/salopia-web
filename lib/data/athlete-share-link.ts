@@ -246,7 +246,7 @@ export async function swapAthleteExercise(
   const supabase = createServiceRoleClient();
   const { data: exercise, error: lookupError } = await supabase
     .from("session_exercises")
-    .select("id, name, sets, swapped_from, sessions!inner(id, athlete_id)")
+    .select("id, name, sets, swapped_from, sessions!inner(id, athlete_id, type)")
     .eq("id", exerciseId)
     .eq("session_id", sessionId)
     .single();
@@ -264,18 +264,39 @@ export async function swapAthleteExercise(
   const originalName = exercise.swapped_from ?? exercise.name;
   const isRevert = newName === originalName;
 
+  const patch: Record<string, unknown> = {
+    name: newName,
+    video_url: newVideoUrl,
+    swapped_from: isRevert ? null : originalName,
+    opted_out: false,
+    progress: "",
+  };
+
+  // Power/Speed exercises carry quality/tracked-metrics/prescribed-
+  // distance/contacts config the OLD exercise doesn't hand off to a
+  // genuinely different movement (0108 - swap was strength-only until
+  // now; reusing the old exercise's PS config against a new name, or
+  // resetting its log to the strength weight/reps/done shape instead of
+  // PSSetLog, would silently corrupt the swapped-to exercise).
+  if (sessionRecord?.type === "power_speed") {
+    patch.log = Array.from({ length: exercise.sets ?? 3 }, () => ({
+      done: false, set_metrics: {}, rep_metrics: [], single_value: false, rpe: "", pain: "", set_notes: "",
+    }));
+    patch.intensity_label = null;
+    patch.ps_tracked_metrics = null;
+    patch.distance = null;
+    patch.contacts = null;
+    patch.count_contacts = true;
+    patch.completion_only = false;
+  } else {
+    // Sets logged against the old exercise don't belong under the
+    // new one — reset to fresh empty sets at the same prescribed count.
+    patch.log = Array.from({ length: exercise.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" }));
+  }
+
   const { error } = await supabase
     .from("session_exercises")
-    .update({
-      name: newName,
-      video_url: newVideoUrl,
-      swapped_from: isRevert ? null : originalName,
-      opted_out: false,
-      progress: "",
-      // Sets logged against the old exercise don't belong under the
-      // new one — reset to fresh empty sets at the same prescribed count.
-      log: Array.from({ length: exercise.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
-    })
+    .update(patch)
     .eq("id", exerciseId);
   if (error) throw error;
 }

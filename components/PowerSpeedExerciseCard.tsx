@@ -14,6 +14,7 @@ import { useState, useRef } from "react";
 import type { LibraryEntry } from "@/types";
 import { saveLibraryEntry } from "@/lib/data/library";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
+import VideoModal from "@/components/VideoModal";
 import {
   PS_METRIC_META, PS_METRIC_ORDER, QUALITY_META,
   buildPSLog, emptyPSSetLog, normalizePSLog,
@@ -56,6 +57,7 @@ export default function PowerSpeedExerciseCard({
 }: Props) {
   const [showCues, setShowCues] = useState(!!exercise.notes);
   const [showLog, setShowLog] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
   const [nameQuery, setNameQuery] = useState(exercise.name);
   const [showDropdown, setShowDropdown] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -170,7 +172,9 @@ export default function PowerSpeedExerciseCard({
   function selectLibraryEntry(entry: LibraryEntry) {
     setNameQuery(entry.name);
     setShowDropdown(false);
-    const patch: Partial<PSExercise> = { name: entry.name };
+    // Was never carried over before (0108) - a P/S exercise's demo
+    // video had no way to get set at all, coach or athlete side.
+    const patch: Partial<PSExercise> = { name: entry.name, video_url: entry.video_url ?? "" };
     const q = entry.default_ps_quality;
     if (q != null && VALID_QUALITIES.includes(q as PSQuality)) patch.quality = q as PSQuality;
     const metrics = Array.isArray(entry.default_ps_metrics)
@@ -260,6 +264,12 @@ export default function PowerSpeedExerciseCard({
           )}
         </div>
 
+        {exercise.video_url && (
+          <button style={card.videoBtn} onClick={() => setVideoOpen(true)} title="Watch demo video">
+            ▶
+          </button>
+        )}
+
         {localLog.length > 0 && (
           <span style={{ ...card.badge, background: doneSets === localLog.length ? "#10B98122" : "var(--ink)", color: doneSets === localLog.length ? "#10B981" : "var(--mute)" }}>
             {doneSets}/{localLog.length}
@@ -268,6 +278,10 @@ export default function PowerSpeedExerciseCard({
 
         <button style={card.deleteBtn} onClick={onDelete}>×</button>
       </div>
+
+      {videoOpen && exercise.video_url && (
+        <VideoModal videoUrl={exercise.video_url} title={exercise.name} onClose={() => setVideoOpen(false)} />
+      )}
 
       {/* ── Metrics tracked ── */}
       {!completionOnly && (
@@ -536,10 +550,14 @@ const card: Record<string, React.CSSProperties> = {
   wrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 },
   header: { display: "flex", alignItems: "center", gap: 6 },
   dragHandle: { cursor: "grab", color: "var(--mute)", fontSize: 16, lineHeight: 1, flexShrink: 0, padding: "4px 2px", userSelect: "none" as const },
+  videoBtn: { background: "var(--accent-dim)", border: "none", color: "var(--accent)", fontSize: 14, cursor: "pointer", borderRadius: 8, width: 34, height: 34, flexShrink: 0 },
   moveBtnCol: { display: "flex", flexDirection: "column" as const, flexShrink: 0, gap: 2 },
   moveBtn: { background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "4px 8px" },
   qualityChip: { borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
-  orderInput: { width: 32, textAlign: "center" as const, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "6px 2px", fontSize: 12, fontWeight: 700, flexShrink: 0 },
+  // Same format as the strength card's order box (width/padding/radius/
+  // weight) - purple instead of neutral grey, matching this app's
+  // Power/Speed brand colour used everywhere else (#A855F7).
+  orderInput: { width: 36, textAlign: "center" as const, background: "#A855F722", border: "1px solid #A855F755", color: "#A855F7", borderRadius: 8, padding: "8px 4px", fontSize: 13, fontWeight: 700, flexShrink: 0 },
   nameInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 14, fontWeight: 700 },
   dropdown: { position: "absolute" as const, top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 10, padding: 4, maxHeight: 200, overflowY: "auto" as const, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" },
   dropdownItem: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "7px 10px", border: "none", background: "transparent", color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },

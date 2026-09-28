@@ -12,8 +12,14 @@ interface HistorySet {
 
 interface HistoryEntry {
   date: string;
-  bestSet: HistorySet | null;
-  allSets: HistorySet[];
+  kind?: "strength" | "ps";
+  bestSet?: HistorySet | null;
+  allSets?: HistorySet[];
+  // Power/Speed shape (0108) — pre-formatted server-side since a PS
+  // exercise logs per-metric values (set_metrics/rep_metrics), not the
+  // weight/reps/time shape HistorySet/formatSetChip assume.
+  peakLabel?: string;
+  setLabels?: string[];
 }
 
 interface PBRecord {
@@ -96,31 +102,56 @@ export default function AthleteExerciseHistoryModal({ token, exerciseName, onClo
               <>
                 <div style={s.sectionLabel}>Previous sessions</div>
                 <div style={s.list}>
-                  {history.map((entry, i) => (
-                    <div key={`${entry.date}-${i}`} style={s.entry}>
-                      <div style={s.entryHeader}>
-                        <div style={s.entryDate}>{formatDate(entry.date)}</div>
-                        {entry.bestSet && (
-                          <div style={s.entryPeak}>
-                            Peak: <strong>{formatSetChip(entry.bestSet)}</strong>
+                  {history.map((entry, i) => {
+                    if (entry.kind === "ps") {
+                      return (
+                        <div key={`${entry.date}-${i}`} style={s.entry}>
+                          <div style={s.entryHeader}>
+                            <div style={s.entryDate}>{formatDate(entry.date)}</div>
+                            {entry.peakLabel && (
+                              <div style={s.entryPeak}>
+                                Peak: <strong>{entry.peakLabel}</strong>
+                              </div>
+                            )}
                           </div>
+                          {(entry.setLabels ?? []).length > 0 ? (
+                            <div style={s.setsRow}>
+                              {(entry.setLabels ?? []).map((label, j) => (
+                                <div key={j} style={s.setChip}>{label}</div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={s.noSets}>No completed sets recorded</div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={`${entry.date}-${i}`} style={s.entry}>
+                        <div style={s.entryHeader}>
+                          <div style={s.entryDate}>{formatDate(entry.date)}</div>
+                          {entry.bestSet && (
+                            <div style={s.entryPeak}>
+                              Peak: <strong>{formatSetChip(entry.bestSet)}</strong>
+                            </div>
+                          )}
+                        </div>
+                        {(entry.allSets ?? []).length > 0 ? (
+                          <div style={s.setsRow}>
+                            {(entry.allSets ?? [])
+                              .filter((set) => set.done || (set.weight ?? "").trim() || (set.time ?? "").trim() || (set.reps ?? "").trim())
+                              .map((set, j) => (
+                                <div key={j} style={s.setChip}>
+                                  {formatSetChip(set)}
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <div style={s.noSets}>No completed sets recorded</div>
                         )}
                       </div>
-                      {entry.allSets.length > 0 ? (
-                        <div style={s.setsRow}>
-                          {entry.allSets
-                            .filter((set) => set.done || (set.weight ?? "").trim() || (set.time ?? "").trim() || (set.reps ?? "").trim())
-                            .map((set, j) => (
-                              <div key={j} style={s.setChip}>
-                                {formatSetChip(set)}
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <div style={s.noSets}>No completed sets recorded</div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}

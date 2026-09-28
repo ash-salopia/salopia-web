@@ -7,11 +7,14 @@
 // per-rep (Time/Distance/Height/…) — and saves the PSSetLog[] via the
 // same /api/athlete-link/log route the strength logger uses.
 
-import { useState, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { saveWithRetry } from "@/lib/save-queue";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import AthletePageHeading from "@/components/AthletePageHeading";
+import VideoModal from "@/components/VideoModal";
+import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
+import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
 import type { Session } from "@/types";
 import {
   PS_METRIC_META, resolveTrackedMetrics, normalizePSLog,
@@ -33,7 +36,23 @@ export default function PowerSpeedAthleteView({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
 
+  // Video/history/swap/skip/notes (0108) all mutate fields on the
+  // *parent's* session copy via onUpdated -> refetchSession (in
+  // AthleteSessionView) - without this sync, this component's own
+  // local `session` state (seeded once from the initial prop) would
+  // never pick those changes up. Safe against clobbering an in-progress
+  // set edit: each exercise's own log input state lives in ExerciseLog,
+  // seeded once on mount, not re-derived from this prop on every sync.
+  useEffect(() => { setSession(initialSession); }, [initialSession]);
+
   const exercises = [...(session.exercises ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  const saveExerciseNotes = async (exerciseId: string, notes: string) => {
+    const result = await saveWithRetry(`exnotes:${session.id}:${exerciseId}`, "/api/athlete-link/exercise-notes", {
+      token, sessionId: session.id, exerciseId, notes,
+    });
+    if (!result.ok && !result.queued) setError(result.error);
+  };
 
   const saveExerciseLog = async (exerciseId: string, log: PSSetLog[]) => {
     setSession((prev) => prev ? {
@@ -78,8 +97,18 @@ export default function PowerSpeedAthleteView({
         <ExerciseLog
           key={ex.id}
           ex={ex}
+          token={token}
+          sessionId={session.id}
           saving={saving === ex.id}
           onSave={(log) => saveExerciseLog(ex.id, log)}
+          onNotesChange={(notes) => {
+            setSession((prev) => prev ? {
+              ...prev,
+              exercises: prev.exercises?.map((e) => (e.id === ex.id ? { ...e, athlete_exercise_notes: notes } as any : e)),
+            } : prev);
+          }}
+          onSaveNotes={(notes) => saveExerciseNotes(ex.id, notes)}
+          onSwapOrSkipDone={onUpdated}
         />
       ))}
       {exercises.length === 0 && <div style={s.empty}>No exercises in this session.</div>}
@@ -118,7 +147,16 @@ function NoteBox({ label, text, videoUrl }: { label: string; text?: string | nul
   );
 }
 
-function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave: (log: PSSetLog[]) => void }) {
+function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSaveNotes, onSwapOrSkipDone }: {
+  ex: any;
+  token: string;
+  sessionId: string;
+  saving: boolean;
+  onSave: (log: PSSetLog[]) => void;
+  onNotesChange: (notes: string) => void;
+  onSaveNotes: (notes: string) => void;
+  onSwapOrSkipDone: () => void;
+}) {
   const tracked = resolveTrackedMetrics(ex.ps_tracked_metrics, ex.tempo, ex.intensity_label);
   const reps = parseInt(String(ex.reps ?? "")) || 4;
   const completionOnly = !!ex.completion_only;
@@ -128,6 +166,30 @@ function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave:
   // always fully expanded end to end, forcing a lot of scrolling to
   // reach later exercises (reported live).
   const [expanded, setExpanded] = useState(false);
+  // Video/history/swap/notes buttons (0108) - same feature set the
+  // strength athlete view already has (AthleteSessionView.tsx), ported
+  // here since P/S had none of them at all.
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [undoingOptOut, setUndoingOptOut] = useState(false);
+
+  const handleUndoOptOut = async () => {
+    setUndoingOptOut(true);
+    try {
+      const res = await fetch("/api/athlete-link/opt-out-exercise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, sessionId, exerciseId: ex.id, optedOut: false }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Could not update");
+      onSwapOrSkipDone();
+    } finally {
+      setUndoingOptOut(false);
+    }
+  };
 
   const setMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "set");
   const repMetrics = tracked.filter((k) => PS_METRIC_META[k].scope === "rep");
@@ -165,16 +227,63 @@ function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave:
 
   return (
     <div style={s.exCard}>
-      <button style={s.exHead} onClick={() => setExpanded((v) => !v)}>
-        <span style={s.exName}>{ex.order ? `${ex.order}. ` : ""}{ex.name}</span>
+      <div style={s.exHead}>
+        <button style={s.exHeadClick} onClick={() => setExpanded((v) => !v)}>
+          {ex.order && <span style={s.orderBadge}>{ex.order}</span>}
+          <span style={s.exName}>{ex.name}</span>
+        </button>
         <span style={s.exHeadRight}>
           <span style={s.exBadge}>{done}/{log.length}</span>
-          <span style={{ ...s.exChevron, transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+          <button style={s.exChevronBtn} onClick={() => setExpanded((v) => !v)}>
+            <span style={{ ...s.exChevron, transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+          </button>
         </span>
-      </button>
+      </div>
 
       {expanded && (
         <>
+          <div style={s.actionRow}>
+            {ex.name.trim() && (
+              <button style={s.actionBtn} onClick={() => setHistoryOpen(true)} title="View history & PB">📈</button>
+            )}
+            {!ex.opted_out && (
+              <button style={s.actionBtn} onClick={() => setSwapOpen(true)} title="Swap or skip this exercise">🔀</button>
+            )}
+            <button
+              style={{ ...s.actionBtn, ...(ex.athlete_exercise_notes ? s.actionBtnActive : {}) }}
+              onClick={() => setNotesOpen((v) => !v)}
+              title="Note on this exercise"
+            >
+              📝
+            </button>
+            {ex.video_url && (
+              <button style={s.watchBtn} onClick={() => setVideoOpen(true)}>▶ Watch</button>
+            )}
+          </div>
+
+          {ex.swapped_from && (
+            <div style={s.swappedNote}>🔀 Swapped from &quot;{ex.swapped_from}&quot;</div>
+          )}
+
+          {notesOpen && (
+            <textarea
+              value={ex.athlete_exercise_notes ?? ""}
+              onChange={(e) => onNotesChange(e.target.value)}
+              onBlur={() => onSaveNotes(ex.athlete_exercise_notes ?? "")}
+              placeholder="Anything to note about this exercise - how it felt, form cues, niggles…"
+              style={s.notesTextarea}
+            />
+          )}
+
+          {ex.opted_out ? (
+            <div style={s.optedOutRow}>
+              <span style={s.optedOutLabel}>⏭ Skipped for this session</span>
+              <button style={s.undoSkipBtn} onClick={handleUndoOptOut} disabled={undoingOptOut}>
+                {undoingOptOut ? "…" : "↩ Undo"}
+              </button>
+            </div>
+          ) : (
+          <>
           <div style={s.exPresc}>
             {ex.sets}×{reps}
             {ex.distance ? ` · ${ex.distance}` : ""}
@@ -238,7 +347,28 @@ function ExerciseLog({ ex, saving, onSave }: { ex: any; saving: boolean; onSave:
               </div>
             );
           })}
+          </>
+          )}
         </>
+      )}
+
+      {videoOpen && ex.video_url && (
+        <VideoModal videoUrl={ex.video_url} title={ex.name} onClose={() => setVideoOpen(false)} />
+      )}
+      {historyOpen && ex.name.trim() && (
+        <AthleteExerciseHistoryModal token={token} exerciseName={ex.name} onClose={() => setHistoryOpen(false)} />
+      )}
+      {swapOpen && (
+        <AthleteSwapExerciseModal
+          token={token}
+          sessionId={sessionId}
+          exerciseId={ex.id}
+          currentName={ex.name}
+          alternativeNames={ex.alternative_names ?? []}
+          swappedFrom={ex.swapped_from}
+          onDone={() => { setSwapOpen(false); onSwapOrSkipDone(); }}
+          onClose={() => setSwapOpen(false)}
+        />
       )}
     </div>
   );
@@ -255,13 +385,30 @@ const s: Record<string, React.CSSProperties> = {
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "16px 0" },
   savingNote: { fontSize: 11, color: "var(--mute)" },
   exCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 12, display: "flex", flexDirection: "column" as const, gap: 8 },
-  exHead: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" as const },
+  exHead: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" },
+  exHeadClick: { display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" as const },
+  // Same format as the strength athlete view's order badge - purple
+  // instead of the generic accent colour, matching this app's
+  // Power/Speed brand colour used everywhere else (#A855F7) (0108).
+  orderBadge: { fontSize: 12, fontWeight: 800, color: "#A855F7", background: "#A855F722", borderRadius: 6, padding: "2px 7px", flexShrink: 0, fontFamily: "'Barlow Condensed', sans-serif" },
   exName: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
-  exHeadRight: { display: "flex", alignItems: "center", gap: 8 },
+  exHeadRight: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
   exBadge: { fontSize: 11, fontWeight: 700, color: "var(--mute)", background: "var(--ink)", borderRadius: 6, padding: "2px 7px" },
+  exChevronBtn: { background: "transparent", border: "none", padding: 0, cursor: "pointer" },
   exChevron: { fontSize: 22, color: "var(--mute)", transition: "transform 0.2s" },
   exPresc: { fontSize: 12, color: "var(--mute)" },
   exCues: { fontSize: 12, color: "var(--mute)", fontStyle: "italic" as const, lineHeight: 1.5 },
+  // Video/history/swap/notes action row (0108) - same button set the
+  // strength athlete view already has.
+  actionRow: { display: "flex", gap: 6 },
+  actionBtn: { width: 34, height: 34, borderRadius: 8, border: "1px solid var(--line)", background: "var(--ink)", color: "var(--mute)", cursor: "pointer", fontSize: 14 },
+  actionBtnActive: { background: "var(--accent-dim)", borderColor: "var(--accent)44", color: "var(--accent)" },
+  watchBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)44", color: "var(--accent)", borderRadius: 8, padding: "0 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+  swappedNote: { fontSize: 11, color: "var(--accent)", fontWeight: 600 },
+  notesTextarea: { width: "100%", boxSizing: "border-box" as const, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 14, lineHeight: 1.5, resize: "vertical" as const, minHeight: 60 },
+  optedOutRow: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--ink)", borderRadius: 8, padding: "10px 12px" },
+  optedOutLabel: { fontSize: 13, fontWeight: 600, color: "var(--mute)" },
+  undoSkipBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--accent)", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   set: { background: "var(--ink)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column" as const, gap: 8 },
   setDone: { boxShadow: "inset 0 0 0 1px #10B98144" },
   setTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },

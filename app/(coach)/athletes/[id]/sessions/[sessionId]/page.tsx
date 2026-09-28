@@ -166,6 +166,7 @@ export default function SessionDetailPage() {
       count_contacts: ex.count_contacts ?? true,
       surface: ex.target_load ?? "",
       notes: ex.notes ?? "",
+      video_url: ex.video_url ?? "",
       log: normalizePSLog(ex.log, reps, tracked_metrics),
       sort_order: ex.sort_order ?? 0,
     };
@@ -299,6 +300,7 @@ export default function SessionDetailPage() {
         completion_only: updated.completion_only,
         target_load: updated.surface,
         notes: updated.notes,
+        video_url: updated.video_url,
         log: updated.log as any,
       } as any : ex),
     } : prev);
@@ -318,6 +320,7 @@ export default function SessionDetailPage() {
         target_load: updated.surface,         // surface stored in target_load
         contacts: updated.contacts ?? null,
         count_contacts: updated.count_contacts,
+        video_url: updated.video_url,
       } as any);
     } catch (e) {
       console.error("PS exercise update failed:", e);

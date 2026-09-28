@@ -113,6 +113,7 @@ export interface PSExercise {
   count_contacts: boolean;
   surface: string;
   notes: string;
+  video_url: string; // 0108 — demo/technique clip, same field strength exercises already use
   log: PSSetLog[];
   sort_order: number;
 }
