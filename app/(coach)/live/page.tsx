@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { listLiveGroupAthletes } from "@/lib/data/athletes";
-import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise, updateSession } from "@/lib/data/sessions";
+import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise, updateSession, addExercisesToSession } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import { listLibrary } from "@/lib/data/library";
@@ -119,7 +119,9 @@ export default function LiveGroupPage() {
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [challengesEnabled, setChallengesEnabled] = useState(true);
   const [challengePanelOpen, setChallengePanelOpen] = useState(false);
-  const [editModal, setEditModal] = useState<{ sessionId: string; exercise: SessionExercise } | null>(null);
+  // exercise: null means "creating a new one" rather than editing an
+  // existing exercise - openAddExercise below.
+  const [editModal, setEditModal] = useState<{ sessionId: string; exercise: SessionExercise | null } | null>(null);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [editNameDropdownOpen, setEditNameDropdownOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<{ name: string; sets: string; mode: "reps" | "time"; reps: string; time: string; rest: string; target_load: string }>({
@@ -460,6 +462,15 @@ export default function LiveGroupPage() {
     setEditNameDropdownOpen(false);
   };
 
+  // Live Group could only edit an existing exercise, never add one
+  // (reported live) - same small quick-edit popup, just seeded blank
+  // and saved via addExercisesToSession instead of updateExercise.
+  const openAddExercise = (sessionId: string) => {
+    setEditDraft({ name: "", sets: "3", mode: "reps", reps: "", time: "", rest: "", target_load: "" });
+    setEditModal({ sessionId, exercise: null });
+    setEditNameDropdownOpen(false);
+  };
+
   const closeEditExercise = () => { setEditModal(null); setEditNameDropdownOpen(false); };
 
   // Picking a library match copies its preset fields onto the draft -
@@ -487,24 +498,42 @@ export default function LiveGroupPage() {
     if (!editModal) return;
     setSavingEdit(true);
     setError("");
-    const patch: Partial<SessionExercise> = {
-      name: editDraft.name.trim(),
-      sets: parseInt(editDraft.sets, 10) || editModal.exercise.sets,
-      rest: editDraft.rest,
-      target_load: editDraft.target_load,
-      reps: editDraft.mode === "reps" ? editDraft.reps : "",
-      time: editDraft.mode === "time" ? editDraft.time : "",
-    };
     try {
-      await updateExercise(editModal.exercise.id, patch);
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id !== editModal.sessionId ? s : {
-            ...s,
-            exercises: s.exercises?.map((e) => e.id === editModal.exercise.id ? { ...e, ...patch } : e),
-          }
-        )
-      );
+      if (!editModal.exercise) {
+        // Create mode - append a new exercise to this session.
+        const created = await addExercisesToSession(editModal.sessionId, [{
+          name: editDraft.name.trim(),
+          sets: parseInt(editDraft.sets, 10) || 3,
+          rest: editDraft.rest,
+          target_load: editDraft.target_load,
+          reps: editDraft.mode === "reps" ? editDraft.reps : "",
+          time: editDraft.mode === "time" ? editDraft.time : "",
+        }]);
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id !== editModal.sessionId ? s : { ...s, exercises: [...(s.exercises ?? []), ...created] }
+          )
+        );
+      } else {
+        const patch: Partial<SessionExercise> = {
+          name: editDraft.name.trim(),
+          sets: parseInt(editDraft.sets, 10) || editModal.exercise.sets,
+          rest: editDraft.rest,
+          target_load: editDraft.target_load,
+          reps: editDraft.mode === "reps" ? editDraft.reps : "",
+          time: editDraft.mode === "time" ? editDraft.time : "",
+        };
+        const exerciseId = editModal.exercise.id;
+        await updateExercise(exerciseId, patch);
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id !== editModal.sessionId ? s : {
+              ...s,
+              exercises: s.exercises?.map((e) => e.id === exerciseId ? { ...e, ...patch } : e),
+            }
+          )
+        );
+      }
       closeEditExercise();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save changes");
@@ -1001,6 +1030,9 @@ export default function LiveGroupPage() {
                       </div>
                     );
                   })}
+                  <button style={s.addExBtn} onClick={() => openAddExercise(activeSess.id)}>
+                    + Add exercise
+                  </button>
                 </div>
               )}
 
@@ -1231,7 +1263,7 @@ export default function LiveGroupPage() {
       {editModal && (
         <div style={s.noteOverlay} onClick={closeEditExercise}>
           <div style={s.notePanel} onClick={(e) => e.stopPropagation()}>
-            <div style={s.noteTitle}>Edit exercise</div>
+            <div style={s.noteTitle}>{editModal.exercise ? "Edit exercise" : "Add exercise"}</div>
             <div style={s.editFieldLabel}>Name</div>
             <div style={s.editNameWrap}>
               <input
@@ -1319,7 +1351,7 @@ export default function LiveGroupPage() {
                 disabled={!editDraft.name.trim() || savingEdit}
                 onClick={saveEditExercise}
               >
-                {savingEdit ? "Saving…" : "Save"}
+                {savingEdit ? "Saving…" : editModal.exercise ? "Save" : "Add"}
               </button>
             </div>
           </div>
@@ -1359,6 +1391,7 @@ const s: Record<string, React.CSSProperties> = {
   typeBadge:    { fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6, alignSelf: "flex-start" as const },
   exList:       { display: "flex", flexDirection: "column" as const, gap: 6 },
   noEx:         { fontSize: 13, color: "var(--mute)", padding: "8px 0" },
+  addExBtn:     { marginTop: 4, width: "100%", background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "10px 0", fontSize: 13, cursor: "pointer" },
   exBlock:      { background: "var(--ink)", borderRadius: 10, overflow: "hidden" },
   exRow:        { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", cursor: "pointer" },
   exOrder:      { fontSize: 12, fontWeight: 800, color: "var(--accent)", minWidth: 24, flexShrink: 0 },
