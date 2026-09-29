@@ -76,6 +76,13 @@ function lsSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch
 function lsGetObj(k: string): Record<string, string> { try { return JSON.parse(localStorage.getItem(k) ?? "{}"); } catch { return {}; } }
 function lsSetObj(k: string, v: Record<string, string>) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
+// Case/whitespace-insensitive - group is free text with no central
+// management, so exact-match comparisons previously missed athletes
+// whose group only differed by casing or a stray space (0110).
+function sameGroup(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+}
+
 const LS_MODE  = "liveGroup_mode";
 const LS_GROUP = "liveGroup_group";
 const LS_TAB   = "liveGroup_tab";
@@ -138,8 +145,19 @@ export default function LiveGroupPage() {
       const all: Athlete[] = allData ?? [];
       setAll(all);
 
+      // Case/whitespace-collapsed, keeping whichever spelling was seen
+      // first - group is free text with no central management, so two
+      // athletes meant to be in the same group but typed as "U16 Boys"
+      // vs "u16 boys " previously showed as two different groups here,
+      // and neither's roster looked complete (reported live as "groups
+      // not working in live group") (0110). sameGroup below applies the
+      // same normalisation to every other group comparison in this file.
       const uniqueGroups = Array.from(
-        new Set(all.map((a) => a.group).filter(Boolean) as string[])
+        all.reduce((m, a) => {
+          const g = (a.group || "").trim();
+          if (g && !m.has(g.toLowerCase())) m.set(g.toLowerCase(), g);
+          return m;
+        }, new Map<string, string>()).values()
       ).sort();
       setGroups(uniqueGroups);
 
@@ -159,7 +177,7 @@ export default function LiveGroupPage() {
 
       const shown = savedMode === "starred"
         ? all.filter((a) => a.in_live_group)
-        : all.filter((a) => a.group === savedGroup);
+        : all.filter((a) => sameGroup(a.group, savedGroup));
       setActiveTab(shown.some((a) => a.id === savedTab) ? savedTab : shown[0]?.id ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load live group");
@@ -182,7 +200,7 @@ export default function LiveGroupPage() {
     if (!selGroup && g) { setSelGroup(g); lsSet(LS_GROUP, g); }
     const shown = m === "starred"
       ? allAthletes.filter((a) => a.in_live_group)
-      : allAthletes.filter((a) => a.group === g);
+      : allAthletes.filter((a) => sameGroup(a.group, g));
     const first = shown[0]?.id ?? "";
     setActiveTab(first); lsSet(LS_TAB, first);
     setExpandedEx(null);
@@ -190,7 +208,7 @@ export default function LiveGroupPage() {
 
   const changeGroup = (g: string) => {
     setSelGroup(g); lsSet(LS_GROUP, g);
-    const shown = allAthletes.filter((a) => a.group === g);
+    const shown = allAthletes.filter((a) => sameGroup(a.group, g));
     const first = shown[0]?.id ?? "";
     setActiveTab(first); lsSet(LS_TAB, first);
     setExpandedEx(null);
@@ -207,7 +225,7 @@ export default function LiveGroupPage() {
 
   const shownAthletes = mode === "starred"
     ? allAthletes.filter((a) => a.in_live_group)
-    : allAthletes.filter((a) => a.group === (selGroup || groups[0] || ""));
+    : allAthletes.filter((a) => sameGroup(a.group, selGroup || groups[0] || ""));
 
   const athleteSessions = (athleteId: string): Session[] => {
     const today  = todayISO();

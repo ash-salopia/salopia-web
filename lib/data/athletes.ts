@@ -44,6 +44,32 @@ export async function listAthletes(): Promise<Athlete[]> {
   return data ?? [];
 }
 
+// Distinct group names in use, for a datalist suggestion when
+// creating/renaming an athlete's group - group is free text with no
+// central management, so without this a coach typing "U16 Boys" on one
+// athlete and "u16 boys" on another silently splinters what should be
+// one group into two that don't group together anywhere that filters
+// by exact group match (Live Group, GroupTestReports, etc.) (0110).
+// Case/whitespace variants collapse to whichever spelling was seen
+// first, alphabetised.
+export async function listGroups(): Promise<string[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("athletes")
+    .select("group")
+    .eq("archived", false)
+    .not("group", "is", null);
+  if (error) throw error;
+  const seen = new Map<string, string>();
+  for (const row of data ?? []) {
+    const g = ((row as any).group ?? "").trim();
+    if (!g) continue;
+    const key = g.toLowerCase();
+    if (!seen.has(key)) seen.set(key, g);
+  }
+  return Array.from(seen.values()).sort();
+}
+
 export async function listArchivedAthletes(): Promise<Athlete[]> {
   const supabase = createClient();
   const { data, error } = await supabase

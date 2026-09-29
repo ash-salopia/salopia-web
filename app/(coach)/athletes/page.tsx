@@ -182,6 +182,17 @@ export default function AthletesPage() {
   const activeList = athletes;
   const visibleList = showArchived ? archivedAthletes : activeList;
 
+  // Distinct group names already in use, case/whitespace-collapsed to
+  // whichever spelling was seen first - the "Add athlete" group field's
+  // datalist suggestion (0110).
+  const existingGroups = Array.from(
+    activeList.reduce((m, a) => {
+      const g = (a.group || "").trim();
+      if (g && !m.has(g.toLowerCase())) m.set(g.toLowerCase(), g);
+      return m;
+    }, new Map<string, string>()).values()
+  ).sort();
+
   const filtered = query.trim()
     ? visibleList.filter(
         (a) =>
@@ -268,8 +279,16 @@ export default function AthletesPage() {
             placeholder="Group (e.g. U15 Squad) - optional"
             value={newGroup}
             onChange={(e) => setNewGroup(e.target.value)}
+            list="existing-groups"
             style={styles.input}
           />
+          {/* Suggests groups already in use, so picking an existing one
+              here doesn't silently create a near-duplicate ("U16 Boys"
+              vs "u16 boys ") that then doesn't group with the others
+              anywhere group filters by exact match (0110). */}
+          <datalist id="existing-groups">
+            {existingGroups.map((g) => <option key={g} value={g} />)}
+          </datalist>
           <input
             type="number"
             step="0.1"

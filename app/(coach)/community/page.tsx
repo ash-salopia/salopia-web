@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  listGroups, createGroup, deleteGroup, listGroupMembers,
+  listGroups, createGroup, updateGroup, deleteGroup, listGroupMembers,
   addGroupMember, removeGroupMember, type Group, type GroupMember,
 } from "@/lib/data/groups";
 import {
@@ -203,6 +203,15 @@ function GroupsTab({ groups, onGroupsChange }: {
   const [newColour, setNewColour] = useState(GROUP_COLOURS[0]);
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Rename/re-describe/re-colour an existing group - createGroup/
+  // deleteGroup already existed here but there was no way to edit a
+  // group's name afterwards at all (reported live), despite updateGroup
+  // already existing in the data layer, just never wired to any UI.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editColour, setEditColour] = useState(GROUP_COLOURS[0]);
+  const [editSaving, setEditSaving] = useState(false);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [allAthletes, setAllAthletes] = useState<{ id: string; name: string }[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -219,6 +228,28 @@ function GroupsTab({ groups, onGroupsChange }: {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create group");
     } finally { setSaving(false); }
+  };
+
+  const startEdit = (group: Group) => {
+    setEditingId(group.id);
+    setEditName(group.name);
+    setEditDesc(group.description ?? "");
+    setEditColour(group.colour || GROUP_COLOURS[0]);
+    setExpandedId(null);
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editName.trim()) return;
+    setEditSaving(true);
+    try {
+      const updated = await updateGroup(id, { name: editName.trim(), description: editDesc, colour: editColour });
+      onGroupsChange(groups.map((g) => (g.id === id ? { ...g, ...updated } : g)));
+      setEditingId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save changes");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -340,6 +371,28 @@ function GroupsTab({ groups, onGroupsChange }: {
 
       {groups.map((group) => (
         <div key={group.id} style={s.groupCard}>
+          {editingId === group.id ? (
+            <div style={s.createCard}>
+              <div style={s.fieldLabel}>Group name</div>
+              <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} style={s.input} />
+              <div style={s.fieldLabel}>Description (optional)</div>
+              <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} style={s.input} />
+              <div style={s.fieldLabel}>Colour</div>
+              <div style={s.colourRow}>
+                {GROUP_COLOURS.map((c) => (
+                  <button key={c} style={{ ...s.colourDot, background: c, boxShadow: editColour === c ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : "none" }}
+                    onClick={() => setEditColour(c)} />
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <button style={s.ghostBtn} onClick={() => setEditingId(null)}>Cancel</button>
+                <button style={{ ...s.primaryBtn, opacity: !editName.trim() || editSaving ? 0.5 : 1 }}
+                  disabled={!editName.trim() || editSaving} onClick={() => handleSaveEdit(group.id)}>
+                  {editSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
           <div style={s.groupCardHead}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ ...s.groupDot, background: group.colour }} />
@@ -352,14 +405,16 @@ function GroupsTab({ groups, onGroupsChange }: {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={s.memberCount}>{group.member_count ?? 0} members</span>
+              <button style={s.ghostBtn} onClick={() => startEdit(group)}>Edit</button>
               <button style={s.ghostBtn} onClick={() => handleExpand(group.id)}>
                 {expandedId === group.id ? "Close ▲" : "Manage ▼"}
               </button>
               <button style={s.deleteBtn} onClick={() => handleDelete(group.id)}>Delete</button>
             </div>
           </div>
+          )}
 
-          {expandedId === group.id && (
+          {expandedId === group.id && editingId !== group.id && (
             <div style={s.groupExpand}>
               {membersLoading ? (
                 <div style={s.loadingMsg}>Loading members…</div>

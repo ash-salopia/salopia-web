@@ -20,7 +20,7 @@ import { listTemplates, loadTemplateForAthlete } from "@/lib/data/templates";
 import { generateReport, type ReportData } from "@/lib/data/reports";
 import { listGroupMembers } from "@/lib/data/groups";
 import { computeSquadComparison, type SquadComparisonContext } from "@/lib/squad-comparison";
-import { archiveAthlete, toggleLiveGroup } from "@/lib/data/athletes";
+import { archiveAthlete, toggleLiveGroup, listGroups as listAthleteGroupTags } from "@/lib/data/athletes";
 import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
 import ReportModal from "@/components/ReportModal";
 import VoiceSessionModal from "@/components/VoiceSessionModal";
@@ -101,6 +101,69 @@ function EditableName({ name, onSave }: { name: string; onSave: (n: string) => P
   );
 }
 
+// There was no way to change an athlete's group after creation at all
+// (reported live as "can't edit group names") - group could only ever
+// be set once, at "Add athlete" time. Suggests existing group tags via
+// a datalist so a rename doesn't introduce a near-duplicate spelling
+// that then doesn't group with the others anywhere group filters by
+// exact match (Live Group's group tab, GroupTestReports, etc.) (0110).
+function EditableGroup({ group, existing, onSave }: { group: string; existing: string[]; onSave: (g: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(group);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const trimmed = value.trim();
+    if (trimmed === group) { setEditing(false); return; }
+    setSaving(true);
+    try { await onSave(trimmed); setEditing(false); }
+    catch {}
+    finally { setSaving(false); }
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
+          placeholder="e.g. U15 Squad"
+          list="athlete-group-tags"
+          autoFocus
+          style={{ fontSize: 13, background: "var(--ink)", border: "1px solid var(--accent)", borderRadius: 6, color: "var(--text)", padding: "3px 8px" }}
+        />
+        <datalist id="athlete-group-tags">
+          {existing.map((g) => <option key={g} value={g} />)}
+        </datalist>
+        <button onClick={handleSave} disabled={saving} style={{ background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          {saving ? "…" : "Save"}
+        </button>
+        <button onClick={() => setEditing(false)} style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+      {group ? (
+        <div style={{ fontSize: 13, color: "var(--mute)" }}>{group}</div>
+      ) : (
+        <button onClick={() => setEditing(true)} style={{ background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}>
+          + Add group
+        </button>
+      )}
+      {group && (
+        <button onClick={() => setEditing(true)} style={{ background: "transparent", border: "none", color: "var(--mute)", cursor: "pointer", fontSize: 12, padding: "0 4px" }} title="Edit group">
+          ✎
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function AthleteDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -118,6 +181,10 @@ export default function AthleteDetailPage() {
   const [hyroxEnabled, setHyroxEnabled] = useState(true);
   const [loadMonitoringEnabled, setLoadMonitoringEnabled] = useState(false);
   const [squadComparisonEnabled, setSquadComparisonEnabled] = useState(true);
+  // Existing group tags (the free-text athlete.group field), suggested
+  // when editing this athlete's own group so a rename doesn't introduce
+  // a near-duplicate spelling (0110).
+  const [existingGroupTags, setExistingGroupTags] = useState<string[]>([]);
   const [copyModal, setCopyModal] = useState<{ sessionId: string; sessionName: string; sessionDate: string } | null>(null);
   // Last-used copy-to-range dates, shared across CopySessionModal opens
   // for different sessions within this programme-editing visit - a
@@ -216,6 +283,8 @@ export default function AthleteDetailPage() {
 
       const templateData = await listTemplates();
       setTemplates(templateData);
+
+      listAthleteGroupTags().then(setExistingGroupTags).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load athlete");
     } finally {
@@ -629,7 +698,14 @@ export default function AthleteDetailPage() {
                 setAthlete((prev) => prev ? { ...prev, name } : prev);
               }}
             />
-            {athlete.group && <div style={styles.groupLabel}>{athlete.group}</div>}
+            <EditableGroup
+              group={athlete.group ?? ""}
+              existing={existingGroupTags}
+              onSave={async (group) => {
+                await updateAthlete(athleteId, { group });
+                setAthlete((prev) => (prev ? { ...prev, group } : prev));
+              }}
+            />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", position: "relative" }}>
