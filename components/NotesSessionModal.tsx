@@ -267,6 +267,19 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       const created: Session[] = [];
       for (let i = 0; i < sessions.length; i++) {
         const s = sessions[i];
+        // TEMPORARY diagnostic (0113) - warmup/cooldown/session notes are
+        // showing correctly in review but arriving null in the saved
+        // session, and this couldn't be reproduced from code review
+        // alone. Surfaces exactly what's about to be sent so we can see
+        // the real runtime values on the next test. Remove once resolved.
+        if (i === 0) {
+          // eslint-disable-next-line no-alert
+          alert("DEBUG - about to save session " + (i + 1) + ":\n" + JSON.stringify({
+            sessionNotes: s.sessionNotes,
+            warmupNotes: s.warmupNotes,
+            cooldownNotes: s.cooldownNotes,
+          }, null, 2));
+        }
         // The coach's own "Programme start date" input is the source of
         // truth here — never the AI's raw detected date (a specific date
         // written on the source PDF/notes, possibly months old). That raw
