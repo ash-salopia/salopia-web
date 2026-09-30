@@ -15,6 +15,7 @@
 import { useState, useRef } from "react";
 import { saveLibraryEntry } from "@/lib/data/library";
 import { normalizeExerciseName } from "@/lib/exercise-name-match";
+import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { LibraryEntry } from "@/types";
 
 // ── Exported types - used by both modals ──────────────────────────────────────
@@ -388,19 +389,22 @@ export default function SessionReviewEditor({
 
           {/* Warm-up — only shown when the parse actually populated it
               (undefined for VoiceSessionModal sessions, which never set
-              this field at all). Lands in session_notes on save, which
-              already renders at the top of a session. */}
+              this field at all). Lands in warmup_notes on save (0105).
+              Uses the real SessionNotesBlock (not a plain textarea) so
+              "Load template" is available here too - this screen
+              previously had no way to load a note template at all,
+              only the post-creation session detail page did (reported
+              live: "still not loading the notes into the session"). */}
           {session.warmupNotes !== undefined && (
-            <div style={s.notesBlock}>
-              <div style={s.notesLabel}>🔥 Warm-up (top of session)</div>
-              <textarea
-                value={session.warmupNotes}
-                onChange={(e) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, warmupNotes: e.target.value } : sess))}
-                placeholder="e.g. 5 min bike, band pull-aparts x15, bodyweight squats x10"
-                style={s.notesTextarea}
-                rows={2}
-              />
-            </div>
+            <SessionNotesBlock
+              value={session.warmupNotes}
+              onChange={(v) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, warmupNotes: v } : sess))}
+              label="Warm-up (top of session)"
+              icon="🔥"
+              placeholder="e.g. 5 min bike, band pull-aparts x15, bodyweight squats x10"
+              sessionType={session.type}
+              noteKind="warmup"
+            />
           )}
 
           {session.exercises.length === 0 && (
@@ -747,16 +751,15 @@ export default function SessionReviewEditor({
           })}
 
           {session.cooldownNotes !== undefined && (
-            <div style={s.notesBlock}>
-              <div style={s.notesLabel}>🧊 Cool-down (bottom of session)</div>
-              <textarea
-                value={session.cooldownNotes}
-                onChange={(e) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, cooldownNotes: e.target.value } : sess))}
-                placeholder="e.g. 5 min easy row, hamstring + hip flexor stretch"
-                style={s.notesTextarea}
-                rows={2}
-              />
-            </div>
+            <SessionNotesBlock
+              value={session.cooldownNotes}
+              onChange={(v) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, cooldownNotes: v } : sess))}
+              label="Cool-down (bottom of session)"
+              icon="🧊"
+              placeholder="e.g. 5 min easy row, hamstring + hip flexor stretch"
+              sessionType={session.type}
+              noteKind="cooldown"
+            />
           )}
         </div>
         );
@@ -888,28 +891,6 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--mute)",
     fontStyle: "italic",
     padding: "8px 0",
-  },
-  notesBlock: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 4,
-    marginBottom: 8,
-  },
-  notesLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--mute)",
-  },
-  notesTextarea: {
-    width: "100%",
-    background: "var(--ink)",
-    border: "1px solid var(--line)",
-    color: "var(--text)",
-    borderRadius: 8,
-    padding: "8px 10px",
-    fontSize: 12,
-    fontFamily: "inherit",
-    resize: "vertical" as const,
   },
   exCard: {
     background: "var(--ink)",
