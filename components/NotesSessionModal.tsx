@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { createSession } from "@/lib/data/sessions";
+import { createSession, getSession, updateSession } from "@/lib/data/sessions";
 import { listLibrary } from "@/lib/data/library";
 import { todayISO, addDaysISO } from "@/lib/date-utils";
 import SessionReviewEditor, {
@@ -255,10 +255,37 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
     );
 
     try {
-      // "add" mode: add exercises to existing session
+      // "add" mode: add exercises to an existing session. This is the
+      // real root cause of "notes show in review but never save" - this
+      // branch only ever called addExercisesToSession, which touches
+      // session_exercises alone and never the session's own
+      // session_notes/warmup_notes/cooldown_notes columns at all, so any
+      // notes the parse detected were silently discarded regardless of
+      // what the review screen showed. "create" mode's own save path
+      // (below) was correct the whole time - it was never being reached.
+      // Only fills in a note field the target session doesn't already
+      // have its own content in (never overwrites something the coach
+      // already wrote), same convention as propagateFutureOccurrences.
+      // Multiple parsed sessions already collapse into one exercise list
+      // here (allExInputs flattens across all of them) - notes do the
+      // same, taking the first parsed session's as representative.
       if (mode === "add" && sessionId && onAdded) {
         const { addExercisesToSession } = await import("@/lib/data/sessions");
         const newExercises = await addExercisesToSession(sessionId, allExInputs);
+        const first = sessions[0];
+        if (first?.sessionNotes || first?.warmupNotes || first?.cooldownNotes) {
+          try {
+            const target = await getSession(sessionId);
+            const patch: Record<string, string> = {};
+            if (first.sessionNotes && !target?.session_notes?.trim()) patch.session_notes = first.sessionNotes;
+            if (first.warmupNotes && !target?.warmup_notes?.trim()) patch.warmup_notes = first.warmupNotes;
+            if (first.cooldownNotes && !target?.cooldown_notes?.trim()) patch.cooldown_notes = first.cooldownNotes;
+            if (Object.keys(patch).length) await updateSession(sessionId, patch as any);
+          } catch {
+            // Exercises already saved successfully - a failure applying
+            // notes on top shouldn't surface as "could not save sessions".
+          }
+        }
         onAdded(newExercises);
         return;
       }
@@ -267,19 +294,6 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       const created: Session[] = [];
       for (let i = 0; i < sessions.length; i++) {
         const s = sessions[i];
-        // TEMPORARY diagnostic (0113) - warmup/cooldown/session notes are
-        // showing correctly in review but arriving null in the saved
-        // session, and this couldn't be reproduced from code review
-        // alone. Surfaces exactly what's about to be sent so we can see
-        // the real runtime values on the next test. Remove once resolved.
-        if (i === 0) {
-          // eslint-disable-next-line no-alert
-          alert("DEBUG - about to save session " + (i + 1) + ":\n" + JSON.stringify({
-            sessionNotes: s.sessionNotes,
-            warmupNotes: s.warmupNotes,
-            cooldownNotes: s.cooldownNotes,
-          }, null, 2));
-        }
         // The coach's own "Programme start date" input is the source of
         // truth here — never the AI's raw detected date (a specific date
         // written on the source PDF/notes, possibly months old). That raw
