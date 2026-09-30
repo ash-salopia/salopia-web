@@ -14,6 +14,7 @@ import HyroxCardioLog, { HYROX_LABEL, CARDIO_LABEL } from "@/components/HyroxCar
 import { HyroxTimer } from "@/components/HyroxCardioBuilder";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import { useSessionCheckIn, lockedContentStyle } from "@/lib/use-session-checkin";
 import type { Session } from "@/types";
 import type { ComputedZone } from "@/lib/training-zones";
 
@@ -24,6 +25,10 @@ export default function HyroxCardioAthleteView({
   zonesEnabled = true,
   onUpdated,
   onBack,
+  lockUntilCheckin,
+  checkedInToday,
+  wellnessCheckIn,
+  painCheckIn,
 }: {
   session: Session;
   token: string;
@@ -31,10 +36,19 @@ export default function HyroxCardioAthleteView({
   zonesEnabled?: boolean;
   onUpdated: () => void;
   onBack: () => void;
+  // Check-in was never wired up here at all - reported live, same gap
+  // as Power/Speed (0111).
+  lockUntilCheckin?: boolean;
+  checkedInToday?: boolean;
+  wellnessCheckIn?: boolean;
+  painCheckIn?: boolean;
 }) {
   const [session, setSession] = useState(initialSession);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { locked, checkInButton, checkInModal, lockOverlay } = useSessionCheckIn({
+    session, token, lockUntilCheckin, checkedInToday, wellnessCheckIn, painCheckIn,
+  });
 
   const isHyrox = session.type === "hyrox";
   const subType = isHyrox ? (session.hyrox_type ?? "") : ((session as any).cardio_type ?? "");
@@ -90,15 +104,23 @@ export default function HyroxCardioAthleteView({
     <div style={styles.page}>
       <button style={styles.backLink} onClick={onBack}>← Back to sessions</button>
       <div style={styles.header}>
-        <div style={styles.title}>{session.name}</div>
-        <div style={styles.typeTag}>{isHyrox ? (HYROX_LABEL[subType] ?? "Hybrid") : (CARDIO_LABEL[subType] ?? "Cardio")}</div>
+        <div>
+          <div style={styles.title}>{session.name}</div>
+          <div style={styles.typeTag}>{isHyrox ? (HYROX_LABEL[subType] ?? "Hybrid") : (CARDIO_LABEL[subType] ?? "Cardio")}</div>
+        </div>
+        {checkInButton}
       </div>
       {error && <div style={styles.errorBox}>{error}</div>}
       {saving && <div style={styles.savingNote}>Saving…</div>}
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly videoUrl={(session as any).session_notes_video_url ?? ""} />
       <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" icon="🔥" videoUrl={(session as any).warmup_video_url ?? ""} />
-      {subType && <HyroxTimer session={session} color={color} />}
-      <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} zonesEnabled={zonesEnabled} />
+      <div style={{ position: "relative" as const }}>
+        <div style={locked ? lockedContentStyle : undefined}>
+          {subType && <HyroxTimer session={session} color={color} />}
+          <HyroxCardioLog session={session} onPatch={patchConfig} zones={zones} zonesEnabled={zonesEnabled} />
+        </div>
+        {lockOverlay}
+      </div>
       <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" videoUrl={(session as any).cooldown_video_url ?? ""} />
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
@@ -110,6 +132,7 @@ export default function HyroxCardioAthleteView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
+      {checkInModal}
     </div>
   );
 }

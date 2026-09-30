@@ -427,6 +427,10 @@ export default function AthleteSessionView({
         token={token}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}
+        lockUntilCheckin={lockUntilCheckin}
+        checkedInToday={checkedInToday}
+        wellnessCheckIn={wellnessCheckIn}
+        painCheckIn={painCheckIn}
       />
     );
   }
@@ -440,6 +444,10 @@ export default function AthleteSessionView({
         token={token}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}
+        lockUntilCheckin={lockUntilCheckin}
+        checkedInToday={checkedInToday}
+        wellnessCheckIn={wellnessCheckIn}
+        painCheckIn={painCheckIn}
       />
     );
   }
@@ -457,6 +465,10 @@ export default function AthleteSessionView({
         zonesEnabled={zonesEnabled}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}
+        lockUntilCheckin={lockUntilCheckin}
+        checkedInToday={checkedInToday}
+        wellnessCheckIn={wellnessCheckIn}
+        painCheckIn={painCheckIn}
       />
     );
   }
@@ -470,6 +482,10 @@ export default function AthleteSessionView({
         token={token}
         onUpdated={refetchSession}
         onBack={() => router.push(`/a/${token}`)}
+        lockUntilCheckin={lockUntilCheckin}
+        checkedInToday={checkedInToday}
+        wellnessCheckIn={wellnessCheckIn}
+        painCheckIn={painCheckIn}
       />
     );
   }

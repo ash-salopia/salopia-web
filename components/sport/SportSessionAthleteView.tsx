@@ -4,6 +4,7 @@ import { useState } from "react";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import { saveWithRetry } from "@/lib/save-queue";
+import { useSessionCheckIn, lockedContentStyle } from "@/lib/use-session-checkin";
 import type { Session } from "@/types";
 
 // Athlete-side view for a Sport / Other session (0088). Shows the coach's plan
@@ -16,15 +17,30 @@ export default function SportSessionAthleteView({
   token,
   onUpdated,
   onBack,
+  lockUntilCheckin,
+  checkedInToday,
+  wellnessCheckIn,
+  painCheckIn,
 }: {
   session: Session;
   token: string;
   onUpdated: () => void;
   onBack: () => void;
+  // Check-in was never wired up here at all - reported live, same gap
+  // as Power/Speed (0111). A self-logged ("athlete_logged") Sport
+  // session was never lockable anyway (session_source !== "programme"),
+  // so this only actually locks a coach-programmed one.
+  lockUntilCheckin?: boolean;
+  checkedInToday?: boolean;
+  wellnessCheckIn?: boolean;
+  painCheckIn?: boolean;
 }) {
   const [session, setSession] = useState(initialSession);
   const [error, setError] = useState("");
   const planned = session.sport_config?.planned ?? null;
+  const { locked, checkInButton, checkInModal, lockOverlay } = useSessionCheckIn({
+    session, token, lockUntilCheckin, checkedInToday, wellnessCheckIn, painCheckIn,
+  });
 
   const [duration, setDuration] = useState(session.duration_min != null ? String(session.duration_min) : "");
   const [notes, setNotes] = useState(session.athlete_notes ?? "");
@@ -68,10 +84,13 @@ export default function SportSessionAthleteView({
     <div style={s.page}>
       <button style={s.backLink} onClick={onBack}>← Back to sessions</button>
 
-      <div style={s.header}>
-        <div style={s.badge}>Sport / Other</div>
-        <div style={s.name}>{session.name}</div>
-        <div style={s.meta}>{session.date}</div>
+      <div style={s.headerRow}>
+        <div style={s.header}>
+          <div style={s.badge}>Sport / Other</div>
+          <div style={s.name}>{session.name}</div>
+          <div style={s.meta}>{session.date}</div>
+        </div>
+        {checkInButton}
       </div>
 
       {/* Was a plain always-expanded div with no hide/unhide control,
@@ -92,32 +111,38 @@ export default function SportSessionAthleteView({
 
       {error && <div style={s.error}>{error}</div>}
 
-      <div style={s.card}>
-        <label style={s.label}>How long did it actually take? (minutes)</label>
-        <input
-          style={s.input}
-          type="number"
-          inputMode="numeric"
-          value={duration}
-          placeholder={planned?.duration_min != null ? String(planned.duration_min) : "e.g. 60"}
-          onChange={(e) => setDuration(e.target.value)}
-          onBlur={saveDuration}
-        />
-      </div>
+      <div style={{ position: "relative" as const }}>
+        <div style={locked ? lockedContentStyle : undefined}>
+          <div style={s.card}>
+            <label style={s.label}>How long did it actually take? (minutes)</label>
+            <input
+              style={s.input}
+              type="number"
+              inputMode="numeric"
+              value={duration}
+              placeholder={planned?.duration_min != null ? String(planned.duration_min) : "e.g. 60"}
+              onChange={(e) => setDuration(e.target.value)}
+              onBlur={saveDuration}
+            />
+          </div>
 
-      <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
+          <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
 
-      <div style={s.card}>
-        <label style={s.label}>Anything to note? (optional)</label>
-        <textarea
-          style={s.textarea}
-          rows={3}
-          value={notes}
-          placeholder="How it went, any niggles, anything your coach should know…"
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={saveNotes}
-        />
+          <div style={s.card}>
+            <label style={s.label}>Anything to note? (optional)</label>
+            <textarea
+              style={s.textarea}
+              rows={3}
+              value={notes}
+              placeholder="How it went, any niggles, anything your coach should know…"
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={saveNotes}
+            />
+          </div>
+        </div>
+        {lockOverlay}
       </div>
+      {checkInModal}
     </div>
   );
 }
@@ -125,7 +150,8 @@ export default function SportSessionAthleteView({
 const s: Record<string, React.CSSProperties> = {
   page: { padding: "8px 0 40px" },
   backLink: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 13, cursor: "pointer", padding: "6px 0", marginBottom: 8 },
-  header: { marginBottom: 14 },
+  headerRow: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 14 },
+  header: {},
   badge: { display: "inline-block", background: "#F59E0B22", color: "#F59E0B", borderRadius: 5, padding: "3px 8px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 },
   name: { fontSize: 20, fontWeight: 700, color: "var(--text)" },
   meta: { fontSize: 12, color: "var(--mute)", marginTop: 2 },

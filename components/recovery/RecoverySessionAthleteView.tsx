@@ -7,6 +7,7 @@ import RecoveryChecklistAthleteList from "@/components/recovery/RecoveryChecklis
 import RecoverySessionFeedbackModal from "@/components/recovery/RecoverySessionFeedbackModal";
 import { saveWithRetry } from "@/lib/save-queue";
 import { recoveryCategoryLabel, RECOVERY_INTENSITIES, RECOVERY_COLOR } from "@/lib/recovery-constants";
+import { useSessionCheckIn, lockedContentStyle } from "@/lib/use-session-checkin";
 import type { RecoveryBlock, RecoveryConfig, Session } from "@/types";
 
 export default function RecoverySessionAthleteView({
@@ -15,18 +16,31 @@ export default function RecoverySessionAthleteView({
   token,
   onUpdated,
   onBack,
+  lockUntilCheckin,
+  checkedInToday,
+  wellnessCheckIn,
+  painCheckIn,
 }: {
   session: Session;
   athleteName: string;
   token: string;
   onUpdated: () => void;
   onBack: () => void;
+  // Check-in was never wired up here at all - reported live, same gap
+  // as Power/Speed (0111).
+  lockUntilCheckin?: boolean;
+  checkedInToday?: boolean;
+  wellnessCheckIn?: boolean;
+  painCheckIn?: boolean;
 }) {
   const [session, setSession] = useState(initialSession);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const { locked, checkInButton, checkInModal, lockOverlay } = useSessionCheckIn({
+    session, token, lockUntilCheckin, checkedInToday, wellnessCheckIn, painCheckIn,
+  });
 
   const config: RecoveryConfig = session.recovery_config ?? {};
   const intensityLabel = RECOVERY_INTENSITIES.find((i) => i.value === config.intensity)?.label;
@@ -79,65 +93,73 @@ export default function RecoverySessionAthleteView({
     <div style={s.page}>
       <button style={s.backLink} onClick={onBack}>← Back to sessions</button>
 
-      <div style={s.header}>
-        <div style={s.categoryBadge}>
-          {recoveryCategoryLabel(session.recovery_category, config.custom_category_label)}
+      <div style={s.headerRow}>
+        <div style={s.header}>
+          <div style={s.categoryBadge}>
+            {recoveryCategoryLabel(session.recovery_category, config.custom_category_label)}
+          </div>
+          <div style={s.sessionName}>{session.name}</div>
+          <div style={s.sessionMeta}>{session.date} · {athleteName}</div>
         </div>
-        <div style={s.sessionName}>{session.name}</div>
-        <div style={s.sessionMeta}>{session.date} · {athleteName}</div>
+        {checkInButton}
       </div>
 
-      {config.instructions && <div style={s.instructionsBox}>{config.instructions}</div>}
+      <div style={{ position: "relative" as const, display: "flex", flexDirection: "column" as const, gap: 16 }}>
+        <div style={{ ...(locked ? lockedContentStyle : {}), display: "flex", flexDirection: "column" as const, gap: 16 }}>
+          {config.instructions && <div style={s.instructionsBox}>{config.instructions}</div>}
 
-      {(config.duration_minutes != null || intensityLabel) && (
-        <div style={s.metaRow}>
-          {config.duration_minutes != null && <div style={s.metaChip}>⏱ {config.duration_minutes} min</div>}
-          {intensityLabel && <div style={s.metaChip}>🔥 {intensityLabel} intensity</div>}
+          {(config.duration_minutes != null || intensityLabel) && (
+            <div style={s.metaRow}>
+              {config.duration_minutes != null && <div style={s.metaChip}>⏱ {config.duration_minutes} min</div>}
+              {intensityLabel && <div style={s.metaChip}>🔥 {intensityLabel} intensity</div>}
+            </div>
+          )}
+
+          {config.media_url && (
+            <a href={config.media_url} target="_blank" rel="noreferrer" style={s.mediaLink}>
+              ▶ View media
+            </a>
+          )}
+
+          {isQuick && (
+            <button
+              disabled={saving}
+              style={{ ...s.completeBtn, ...(config.completed ? s.completeBtnDone : {}) }}
+              onClick={() => patchConfig({ completed: !config.completed })}
+            >
+              {config.completed ? "✓ Marked done" : "Mark as done"}
+            </button>
+          )}
+
+          {session.recovery_format === "guided" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {(config.blocks ?? []).map((block) => (
+                <RecoveryBlockAthleteCard
+                  key={block.id}
+                  block={block}
+                  onUpdate={(patch) => updateBlock(block.id, patch)}
+                  onToggleItem={(itemId) => toggleChecklistItem(block.id, itemId)}
+                />
+              ))}
+            </div>
+          )}
+
+          {session.recovery_format === "checklist" && (
+            <RecoveryChecklistAthleteList items={config.checklist_items ?? []} onToggle={toggleStandaloneChecklistItem} />
+          )}
+
+          {error && <div style={s.error}>{error}</div>}
+
+          {config.request_feedback && (
+            feedbackSubmitted ? (
+              <div style={s.feedbackDone}>✓ Feedback submitted - thanks!</div>
+            ) : (
+              <button style={s.finishBtn} onClick={() => setFeedbackOpen(true)}>Finish session</button>
+            )
+          )}
         </div>
-      )}
-
-      {config.media_url && (
-        <a href={config.media_url} target="_blank" rel="noreferrer" style={s.mediaLink}>
-          ▶ View media
-        </a>
-      )}
-
-      {isQuick && (
-        <button
-          disabled={saving}
-          style={{ ...s.completeBtn, ...(config.completed ? s.completeBtnDone : {}) }}
-          onClick={() => patchConfig({ completed: !config.completed })}
-        >
-          {config.completed ? "✓ Marked done" : "Mark as done"}
-        </button>
-      )}
-
-      {session.recovery_format === "guided" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {(config.blocks ?? []).map((block) => (
-            <RecoveryBlockAthleteCard
-              key={block.id}
-              block={block}
-              onUpdate={(patch) => updateBlock(block.id, patch)}
-              onToggleItem={(itemId) => toggleChecklistItem(block.id, itemId)}
-            />
-          ))}
-        </div>
-      )}
-
-      {session.recovery_format === "checklist" && (
-        <RecoveryChecklistAthleteList items={config.checklist_items ?? []} onToggle={toggleStandaloneChecklistItem} />
-      )}
-
-      {error && <div style={s.error}>{error}</div>}
-
-      {config.request_feedback && (
-        feedbackSubmitted ? (
-          <div style={s.feedbackDone}>✓ Feedback submitted - thanks!</div>
-        ) : (
-          <button style={s.finishBtn} onClick={() => setFeedbackOpen(true)}>Finish session</button>
-        )
-      )}
+        {lockOverlay}
+      </div>
 
       {feedbackOpen && (
         <RecoverySessionFeedbackModal
@@ -147,6 +169,7 @@ export default function RecoverySessionAthleteView({
           onSkip={() => setFeedbackOpen(false)}
         />
       )}
+      {checkInModal}
 
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}
@@ -164,6 +187,7 @@ export default function RecoverySessionAthleteView({
 const s: Record<string, React.CSSProperties> = {
   page: { maxWidth: 560, margin: "0 auto", padding: "0 16px 40px", display: "flex", flexDirection: "column", gap: 16 },
   backLink: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 13, cursor: "pointer", padding: "12px 0", alignSelf: "flex-start" },
+  headerRow: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   header: { display: "flex", flexDirection: "column", gap: 4 },
   categoryBadge: {
     alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: RECOVERY_COLOR, background: "#123832",

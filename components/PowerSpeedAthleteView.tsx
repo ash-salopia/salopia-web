@@ -15,6 +15,7 @@ import AthletePageHeading from "@/components/AthletePageHeading";
 import VideoModal from "@/components/VideoModal";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
 import AthleteSwapExerciseModal from "@/components/AthleteSwapExerciseModal";
+import { useSessionCheckIn, lockedContentStyle } from "@/lib/use-session-checkin";
 import type { Session } from "@/types";
 import {
   PS_METRIC_META, resolveTrackedMetrics, normalizePSLog,
@@ -26,15 +27,32 @@ export default function PowerSpeedAthleteView({
   token,
   onUpdated,
   onBack,
+  lockUntilCheckin,
+  checkedInToday,
+  wellnessCheckIn,
+  painCheckIn,
 }: {
   session: Session;
   token: string;
   onUpdated: () => void;
   onBack: () => void;
+  // Was never wired up at all here - check-in (and "lock until
+  // check-in") silently didn't exist on a Power/Speed session, reported
+  // live. Already correctly once-per-day at the data layer
+  // (getTodayCheckIn resolves by athlete + date, not session), the gap
+  // was purely that these props stopped at AthleteSessionView and never
+  // reached this component (0111).
+  lockUntilCheckin?: boolean;
+  checkedInToday?: boolean;
+  wellnessCheckIn?: boolean;
+  painCheckIn?: boolean;
 }) {
   const [session, setSession] = useState(initialSession);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const { locked, checkInButton, checkInModal, lockOverlay } = useSessionCheckIn({
+    session, token, lockUntilCheckin, checkedInToday, wellnessCheckIn, painCheckIn,
+  });
 
   // Video/history/swap/skip/notes (0108) all mutate fields on the
   // *parent's* session copy via onUpdated -> refetchSession (in
@@ -87,7 +105,10 @@ export default function PowerSpeedAthleteView({
     <div style={s.page}>
       <button style={s.backLink} onClick={onBack}>← Back to sessions</button>
       <AthletePageHeading emoji="⚡" title={session.name} />
-      <div style={s.meta}>{session.date} · Power / Speed</div>
+      <div style={s.metaRow}>
+        <div style={s.meta}>{session.date} · Power / Speed</div>
+        {checkInButton}
+      </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
       {/* Was a bespoke, always-expanded plain-div renderer (NoteBox)
@@ -98,25 +119,30 @@ export default function PowerSpeedAthleteView({
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly videoUrl={(session as any).session_notes_video_url ?? ""} />
       <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" icon="🔥" videoUrl={(session as any).warmup_video_url ?? ""} />
 
-      {exercises.map((ex) => (
-        <ExerciseLog
-          key={ex.id}
-          ex={ex}
-          token={token}
-          sessionId={session.id}
-          saving={saving === ex.id}
-          onSave={(log) => saveExerciseLog(ex.id, log)}
-          onNotesChange={(notes) => {
-            setSession((prev) => prev ? {
-              ...prev,
-              exercises: prev.exercises?.map((e) => (e.id === ex.id ? { ...e, athlete_exercise_notes: notes } as any : e)),
-            } : prev);
-          }}
-          onSaveNotes={(notes) => saveExerciseNotes(ex.id, notes)}
-          onSwapOrSkipDone={onUpdated}
-        />
-      ))}
-      {exercises.length === 0 && <div style={s.empty}>No exercises in this session.</div>}
+      <div style={{ position: "relative" as const }}>
+        <div style={locked ? lockedContentStyle : undefined}>
+          {exercises.map((ex) => (
+            <ExerciseLog
+              key={ex.id}
+              ex={ex}
+              token={token}
+              sessionId={session.id}
+              saving={saving === ex.id}
+              onSave={(log) => saveExerciseLog(ex.id, log)}
+              onNotesChange={(notes) => {
+                setSession((prev) => prev ? {
+                  ...prev,
+                  exercises: prev.exercises?.map((e) => (e.id === ex.id ? { ...e, athlete_exercise_notes: notes } as any : e)),
+                } : prev);
+              }}
+              onSaveNotes={(notes) => saveExerciseNotes(ex.id, notes)}
+              onSwapOrSkipDone={onUpdated}
+            />
+          ))}
+          {exercises.length === 0 && <div style={s.empty}>No exercises in this session.</div>}
+        </div>
+        {lockOverlay}
+      </div>
 
       <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" videoUrl={(session as any).cooldown_video_url ?? ""} />
 
@@ -130,6 +156,7 @@ export default function PowerSpeedAthleteView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
+      {checkInModal}
     </div>
   );
 }
@@ -322,14 +349,20 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
                     turned a 5-rep, 2-metric set into 5 separate rows. */}
                 {!completionOnly && repMetrics.length > 0 && (
                   <div style={s.repGridWrap}>
-                    <div style={{ ...s.repGrid, gridTemplateColumns: `40px repeat(${colCount}, minmax(44px, 1fr))` }}>
+                    <div style={{ ...s.repGrid, gridTemplateColumns: `76px repeat(${colCount}, minmax(44px, 1fr))` }}>
                       <div />
                       {Array.from({ length: colCount }).map((_, ci) => (
                         <div key={ci} style={s.repColHeader}>{set.single_value ? "All" : `R${ci + 1}`}</div>
                       ))}
                       {repMetrics.map((key) => (
                         <Fragment key={key}>
-                          <div style={s.repRowLabel} title={PS_METRIC_META[key].label}>{PS_METRIC_META[key].short}</div>
+                          {/* Full label + unit, not the short form
+                              ("Ht") - wasn't obvious what an
+                              abbreviation meant out of context
+                              (reported live). Wraps onto two lines
+                              rather than truncating, since the whole
+                              point is to actually be able to read it. */}
+                          <div style={s.repRowLabel}>{PS_METRIC_META[key].label}{PS_METRIC_META[key].unit ? ` (${PS_METRIC_META[key].unit})` : ""}</div>
                           {Array.from({ length: colCount }).map((_, ci) => (
                             <input key={ci} value={set.rep_metrics[ci]?.[key] ?? ""} inputMode="decimal"
                               placeholder={PS_METRIC_META[key].placeholder}
@@ -372,7 +405,8 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
 const s: Record<string, React.CSSProperties> = {
   page: { padding: 16, maxWidth: 560, margin: "0 auto" },
   backLink: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 13, cursor: "pointer", padding: 0 },
-  meta: { fontSize: 12, color: "var(--mute)", padding: "0 16px 12px" },
+  metaRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 16px 12px" },
+  meta: { fontSize: 12, color: "var(--mute)" },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
   empty: { fontSize: 13, color: "var(--mute)", fontStyle: "italic", padding: "16px 0" },
   savingNote: { fontSize: 11, color: "var(--mute)" },
@@ -428,7 +462,7 @@ const s: Record<string, React.CSSProperties> = {
   repGridWrap: { overflowX: "auto" as const },
   repGrid: { display: "grid", gap: 4, alignItems: "center" },
   repColHeader: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const },
-  repRowLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
+  repRowLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", lineHeight: 1.25 },
   repGridInput: { width: "100%", boxSizing: "border-box" as const, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "6px 4px", fontSize: 13, fontWeight: 700, textAlign: "center" as const },
   input: { width: 72, boxSizing: "border-box" as const, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "8px 9px", fontSize: 15, fontWeight: 700 },
 };
