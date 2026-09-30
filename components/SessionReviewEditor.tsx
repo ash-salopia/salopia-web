@@ -401,7 +401,7 @@ export default function SessionReviewEditor({
               onChange={(v) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, sessionNotes: v } : sess))}
               label="Session Notes"
               icon="📋"
-              placeholder="General notes for the day - coaching focus, deload instructions, etc."
+              placeholder="Nothing detected in the source — type here to add"
               sessionType={session.type}
             />
           )}
@@ -420,7 +420,7 @@ export default function SessionReviewEditor({
               onChange={(v) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, warmupNotes: v } : sess))}
               label="Warm-up (top of session)"
               icon="🔥"
-              placeholder="e.g. 5 min bike, band pull-aparts x15, bodyweight squats x10"
+              placeholder="Nothing detected in the source — type here to add"
               sessionType={session.type}
               noteKind="warmup"
             />
@@ -775,7 +775,7 @@ export default function SessionReviewEditor({
               onChange={(v) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, cooldownNotes: v } : sess))}
               label="Cool-down (bottom of session)"
               icon="🧊"
-              placeholder="e.g. 5 min easy row, hamstring + hip flexor stretch"
+              placeholder="Nothing detected in the source — type here to add"
               sessionType={session.type}
               noteKind="cooldown"
             />
