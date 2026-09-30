@@ -50,11 +50,18 @@ export interface ParsedSession {
   date?: string;       // ISO date YYYY-MM-DD if a specific date was mentioned
   dayOffset: number;   // 0=Mon, 1=Tue … relative offset if no specific date
   weekNumber: number;  // 1-based
+  // General session-level notes/overview (distinct from warm-up) - a
+  // source often has a "Session Notes" or "Overview" section ABOVE the
+  // warm-up giving the day's focus/coaching emphasis, not a warm-up
+  // routine and not an individual exercise. Was missing entirely until
+  // 0112 (reported live: "doesn't pick up the session notes at all
+  // which is above the warm up in the PDF") - lands in session_notes.
+  sessionNotes?: string;
   // Warm-up/cool-down movements, summarised as free text rather than
   // added to `exercises` as individually-tracked lifts — see the system
-  // prompt's "Warm-up and cool-down" section. Land in session_notes
-  // (top of session) / cooldown_notes (bottom) respectively; empty
-  // string when the source had none.
+  // prompt's "Warm-up and cool-down" section. Land in warmup_notes (top
+  // of session) / cooldown_notes (bottom) respectively; empty string
+  // when the source had none.
   warmupNotes?: string;
   cooldownNotes?: string;
 }
@@ -92,6 +99,7 @@ Response format:
       "date": "2026-06-26",
       "dayOffset": 0,
       "weekNumber": 1,
+      "sessionNotes": "Focus on bar speed today\nDeload week - stay at 80% or below",
       "warmupNotes": "5 min bike\nBand pull-aparts x15\nBodyweight squats x10",
       "cooldownNotes": "5 min easy row\nHamstring stretch\nHip flexor stretch",
       "exercises": [
@@ -149,6 +157,11 @@ Session detection rules:
   - If no day info: space 1 day apart (0, 1, 2…)
 - weekNumber: 1-based (Week 1=1, Week 2=2…); always 1 for single-week content
 
+Session notes (general - separate from warm-up):
+- A source sometimes has a general note/overview section for the day — coaching focus, deload/taper instructions, "how this week fits the block", equipment notes, anything that isn't a warm-up routine, a cool-down, or an individual tracked exercise. This is often positioned ABOVE the warm-up on the page, or as a header note before the exercise list starts.
+- Put this in "sessionNotes" - ONE ITEM PER LINE like warmupNotes/cooldownNotes below if it's a list, or a short paragraph if that's how the source writes it. "" if the source has no such general note (don't invent one, and don't just repeat the session name here).
+- Do not confuse this with warm-up content: a warm-up is physical preparation movements (mobility, activation, an easy bike/row) the athlete DOES before the main work: that always goes in "warmupNotes", never "sessionNotes", even if it's the first text block on the page.
+
 Warm-up and cool-down:
 - A session often opens with general prep (mobility, activation, an easy bike/row, band work) and/or closes with a cool-down (easy cardio, stretching) — these are NOT part of the tracked training block.
 - Do NOT add warm-up or cool-down movements to "exercises" — nobody logs sets/reps/load history against them, so turning each one into a tracked exercise just clutters the session.
@@ -184,7 +197,7 @@ Power/Speed exercise setup (only for exercises inside a "power_speed" session �
 - ps_tracked_metrics: which of these the source actually gives a number for on this exercise, as an array of these exact keys only: "load" (an external weight/resistance), "reps" (a rep count logged per set, distinct from the prescribed "reps" field), "time" (a duration, e.g. sprint time), "distance" (a distance in METRES — sprint/flying-run distance), "distance_cm" (a distance in CENTIMETRES — jump/throw distance, e.g. broad jump), "height" (jump height in cm), "velocity" (a speed in m/s), "power" (watts), "rsi" (reactive strength index), "contact_time" (ground contact time in ms). Only include a key when the source genuinely gives that number to log against — do not guess extras just because the exercise "could" track them. A plain "Broad Jump x5" with no numbers beyond reps/contacts gets ps_tracked_metrics: [] (the athlete just ticks each set done); a "10m Sprint - record time" gets ["time"]; a timed sprint with a stated distance gets ["time","distance"].
 - ps_count_contacts: for "plyometric" exercises only, true by default - a correctly-classified plyometric movement is reactive landing work, so it should count. A throw/toss belongs under "power" instead (see ps_quality above), not plyometric, which is the correct fix for keeping throws out of the contacts total - only fall back to setting this false if an exercise with no landing impact genuinely doesn't fit "power" either but still ended up "plyometric". true for every non-plyometric exercise (the field is meaningless there, but keep it true rather than omitting it).
 
-When handling a correction: update only what was mentioned, return the COMPLETE updated sessions array.
+When handling a correction: update only what was mentioned, return the COMPLETE updated sessions array. This explicitly includes "sessionNotes"/"warmupNotes"/"cooldownNotes" on every session in your reply, not just the session(s) the correction actually touched - carry each one over byte-for-byte unchanged from your previous reply unless the coach's correction specifically asks to change that session's notes/warm-up/cool-down. These three fields are easy to drop silently since they're not exercises - dropping them wipes out real content that isn't in the coach's correction message at all, and it won't be visible in the review screen as a mistake (an empty field just looks like "no warm-up on this one"), so treat re-including them as mandatory on every single reply, correction or not.
 
 Splitting or merging sessions during a correction:
 - If asked to split one session into multiple (e.g. "split the first 3 exercises into a plyo/speed session and the rest into strength"), the response MUST contain one entry in "sessions" per resulting session — this is a structural change to the array itself, not a relabelling of exercises within a single session. Each new session needs its own accurate "type" (the plyo/speed one should be "power_speed", not "strength", unless told otherwise), its own "name", and inherits the original "date"/"dayOffset"/"weekNumber" unless the coach specifies otherwise for one of them. Move each mentioned exercise into its new session's "exercises" array — do not duplicate it into both.
@@ -256,6 +269,7 @@ export async function POST(
     date: s.date ?? undefined,
     dayOffset: typeof s.dayOffset === "number" ? s.dayOffset : 0,
     weekNumber: typeof s.weekNumber === "number" ? Math.max(1, s.weekNumber) : 1,
+    sessionNotes: typeof s.sessionNotes === "string" ? s.sessionNotes : "",
     warmupNotes: typeof s.warmupNotes === "string" ? s.warmupNotes : "",
     cooldownNotes: typeof s.cooldownNotes === "string" ? s.cooldownNotes : "",
     exercises: (s.exercises ?? []).map((e) => ({

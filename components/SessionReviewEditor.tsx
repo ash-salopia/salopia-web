@@ -56,12 +56,15 @@ export interface ReviewSession {
   weekNumber: number;
   exercises: ReviewExercise[];
   // Optional — only ever populated by the notes/PDF parse flow, when the
-  // source described a warm-up or cool-down that got summarised instead
-  // of added as individual exercises. warmupNotes lands in the session's
-  // own warmup_notes column (renders near the top, separate from the
-  // general session_notes box — 0105); cooldownNotes in cooldown_notes
+  // source described general session notes, a warm-up, and/or a
+  // cool-down that got summarised instead of added as individual
+  // exercises. sessionNotes lands in the general session_notes column
+  // (0112 — was missing entirely; the AI parse had no concept of a
+  // general notes section separate from warm-up at all); warmupNotes in
+  // warmup_notes (renders near the top); cooldownNotes in cooldown_notes
   // (bottom). Undefined for VoiceSessionModal's sessions, which never
-  // sets these — both render conditionally so that's a no-op there.
+  // sets these — all three render conditionally so that's a no-op there.
+  sessionNotes?: string;
   warmupNotes?: string;
   cooldownNotes?: string;
 }
@@ -386,6 +389,22 @@ export default function SessionReviewEditor({
               </select>
             </div>
           </div>
+
+          {/* General Session Notes - separate from Warm-up, positioned
+              above it (0112 - the parse previously had no concept of a
+              general notes section at all, so a source PDF's own
+              "Session Notes" block above its warm-up was silently
+              dropped, reported live). */}
+          {session.sessionNotes !== undefined && (
+            <SessionNotesBlock
+              value={session.sessionNotes}
+              onChange={(v) => onChange(sessions.map((sess, idx) => idx === si ? { ...sess, sessionNotes: v } : sess))}
+              label="Session Notes"
+              icon="📋"
+              placeholder="General notes for the day - coaching focus, deload instructions, etc."
+              sessionType={session.type}
+            />
+          )}
 
           {/* Warm-up — only shown when the parse actually populated it
               (undefined for VoiceSessionModal sessions, which never set
