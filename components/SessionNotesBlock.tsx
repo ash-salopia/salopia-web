@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { listNoteTemplates, type NoteTemplate } from "@/lib/data/note-templates";
+import { listNoteTemplates, saveNoteTemplate, type NoteTemplate, type NoteCategory } from "@/lib/data/note-templates";
+import NoteCategoryPicker from "@/components/NoteCategoryPicker";
 import { linkify } from "@/lib/linkify";
 
 interface Props {
@@ -57,6 +58,28 @@ export default function SessionNotesBlock({
   const [isOpen, setIsOpen] = useState(!!value || !!videoUrl);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
+  // Saving the note just written here as a reusable template, rather
+  // than only ever loading one in - previously the only way to create
+  // a template was the separate /templates management page, so a good
+  // note typed straight into a session had to be re-typed there from
+  // scratch to reuse it (0114).
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false);
+  const [templateNameDraft, setTemplateNameDraft] = useState("");
+  // Which pickers the new template should show up in (0109 - "general"
+  // removed, a template no longer has an implicit "show everywhere"
+  // option). Pre-ticked with a sensible guess for this block (its own
+  // warm-up/cool-down category, or this session's type) so the common
+  // case is a single tap, but always left editable - e.g. a mobility
+  // note the coach also wants under Power/Speed just gets a second tick.
+  const [templateCategories, setTemplateCategories] = useState<NoteCategory[]>(() => {
+    if (noteKind === "warmup") return ["warm_up"];
+    if (noteKind === "cooldown") return ["cool_down"];
+    return (["strength", "power_speed", "cardio", "hyrox", "sport", "recovery"] as const).includes(sessionType as any)
+      ? [sessionType as NoteCategory]
+      : [];
+  });
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateSavedFlash, setTemplateSavedFlash] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -70,6 +93,31 @@ export default function SessionNotesBlock({
     if (t.video_url && onVideoUrlChange) onVideoUrlChange(t.video_url);
     setShowTemplates(false);
     setTimeout(() => textareaRef.current?.focus(), 50);
+  }
+
+  async function handleSaveAsTemplate() {
+    if (!templateNameDraft.trim() || !templateCategories.length) return;
+    setTemplateSaving(true);
+    try {
+      const saved = await saveNoteTemplate({
+        name: templateNameDraft.trim(),
+        content: value,
+        categories: templateCategories,
+        sort_order: templates.length,
+        video_url: videoUrl ?? "",
+      });
+      setTemplates((prev) => [...prev, saved]);
+      setSavingAsTemplate(false);
+      setTemplateNameDraft("");
+      setTemplateSavedFlash(true);
+      setTimeout(() => setTemplateSavedFlash(false), 2500);
+    } catch {
+      // Swallowed deliberately - this is a convenience save, not the
+      // coach's actual note (already safely saved on the session itself
+      // via the normal onChange/onBlur path regardless of this failing).
+    } finally {
+      setTemplateSaving(false);
+    }
   }
 
   if (readOnly && !value && !videoUrl) return null;
@@ -87,7 +135,6 @@ export default function SessionNotesBlock({
   // content specifically for that block, not for session type at all.
   const relevantTemplates = templates.filter(t => {
     const cats = t.categories ?? [];
-    if (cats.includes("general")) return true;
     if (noteKind === "warmup") return cats.includes("warm_up");
     if (noteKind === "cooldown") return cats.includes("cool_down");
     return (
@@ -116,36 +163,79 @@ export default function SessionNotesBlock({
       {isOpen && (
         <div style={s.body}>
           {!readOnly && enableTemplates && (
-            relevantTemplates.length > 0 ? (
-              <div style={s.templateRow}>
-                <button style={s.templateBtn} onClick={() => setShowTemplates(v => !v)}>
-                  Load template ▾
-                </button>
-                {showTemplates && (
-                  <div style={s.templateDropdown}>
-                    {relevantTemplates.map(t => (
-                      <button key={t.id} style={s.templateItem} onClick={() => applyTemplate(t)}>
-                        {t.name}{t.video_url ? " 🎥" : ""}
-                      </button>
-                    ))}
-                    <button style={{ ...s.templateItem, color: "var(--mute)", borderTop: "1px solid var(--line)" }}
-                      onClick={() => setShowTemplates(false)}>
-                      Close
-                    </button>
-                  </div>
+            <div style={s.templateRow}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+                {relevantTemplates.length > 0 && (
+                  <button style={s.templateBtn} onClick={() => setShowTemplates(v => !v)}>
+                    Load template ▾
+                  </button>
+                )}
+                {/* Save whatever's typed here as a reusable template -
+                    previously the only way to create one was the
+                    separate /templates page, so a good note typed
+                    straight into a session had to be re-typed there
+                    from scratch to reuse it (0114). */}
+                {value.trim().length > 0 && (
+                  <button style={s.templateBtn} onClick={() => setSavingAsTemplate(v => !v)}>
+                    💾 Save as template
+                  </button>
+                )}
+                {relevantTemplates.length === 0 && !value.trim() && (
+                  // No templates saved yet (or none tagged for this session
+                  // type) and nothing here yet to save either - without
+                  // this, the whole row just silently vanishes and there's
+                  // no way to discover the feature exists at all (reported
+                  // live: "no way to load a note template into a
+                  // session"). Points straight at the management page.
+                  <Link href="/templates" style={s.templateEmptyLink}>
+                    + No note templates yet — create one
+                  </Link>
                 )}
               </div>
-            ) : (
-              // No templates saved yet (or none tagged for this session
-              // type) - without this, the whole template row just silently
-              // vanishes and there's no way to discover the feature exists
-              // at all (reported live: "no way to load a note template
-              // into a session"). Points straight at the management page
-              // rather than leaving a dead end.
-              <Link href="/templates" style={s.templateEmptyLink}>
-                + No note templates yet — create one
-              </Link>
-            )
+
+              {showTemplates && relevantTemplates.length > 0 && (
+                <div style={s.templateDropdown}>
+                  {relevantTemplates.map(t => (
+                    <button key={t.id} style={s.templateItem} onClick={() => applyTemplate(t)}>
+                      {t.name}{t.video_url ? " 🎥" : ""}
+                    </button>
+                  ))}
+                  <button style={{ ...s.templateItem, color: "var(--mute)", borderTop: "1px solid var(--line)" }}
+                    onClick={() => setShowTemplates(false)}>
+                    Close
+                  </button>
+                </div>
+              )}
+
+              {savingAsTemplate && (
+                <div style={s.saveTemplateForm}>
+                  <input
+                    value={templateNameDraft}
+                    onChange={e => setTemplateNameDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Escape") setSavingAsTemplate(false); }}
+                    placeholder="Template name, e.g. Sprint Warm-Up Protocol"
+                    autoFocus
+                    style={s.saveTemplateInput}
+                  />
+                  <div style={s.saveTemplateCategoryLabel}>Show in:</div>
+                  <NoteCategoryPicker selected={templateCategories} onChange={setTemplateCategories} />
+                  <div style={s.saveTemplateRow}>
+                    <button
+                      onClick={handleSaveAsTemplate}
+                      disabled={!templateNameDraft.trim() || !templateCategories.length || templateSaving}
+                      style={{ ...s.templateSaveConfirmBtn, opacity: !templateNameDraft.trim() || !templateCategories.length || templateSaving ? 0.6 : 1 }}
+                    >
+                      {templateSaving ? "…" : "Save"}
+                    </button>
+                    <button style={s.templateCancelBtn} onClick={() => { setSavingAsTemplate(false); setTemplateNameDraft(""); }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {templateSavedFlash && <div style={s.templateSavedFlash}>✓ Saved as template</div>}
+            </div>
           )}
 
           {readOnly ? (
@@ -200,7 +290,20 @@ const s: Record<string, React.CSSProperties> = {
   templateEmptyLink: { fontSize: 11, fontWeight: 600, color: "var(--accent)", textDecoration: "none", alignSelf: "flex-start" as const },
   templateDropdown: { position: "absolute" as const, top: "calc(100% + 4px)", left: 0, zIndex: 20, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 8, padding: 4, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" as const },
   templateItem: { background: "transparent", border: "none", color: "var(--text)", padding: "8px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, borderRadius: 6 },
-  textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 16, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "monospace", minHeight: 120 },
+  saveTemplateForm: { display: "flex", flexDirection: "column" as const, gap: 8, marginTop: 6, padding: 10, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 8 },
+  saveTemplateCategoryLabel: { fontSize: 11, fontWeight: 600, color: "var(--mute)" },
+  saveTemplateRow: { display: "flex", gap: 6, alignItems: "center" as const },
+  saveTemplateInput: { width: "100%", boxSizing: "border-box" as const, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "6px 8px", fontSize: 12 },
+  templateSaveConfirmBtn: { background: "var(--accent)", border: "none", color: "#fff", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  templateCancelBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "6px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
+  templateSavedFlash: { fontSize: 11, fontWeight: 600, color: "#22C55E", marginTop: 6 },
+  // fontSize matches readOnlyText below (13) so the session builder's
+  // editable notes box reads at the same size as the athlete app's
+  // rendered version, rather than the oversized 16px it used to be
+  // (originally set that large to dodge iOS Safari's auto-zoom-on-focus
+  // on <16px inputs - every other textarea/input in this app is 13-14px
+  // already, so that wasn't being applied consistently anyway).
+  textarea: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 13, lineHeight: 1.6, resize: "vertical" as const, fontFamily: "monospace", minHeight: 120 },
   readOnlyText: { fontSize: 13, color: "var(--mute)", whiteSpace: "pre-wrap" as const, fontFamily: "inherit", lineHeight: 1.6, margin: 0 },
   videoInput: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 12px", fontSize: 13 },
   videoLink: { fontSize: 13, fontWeight: 600, color: "var(--accent)", textDecoration: "none", alignSelf: "flex-start" as const },

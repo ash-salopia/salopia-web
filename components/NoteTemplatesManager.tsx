@@ -14,46 +14,7 @@ import {
   type NoteTemplate, type NoteCategory,
 } from "@/lib/data/note-templates";
 import CollapsibleSection from "@/components/CollapsibleSection";
-
-const CATEGORIES: NoteCategory[] = ["general", "warm_up", "cool_down", "strength", "power_speed", "cardio", "hyrox", "sport", "recovery"];
-const CATEGORY_LABELS: Record<NoteCategory, string> = {
-  general: "General",
-  warm_up: "Warm-Up",
-  cool_down: "Cool-Down",
-  strength: "Strength",
-  power_speed: "Power / Speed",
-  cardio: "Cardio",
-  hyrox: "Hybrid",
-  sport: "Sport",
-  recovery: "Recovery",
-};
-
-// Shared tickable-chip category picker (0107) - a template is often
-// relevant to more than one session type (e.g. a generic mobility
-// warm-up fits Strength AND Power/Speed), so this replaced a single
-// dropdown. "General" alone still means "show everywhere".
-function CategoryPicker({ selected, onChange }: { selected: NoteCategory[]; onChange: (next: NoteCategory[]) => void }) {
-  const toggle = (cat: NoteCategory) =>
-    onChange(selected.includes(cat) ? selected.filter(c => c !== cat) : [...selected, cat]);
-  return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
-      {CATEGORIES.map(cat => {
-        const on = selected.includes(cat);
-        return (
-          <button key={cat} type="button" onClick={() => toggle(cat)}
-            style={{
-              background: on ? "var(--accent-dim)" : "var(--ink)",
-              border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
-              color: on ? "var(--accent)" : "var(--mute)",
-              borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-            }}>
-            {CATEGORY_LABELS[cat]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+import NoteCategoryPicker, { CATEGORIES, CATEGORY_LABELS } from "@/components/NoteCategoryPicker";
 
 export default function NoteTemplatesManager() {
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
@@ -61,7 +22,7 @@ export default function NoteTemplatesManager() {
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", content: "", categories: ["general"] as NoteCategory[], video_url: "" });
+  const [form, setForm] = useState({ name: "", content: "", categories: [] as NoteCategory[], video_url: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -83,7 +44,7 @@ export default function NoteTemplatesManager() {
       const t = await saveNoteTemplate({ name: form.name.trim(), content: form.content, categories: form.categories, sort_order: templates.length, video_url: form.video_url.trim() });
       setTemplates(prev => [...prev, t]);
       setCreating(false);
-      setForm({ name: "", content: "", categories: ["general"], video_url: "" });
+      setForm({ name: "", content: "", categories: [], video_url: "" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally { setSaving(false); }
@@ -139,7 +100,7 @@ export default function NoteTemplatesManager() {
           <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             placeholder="e.g. Sprint Warm-Up Protocol" style={s.input} autoFocus />
           <div style={s.fieldLabel}>Categories</div>
-          <CategoryPicker selected={form.categories} onChange={categories => setForm(f => ({ ...f, categories }))} />
+          <NoteCategoryPicker selected={form.categories} onChange={categories => setForm(f => ({ ...f, categories }))} />
           <div style={s.fieldLabel}>Content</div>
           <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
             placeholder="Paste or type your template content here…"
@@ -149,8 +110,8 @@ export default function NoteTemplatesManager() {
             placeholder="https://…" style={s.input} />
           <div style={s.formBtns}>
             <button style={s.cancelBtn} onClick={() => setCreating(false)}>Cancel</button>
-            <button style={{ ...s.saveBtn, opacity: !form.name.trim() || saving ? 0.5 : 1 }}
-              disabled={!form.name.trim() || saving} onClick={handleCreate}>
+            <button style={{ ...s.saveBtn, opacity: !form.name.trim() || !form.categories.length || saving ? 0.5 : 1 }}
+              disabled={!form.name.trim() || !form.categories.length || saving} onClick={handleCreate}>
               {saving ? "Saving…" : "Save template"}
             </button>
           </div>
@@ -218,14 +179,14 @@ function EditForm({ template, saving, onSave, onCancel }: {
     <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
       <input value={t.name} onChange={e => setT(x => ({ ...x, name: e.target.value }))}
         style={s.input} />
-      <CategoryPicker selected={t.categories ?? []} onChange={categories => setT(x => ({ ...x, categories }))} />
+      <NoteCategoryPicker selected={t.categories ?? []} onChange={categories => setT(x => ({ ...x, categories }))} />
       <textarea value={t.content} onChange={e => setT(x => ({ ...x, content: e.target.value }))}
         rows={8} style={s.textarea} />
       <input value={t.video_url ?? ""} onChange={e => setT(x => ({ ...x, video_url: e.target.value }))}
         placeholder="Video link (optional)" style={s.input} />
       <div style={{ display: "flex", gap: 8 }}>
         <button style={s.cancelBtn} onClick={onCancel}>Cancel</button>
-        <button style={{ ...s.saveBtn, opacity: saving ? 0.5 : 1 }} disabled={saving} onClick={() => onSave(t)}>
+        <button style={{ ...s.saveBtn, opacity: !t.categories?.length || saving ? 0.5 : 1 }} disabled={!t.categories?.length || saving} onClick={() => onSave(t)}>
           {saving ? "Saving…" : "Save"}
         </button>
       </div>

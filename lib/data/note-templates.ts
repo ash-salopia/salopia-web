@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase-browser";
 
-export type NoteCategory = "general" | "warm_up" | "cool_down" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
+export type NoteCategory = "warm_up" | "cool_down" | "strength" | "power_speed" | "cardio" | "hyrox" | "sport" | "recovery";
 
 export interface NoteTemplate {
   id: string;
@@ -9,8 +9,9 @@ export interface NoteTemplate {
   content: string;
   // 0107 — was a single category; a note is often relevant to more than
   // one session type (e.g. a generic mobility warm-up fits Strength AND
-  // Power/Speed), so this is now a tag array. "general" still means
-  // "show everywhere" regardless of what else is ticked.
+  // Power/Speed), so this is a tag array. 0109 — the "general"/
+  // show-everywhere option was removed; a template now always lists
+  // explicitly which pickers it should appear in.
   categories: NoteCategory[];
   sort_order: number;
   created_at: string;
