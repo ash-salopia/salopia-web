@@ -83,12 +83,19 @@ export interface PBReaction {
   created_at: string;
 }
 
-export async function listRecentOrgPBs(limit = 30): Promise<PersonalBest[]> {
+// pbTypes narrows which PB lanes come back (0110 added 'e1rm'/'volume'
+// alongside the classic 'weight'/'bw_reps'/'bw_time') - omit for every
+// lane (the celebration popup and session-summary list both want all
+// of them); callers that show a single running PB feed/ticker pass an
+// explicit subset instead.
+export async function listRecentOrgPBs(limit = 30, pbTypes?: PBType[]): Promise<PersonalBest[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("personal_bests")
     .select("*, athlete:athletes!inner(id, name), reactions:pb_reactions(*), comments:pb_comments(*)")
-    .eq("athlete.archived", false)
+    .eq("athlete.archived", false);
+  if (pbTypes) query = query.in("pb_type", pbTypes);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;

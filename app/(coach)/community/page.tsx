@@ -94,7 +94,8 @@ export default function CommunityPage() {
       const [g, a, p, compsRes, athletesRes] = await Promise.all([
         listGroups(),
         listAnnouncements(),
-        listRecentOrgPBs(),
+        // Weight PBs only (no e1RM/Volume) - the classic PB feed.
+        listRecentOrgPBs(30, ["weight", "bw_reps", "bw_time"]),
         fetch("/api/competitions").then((r) => r.json()),
         supabase.from("athletes").select("id, name").eq("archived", false).order("name"),
       ]);

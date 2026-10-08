@@ -263,8 +263,11 @@ export default function DashboardPage() {
         }
 
         // ── Recent PBs (last 7 days) ──────────────────────────────────────────
+        // Weight + e1RM only (no Volume PBs here, per Ash) - the dashboard
+        // ticker is meant to stay a quick "who hit a real strength PB"
+        // glance, not every session-total-tonnage record too.
         if (orgSettings?.pb_enabled !== false) {
-          const pbs = await listRecentOrgPBs(7).catch(() => [] as PersonalBest[]);
+          const pbs = await listRecentOrgPBs(7, ["weight", "e1rm", "bw_reps", "bw_time"]).catch(() => [] as PersonalBest[]);
           setRecentPBs(pbs);
         } else {
           setRecentPBs([]);
