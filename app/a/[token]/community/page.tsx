@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed";
-import { formatPBValue } from "@/lib/data/personal-bests";
+import { formatPBValue, pbTypeLabel } from "@/lib/data/personal-bests";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
 import AthletePageHeading from "@/components/AthletePageHeading";
@@ -672,7 +672,7 @@ function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, onPbDel
           )
         )}
       </div>
-      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
+      <div style={s.pbExercise}>🏆 {pb.exercise_name}{pbTypeLabel(pb.pb_type) ? ` · ${pbTypeLabel(pb.pb_type)}` : ""}</div>
       <div style={s.pbWeight}>{formatPBValue(pb)}</div>
       <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
 

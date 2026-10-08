@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { detectPB } from "@/lib/pb-detect";
 import type { SetLog } from "@/types";
 
 // Called from the coach session page after logging sets — detects PBs
-// the same way the athlete-link/log route does for the athlete app.
+// the same way the athlete-link/log route does for the athlete app
+// (both call the shared detectPB in lib/pb-detect.ts).
 //
 // SECURITY NOTE: this route is nested under /api/athlete-link/ but is
 // coach-only — it's called from an authenticated coach page, not the
@@ -65,119 +67,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await detectPB(athleteId, exerciseId, sessionId, log);
-    return NextResponse.json({ ok: true });
+    const pbs = await detectPB(athleteId, exerciseId, sessionId, log);
+    return NextResponse.json({ ok: true, pbs });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "PB detection failed" }, { status: 500 });
   }
-}
-
-// Mirrors detectPB in app/api/athlete-link/log/route.ts exactly — see
-// that file's docstring for the full reasoning (session-scoped
-// reconciliation, the three PB shapes driven by the explicit
-// is_bodyweight flag, and the atomic upsert on the 0039 unique
-// constraint). Keep both in sync if either changes.
-async function detectPB(athleteId: string, exerciseId: string, sessionId: string, log: SetLog[]) {
-  const supabase = createServiceRoleClient();
-
-  const { data: exData, error: exErr } = await supabase
-    .from("session_exercises")
-    .select("name, session_id, is_bodyweight, time")
-    .eq("id", exerciseId)
-    .maybeSingle();
-  if (exErr || !exData?.name) { console.error("[detectPB coach] exercise lookup failed", exErr); return; }
-
-  const isBodyweight = !!exData.is_bodyweight;
-  const isTimeMode = isBodyweight && !!(exData.time ?? "").trim();
-
-  let maxWeight = 0;
-  let repsAtMaxWeight: number | null = null;
-  let maxReps = 0;
-  let maxTime = 0;
-  for (const set of log) {
-    if (!set.done) continue;
-    if (isBodyweight) {
-      if (isTimeMode) {
-        const t = parseFloat(String(set.time ?? ""));
-        if (!isNaN(t) && t > maxTime) maxTime = t;
-      } else {
-        const r = parseInt(String(set.reps ?? "")) || 0;
-        if (r > maxReps) maxReps = r;
-      }
-    } else {
-      const w = parseFloat(String(set.weight));
-      if (!isNaN(w) && w > 0 && w > maxWeight) { maxWeight = w; repsAtMaxWeight = parseInt(String(set.reps)) || null; }
-    }
-  }
-
-  const candidateValue = isBodyweight ? (isTimeMode ? maxTime : maxReps) : maxWeight;
-
-  const { data: sessData, error: sessErr } = await supabase
-    .from("sessions")
-    .select("date")
-    .eq("id", exData.session_id)
-    .maybeSingle();
-  if (sessErr || !sessData?.date) { console.error("[detectPB coach] session lookup failed", sessErr); return; }
-
-  const { data: sessionPbRows } = await supabase
-    .from("personal_bests")
-    .select("id")
-    .eq("athlete_id", athleteId)
-    .ilike("exercise_name", exData.name)
-    .eq("session_id", sessionId)
-    .limit(1);
-  const sessionPb = sessionPbRows?.[0] ?? null;
-
-  let bestOtherQuery = supabase
-    .from("personal_bests")
-    .select("weight_kg, reps, time_seconds")
-    .eq("athlete_id", athleteId)
-    .ilike("exercise_name", exData.name);
-  if (isBodyweight) {
-    bestOtherQuery = isTimeMode
-      ? bestOtherQuery.not("time_seconds", "is", null).order("time_seconds", { ascending: false })
-      : bestOtherQuery.is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false });
-  } else {
-    bestOtherQuery = bestOtherQuery.not("weight_kg", "is", null).order("weight_kg", { ascending: false });
-  }
-  if (sessionPb) bestOtherQuery = bestOtherQuery.neq("id", sessionPb.id);
-  const { data: bestOther } = await bestOtherQuery.limit(1).maybeSingle();
-
-  const threshold = isBodyweight
-    ? (isTimeMode ? (bestOther?.time_seconds ?? 0) : (bestOther?.reps ?? 0))
-    : (bestOther?.weight_kg ?? 0);
-
-  if (candidateValue <= 0 || candidateValue <= threshold) {
-    if (sessionPb) {
-      const { error: delErr } = await supabase.from("personal_bests").delete().eq("id", sessionPb.id);
-      if (delErr) console.error("[detectPB coach] stale PB delete failed", delErr);
-    }
-    return;
-  }
-
-  const row = {
-    athlete_id: athleteId,
-    exercise_name: exData.name,
-    date: sessData.date,
-    session_id: sessionId,
-    weight_kg: isBodyweight ? null : maxWeight,
-    reps: isBodyweight ? (isTimeMode ? null : maxReps) : repsAtMaxWeight,
-    time_seconds: isBodyweight && isTimeMode ? maxTime : null,
-  };
-
-  const { error: upsertErr } = await supabase
-    .from("personal_bests")
-    .upsert(row, { onConflict: "athlete_id,exercise_name,session_id" });
-  if (upsertErr) console.error("[detectPB coach] upsert failed", upsertErr);
-
-  // 0092 — a genuine new PB un-hides an exercise the coach previously
-  // deleted the PB for. (Silently skipped if 0092 isn't applied.)
-  try {
-    const { data: ath } = await supabase.from("athletes").select("pb_hidden").eq("id", athleteId).maybeSingle();
-    const hidden: string[] = (ath as { pb_hidden?: string[] } | null)?.pb_hidden ?? [];
-    const lower = exData.name.toLowerCase();
-    if (hidden.some((h) => h.toLowerCase() === lower)) {
-      await supabase.from("athletes").update({ pb_hidden: hidden.filter((h) => h.toLowerCase() !== lower) }).eq("id", athleteId);
-    }
-  } catch { /* column may not exist yet */ }
 }

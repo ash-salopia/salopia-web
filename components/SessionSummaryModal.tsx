@@ -6,7 +6,7 @@ import {
   findPreviousExercise, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal,
   progressionArrow, type ProgressionSignal,
 } from "@/lib/session-progress";
-import { formatPBValue } from "@/lib/data/personal-bests";
+import { formatPBValue, pbTypeLabel, type PBType } from "@/lib/data/personal-bests";
 
 interface Props {
   session: Session;
@@ -20,10 +20,14 @@ interface Props {
 }
 
 interface SessionPB {
+  id: string;
   exercise_name: string;
+  pb_type: PBType;
   weight_kg: number | null;
   reps: number | null;
   time_seconds: number | null;
+  e1rm_kg: number | null;
+  volume_kg: number | null;
 }
 
 function signalColor(direction: "up" | "down" | "same"): string {
@@ -185,12 +189,15 @@ export default function SessionSummaryModal({ session, allSessions, token, onClo
         {!!sessionPBs?.length && (
           <div style={s.pbBox}>
             <div style={s.pbLabel}>New personal best{sessionPBs.length === 1 ? "" : "s"}</div>
-            {sessionPBs.map((pb) => (
-              <div key={pb.exercise_name} style={s.pbRow}>
-                <span style={s.pbName}>{pb.exercise_name}</span>
-                <span style={s.pbValue}>{formatPBValue(pb)}</span>
-              </div>
-            ))}
+            {sessionPBs.map((pb) => {
+              const label = pbTypeLabel(pb.pb_type);
+              return (
+                <div key={pb.id} style={s.pbRow}>
+                  <span style={s.pbName}>{pb.exercise_name}{label ? ` · ${label}` : ""}</span>
+                  <span style={s.pbValue}>{formatPBValue(pb)}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 

@@ -213,14 +213,18 @@ function buildCSV(data: any, opts: ExportOptions): string {
   if (f.includes("pbs") && pbs.length > 0) {
     lines.push("");
     lines.push("SECTION: PERSONAL BESTS");
-    lines.push(buildCsvRow(["Athlete Name", "Exercise", "Best Weight (kg)", "Reps", "Date"]));
+    lines.push(buildCsvRow(["Athlete Name", "Exercise", "Type", "Best Weight (kg)", "Reps", "Time (s)", "Est. 1RM (kg)", "Volume (kg)", "Date"]));
     for (const pb of pbs) {
       const athlete = Array.isArray(pb.athletes) ? pb.athletes[0] : pb.athletes;
       lines.push(buildCsvRow([
         athlete?.name ?? "",
         pb.exercise_name,
+        pb.pb_type ?? "weight",
         pb.weight_kg ?? "",
         pb.reps ?? "",
+        pb.time_seconds ?? "",
+        pb.e1rm_kg ?? "",
+        pb.volume_kg ?? "",
         pb.date,
       ]));
     }

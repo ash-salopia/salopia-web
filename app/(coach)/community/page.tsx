@@ -10,7 +10,7 @@ import {
   listAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement,
 } from "@/lib/data/announcements";
 import {
-  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, formatPBValue, type PersonalBest,
+  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, formatPBValue, pbTypeLabel, type PersonalBest,
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
@@ -740,7 +740,7 @@ function PBCard({ pb, myReaction, reactionGroups, highlighted, onReact, onDelete
           ✕
         </button>
       </div>
-      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
+      <div style={s.pbExercise}>🏆 {pb.exercise_name}{pbTypeLabel(pb.pb_type) ? ` · ${pbTypeLabel(pb.pb_type)}` : ""}</div>
       <div style={s.pbWeight}>{formatPBValue(pb)}</div>
       <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
 
