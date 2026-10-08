@@ -484,7 +484,7 @@ export default function LiveGroupPage() {
   // (reported live) - same small quick-edit popup, just seeded blank
   // and saved via addExercisesToSession instead of updateExercise.
   const openAddExercise = (sessionId: string) => {
-    setEditDraft({ name: "", sets: "3", mode: "reps", reps: "", time: "", rest: "", target_load: "" });
+    setEditDraft({ name: "", sets: "3", mode: "reps", reps: "8-12", time: "", rest: "", target_load: "" });
     setEditModal({ sessionId, exercise: null });
     setEditNameDropdownOpen(false);
   };

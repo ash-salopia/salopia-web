@@ -427,7 +427,7 @@ export default function SessionDetailPage() {
         session_id: sessionId,
         name: "",
         sets: 3,
-        reps: "8",
+        reps: "8-12",
         tempo: "2-0-2",
         sort_order: (session.exercises?.length ?? 0),
         log: [{ weight: "", done: false, reps: "" }, { weight: "", done: false, reps: "" }, { weight: "", done: false, reps: "" }],
