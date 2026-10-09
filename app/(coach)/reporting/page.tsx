@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { pdf } from "@react-pdf/renderer";
-import JSZip from "jszip";
 import { todayISO, resolveDateRange, type ReportRangeMode } from "@/lib/date-utils";
 import { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/lib/report-options";
 import { generateReport } from "@/lib/data/reports";
@@ -16,8 +14,6 @@ import ReportTargetPicker from "@/components/reports/ReportTargetPicker";
 import DateRangePicker from "@/components/reports/DateRangePicker";
 import ReportOptionsForm from "@/components/reports/ReportOptionsForm";
 import ExportModal from "@/components/ExportModal";
-import AthleteReportPdf from "@/components/reports/pdf/AthleteReportPdf";
-import SquadReportPdf from "@/components/reports/pdf/SquadReportPdf";
 import {
   computeSquadReport,
   availableExercises,
@@ -594,6 +590,15 @@ export default function ReportingPage() {
     // click's user-gesture context and get popup-blocked.
     const win = window.open("", "_blank");
     try {
+      // @react-pdf/renderer and the PDF layout components are loaded
+      // on demand (0111) rather than statically - they're only ever
+      // needed once a coach actually generates a report, but a static
+      // import bundles them into this page's JS for every visit. This
+      // was most of the ~500KB this route shipped on every load.
+      const [{ pdf }, { default: SquadReportPdf }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/components/reports/pdf/SquadReportPdf"),
+      ]);
       const { start, end } = resolveDateRange(mode, customStart, customEnd);
       const rangeLabel = start && end ? `${start} to ${end}` : "All time";
       const generated = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -647,6 +652,10 @@ export default function ReportingPage() {
     // zoom all just work like any other PDF link.
     const win = window.open("", "_blank");
     try {
+      const [{ pdf }, { default: AthleteReportPdf }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/components/reports/pdf/AthleteReportPdf"),
+      ]);
       const { start, end } = resolveDateRange(mode, customStart, customEnd);
       const id = targetIds[0];
       const athlete = athleteById(id);
@@ -683,6 +692,11 @@ export default function ReportingPage() {
     setPdfError("");
     setPdfBusy(true);
     try {
+      const [{ pdf }, { default: AthleteReportPdf }, { default: JSZip }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/components/reports/pdf/AthleteReportPdf"),
+        import("jszip"),
+      ]);
       const { start, end } = resolveDateRange(mode, customStart, customEnd);
       const zip = new JSZip();
       // Sequential, not Promise.all - a large squad means N Supabase reads
