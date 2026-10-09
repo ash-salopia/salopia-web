@@ -204,14 +204,17 @@ export interface NewExerciseInput {
   count_contacts?: boolean;
 }
 
-// Mirrors the prototype's newExercise() defaults exactly.
+// Default new-exercise prescription, overridable per call (0110: 3x8-12
+// rather than a flat "8" - a hypertrophy rep range, not a single number,
+// is the sensible blank-slate default a coach actually wants to adjust
+// from rather than retype entirely).
 function exerciseDefaults(over: NewExerciseInput) {
   const sets = over.sets ?? 3;
   return {
     name: over.name ?? "",
     order: over.order ?? "",
     sets,
-    reps: over.reps ?? "8",
+    reps: over.reps ?? "8-12",
     time: over.time ?? "",
     rest: over.rest ?? "",
     target_load: over.target_load ?? "",

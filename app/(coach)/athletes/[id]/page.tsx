@@ -1,6 +1,6 @@
 "use client";
 import { reorderSessionsOnDay, copySessionToDates } from "@/lib/data/sessions";
-import CopySessionModal from "@/components/CopySessionModal";
+import dynamic from "next/dynamic";
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
@@ -22,19 +22,30 @@ import { listGroupMembers } from "@/lib/data/groups";
 import { computeSquadComparison, type SquadComparisonContext } from "@/lib/squad-comparison";
 import { archiveAthlete, toggleLiveGroup, listGroups as listAthleteGroupTags } from "@/lib/data/athletes";
 import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
-import ReportModal from "@/components/ReportModal";
-import VoiceSessionModal from "@/components/VoiceSessionModal";
-import NotesSessionModal from "@/components/NotesSessionModal";
-import ModifySessionsModal from "@/components/ModifySessionsModal";
-import DirectMessageThread from "@/components/DirectMessageThread";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
-import AssignProgrammeModal from "@/components/AssignProgrammeModal";
-import SessionLibraryAccessModal from "@/components/SessionLibraryAccessModal";
-import GoalsManager from "@/components/GoalsManager";
-import ExportModal from "@/components/ExportModal";
-import RecoverySessionModal from "@/components/RecoverySessionModal";
-import AthleteDashboard from "@/components/AthleteDashboard";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
+
+// Dynamically imported (0111) - every one of these is either a modal
+// only rendered after a button click, or a tab view that's just one of
+// several - none are needed for the page's first paint, but a plain
+// static import bundles a component's full code (and whatever it
+// imports - chart libs, etc.) into this page's main chunk regardless
+// of whether it's ever opened. This page had become the single
+// heaviest route in the app (159KB of its own JS, 436KB first load)
+// almost entirely from these. `ssr: false` costs nothing here since
+// the whole page is already client-only ("use client" above).
+const CopySessionModal = dynamic(() => import("@/components/CopySessionModal"), { ssr: false });
+const ReportModal = dynamic(() => import("@/components/ReportModal"), { ssr: false });
+const VoiceSessionModal = dynamic(() => import("@/components/VoiceSessionModal"), { ssr: false });
+const NotesSessionModal = dynamic(() => import("@/components/NotesSessionModal"), { ssr: false });
+const ModifySessionsModal = dynamic(() => import("@/components/ModifySessionsModal"), { ssr: false });
+const DirectMessageThread = dynamic(() => import("@/components/DirectMessageThread"), { ssr: false });
+const AssignProgrammeModal = dynamic(() => import("@/components/AssignProgrammeModal"), { ssr: false });
+const SessionLibraryAccessModal = dynamic(() => import("@/components/SessionLibraryAccessModal"), { ssr: false });
+const GoalsManager = dynamic(() => import("@/components/GoalsManager"), { ssr: false });
+const ExportModal = dynamic(() => import("@/components/ExportModal"), { ssr: false });
+const RecoverySessionModal = dynamic(() => import("@/components/RecoverySessionModal"), { ssr: false });
+const AthleteDashboard = dynamic(() => import("@/components/AthleteDashboard"), { ssr: false });
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
 import { getMyBranding } from "@/lib/data/branding";

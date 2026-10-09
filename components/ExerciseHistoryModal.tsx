@@ -123,15 +123,17 @@ export default function ExerciseHistoryModal({ athleteId, exerciseName, currentS
       if (!pbEnabled) { setPb(null); return; }
 
       // Fetch PB — could be weighted, bodyweight+reps, or bodyweight+time
-      // (see detectPB's docstring in app/api/athlete-link/log/route.ts).
-      // Check all three shapes, use whichever this exercise has data in.
+      // (see detectPB's docstring in lib/pb-detect.ts). Explicit pb_type
+      // per shape rather than inferring from null columns (0110 added
+      // 'e1rm'/'volume' lanes that can also leave these columns null in
+      // combinations that would otherwise collide with bw_reps/bw_time).
       const pbSelect = "id, weight_kg, reps, time_seconds, date";
       const pbBase = () =>
         supabase.from("personal_bests").select(pbSelect).ilike("exercise_name", exerciseName).eq("athlete_id", athleteId);
       const [{ data: weightedPb }, { data: repsPb }, { data: timePb }] = await Promise.all([
-        pbBase().not("weight_kg", "is", null).order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
-        pbBase().is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false }).limit(1).maybeSingle(),
-        pbBase().not("time_seconds", "is", null).order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
+        pbBase().eq("pb_type", "weight").order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
+        pbBase().eq("pb_type", "bw_reps").order("reps", { ascending: false }).limit(1).maybeSingle(),
+        pbBase().eq("pb_type", "bw_time").order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
       ]);
 
       setPb(weightedPb ?? repsPb ?? timePb ?? null);

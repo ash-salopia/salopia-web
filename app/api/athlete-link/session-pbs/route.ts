@@ -9,9 +9,11 @@ export const dynamic = "force-dynamic";
 // The athlete's own PBs set in one session — powers the 🏆 stat on the
 // Session summary modal. Client-fetched when the modal opens so it
 // reflects PBs hit moments earlier in the same sitting (a server render
-// at page load would miss those). One row per exercise per session,
-// guaranteed by the (athlete_id, exercise_name, session_id) unique
-// constraint (0039).
+// at page load would miss those). Up to one row per (exercise, pb_type)
+// per session (0039's unique constraint, widened by 0110 to include
+// pb_type) — a single exercise can appear more than once here if it
+// PB'd on more than one lane (e.g. heaviest weight AND best session
+// volume) in the same sitting.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token");
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("personal_bests")
-    .select("exercise_name, weight_kg, reps, time_seconds")
+    .select("id, exercise_name, pb_type, weight_kg, reps, time_seconds, e1rm_kg, volume_kg")
     .eq("athlete_id", athlete.id)
     .eq("session_id", sessionId)
     .order("exercise_name", { ascending: true });

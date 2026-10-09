@@ -255,8 +255,12 @@ export default function AthleteProfilePage() {
     try {
       const [{ data: athleteData }, { data: pbData }, { data: sessionData }, { data: exerciseData }] = await Promise.all([
         supabase.from("athletes").select("*").eq("id", athleteId).single(),
+        // Excludes 'e1rm'/'volume' (0110 added those lanes, which also
+        // populate weight_kg for display elsewhere) - this profile card
+        // is specifically "heaviest weight / most reps / longest hold
+        // ever per exercise", the classic single-PB-per-exercise view.
         supabase.from("personal_bests").select("id, exercise_name, weight_kg, reps, time_seconds, date")
-          .eq("athlete_id", athleteId).order("weight_kg", { ascending: false }),
+          .eq("athlete_id", athleteId).in("pb_type", ["weight", "bw_reps", "bw_time"]).order("weight_kg", { ascending: false }),
         supabase.from("sessions").select("date, session_exercises(log)").eq("athlete_id", athleteId),
         // Also calculate PBs directly from session logs to catch coach-logged sessions
         supabase.from("session_exercises")

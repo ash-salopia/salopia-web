@@ -29,6 +29,9 @@ export async function GET(request: Request) {
     .from("personal_bests")
     .select("*, athlete:athletes(id, name, hide_pbs_from_feed, feed_first_name_only), reactions:pb_reactions(*), comments:pb_comments(*)")
     .in("athlete_id", athleteIds.length ? athleteIds : [athlete.id])
+    // Weight PBs only (no e1RM/Volume) - the classic PB feed, matching
+    // the coach-side community page.
+    .in("pb_type", ["weight", "bw_reps", "bw_time"])
     .order("created_at", { ascending: false })
     .limit(30);
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets } from "@/lib/one-rm";
@@ -30,8 +31,14 @@ import {
 } from "@/lib/session-progress";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import { computeZones, DEFAULT_ZONE_MODEL, type ComputedZone } from "@/lib/training-zones";
-import VoiceSessionModal from "@/components/VoiceSessionModal";
-import NotesSessionModal from "@/components/NotesSessionModal";
+// Dynamically imported (0111) - both only render after a button click
+// (Voice/Notes import), never for the page's first paint; a static
+// import was bundling both (NotesSessionModal pulls in the xlsx
+// parser, a large library on its own) into this page's main chunk on
+// every visit regardless. `ssr: false` costs nothing - the whole page
+// is already client-only ("use client" above).
+const VoiceSessionModal = dynamic(() => import("@/components/VoiceSessionModal"), { ssr: false });
+const NotesSessionModal = dynamic(() => import("@/components/NotesSessionModal"), { ssr: false });
 import PowerSpeedExerciseCard from "@/components/PowerSpeedExerciseCard";
 import PowerSpeedSummaryBar from "@/components/PowerSpeedSummaryBar";
 import RecoverySessionEditor from "@/components/recovery/RecoverySessionEditor";
@@ -40,7 +47,7 @@ import type { PSExercise, PSSetLog } from "@/components/PowerSpeedExerciseCard";
 import { resolveTrackedMetrics, normalizePSLog } from "@/lib/ps-metrics";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import SportSessionEditor from "@/components/sport/SportSessionEditor";
-import SessionCompareModal from "@/components/SessionCompareModal";
+const SessionCompareModal = dynamic(() => import("@/components/SessionCompareModal"), { ssr: false });
 import type { Session, SessionExercise, SetLog, LibraryEntry } from "@/types";
 
 type SessionStub = { id: string; name: string; date: string; type: string };
@@ -427,7 +434,7 @@ export default function SessionDetailPage() {
         session_id: sessionId,
         name: "",
         sets: 3,
-        reps: "8",
+        reps: "8-12",
         tempo: "2-0-2",
         sort_order: (session.exercises?.length ?? 0),
         log: [{ weight: "", done: false, reps: "" }, { weight: "", done: false, reps: "" }, { weight: "", done: false, reps: "" }],

@@ -275,7 +275,10 @@ export async function buildLeaderboards(
   athletes: LbAthlete[],
   opts: { athleteIds?: string[]; metricIds?: string[] } = {}
 ): Promise<{ boards: LeaderboardBoard[]; bands: AgeBand[] }> {
-  let pbQ = supabase.from("personal_bests").select("athlete_id, exercise_name, weight_kg").not("weight_kg", "is", null);
+  // pb_type='weight' explicitly (0110 added 'e1rm'/'volume' lanes that
+  // also carry a non-null weight_kg for display elsewhere) - the
+  // leaderboard is specifically about heaviest weight ever lifted.
+  let pbQ = supabase.from("personal_bests").select("athlete_id, exercise_name, weight_kg").eq("pb_type", "weight").not("weight_kg", "is", null);
   let sessQ = supabase.from("test_sessions").select("id, athlete_id");
   let resultQ = supabase.from("test_results").select("value, side, test_metric_id, test_session_id, test_metrics(name, unit, better_direction, is_bilateral)");
   let benchQ = supabase.from("test_benchmarks").select("age_min, age_max");

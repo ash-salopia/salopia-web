@@ -52,7 +52,7 @@ export async function getLeaderboards(): Promise<LeaderboardsData> {
 // strength-exercise picker in Settings.
 export async function listOrgPbExerciseNames(): Promise<string[]> {
   const supabase = createClient();
-  const { data } = await supabase.from("personal_bests").select("exercise_name").not("weight_kg", "is", null);
+  const { data } = await supabase.from("personal_bests").select("exercise_name").eq("pb_type", "weight").not("weight_kg", "is", null);
   const seen = new Map<string, string>();
   for (const r of data ?? []) {
     const name = (r.exercise_name as string) ?? "";

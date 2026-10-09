@@ -19,10 +19,13 @@ import { todayISO } from "@/lib/date-utils";
 import type { Session, SessionExercise, SetLog } from "@/types";
 
 interface DetectedPB {
+  kind: "weight" | "e1rm" | "volume" | "bw_reps" | "bw_time";
   exerciseName: string;
   weightKg: number | null;
   reps: number | null;
   timeSeconds: number | null;
+  e1rmKg: number | null;
+  volumeKg: number | null;
 }
 
 // Whether a set has anything logged in any of its currently-visible
@@ -148,7 +151,7 @@ export default function AthleteSessionView({
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
-  const [pbCelebration, setPbCelebration] = useState<DetectedPB | null>(null);
+  const [pbCelebration, setPbCelebration] = useState<DetectedPB[] | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [checkedInToday, setCheckedInToday] = useState(initialCheckedInToday ?? false);
   const [openNotesFor, setOpenNotesFor] = useState<Set<string>>(new Set());
@@ -329,8 +332,8 @@ export default function AthleteSessionView({
     if (!result.ok && !result.queued) {
       setError(result.error);
     }
-    if (result.ok && result.data?.pb) {
-      setPbCelebration(result.data.pb);
+    if (result.ok && result.data?.pbs?.length) {
+      setPbCelebration(result.data.pbs);
     }
     setSaving(null);
   };
@@ -1021,12 +1024,13 @@ export default function AthleteSessionView({
         );
       })()}
 
-      {pbCelebration && (
+      {pbCelebration && pbCelebration.length > 0 && (
         <PBCelebrationModal
-          exerciseName={pbCelebration.exerciseName}
-          weightKg={pbCelebration.weightKg}
-          reps={pbCelebration.reps}
-          timeSeconds={pbCelebration.timeSeconds}
+          exerciseName={pbCelebration[0].exerciseName}
+          pbs={pbCelebration.map((pb) => ({
+            kind: pb.kind, weightKg: pb.weightKg, reps: pb.reps,
+            timeSeconds: pb.timeSeconds, e1rmKg: pb.e1rmKg, volumeKg: pb.volumeKg,
+          }))}
           onClose={() => setPbCelebration(null)}
         />
       )}

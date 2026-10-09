@@ -10,7 +10,7 @@ import {
   listAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement,
 } from "@/lib/data/announcements";
 import {
-  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, formatPBValue, type PersonalBest,
+  listRecentOrgPBs, addCoachReaction, removeCoachReaction, deletePB, formatPBValue, pbTypeLabel, type PersonalBest,
 } from "@/lib/data/personal-bests";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
@@ -94,7 +94,8 @@ export default function CommunityPage() {
       const [g, a, p, compsRes, athletesRes] = await Promise.all([
         listGroups(),
         listAnnouncements(),
-        listRecentOrgPBs(),
+        // Weight PBs only (no e1RM/Volume) - the classic PB feed.
+        listRecentOrgPBs(30, ["weight", "bw_reps", "bw_time"]),
         fetch("/api/competitions").then((r) => r.json()),
         supabase.from("athletes").select("id, name").eq("archived", false).order("name"),
       ]);
@@ -740,7 +741,7 @@ function PBCard({ pb, myReaction, reactionGroups, highlighted, onReact, onDelete
           ✕
         </button>
       </div>
-      <div style={s.pbExercise}>🏆 {pb.exercise_name}</div>
+      <div style={s.pbExercise}>🏆 {pb.exercise_name}{pbTypeLabel(pb.pb_type) ? ` · ${pbTypeLabel(pb.pb_type)}` : ""}</div>
       <div style={s.pbWeight}>{formatPBValue(pb)}</div>
       <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
 

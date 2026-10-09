@@ -1,12 +1,21 @@
 import { createClient } from "@/lib/supabase-browser";
 
+// 0110 — explicit PB shape, replacing inference from which columns
+// are null: 'weight' (heaviest single weight, the classic PB), 'e1rm'
+// (best estimated 1RM this session), 'volume' (best total session
+// tonnage), 'bw_reps'/'bw_time' (bodyweight, unchanged from before).
+export type PBType = "weight" | "e1rm" | "volume" | "bw_reps" | "bw_time";
+
 export interface PersonalBest {
   id: string;
   athlete_id: string;
   exercise_name: string;
+  pb_type: PBType;
   weight_kg: number | null;
   reps: number | null;
   time_seconds: number | null; // 0041 — set for a time-mode bodyweight PB (e.g. longest plank hold); null otherwise
+  e1rm_kg: number | null; // 0110 — set for pb_type='e1rm' rows only
+  volume_kg: number | null; // 0110 — set for pb_type='volume' rows only
   date: string;
   session_id: string | null;
   created_at: string;
@@ -16,10 +25,18 @@ export interface PersonalBest {
 }
 
 // Shared display formatting so every PB surface (community feed,
-// athlete profile, dashboard, history modals) shows the three PB
-// shapes consistently: weighted (kg, + reps if set), bodyweight+reps,
-// bodyweight+time (longest hold).
-export function formatPBValue(pb: Pick<PersonalBest, "weight_kg" | "reps" | "time_seconds">): string {
+// athlete profile, dashboard, history modals) shows every PB shape
+// consistently: weighted (kg, + reps if set), estimated 1RM, session
+// volume, bodyweight+reps, bodyweight+time (longest hold).
+export function formatPBValue(
+  pb: Partial<Pick<PersonalBest, "pb_type" | "weight_kg" | "reps" | "time_seconds" | "e1rm_kg" | "volume_kg">>
+): string {
+  if (pb.pb_type === "e1rm" && pb.e1rm_kg != null) {
+    return `e1RM ${pb.e1rm_kg}kg${pb.weight_kg ? ` (${pb.weight_kg}kg × ${pb.reps})` : ""}`;
+  }
+  if (pb.pb_type === "volume" && pb.volume_kg != null) {
+    return `${Math.round(pb.volume_kg)}kg total volume`;
+  }
   if (pb.time_seconds != null) {
     const mins = Math.floor(pb.time_seconds / 60);
     const secs = Math.round(pb.time_seconds % 60);
@@ -32,6 +49,18 @@ export function formatPBValue(pb: Pick<PersonalBest, "weight_kg" | "reps" | "tim
     return `${pb.reps} reps`;
   }
   return "Bodyweight";
+}
+
+// Short badge label for the PB type, shown alongside the value so a
+// non-'weight' lane (e1RM, volume) doesn't read as a plain weight PB.
+export function pbTypeLabel(pbType: PBType | undefined): string | null {
+  switch (pbType) {
+    case "e1rm": return "Estimated 1RM";
+    case "volume": return "Session volume";
+    case "bw_reps": return "Most reps";
+    case "bw_time": return "Longest hold";
+    default: return null; // 'weight' - the classic PB, no extra label needed
+  }
 }
 
 export interface PBComment {
@@ -54,12 +83,19 @@ export interface PBReaction {
   created_at: string;
 }
 
-export async function listRecentOrgPBs(limit = 30): Promise<PersonalBest[]> {
+// pbTypes narrows which PB lanes come back (0110 added 'e1rm'/'volume'
+// alongside the classic 'weight'/'bw_reps'/'bw_time') - omit for every
+// lane (the celebration popup and session-summary list both want all
+// of them); callers that show a single running PB feed/ticker pass an
+// explicit subset instead.
+export async function listRecentOrgPBs(limit = 30, pbTypes?: PBType[]): Promise<PersonalBest[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("personal_bests")
     .select("*, athlete:athletes!inner(id, name), reactions:pb_reactions(*), comments:pb_comments(*)")
-    .eq("athlete.archived", false)
+    .eq("athlete.archived", false);
+  if (pbTypes) query = query.in("pb_type", pbTypes);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -149,6 +185,7 @@ export async function createManualPB(params: {
     .insert({
       athlete_id: params.athleteId,
       exercise_name: params.exerciseName,
+      pb_type: "weight",
       weight_kg: params.weightKg,
       reps: params.reps,
       date: params.date,

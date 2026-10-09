@@ -57,13 +57,18 @@ export async function GET(req: NextRequest) {
   // whichever one this exercise actually has data in.
   let pbRow: { weight_kg: number | null; reps: number | null; time_seconds: number | null; date: string } | null = null;
   if (pbEnabled) {
+    // Explicit pb_type ('weight'/'bw_reps'/'bw_time') rather than
+    // inferring the shape from which columns are null (0110 added
+    // 'e1rm'/'volume' lanes that can ALSO have weight_kg/reps/time_seconds
+    // null in various combinations, so null-pattern matching here would
+    // risk picking up one of those instead of the intended shape).
     const pbSelect = "weight_kg, reps, time_seconds, date";
     const pbBase = () =>
       supabase.from("personal_bests").select(pbSelect).eq("athlete_id", athlete.id).ilike("exercise_name", exerciseName);
     const [{ data: weightedPb }, { data: repsPb }, { data: timePb }] = await Promise.all([
-      pbBase().not("weight_kg", "is", null).order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
-      pbBase().is("weight_kg", null).is("time_seconds", null).order("reps", { ascending: false }).limit(1).maybeSingle(),
-      pbBase().not("time_seconds", "is", null).order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
+      pbBase().eq("pb_type", "weight").order("weight_kg", { ascending: false }).limit(1).maybeSingle(),
+      pbBase().eq("pb_type", "bw_reps").order("reps", { ascending: false }).limit(1).maybeSingle(),
+      pbBase().eq("pb_type", "bw_time").order("time_seconds", { ascending: false }).limit(1).maybeSingle(),
     ]);
     pbRow = weightedPb ?? repsPb ?? timePb ?? null;
   }
