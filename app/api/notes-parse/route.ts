@@ -245,8 +245,12 @@ export async function POST(
   ];
 
   // Messy spreadsheet → structured multi-session output: accuracy-
-  // critical, kept on the stronger model. max_tokens high (long output).
-  const r = await callClaude({ model: AI_MODEL.parse, system: buildSystem(libraryNames), maxTokens: 4096, messages });
+  // critical, kept on the stronger model. max_tokens high (long output) -
+  // a long multi-week import (many sessions/exercises + warm-up/cooldown
+  // prose) can need more than one might expect; 4096 was previously
+  // silently truncating the tail of long imports (e.g. the end of a
+  // session's cooldown notes, or later sessions) with no error surfaced.
+  const r = await callClaude({ model: AI_MODEL.parse, system: buildSystem(libraryNames), maxTokens: 16000, messages });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
 
   const raw: string = r.text || "{}";
@@ -256,8 +260,26 @@ export async function POST(
     const clean = raw.replace(/```json|```/g, "").trim();
     parsed = JSON.parse(clean);
   } catch {
+    if (r.truncated) {
+      return NextResponse.json(
+        { error: "These notes were too long to parse in one go - try importing them in smaller chunks (e.g. a few weeks at a time)" },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { error: "AI returned an unexpected format - please try again" },
+      { status: 500 }
+    );
+  }
+
+  // JSON.parse can succeed even on a truncated response if the cutoff
+  // happened to land on a clean structural boundary - the tail content
+  // (later sessions, or the end of a notes field) would just be silently
+  // missing rather than throwing. Flag that case explicitly rather than
+  // returning incomplete data with no indication anything was cut.
+  if (r.truncated) {
+    return NextResponse.json(
+      { error: "These notes were too long to parse in full - try importing them in smaller chunks (e.g. a few weeks at a time)" },
       { status: 500 }
     );
   }

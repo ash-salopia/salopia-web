@@ -46,7 +46,9 @@ interface CallOpts {
   signal?: AbortSignal;
 }
 
-export type CallResult = { ok: true; text: string } | { ok: false; status: number; error: string };
+export type CallResult =
+  | { ok: true; text: string; truncated: boolean }
+  | { ok: false; status: number; error: string };
 
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
@@ -90,7 +92,11 @@ export async function callClaude(o: CallOpts): Promise<CallResult> {
   }
   const data = await res.json().catch(() => null);
   const text: string = textFromContent(data);
-  return { ok: true, text };
+  // stop_reason "max_tokens" means the response was cut off mid-generation
+  // because it hit CallOpts.maxTokens — the caller asked for a hard cap
+  // that was too low for this particular input, not an error from the API.
+  const truncated = (data as { stop_reason?: unknown })?.stop_reason === "max_tokens";
+  return { ok: true, text, truncated };
 }
 
 // Concatenate every text block. Never assume content[0] is text — a
