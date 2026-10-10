@@ -159,7 +159,8 @@ Session detection rules:
 
 Session notes (general - separate from warm-up):
 - A source sometimes has a general note/overview section for the day — coaching focus, deload/taper instructions, "how this week fits the block", equipment notes, anything that isn't a warm-up routine, a cool-down, or an individual tracked exercise. This is often positioned ABOVE the warm-up on the page, or as a header note before the exercise list starts.
-- Put this in "sessionNotes" - ONE ITEM PER LINE like warmupNotes/cooldownNotes below if it's a list, or a short paragraph if that's how the source writes it. "" if the source has no such general note (don't invent one, and don't just repeat the session name here).
+- Put this in "sessionNotes" - ONE ITEM PER LINE like warmupNotes/cooldownNotes below if it's a list, or as a paragraph if that's how the source writes it. "" if the source has no such general note (don't invent one, and don't just repeat the session name here).
+- Transcribe this section's text IN FULL, word for word, exactly as written in the source — every sentence of every paragraph, including ones that read as generic/boilerplate advice (safety disclaimers, "ask a coach if unsure", numbered general-rules lists, etc.). Do NOT summarise, condense, paraphrase, or quietly drop a sentence (including the last sentence of a paragraph) because it seems repetitive or low-value - the coach sees exactly what you return, so a trimmed sentence is content that's gone, not content that was skippable. This matters even for long multi-paragraph note sections; length is not a reason to shorten it.
 - Do not confuse this with warm-up content: a warm-up is physical preparation movements (mobility, activation, an easy bike/row) the athlete DOES before the main work: that always goes in "warmupNotes", never "sessionNotes", even if it's the first text block on the page.
 
 Warm-up and cool-down:
