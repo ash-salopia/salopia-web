@@ -199,6 +199,16 @@ export default function ExerciseCard({
     onEditPresc({ set_percents: next });
   };
 
+  // Per-set target RIR prescriptions live in exercise.set_rir (0112) -
+  // same shape/convention as set_percents above, just converted to a
+  // suggested kg via lib/rir-load.ts instead of a straight % lookup.
+  const updateSetRIR = (index: number, value: string) => {
+    const next = [...(exercise.set_rir ?? [])];
+    while (next.length < log.length) next.push("");
+    next[index] = value;
+    onEditPresc({ set_rir: next });
+  };
+
   // Reps vs time is decided purely by whether the exercise is prescribed
   // in time mode (exercise.time set) - same rule as the athlete app's own
   // session view. Tempo (a rep-cadence concept, e.g. 3-1-1-0) doesn't
@@ -578,10 +588,25 @@ export default function ExerciseCard({
             <input
               type="checkbox"
               checked={!!exercise.use_percent_1rm}
-              onChange={(e) => onEditPresc({ use_percent_1rm: e.target.checked })}
+              // Mutually exclusive with Target RIR below - both compute a
+              // suggested kg from the athlete's 1RM, so having both on at
+              // once would just mean whichever happened to render last
+              // silently wins.
+              onChange={(e) => onEditPresc({ use_percent_1rm: e.target.checked, use_rir: e.target.checked ? false : exercise.use_rir })}
               style={{ accentColor: "var(--accent)" }}
             />
             <span style={{ color: exercise.use_percent_1rm ? "var(--accent)" : "var(--mute)" }}>Use %1RM</span>
+          </label>
+        )}
+        {!exercise.is_bodyweight && !exercise.completion_only && (
+          <label style={styles.checkboxRow} title="Prescribe each set's own target Reps-in-Reserve (e.g. 3/2/1 across a set) instead of a fixed load or %1RM - the app suggests a kg from the athlete's current 1RM">
+            <input
+              type="checkbox"
+              checked={!!exercise.use_rir}
+              onChange={(e) => onEditPresc({ use_rir: e.target.checked, use_percent_1rm: e.target.checked ? false : exercise.use_percent_1rm })}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span style={{ color: exercise.use_rir ? "var(--accent)" : "var(--mute)" }}>Use Target RIR</span>
           </label>
         )}
         <label style={styles.checkboxRow} title="A deliberately lighter primer/activation effort (e.g. pre-match). Excluded from reports and the rolling %1RM estimate, so it won't look like a strength drop.">
@@ -652,7 +677,7 @@ export default function ExerciseCard({
             style={styles.miniInput}
           />
         </Field>
-        {!exercise.is_bodyweight && !exercise.use_percent_1rm && !exercise.completion_only && (
+        {!exercise.is_bodyweight && !exercise.use_percent_1rm && !exercise.use_rir && !exercise.completion_only && (
           <Field label="Load" grow>
             <input
               value={exercise.target_load}
@@ -747,6 +772,16 @@ export default function ExerciseCard({
                   value={exercise.set_percents?.[i] ?? ""}
                   onChange={(e) => updateSetPercent(i, e.target.value)}
                   placeholder="%1RM"
+                  inputMode="decimal"
+                  style={styles.setInput}
+                />
+              )}
+              {exercise.use_rir && (
+                <input
+                  value={exercise.set_rir?.[i] ?? ""}
+                  onChange={(e) => updateSetRIR(i, e.target.value)}
+                  placeholder="RIR"
+                  title="Target Reps-in-Reserve for this set (0-4)"
                   inputMode="decimal"
                   style={styles.setInput}
                 />

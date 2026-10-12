@@ -176,7 +176,7 @@ export function parseToKg(value: string, unit: WeightUnit): number {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseRepsStr(s: string | null | undefined): number {
+export function parseRepsStr(s: string | null | undefined): number {
   if (!s) return 0;
   const m = s.match(/(\d+)/);
   return m ? parseInt(m[1], 10) : 0;
