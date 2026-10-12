@@ -26,6 +26,31 @@ node scripts/seed-mas-hr-zones-demo.js   # "Marcus Vale (MAS)" — aerobic profi
 node scripts/seed-training-load-rtp-demo.js  # "Rico Alvarez (RTP)" — 13 weeks of
                                              #   load/RTP data (ACWR spike, monotony,
                                              #   pain check-ins, return-to-play status)
+node scripts/seed-rir-demo.js            # "Priya Anand (RIR)" — fixed 1RMs + a
+                                         #   3-week Target RIR block (3→2→1 RIR),
+                                         #   last session left unlogged so the
+                                         #   suggested-kg placeholder shows live
+```
+
+## `seed-demo-fill-gaps.js`
+
+Non-destructive top-up, NOT part of the full-rebuild chain above — only
+ever INSERTS new sessions on dates that don't already exist, for the 7 base
+athletes + Marcus Webb (VBT) + Ryan Foster (continues each athlete's actual
+last logged weight per exercise). Run this any time the demo's calendar has
+gone stale (nothing scheduled past whenever it was last seeded) to restore
+continuous no-gaps coverage through `END_DATE` (currently 2026-11-30 — bump
+this constant in the file as time passes). Safe to re-run.
+
+Marcus Vale (MAS) and Rico Alvarez (RTP) aren't covered by this script —
+their own dedicated scripts above already regenerate relative to "today"
+when re-run, so just re-run those directly to freshen them instead. Their
+narrative windows are intentionally shorter (days/weeks, not through
+November) — see each script's own header comment.
+
+```bash
+node scripts/seed-demo-fill-gaps.js
+DRY_RUN=1 node scripts/seed-demo-fill-gaps.js   # preview only, no writes
 ```
 
 `seed-demo-org.js` is destructive (rebuilds the org). The rest are additive and
@@ -37,6 +62,7 @@ idempotent — safe to re-run individually; each deletes the rows it owns first.
 `0074`, `0085` (guarded — skips a section whose table is missing).
 `seed-training-load-rtp-demo.js` and the RTP parts of `seed-demo-extras.js`
 need `0088` + `0089`. `seed-mas-hr-zones-demo.js` needs `0086`.
+`seed-rir-demo.js` needs `0112`.
 
 ## Not covered by any script
 
