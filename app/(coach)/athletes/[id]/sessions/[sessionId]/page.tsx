@@ -5,7 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
-import { calculateSetTargets } from "@/lib/one-rm";
+import { calculateSetTargets, parseRepsStr } from "@/lib/one-rm";
+import { calculateSetTargetsFromRIR } from "@/lib/rir-load";
 import {
   getSession,
   updateSession,
@@ -252,8 +253,11 @@ export default function SessionDetailPage() {
 
   // Recompute %1RM previews whenever the set of prescribed percentages
   // actually changes (not on every keystroke elsewhere on the page).
+  // RIR exercises (0112) feed the same oneRmTargets map/prop as %1RM -
+  // ExerciseCard's percentTargets is just "suggested kg per set",
+  // whichever prescription mode computed it.
   const percentSignature = (session?.exercises ?? [])
-    .map((e) => `${e.id}:${e.use_percent_1rm ? (e.set_percents ?? []).join(",") : ""}`)
+    .map((e) => `${e.id}:${e.use_percent_1rm ? (e.set_percents ?? []).join(",") : ""}:${e.use_rir ? (e.set_rir ?? []).join(",") : ""}`)
     .join("|");
 
   useEffect(() => {
@@ -261,21 +265,32 @@ export default function SessionDetailPage() {
     const withPercent = (session?.exercises ?? []).filter(
       (e) => e.use_percent_1rm && (e.set_percents ?? []).some((p) => p)
     );
-    if (!withPercent.length) { setOneRmTargets({}); return; }
+    const withRIR = (session?.exercises ?? []).filter(
+      (e) => e.use_rir && (e.set_rir ?? []).some((r) => r)
+    );
+    if (!withPercent.length && !withRIR.length) { setOneRmTargets({}); return; }
 
     let cancelled = false;
     (async () => {
       const settings = await getOrgSettings().catch(() => null);
       const formula = settings?.one_rm_formula ?? "lander";
-      const entries = await Promise.all(
-        withPercent.map(async (ex) => {
-          const oneRM = await resolveCurrentOneRM(athleteId, ex.name, formula).catch(() => null);
-          return [ex.id, oneRM != null ? calculateSetTargets(oneRM, ex.set_percents ?? []) : null] as const;
-        })
-      );
+      const [percentEntries, rirEntries] = await Promise.all([
+        Promise.all(
+          withPercent.map(async (ex) => {
+            const oneRM = await resolveCurrentOneRM(athleteId, ex.name, formula).catch(() => null);
+            return [ex.id, oneRM != null ? calculateSetTargets(oneRM, ex.set_percents ?? []) : null] as const;
+          })
+        ),
+        Promise.all(
+          withRIR.map(async (ex) => {
+            const oneRM = await resolveCurrentOneRM(athleteId, ex.name, formula).catch(() => null);
+            return [ex.id, oneRM != null ? calculateSetTargetsFromRIR(oneRM, parseRepsStr(ex.reps), ex.set_rir ?? []) : null] as const;
+          })
+        ),
+      ]);
       if (cancelled) return;
       const next: Record<string, (number | null)[]> = {};
-      for (const [id, targets] of entries) if (targets) next[id] = targets;
+      for (const [id, targets] of [...percentEntries, ...rirEntries]) if (targets) next[id] = targets;
       setOneRmTargets(next);
     })();
 

@@ -125,6 +125,8 @@ export interface ExerciseBase {
   percent_1rm?: number | null; // 0032 — DEPRECATED, one value for the whole exercise. Superseded by use_percent_1rm + set_percents (0045); kept only so old data still reads back.
   use_percent_1rm?: boolean; // 0045 — when true, set_percents[i] prescribes each set's own %1RM (a ramping scheme, e.g. 70/80/90%), rather than one uniform load for the exercise
   set_percents?: string[]; // 0045 — per-set %1RM prescriptions, index-aligned with `sets` (and, for a real session, with `log`)
+  use_rir?: boolean; // 0112 — when true, set_rir[i] prescribes each set's own target Reps-in-Reserve instead of a fixed load or %1RM. Mutually exclusive with use_percent_1rm (the UI only lets one be on at a time)
+  set_rir?: string[]; // 0112 — per-set target RIR prescriptions, index-aligned with `sets`/`log`, same convention as set_percents. Converted to a suggested kg via lib/rir-load.ts
   is_bodyweight?: boolean; // 0041 — coach-set: this exercise has no load, athlete logs reps or time only
   completion_only?: boolean; // coach-set: nothing to track for this exercise (e.g. a mobility drill) — hides weight/reps/time entirely, logging is just a done tick per set
   track_velocity?: boolean; // coach-set: show a bar speed (m/s) box per set, in addition to whatever else this exercise logs

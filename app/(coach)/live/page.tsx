@@ -11,7 +11,8 @@ import CheckInModal from "@/components/CheckInModal";
 import LiveChallengePanel from "@/components/LiveChallengePanel";
 import HyroxCardioLog from "@/components/HyroxCardioLog";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
-import { calculateSetTargets } from "@/lib/one-rm";
+import { calculateSetTargets, parseRepsStr } from "@/lib/one-rm";
+import { calculateSetTargetsFromRIR } from "@/lib/rir-load";
 import { useIsMobile } from "@/lib/use-is-mobile";
 import type { Athlete, Session, SessionType, SetLog, SessionExercise, LibraryEntry } from "@/types";
 import {
@@ -567,35 +568,46 @@ export default function LiveGroupPage() {
   const targetsAthlete = shownAthletes.find((a) => a.id === activeTab) ?? shownAthletes[0];
   const targetsSess = targetsAthlete ? getActiveSession(targetsAthlete.id) : null;
   const percentSignature = (targetsSess?.exercises ?? [])
-    .map((e) => `${e.id}:${e.use_percent_1rm ? (e.set_percents ?? []).join(",") : ""}`)
+    .map((e) => `${e.id}:${e.use_percent_1rm ? (e.set_percents ?? []).join(",") : ""}:${e.use_rir ? (e.set_rir ?? []).join(",") : ""}`)
     .join("|");
 
   useEffect(() => {
     const athlete = shownAthletes.find((a) => a.id === activeTab) ?? shownAthletes[0];
     const sess = athlete ? getActiveSession(athlete.id) : null;
-    // Computed for every %1RM exercise in the active session (not just
-    // whichever one happens to be expanded), so the compact per-set
-    // dots can capture a target on tap too, not only the expanded
-    // set editor.
+    // Computed for every %1RM/RIR (0112) exercise in the active session
+    // (not just whichever one happens to be expanded), so the compact
+    // per-set dots can capture a target on tap too, not only the
+    // expanded set editor.
     const withPercent = (sess?.exercises ?? []).filter(
       (e) => e.use_percent_1rm && (e.set_percents ?? []).some((p) => p)
     );
-    if (!athlete || !withPercent.length) return;
+    const withRIR = (sess?.exercises ?? []).filter(
+      (e) => e.use_rir && (e.set_rir ?? []).some((r) => r)
+    );
+    if (!athlete || (!withPercent.length && !withRIR.length)) return;
 
     let cancelled = false;
     (async () => {
       const settings = await getOrgSettings().catch(() => null);
       const formula = settings?.one_rm_formula ?? "lander";
-      const entries = await Promise.all(
-        withPercent.map(async (ex) => {
-          const oneRM = await resolveCurrentOneRM(athlete.id, ex.name, formula).catch(() => null);
-          return [ex.id, oneRM != null ? calculateSetTargets(oneRM, ex.set_percents ?? []) : null] as const;
-        })
-      );
+      const [percentEntries, rirEntries] = await Promise.all([
+        Promise.all(
+          withPercent.map(async (ex) => {
+            const oneRM = await resolveCurrentOneRM(athlete.id, ex.name, formula).catch(() => null);
+            return [ex.id, oneRM != null ? calculateSetTargets(oneRM, ex.set_percents ?? []) : null] as const;
+          })
+        ),
+        Promise.all(
+          withRIR.map(async (ex) => {
+            const oneRM = await resolveCurrentOneRM(athlete.id, ex.name, formula).catch(() => null);
+            return [ex.id, oneRM != null ? calculateSetTargetsFromRIR(oneRM, parseRepsStr(ex.reps), ex.set_rir ?? []) : null] as const;
+          })
+        ),
+      ]);
       if (cancelled) return;
       setOneRmTargets((prev) => {
         const next = { ...prev };
-        for (const [id, targets] of entries) if (targets) next[id] = targets;
+        for (const [id, targets] of [...percentEntries, ...rirEntries]) if (targets) next[id] = targets;
         return next;
       });
     })();
