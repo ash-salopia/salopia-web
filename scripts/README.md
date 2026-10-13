@@ -22,31 +22,35 @@ node scripts/seed-demo-extras.js         # additive: 2nd coach, groups + group c
                                          #   sessions, cardio/hybrid + aerobic profiles,
                                          #   sport sessions, documents, Coach Forum
 node scripts/seed-mas-hr-zones-demo.js   # "Marcus Vale (MAS)" — aerobic profile +
-                                         #   zoned cardio/hybrid sessions
+                                         #   weekly zoned cardio/hybrid block: 6 weeks
+                                         #   logged, planned through END_DATE
 node scripts/seed-training-load-rtp-demo.js  # "Rico Alvarez (RTP)" — 13 weeks of
                                              #   load/RTP data (ACWR spike, monotony,
-                                             #   pain check-ins, return-to-play status)
+                                             #   pain check-ins, return-to-play status),
+                                             #   then planned sessions through END_DATE
 node scripts/seed-rir-demo.js            # "Priya Anand (RIR)" — fixed 1RMs + a
-                                         #   3-week Target RIR block (3→2→1 RIR),
-                                         #   last session left unlogged so the
-                                         #   suggested-kg placeholder shows live
+                                         #   6-week Target RIR block (8 reps then
+                                         #   5 reps, each 3→2→1 RIR); week 4 is
+                                         #   today, unlogged, so the suggested-kg
+                                         #   placeholder shows live
 ```
 
 ## `seed-demo-fill-gaps.js`
 
 Non-destructive top-up, NOT part of the full-rebuild chain above — only
-ever INSERTS new sessions on dates that don't already exist, for the 7 base
+ever INSERTS new sessions on dates that don't already exist (the tail after
+each athlete's last session, plus any gap longer than 7 days), for the 7 base
 athletes + Marcus Webb (VBT) + Ryan Foster (continues each athlete's actual
 last logged weight per exercise). Run this any time the demo's calendar has
 gone stale (nothing scheduled past whenever it was last seeded) to restore
-continuous no-gaps coverage through `END_DATE` (currently 2026-11-30 — bump
+continuous no-gaps coverage through `END_DATE` (currently 2026-12-31 — bump
 this constant in the file as time passes). Safe to re-run.
 
 Marcus Vale (MAS) and Rico Alvarez (RTP) aren't covered by this script —
 their own dedicated scripts above already regenerate relative to "today"
-when re-run, so just re-run those directly to freshen them instead. Their
-narrative windows are intentionally shorter (days/weeks, not through
-November) — see each script's own header comment.
+when re-run, so just re-run those directly to freshen them instead. Each
+of those (and `seed-rir-demo.js`) has its own `END_DATE` constant too —
+bump all four together.
 
 ```bash
 node scripts/seed-demo-fill-gaps.js

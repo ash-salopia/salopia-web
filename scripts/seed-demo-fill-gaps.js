@@ -1,6 +1,6 @@
 // Non-destructive top-up: extends every "standard" demo athlete's
 // strength session history so their calendar has continuous coverage
-// with no stale tail, through the end of November 2026 - requested
+// with no stale tail, through END_DATE (end of December 2026) - requested
 // live: "update all other athletes' programmes to include sessions in
 // October & November with no gaps in history for any new prospective
 // coaches looking at trialling the app."
@@ -44,7 +44,10 @@ const { createClient } = require("@supabase/supabase-js");
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
 const DEMO_ORG_NAME = "VIS BUILD Demo";
-const END_DATE = "2026-11-30";
+const END_DATE = "2026-12-31";
+// An existing gap longer than this (days) between two sessions gets
+// filled too, not just the tail after the last session.
+const MAX_GAP_DAYS = 7;
 const DRY_RUN = process.env.DRY_RUN === "1";
 
 function todayISO() {
@@ -120,92 +123,117 @@ async function fillAthlete(athlete) {
   const sessionDateById = new Map((existingSessions ?? []).map((s) => [s.id, s.date]));
   const maxDate = existingSessions?.length ? existingSessions[existingSessions.length - 1].date : null;
 
-  // Continuation weight per exercise — the heaviest logged weight from
-  // this athlete's most recent past session that included it, else the
-  // midpoint of its normal starting range (a brand-new athlete like
-  // Ryan Foster has nothing logged yet).
-  const weightState = new Map();
+  // Every logged (date, heaviest weight) per exercise across this
+  // athlete's past sessions, so each filled window continues from the
+  // weight they were actually lifting just before it.
+  const history = new Map();
   for (const def of [...SESSION_A_EXERCISES, ...SESSION_B_EXERCISES]) {
-    const [lo, hi] = def.baseRange;
-    let best = { date: "", weight: 0 };
+    const points = [];
     if (pastSessionIds.length) {
       const { data: rows } = await sb
         .from("session_exercises").select("session_id, log").eq("name", def.name).in("session_id", pastSessionIds);
       for (const row of rows ?? []) {
-        const date = sessionDateById.get(row.session_id);
         const weights = (row.log ?? []).map((s) => parseFloat(s.weight)).filter((w) => !isNaN(w) && w > 0);
-        if (!weights.length) continue;
-        const w = Math.max(...weights);
-        if (date > best.date) best = { date, weight: w };
+        if (weights.length) points.push({ date: sessionDateById.get(row.session_id), weight: Math.max(...weights) });
       }
     }
-    weightState.set(def.name, best.weight > 0 ? best.weight : roundToPlate((lo + hi) / 2));
+    history.set(def.name, points);
+  }
+  // Heaviest logged weight from the most recent session on/before
+  // `date`, else the midpoint of the exercise's normal starting range
+  // (a brand-new athlete like Ryan Foster has nothing logged yet).
+  function weightAsOf(def, date) {
+    let best = { date: "", weight: 0 };
+    for (const p of history.get(def.name)) {
+      if (p.date <= date && p.date > best.date) best = p;
+    }
+    const [lo, hi] = def.baseRange;
+    return best.weight > 0 ? best.weight : roundToPlate((lo + hi) / 2);
   }
 
-  // Step forward from the day after the last existing session (or 14
-  // weeks before today, for an athlete with none at all - matching the
-  // depth the other base athletes originally got) in an alternating
-  // 3/4-day cadence - the same "twice a week" rhythm the base seed
-  // uses, just not pinned to its exact original weekdays.
-  let cursor = maxDate ?? addDaysISO(today, -14 * 7);
-  let isA = true;
-  let gapDays = 3;
+  // Windows to fill: every gap > MAX_GAP_DAYS between existing
+  // sessions, plus the tail from the last session (or 14 weeks before
+  // today, for an athlete with none at all - matching the depth the
+  // other base athletes originally got) through END_DATE. A filled gap
+  // stops 2 days short of the session that closes it so nothing lands
+  // back-to-back with existing work.
+  const dates = [...existingDates].sort();
+  const windows = [];
+  for (let i = 1; i < dates.length; i++) {
+    const days = (new Date(dates[i]) - new Date(dates[i - 1])) / 864e5;
+    if (days > MAX_GAP_DAYS) windows.push({ from: dates[i - 1], until: addDaysISO(dates[i], -2) });
+  }
+  windows.push({ from: maxDate ?? addDaysISO(today, -14 * 7), until: END_DATE });
+
   let inserted = 0;
   const insertedDates = [];
 
-  while (true) {
-    cursor = addDaysISO(cursor, gapDays);
-    gapDays = gapDays === 3 ? 4 : 3;
-    if (cursor > END_DATE) break;
-    if (existingDates.has(cursor)) { isA = !isA; continue; }
+  for (const win of windows) {
+    // Alternating 3/4-day cadence - the same "twice a week" rhythm the
+    // base seed uses, just not pinned to its exact original weekdays.
+    let cursor = win.from;
+    let isA = true;
+    let gapDays = 3;
+    const weightState = new Map(
+      [...SESSION_A_EXERCISES, ...SESSION_B_EXERCISES].map((def) => [def.name, weightAsOf(def, win.from)])
+    );
 
-    const isPast = cursor < today;
-    const weightedDefs = isA ? SESSION_A_EXERCISES : SESSION_B_EXERCISES;
-    const bodyweightDef = isA ? BODYWEIGHT_A : BODYWEIGHT_B;
+    while (true) {
+      cursor = addDaysISO(cursor, gapDays);
+      gapDays = gapDays === 3 ? 4 : 3;
+      if (cursor > win.until || cursor > END_DATE) break;
+      if (existingDates.has(cursor)) { isA = !isA; continue; }
 
-    const exercises = weightedDefs.map((def) => {
-      if (isPast) weightState.set(def.name, weightState.get(def.name) * 1.006);
-      const displayWeight = Math.max(roundToPlate(weightState.get(def.name)), 5);
-      return {
-        name: def.name, sets: def.sets, reps: String(def.reps), rest: def.rest, each_side: !!def.eachSide,
-        log: isPast
-          ? Array.from({ length: def.sets }, () => ({ weight: String(displayWeight), reps: String(def.reps), time: "", done: true }))
-          : Array.from({ length: def.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
-      };
-    });
+      const isPast = cursor < today;
+      const weightedDefs = isA ? SESSION_A_EXERCISES : SESSION_B_EXERCISES;
+      const bodyweightDef = isA ? BODYWEIGHT_A : BODYWEIGHT_B;
 
-    exercises.push({
-      name: bodyweightDef.name, sets: bodyweightDef.sets, reps: String(bodyweightDef.reps), rest: "90s", is_bodyweight: true,
-      log: isPast
-        ? Array.from({ length: bodyweightDef.sets }, (_, i) => ({ weight: "", reps: String(bodyweightDef.reps + (i % 2)), time: "", done: true }))
-        : Array.from({ length: bodyweightDef.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
-    });
-
-    if (isA) {
-      exercises.push({
-        name: TIME_EXERCISE.name, sets: TIME_EXERCISE.sets, reps: "", time: String(TIME_EXERCISE.time), rest: "60s", is_bodyweight: true,
-        log: isPast
-          ? Array.from({ length: TIME_EXERCISE.sets }, () => ({ weight: "", reps: "", time: String(TIME_EXERCISE.time), done: true }))
-          : Array.from({ length: TIME_EXERCISE.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+      const exercises = weightedDefs.map((def) => {
+        if (isPast) weightState.set(def.name, weightState.get(def.name) * 1.006);
+        const displayWeight = Math.max(roundToPlate(weightState.get(def.name)), 5);
+        return {
+          name: def.name, sets: def.sets, reps: String(def.reps), rest: def.rest, each_side: !!def.eachSide,
+          log: isPast
+            ? Array.from({ length: def.sets }, () => ({ weight: String(displayWeight), reps: String(def.reps), time: "", done: true }))
+            : Array.from({ length: def.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+        };
       });
-    }
 
-    if (!DRY_RUN) {
-      const { data: session, error: sessErr } = await sb
-        .from("sessions")
-        .insert({ athlete_id: athlete.id, name: isA ? "Lower A" : "Upper B", date: cursor, type: "strength" })
-        .select("id").single();
-      if (sessErr) throw sessErr;
-      const exRows = exercises.map((e, i) => exercisePresc(session.id, i, e));
-      const { error: exErr } = await sb.from("session_exercises").insert(exRows);
-      if (exErr) throw exErr;
-    }
+      exercises.push({
+        name: bodyweightDef.name, sets: bodyweightDef.sets, reps: String(bodyweightDef.reps), rest: "90s", is_bodyweight: true,
+        log: isPast
+          ? Array.from({ length: bodyweightDef.sets }, (_, i) => ({ weight: "", reps: String(bodyweightDef.reps + (i % 2)), time: "", done: true }))
+          : Array.from({ length: bodyweightDef.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+      });
 
-    inserted++;
-    insertedDates.push(cursor);
-    isA = !isA;
+      if (isA) {
+        exercises.push({
+          name: TIME_EXERCISE.name, sets: TIME_EXERCISE.sets, reps: "", time: String(TIME_EXERCISE.time), rest: "60s", is_bodyweight: true,
+          log: isPast
+            ? Array.from({ length: TIME_EXERCISE.sets }, () => ({ weight: "", reps: "", time: String(TIME_EXERCISE.time), done: true }))
+            : Array.from({ length: TIME_EXERCISE.sets }, () => ({ weight: "", reps: "", time: "", done: false })),
+        });
+      }
+
+      if (!DRY_RUN) {
+        const { data: session, error: sessErr } = await sb
+          .from("sessions")
+          .insert({ athlete_id: athlete.id, name: isA ? "Lower A" : "Upper B", date: cursor, type: "strength" })
+          .select("id").single();
+        if (sessErr) throw sessErr;
+        const exRows = exercises.map((e, i) => exercisePresc(session.id, i, e));
+        const { error: exErr } = await sb.from("session_exercises").insert(exRows);
+        if (exErr) throw exErr;
+      }
+
+      existingDates.add(cursor);
+      inserted++;
+      insertedDates.push(cursor);
+      isA = !isA;
+    }
   }
 
+  insertedDates.sort();
   return { inserted, first: insertedDates[0], last: insertedDates[insertedDates.length - 1] };
 }
 

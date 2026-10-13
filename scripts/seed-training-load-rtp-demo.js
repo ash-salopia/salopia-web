@@ -8,9 +8,11 @@
 //                           MONOTONY.
 //   Weeks 5-9   MODIFIED  — building back, pain 4 -> 2.
 //   Weeks 10-12 RTP BUILD — near-full training, flat-ish load, pain 2 -> 1.
-//   Week  13    SPIKE     — this (partial) week: match + heavy conditioning
+//   Week  13    SPIKE     — last full week: match + heavy conditioning
 //                           => current ACWR jumps into the spike band and
 //                           the weekly-load spike flag fires.
+//   Week  14+   PLANNED   — today through END_DATE: unlogged programme
+//                           sessions (no RPE, so no load counted).
 //
 // Every training day gets a session with a real duration_min + session
 // RPE (so sRPE load is computed for every type), plus a daily check-in
@@ -51,6 +53,7 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 
 const DEMO_ORG_NAME = "VIS BUILD Demo";
 const ATHLETE_NAME = "Rico Alvarez (RTP)";
+const END_DATE = "2026-12-31"; // planned (unlogged) sessions run through here
 
 // ── date helpers ────────────────────────────────────────────────────────────
 function todayISO() {
@@ -105,6 +108,14 @@ const MENUS = {
     { kind: "sport", name: "5-a-side", dur: 50, rpe: 6, logged: true },
     { kind: "strength", name: "Upper + core", dur: 45, rpe: 6, ex: "upper" },
   ],
+  // Post-spike, planned and unlogged (no RPE => no load counted), so the
+  // calendar runs on through END_DATE without changing the load story.
+  maintain: [
+    { kind: "sport", name: "Full team training", dur: 90, rpe: 7 },
+    { kind: "strength", name: "Lower-body strength", dur: 60, rpe: 7, ex: "lower" },
+    { kind: "sport", name: "Match", dur: 85, rpe: 8 },
+    { kind: "strength", name: "Upper + core", dur: 45, rpe: 6, ex: "upper" },
+  ],
   spike: [
     { kind: "sport", name: "Full team training", dur: 90, rpe: 7, logged: true },
     { kind: "sport", name: "Match", dur: 85, rpe: 8, logged: true },
@@ -121,7 +132,8 @@ function weekPlan(w) {
   if (w <= 4) return { phase: "rehab", perWeek: 6, pain: [6, 6, 5, 4][w - 1] };
   if (w <= 9) return { phase: "modified", perWeek: 4, pain: [4, 4, 3, 3, 2][w - 5] };
   if (w <= 12) return { phase: "build", perWeek: 4, pain: [2, 2, 1][w - 10] };
-  return { phase: "spike", perWeek: 6, pain: 1 };
+  if (w === 13) return { phase: "spike", perWeek: 6, pain: 1 };
+  return { phase: "maintain", perWeek: 4, pain: 1 };
 }
 
 const EX_MENUS = {
@@ -145,7 +157,7 @@ const EX_MENUS = {
   ],
 };
 
-function exerciseRows(sessionId, key) {
+function exerciseRows(sessionId, key, logged = true) {
   return EX_MENUS[key].map((e, i) => ({
     session_id: sessionId,
     name: e.name,
@@ -160,12 +172,14 @@ function exerciseRows(sessionId, key) {
     notes: "",
     sort_order: i,
     is_bodyweight: e.w.every((x) => x == null),
-    log: e.w.map((weight) => ({
-      weight: weight == null ? "" : String(weight),
-      reps: String(e.reps).replace(/[^0-9].*$/, "") || "8",
-      time: "",
-      done: true,
-    })),
+    log: e.w.map((weight) => logged
+      ? {
+          weight: weight == null ? "" : String(weight),
+          reps: String(e.reps).replace(/[^0-9].*$/, "") || "8",
+          time: "",
+          done: true,
+        }
+      : { weight: "", reps: "", time: "", done: false }),
   }));
 }
 
@@ -227,7 +241,11 @@ async function main() {
     console.log(`Removed existing "${a.name}".`);
   }
 
-  const start = mondayOnOrBefore(addDaysISO(todayISO(), -90));
+  // Week 13 (the spike) is always the last COMPLETE calendar week,
+  // whatever weekday the script runs on: the weekly-spike flag reads the
+  // latest week with any logged load, so a half-logged current week
+  // would mask it. Week 14 onward (incl. today) is planned, unlogged.
+  const start = addDaysISO(mondayOnOrBefore(todayISO()), -13 * 7);
   const rtpSince = addDaysISO(start, 9 * 7); // start of week 10 (RTP build)
 
   // Create the athlete. Hard-require migration 0088 (rtp_status column).
@@ -263,8 +281,9 @@ async function main() {
   let sessionCount = 0;
   let athleteLoggedCount = 0;
   let noteCount = 0;
+  let plannedCount = 0;
 
-  for (let w = 1; w <= 13; w++) {
+  for (let w = 1; addDaysISO(start, (w - 1) * 7) <= END_DATE; w++) {
     const wp = weekPlan(w);
     const menu = MENUS[wp.phase];
     const weekStart = addDaysISO(start, (w - 1) * 7);
@@ -272,7 +291,27 @@ async function main() {
 
     for (let di = 0; di < dows.length; di++) {
       const date = addDaysISO(weekStart, dows[di]);
-      if (date > today) continue;
+      if (date > END_DATE) continue;
+      if (w >= 14) {
+        if (date < today) continue;
+        // Planned, not yet done: no RPE/duration, programme-sourced.
+        const tpl = MENUS.maintain[di % MENUS.maintain.length];
+        const base = { athlete_id: athlete.id, name: tpl.name, date };
+        if (tpl.kind === "sport") {
+          const { error } = await sb.from("sessions").insert({
+            ...base, type: "sport", session_source: "programme",
+            sport_config: { planned: { duration_min: tpl.dur, rpe: tpl.rpe } },
+          });
+          if (error) throw error;
+        } else {
+          const { data: sess, error } = await sb.from("sessions").insert({ ...base, type: "strength" }).select("id").single();
+          if (error) throw error;
+          const { error: exErr } = await sb.from("session_exercises").insert(exerciseRows(sess.id, tpl.ex, false));
+          if (exErr) throw exErr;
+        }
+        plannedCount++;
+        continue;
+      }
       const tpl = menu[(di + w) % menu.length];
       // Rehab is deliberately samey day to day (that's the point — it drives
       // the high-monotony flag), so skip the jitter there.
@@ -332,7 +371,7 @@ async function main() {
 
   // ── Daily check-ins across the whole window ───────────────────────────────
   const checkRows = [];
-  for (let d = 0; d <= 90; d++) {
+  for (let d = 0; ; d++) {
     const date = addDaysISO(start, d);
     if (date > today) break;
     const w = Math.floor(d / 7) + 1;
@@ -353,7 +392,8 @@ async function main() {
 
   const origin = (env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
   console.log(`\n✓ Seeded "${ATHLETE_NAME}" in "${DEMO_ORG_NAME}".`);
-  console.log(`  ${sessionCount} sessions over 13 weeks (${start} → ${today}), ${athleteLoggedCount} athlete-logged, ${noteCount} with athlete notes.`);
+  console.log(`  ${sessionCount} logged sessions over 13 weeks (${start} → ${today}), ${athleteLoggedCount} athlete-logged, ${noteCount} with athlete notes.`);
+  console.log(`  ${plannedCount} planned (unlogged) sessions after today, through ${END_DATE}.`);
   console.log(`  ${checkRows.length} daily check-ins with fatigue / stress / pain.`);
   console.log(`  RTP status: return_to_play since ${rtpSince}.`);
   console.log(`\n  Expected in the app (needs load-monitoring toggle ON in Settings):`);
