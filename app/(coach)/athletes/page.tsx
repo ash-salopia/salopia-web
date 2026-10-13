@@ -11,6 +11,7 @@ import {
   archiveAthlete,
   unarchiveAthlete,
   toggleLiveGroup,
+  LiveGroupCapError,
   clearLiveGroup,
 } from "@/lib/data/athletes";
 import ExportModal from "@/components/ExportModal";
@@ -18,6 +19,7 @@ import Avatar from "@/components/Avatar";
 import { getOrgSettings } from "@/lib/data/settings";
 import { rtpMeta } from "@/lib/rtp";
 import type { Athlete } from "@/types";
+import LiveGroupCapNotice from "@/components/LiveGroupCapNotice";
 
 export default function AthletesPage() {
   const router = useRouter();
@@ -26,6 +28,7 @@ export default function AthletesPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [capMessage, setCapMessage] = useState("");
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
@@ -96,7 +99,8 @@ export default function AthletesPage() {
       await toggleLiveGroup(athlete.id, next);
     } catch (err) {
       setAthletes((prev) => prev.map((a) => (a.id === athlete.id ? { ...a, in_live_group: !next } : a)));
-      setError(err instanceof Error ? err.message : "Could not update live group");
+      if (err instanceof LiveGroupCapError) setCapMessage(err.message);
+      else setError(err instanceof Error ? err.message : "Could not update live group");
     }
   };
 
@@ -258,6 +262,7 @@ export default function AthletesPage() {
       )}
 
       {error && <div style={styles.errorBox}>{error}</div>}
+      {capMessage && <LiveGroupCapNotice message={capMessage} onClose={() => setCapMessage("")} />}
 
       {showArchived && (
         <p style={styles.archivedNote}>

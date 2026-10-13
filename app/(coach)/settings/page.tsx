@@ -1128,7 +1128,10 @@ export default function SettingsPage() {
           coachSeatLimit={coachSeatLimit}
         />
       )}
-      {orgId && <BillingSettings orgId={orgId} role={coachRole} />}
+      {/* #billing: target of every "Upgrade" link (lib/billing/live-group-limits.ts UPGRADE_HREF) */}
+      <div id="billing" style={{ scrollMarginTop: 16 }}>
+        {orgId && <BillingSettings orgId={orgId} role={coachRole} />}
+      </div>
       <BrandingSettings
         orgId={orgId}
         orgName=""

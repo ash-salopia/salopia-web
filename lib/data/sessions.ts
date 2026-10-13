@@ -208,7 +208,7 @@ export interface NewExerciseInput {
 // rather than a flat "8" - a hypertrophy rep range, not a single number,
 // is the sensible blank-slate default a coach actually wants to adjust
 // from rather than retype entirely).
-function exerciseDefaults(over: NewExerciseInput) {
+export function exerciseDefaults(over: NewExerciseInput) {
   const sets = over.sets ?? 3;
   return {
     name: over.name ?? "",
