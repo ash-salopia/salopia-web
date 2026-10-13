@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { listLiveGroupAthletes } from "@/lib/data/athletes";
-import { listSessionsForAthletes, toggleSetDone, updateExerciseLog, updateExercise, updateSession, addExercisesToSession } from "@/lib/data/sessions";
+import { listSessionsForAthletes } from "@/lib/data/sessions";
 import { createClient } from "@/lib/supabase-browser";
 import { getOrgSettings } from "@/lib/data/settings";
 import { listLibrary } from "@/lib/data/library";
@@ -14,6 +14,9 @@ import { resolveCurrentOneRM } from "@/lib/data/one-rm";
 import { calculateSetTargets, parseRepsStr } from "@/lib/one-rm";
 import { calculateSetTargetsFromRIR } from "@/lib/rir-load";
 import { useIsMobile } from "@/lib/use-is-mobile";
+import { sendLiveOp, useLiveQueueStatus, clearLiveFailed, type LiveOp } from "@/lib/live-group/client";
+import { useLiveControl, describeDevice } from "@/lib/live-group/use-live-control";
+import { liveGroupLimits, athleteCapMessage, UPGRADE_HREF, type LiveGroupLimits } from "@/lib/billing/live-group-limits";
 import type { Athlete, Session, SessionType, SetLog, SessionExercise, LibraryEntry } from "@/types";
 import {
   findPreviousExercise, formatPrevSets, computeBestSetSignal, computeTotalLoadSignal, progressionArrow,
@@ -136,6 +139,12 @@ export default function LiveGroupPage() {
     name: "", sets: "", mode: "reps", reps: "", time: "", rest: "", target_load: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  // Plan-based Live Group limits (lib/billing/live-group-limits.ts).
+  // Starts as "trial" (no limits) until the org's plan loads.
+  const [limits, setLimits] = useState<LiveGroupLimits>(() => liveGroupLimits("trial"));
+  const control = useLiveControl();
+  const queue = useLiveQueueStatus();
+  const allAthleteIds = useRef<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -145,6 +154,11 @@ export default function LiveGroupPage() {
         .from("athletes").select("*").eq("archived", false).order("name");
       const all: Athlete[] = allData ?? [];
       setAll(all);
+      allAthleteIds.current = all.map((a) => a.id);
+
+      // RLS only returns the coach's own organisation.
+      const { data: org } = await supabase.from("organisations").select("plan").maybeSingle();
+      setLimits(liveGroupLimits(org?.plan));
 
       // Case/whitespace-collapsed, keeping whichever spelling was seen
       // first - group is free text with no central management, so two
@@ -187,6 +201,51 @@ export default function LiveGroupPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // While this device isn't in control (view-only, or another device
+  // took over) the data keeps refreshing so the coach can still watch.
+  // Only the window Live Group shows (yesterday → +7 days) is re-fetched,
+  // merged over what's already loaded, rather than every session ever.
+  const refreshQuietly = useCallback(async () => {
+    const ids = allAthleteIds.current;
+    if (!ids.length) return;
+    const from = addDays(todayISO(), -1);
+    const to = addDays(todayISO(), 7);
+    const { data, error: err } = await createClient()
+      .from("sessions").select("*, session_exercises(*)")
+      .in("athlete_id", ids).gte("date", from).lte("date", to);
+    if (err || !data) return;
+    const fresh: Session[] = data.map((x: any) => ({
+      ...x,
+      exercises: (x.session_exercises ?? []).sort((a: SessionExercise, b: SessionExercise) => a.sort_order - b.sort_order),
+    }));
+    setSessions((prev) => [
+      ...prev.filter((x) => x.date < from || x.date > to),
+      ...fresh,
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
+  }, []);
+
+  useEffect(() => {
+    if (control.state !== "viewOnly" && control.state !== "displaced") return;
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") refreshQuietly().catch(() => {});
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [control.state, refreshQuietly]);
+
+  // Losing control mid-edit: close any open note/edit popup (its save
+  // would be refused anyway).
+  useEffect(() => {
+    if (control.readOnly && control.state !== "checking") {
+      setNoteModal(null);
+      setEditModal(null);
+      setChallengePanelOpen(false);
+    }
+  }, [control.readOnly, control.state]);
+
+  const handleTakeOver = async () => {
+    if (await control.takeOver()) refreshQuietly().catch(() => {});
+  };
+
   useEffect(() => {
     getOrgSettings().then((s) => {
       if (!s.checkin_enabled) setCheckinEnabled(false);
@@ -224,9 +283,15 @@ export default function LiveGroupPage() {
     }, 50);
   };
 
-  const shownAthletes = mode === "starred"
+  const eligibleAthletes = mode === "starred"
     ? allAthletes.filter((a) => a.in_live_group)
     : allAthletes.filter((a) => sameGroup(a.group, selGroup || groups[0] || ""));
+  // Plan athlete cap applies to both modes (Group mode would otherwise
+  // be a way around it): the first N alphabetically, with a note.
+  const shownAthletes = limits.maxAthletes != null
+    ? eligibleAthletes.slice(0, limits.maxAthletes)
+    : eligibleAthletes;
+  const hiddenByCap = eligibleAthletes.length - shownAthletes.length;
 
   const athleteSessions = (athleteId: string): Session[] => {
     const today  = todayISO();
@@ -254,7 +319,20 @@ export default function LiveGroupPage() {
     setExpandedEx(null);
   };
 
-  // ── Update log (coach-side, uses browser client) ──────────────────────────
+  // Every Live Group write goes through /api/live-group/write (via the
+  // ordered offline queue in lib/live-group/client.ts), which checks this
+  // device is in control. "queued" = no connection, will retry; a refusal
+  // because another device took over is handled by useLiveControl
+  // (switches to view-only), so it's deliberately not shown as an error.
+  const saveOp = async (op: LiveOp): Promise<{ status: "saved"; data: any } | { status: "queued" | "failed" }> => {
+    const r = await sendLiveOp(op);
+    if (r.ok) return { status: "saved", data: r.data };
+    if (r.queued) return { status: "queued" };
+    if (!r.notActive) setError(r.error);
+    return { status: "failed" };
+  };
+
+  // ── Update log (coach-side) ───────────────────────────────────────────────
   const handleLogChange = async (
     sessionId: string,
     exerciseId: string,
@@ -279,8 +357,8 @@ export default function LiveGroupPage() {
     const ex = sess?.exercises?.find((e) => e.id === exerciseId);
     if (!ex) return;
     const newLog = (ex.log ?? []).map((l, i) => i === setIndex ? { ...l, ...patch } : l);
-    try { await updateExerciseLog(exerciseId, newLog); detectCoachPB(sessionId, exerciseId, newLog); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    const r = await saveOp({ kind: "patchSet", exerciseId, setIndex, patch });
+    if (r.status === "saved") detectCoachPB(sessionId, exerciseId, newLog);
   };
 
   // Append a blank set to an exercise's log (the coach ran an extra
@@ -290,13 +368,13 @@ export default function LiveGroupPage() {
     const sess = sessions.find((s) => s.id === sessionId);
     const ex = sess?.exercises?.find((e) => e.id === exerciseId);
     if (!ex) return;
-    const newLog: SetLog[] = [...(ex.log ?? []), { weight: "", reps: "", done: false }];
+    const blank: SetLog = { weight: "", reps: "", done: false };
+    const newLog: SetLog[] = [...(ex.log ?? []), blank];
     setSessions((prev) => prev.map((s) => s.id !== sessionId ? s : {
       ...s,
       exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog }),
     }));
-    try { await updateExerciseLog(exerciseId, newLog); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    await saveOp({ kind: "appendSet", exerciseId, expectedLength: (ex.log ?? []).length, set: { ...blank } });
   };
 
   // Undo an add — only ever drops a trailing set that's still empty and
@@ -312,8 +390,7 @@ export default function LiveGroupPage() {
       ...s,
       exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog }),
     }));
-    try { await updateExerciseLog(exerciseId, newLog); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    await saveOp({ kind: "removeLastSet", exerciseId, expectedLength: log.length });
   };
 
   // ── Power/Speed logging (multi-metric PSSetLog shape) ────────────────────
@@ -322,8 +399,7 @@ export default function LiveGroupPage() {
       ...s,
       exercises: s.exercises?.map((e) => e.id !== exerciseId ? e : { ...e, log: newLog as any }),
     }));
-    try { await updateExerciseLog(exerciseId, newLog as any); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    await saveOp({ kind: "replaceLog", exerciseId, log: newLog });
   };
 
   const psSetHasData = (set: PSSetLog): boolean =>
@@ -388,8 +464,8 @@ export default function LiveGroupPage() {
         ),
       })
     );
-    try { await updateExerciseLog(exerciseId, newLog); detectCoachPB(sessionId, exerciseId, newLog); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    const r = await saveOp({ kind: "patchSet", exerciseId, setIndex, patch: { ...newLog[setIndex] } });
+    if (r.status === "saved") detectCoachPB(sessionId, exerciseId, newLog);
   };
 
   // Coach's own thumbs up/down on whether the athlete could progress
@@ -413,8 +489,7 @@ export default function LiveGroupPage() {
         ),
       })
     );
-    try { await updateExercise(exerciseId, { progress: next }); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save"); }
+    await saveOp({ kind: "exercise", exerciseId, patch: { progress: next } });
   };
 
   const openSessionNote = (session: Session) => {
@@ -437,12 +512,14 @@ export default function LiveGroupPage() {
     setSavingNote(true);
     try {
       if (noteModal.kind === "session") {
-        await updateSession(noteModal.sessionId, { session_notes: noteDraft });
+        const r = await saveOp({ kind: "session", sessionId: noteModal.sessionId, patch: { session_notes: noteDraft } });
+        if (r.status === "failed") return;
         setSessions((prev) =>
           prev.map((s) => (s.id === noteModal.sessionId ? { ...s, session_notes: noteDraft } : s))
         );
       } else {
-        await updateExercise(noteModal.exerciseId, { notes: noteDraft });
+        const r = await saveOp({ kind: "exercise", exerciseId: noteModal.exerciseId, patch: { notes: noteDraft } });
+        if (r.status === "failed") return;
         setSessions((prev) =>
           prev.map((s) =>
             s.id !== noteModal.sessionId ? s : {
@@ -520,19 +597,25 @@ export default function LiveGroupPage() {
     try {
       if (!editModal.exercise) {
         // Create mode - append a new exercise to this session.
-        const created = await addExercisesToSession(editModal.sessionId, [{
+        const r = await saveOp({ kind: "addExercise", sessionId: editModal.sessionId, exercise: {
           name: editDraft.name.trim(),
           sets: parseInt(editDraft.sets, 10) || 3,
           rest: editDraft.rest,
           target_load: editDraft.target_load,
           reps: editDraft.mode === "reps" ? editDraft.reps : "",
           time: editDraft.mode === "time" ? editDraft.time : "",
-        }]);
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id !== editModal.sessionId ? s : { ...s, exercises: [...(s.exercises ?? []), ...created] }
-          )
-        );
+        } });
+        if (r.status === "failed") return;
+        if (r.status === "saved") {
+          const created: SessionExercise[] = r.data.exercises ?? [];
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id !== editModal.sessionId ? s : { ...s, exercises: [...(s.exercises ?? []), ...created] }
+            )
+          );
+        }
+        // queued: no connection — it's added once the save goes through,
+        // and shows up on the next refresh.
       } else {
         const patch: Partial<SessionExercise> = {
           name: editDraft.name.trim(),
@@ -543,7 +626,8 @@ export default function LiveGroupPage() {
           time: editDraft.mode === "time" ? editDraft.time : "",
         };
         const exerciseId = editModal.exercise.id;
-        await updateExercise(exerciseId, patch);
+        const r = await saveOp({ kind: "exercise", exerciseId, patch });
+        if (r.status === "failed") return;
         setSessions((prev) =>
           prev.map((s) =>
             s.id !== editModal.sessionId ? s : {
@@ -658,13 +742,56 @@ export default function LiveGroupPage() {
             <span style={{ fontSize: 12, color: "var(--mute)" }}>No groups set on athletes</span>
           )}
           {mode === "group" && challengesEnabled && (
-            <button style={s.refreshBtn} onClick={() => setChallengePanelOpen(true)} title="Launch a challenge">🏆</button>
+            <button style={s.refreshBtn} disabled={control.readOnly} onClick={() => setChallengePanelOpen(true)} title="Launch a challenge">🏆</button>
           )}
           <button style={s.refreshBtn} onClick={load} title="Refresh">↻</button>
         </div>
       </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
+
+      {/* Device control (plan device limit) */}
+      {control.state === "handover" && (
+        <div style={s.lockBanner}>
+          <span>Saving your last changes before Live Group moves to {control.displacedBy ? describeDevice(control.displacedBy) : "another device"}…</span>
+        </div>
+      )}
+      {control.state === "displaced" && (
+        <div style={s.lockBanner}>
+          <span>
+            Live Group continued on {control.displacedBy ? describeDevice(control.displacedBy) : "another device"}. You can still watch here.
+            {control.handoverUnsent > 0 && ` ${control.handoverUnsent} change${control.handoverUnsent === 1 ? "" : "s"} from this device ${control.handoverUnsent === 1 ? "is" : "are"} still waiting for a connection and will save automatically.`}
+          </span>
+          <button style={s.lockBtn} onClick={handleTakeOver}>Take back</button>
+        </div>
+      )}
+      {control.state === "viewOnly" && (
+        <div style={s.lockBanner}>
+          <span>View only{control.others[0] ? ` — Live Group is running on ${describeDevice(control.others[0])}` : ""}.</span>
+          <button style={s.lockBtn} onClick={handleTakeOver}>Take over</button>
+        </div>
+      )}
+      {queue.pending > 0 && (
+        <div style={s.queueNote}>
+          ⏳ {queue.pending} change{queue.pending === 1 ? "" : "s"} waiting for a connection — {queue.pending === 1 ? "it'll" : "they'll"} save automatically.
+        </div>
+      )}
+      {queue.failed.length > 0 && (
+        <div style={s.errorBox}>
+          {queue.failed.length} change{queue.failed.length === 1 ? "" : "s"} from this device couldn&apos;t be saved
+          {queue.failed.some((f) => f.notActive)
+            ? " because they were made after Live Group moved to another device. Check those sets and re-enter them if needed."
+            : ` (${queue.failed[0].error}).`}
+          {" "}
+          <button style={s.dismissBtn} onClick={clearLiveFailed}>Dismiss</button>
+        </div>
+      )}
+      {hiddenByCap > 0 && (
+        <div style={s.capNote}>
+          Showing {shownAthletes.length} of {eligibleAthletes.length}. {athleteCapMessage(limits)}{" "}
+          <a href={UPGRADE_HREF} style={s.upgradeLink}>Upgrade</a>
+        </div>
+      )}
 
       {shownAthletes.length === 0 ? (
         <div style={s.empty}>
@@ -718,6 +845,7 @@ export default function LiveGroupPage() {
                   {activeSess && (
                     <button
                       style={{ ...s.noteBtn, ...(activeSess.session_notes?.trim() ? s.noteBtnActive : {}) }}
+                      disabled={control.readOnly}
                       onClick={() => openSessionNote(activeSess)}
                       title={activeSess.session_notes?.trim() ? "Edit session note" : "Add session note"}
                     >
@@ -738,6 +866,9 @@ export default function LiveGroupPage() {
                 </div>
               </div>
 
+              {/* Everything editable below is locked while another
+                  device controls Live Group (rows still expand). */}
+              <fieldset disabled={control.readOnly} style={s.lockFieldset}>
               {activeSess && (
                 <div style={{ ...s.typeBadge, background: meta.dim, color: meta.color }}>
                   {meta.label}
@@ -1074,8 +1205,7 @@ export default function LiveGroupPage() {
                     const currentCfg: any = (activeSess as any)[field] ?? {};
                     const next = { ...currentCfg, ...patch };
                     setSessions((prev) => prev.map((sess) => sess.id !== activeSess.id ? sess : { ...sess, [field]: next } as Session));
-                    updateSession(activeSess.id, { [field]: next } as Partial<Session>)
-                      .catch((e) => setError(e instanceof Error ? e.message : "Could not save"));
+                    saveOp({ kind: "session", sessionId: activeSess.id, patch: { [field]: next } });
                   }}
                   compact
                 />
@@ -1241,6 +1371,8 @@ export default function LiveGroupPage() {
                 </div>
               )}
 
+              </fieldset>
+
               {activeSess && activeSess.type !== "strength" && activeSess.type !== "hyrox" && activeSess.type !== "cardio" && activeSess.type !== "power_speed" && (
                 <div style={s.noEx}>
                   {meta.label} session - use "Open full session" above for the timer &amp; log.
@@ -1259,6 +1391,28 @@ export default function LiveGroupPage() {
             </div>
           )}
         </>
+      )}
+
+      {control.state === "full" && (
+        <div style={s.noteOverlay}>
+          <div style={s.notePanel}>
+            <div style={s.noteTitle}>
+              {control.others[0]
+                ? `Live Group is running on ${describeDevice(control.others[0])}${control.others.length > 1 ? ` and ${control.others.length - 1} other device${control.others.length > 2 ? "s" : ""}` : ""}. Take over here?`
+                : "Live Group is running on another device. Take over here?"}
+            </div>
+            <div style={s.noteBtns}>
+              <button style={s.noteCancelBtn} onClick={control.viewOnly}>View only</button>
+              <button style={s.noteSaveBtn} onClick={handleTakeOver}>Take over</button>
+            </div>
+            {control.upsell && (
+              <div style={s.upsellText}>
+                {control.upsell}{" "}
+                <a href={UPGRADE_HREF} style={s.upgradeLink}>Upgrade</a>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {checkInOpen && <CheckInModal onClose={() => setCheckInOpen(false)} />}
@@ -1484,6 +1638,15 @@ const s: Record<string, React.CSSProperties> = {
   noteTitle:    { fontSize: 15, fontWeight: 700, color: "var(--text)" },
   noteTextarea: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 14, minHeight: 120, resize: "vertical" as const, fontFamily: "inherit" },
   noteBtns:     { display: "flex", gap: 8, justifyContent: "flex-end" },
+  // Live Group limits (device control + athlete cap)
+  lockBanner:   { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" as const, background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
+  lockBtn:      { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
+  lockFieldset: { border: 0, padding: 0, margin: 0, minWidth: 0 },
+  queueNote:    { color: "var(--warn)", fontSize: 13, marginBottom: 12 },
+  dismissBtn:   { background: "transparent", border: "1px solid currentColor", color: "inherit", borderRadius: 6, padding: "2px 8px", fontSize: 12, cursor: "pointer" },
+  capNote:      { color: "var(--mute)", fontSize: 13, marginBottom: 12 },
+  upgradeLink:  { color: "var(--accent)", fontWeight: 700 },
+  upsellText:   { color: "var(--mute)", fontSize: 12, lineHeight: 1.5 },
   noteCancelBtn:{ background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   noteSaveBtn:  { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   editFieldLabel: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const, letterSpacing: "0.04em" },

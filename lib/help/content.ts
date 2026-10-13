@@ -1241,10 +1241,29 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "live-multiple-coaches",
     category: "live",
     title: "Two coaches in Live group at once",
-    summary: "Fine — edits save to the same data. Refresh to pull in a colleague's changes.",
+    summary: "Depends on your plan's device limit. Edits save to the same data; refresh to pull in a colleague's changes.",
     keywords: ["multiple coaches", "concurrent", "two coaches", "shared"],
     body: [
-      { type: "p", text: "Several coaches can log the same room at once. Each save writes to the shared session, so the last edit to a given field wins. Use the **↻** refresh button to pull in what a colleague just entered." },
+      { type: "p", text: "Several coaches can log the same room at once, up to your plan's Live group device limit (see **Live group limits by plan**). Each save writes to the shared session, so the last edit to a given set wins. Use the **↻** refresh button to pull in what a colleague just entered." },
+    ],
+  },
+  {
+    id: "live-group-limits",
+    category: "live",
+    title: "Live group limits by plan",
+    summary: "How many athletes Live group holds, and how many devices can run it at once.",
+    keywords: ["limit", "device", "take over", "view only", "take back", "6 athletes", "upgrade", "ipad", "phone", "tablet"],
+    body: [
+      { type: "p", text: "**Athletes:** Student and Coach plans hold up to 6 athletes in Live group. Squad and above are unlimited. The limit covers both **★ Starred** and **👥 Group** mode — in Group mode the first 6 athletes (A–Z) show." },
+      { type: "p", text: "**Devices at once:** Student and Coach run Live group on 1 device at a time, Squad on 2, Performance and above on many. The count is for your whole subscription — every coach and device together, not per coach." },
+      { type: "steps", items: [
+        "Open **Live group** when the limit is already in use and you'll see who's running it, e.g. \"Live Group is running on your iPad\" or a colleague's name.",
+        "Tap **Take over** to run it here — the device that's been running longest switches to view only. Or tap **View only** to just watch.",
+        "On the device that lost control, any sets still saving finish first, then a banner shows where Live group continued. Tap **Take back** to swap again.",
+      ] },
+      { type: "note", text: "You stay signed in on every device, and the rest of the app works normally everywhere — only control of Live group is limited. A device that closes Live group (or leaves it in the background for a minute or two) frees its place automatically." },
+      { type: "note", text: "Sets logged with no signal are saved once the connection returns, as long as they were logged before another device took over." },
+      { type: "tip", text: "Free trials have no Live group limits." },
     ],
   },
   {
