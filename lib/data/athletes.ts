@@ -206,10 +206,24 @@ export async function deleteAthletes(ids: string[]): Promise<void> {
   if (error) throw error;
 }
 
+// Thrown when starring would take the Live Group over the plan's athlete
+// cap — the message is the user-facing upgrade prompt.
+export class LiveGroupCapError extends Error {}
+
+// Goes through /api/live-group/star, which enforces the plan's athlete
+// cap. Starring can't be done with a direct table update any more (the
+// guard_live_group_star trigger, 0113, blocks it from the browser).
 export async function toggleLiveGroup(id: string, inLiveGroup: boolean): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.from("athletes").update({ in_live_group: inLiveGroup }).eq("id", id);
-  if (error) throw error;
+  const res = await fetch("/api/live-group/star", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ athleteId: id, starred: inLiveGroup }),
+    cache: "no-store",
+  });
+  if (res.ok) return;
+  const body = await res.json().catch(() => ({}));
+  if (body.code === "LIVE_GROUP_ATHLETE_CAP") throw new LiveGroupCapError(body.error);
+  throw new Error(body.error || "Could not update live group");
 }
 
 // Unstars every currently-starred athlete in one go (RLS scopes this to

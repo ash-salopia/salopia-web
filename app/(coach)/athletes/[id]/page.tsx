@@ -20,7 +20,8 @@ import { listTemplates, loadTemplateForAthlete } from "@/lib/data/templates";
 import { generateReport, type ReportData } from "@/lib/data/reports";
 import { listGroupMembers } from "@/lib/data/groups";
 import { computeSquadComparison, type SquadComparisonContext } from "@/lib/squad-comparison";
-import { archiveAthlete, toggleLiveGroup, listGroups as listAthleteGroupTags } from "@/lib/data/athletes";
+import { archiveAthlete, toggleLiveGroup, LiveGroupCapError, listGroups as listAthleteGroupTags } from "@/lib/data/athletes";
+import LiveGroupCapNotice from "@/components/LiveGroupCapNotice";
 import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
@@ -186,6 +187,7 @@ export default function AthleteDetailPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [capMessage, setCapMessage] = useState("");
   const [flash, setFlash] = useState("");
   const [typePicker, setTypePicker] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -549,7 +551,8 @@ export default function AthleteDetailPage() {
       await toggleLiveGroup(athleteId, next);
     } catch (e) {
       setAthlete((prev) => (prev ? { ...prev, in_live_group: !next } : prev)); // revert on failure
-      setError(e instanceof Error ? e.message : "Could not update live group");
+      if (e instanceof LiveGroupCapError) setCapMessage(e.message);
+      else setError(e instanceof Error ? e.message : "Could not update live group");
     }
   };
 
@@ -870,6 +873,7 @@ export default function AthleteDetailPage() {
 
       {flash && <div style={styles.flashBox}>{flash}</div>}
       {error && <div style={styles.errorBox}>{error}</div>}
+      {capMessage && <LiveGroupCapNotice message={capMessage} onClose={() => setCapMessage("")} />}
 
       {/* Calendar view */}
       <div style={styles.calendarWrap}>
