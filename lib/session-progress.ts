@@ -42,7 +42,8 @@ export function findPreviousExercise(
   return findPreviousExerciseEntry(sessions, athleteId, exerciseName, beforeDate)?.exercise ?? null;
 }
 
-// Last time's completed sets as a compact string, e.g. "92.5kg×5, 92.5kg×5".
+// Last time's completed sets as a compact string, e.g. "92.5kg×5, 92.5kg×5"
+// (or "20kg×30s" for a weighted timed hold).
 export function formatPrevSets(ex: SessionExercise | null): string | null {
   if (!ex) return null;
   const timeMode = (ex.time ?? "").trim().length > 0;
@@ -52,7 +53,13 @@ export function formatPrevSets(ex: SessionExercise | null): string | null {
   const parts = (ex.log ?? [])
     .filter((l) => l.done)
     .map((l) => {
-      if (timeMode) return l.time?.trim() ? `${l.time}s` : null;
+      // Weighted holds (e.g. anterior hold) log both — show the load too,
+      // not just the time.
+      if (timeMode) {
+        const w = showWeight && l.weight?.trim() ? `${l.weight}kg` : "";
+        if (l.time?.trim()) return w ? `${w}×${l.time}s` : `${l.time}s`;
+        return w || null;
+      }
       if (!showWeight) return l.reps?.trim() ? withPause(`×${l.reps}`, l) : null;
       if (l.weight?.trim() && l.reps?.trim()) return withPause(`${l.weight}kg×${l.reps}`, l);
       if (l.weight?.trim()) return withPause(`${l.weight}kg`, l);
