@@ -5,6 +5,7 @@ import CoachProfileSettings from "@/components/CoachProfileSettings";
 import TeamSettings from "@/components/TeamSettings";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
+import DeletePasswordSettings from "@/components/DeletePasswordSettings";
 
 import { useState, useEffect, useRef } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
@@ -1116,6 +1117,35 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Athlete deletion (0114) ── */}
+      <CollapsibleSection title="Athlete deletion">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Let coaches delete athletes</div>
+              <div style={s.cardDesc}>
+                Off (default): only the owner can permanently delete an athlete. On: any coach can,
+                for athletes they have access to. Either way the delete password below is required.
+                Archiving is never locked.
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.coaches_can_delete_athletes ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, coaches_can_delete_athletes: !prev.coaches_can_delete_athletes }))}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.coaches_can_delete_athletes ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+          <DeletePasswordSettings isOwner={coachRole === "owner"} />
         </div>
       </CollapsibleSection>
 

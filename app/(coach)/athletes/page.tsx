@@ -6,14 +6,15 @@ import {
   listAthletes,
   listArchivedAthletes,
   createAthlete,
-  deleteAthlete,
   deleteAthletes,
   archiveAthlete,
   unarchiveAthlete,
   toggleLiveGroup,
   LiveGroupCapError,
   clearLiveGroup,
+  getAthleteDeleteAccess,
 } from "@/lib/data/athletes";
+import DeleteAthleteModal from "@/components/DeleteAthleteModal";
 import ExportModal from "@/components/ExportModal";
 import Avatar from "@/components/Avatar";
 import { getOrgSettings } from "@/lib/data/settings";
@@ -39,6 +40,10 @@ export default function AthletesPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Permanent delete is owner-only unless the owner allows coaches, and
+  // always needs the org's delete password (0114).
+  const [canDelete, setCanDelete] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Athlete[] | null>(null);
   const [rtpEnabled, setRtpEnabled] = useState(false);
 
   const load = async () => {
@@ -57,6 +62,7 @@ export default function AthletesPage() {
 
   useEffect(() => {
     load();
+    getAthleteDeleteAccess().then((a) => setCanDelete(a.canDelete)).catch(() => {});
     getOrgSettings()
       .then((sett) => setRtpEnabled(sett.load_monitoring_enabled && sett.load_monitoring.rtp_status))
       .catch(() => {});
@@ -127,20 +133,23 @@ export default function AthletesPage() {
     }
   };
 
-  const handleDelete = async (athlete: Athlete) => {
-    if (
-      !confirm(
-        `Permanently delete ${athlete.name} and every session they've ever had? This cannot be undone - if you just want to hide them, use Archive instead.`
-      )
-    )
-      return;
+  const handleDelete = (athlete: Athlete) => setDeleteTarget([athlete]);
+
+  const confirmDelete = async (password: string) => {
+    if (!deleteTarget) return;
+    const ids = deleteTarget.map((a) => a.id);
+    const isBulk = selectMode;
+    if (isBulk) setBulkDeleting(true);
     try {
-      await deleteAthlete(athlete.id);
-      setAthletes((prev) => prev.filter((a) => a.id !== athlete.id));
-      setArchivedAthletes((prev) => prev.filter((a) => a.id !== athlete.id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not remove athlete");
+      await deleteAthletes(ids, password);
+    } finally {
+      if (isBulk) setBulkDeleting(false);
     }
+    const gone = new Set(ids);
+    setAthletes((prev) => prev.filter((a) => !gone.has(a.id)));
+    setArchivedAthletes((prev) => prev.filter((a) => !gone.has(a.id)));
+    setDeleteTarget(null);
+    if (isBulk) exitSelectMode();
   };
 
   const exitSelectMode = () => {
@@ -161,26 +170,9 @@ export default function AthletesPage() {
     });
   };
 
-  const handleBulkDelete = async () => {
-    const ids = [...selectedIds];
-    if (!ids.length) return;
-    const names = archivedAthletes.filter((a) => selectedIds.has(a.id)).map((a) => a.name);
-    if (
-      !confirm(
-        `Permanently delete ${ids.length} athlete${ids.length !== 1 ? "s" : ""} and every session they've ever had?\n\n${names.join(", ")}\n\nThis cannot be undone.`
-      )
-    )
-      return;
-    setBulkDeleting(true);
-    try {
-      await deleteAthletes(ids);
-      setArchivedAthletes((prev) => prev.filter((a) => !selectedIds.has(a.id)));
-      exitSelectMode();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete athletes");
-    } finally {
-      setBulkDeleting(false);
-    }
+  const handleBulkDelete = () => {
+    const targets = archivedAthletes.filter((a) => selectedIds.has(a.id));
+    if (targets.length) setDeleteTarget(targets);
   };
 
   const activeList = athletes;
@@ -229,7 +221,7 @@ export default function AthletesPage() {
           <button style={styles.ghostBtn} onClick={handleShowArchivedToggle}>
             {showArchived ? "← Back to active" : `Archived (${archivedAthletes.length})`}
           </button>
-          {showArchived && archivedAthletes.length > 0 && (
+          {showArchived && canDelete && archivedAthletes.length > 0 && (
             <button
               style={styles.ghostBtn}
               onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
@@ -386,16 +378,18 @@ export default function AthletesPage() {
                   >
                     Restore
                   </button>
-                  <button
-                    style={styles.deleteBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(athlete);
-                    }}
-                    title="Permanently delete"
-                  >
-                    ×
-                  </button>
+                  {canDelete && (
+                    <button
+                      style={styles.deleteBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(athlete);
+                      }}
+                      title="Permanently delete"
+                    >
+                      ×
+                    </button>
+                  )}
                 </>
               ) : (
                 <button
@@ -419,6 +413,19 @@ export default function AthletesPage() {
         <ExportModal
           mode="all"
           onClose={() => setExportOpen(false)}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteAthleteModal
+          title={deleteTarget.length === 1 ? `Permanently delete ${deleteTarget[0].name}?` : `Permanently delete ${deleteTarget.length} athletes?`}
+          message={
+            <>
+              {deleteTarget.length > 1 && <>{deleteTarget.map((a) => a.name).join(", ")}<br /><br /></>}
+              This deletes every session, PB and test result they&apos;ve ever had. It cannot be undone. If you just want to hide them, use Archive instead.
+            </>
+          }
+          onConfirm={confirmDelete}
+          onClose={() => setDeleteTarget(null)}
         />
       )}
     </div>

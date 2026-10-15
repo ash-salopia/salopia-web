@@ -44,6 +44,7 @@ export default function ImportPage() {
 
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [revertTarget, setRevertTarget] = useState<{ batch: ImportBatch; impact: RevertImpact } | null>(null);
+  const [revertPassword, setRevertPassword] = useState("");
 
   const reloadBatches = useCallback(() => {
     listImportBatches().then(setBatches).catch(() => {});
@@ -111,10 +112,11 @@ export default function ImportPage() {
   };
 
   const confirmRevert = async () => {
-    if (!revertTarget) return;
+    if (!revertTarget || !revertPassword) return;
     setBusy(true); setError("");
     try {
-      await revertRosterImport(revertTarget.batch.id);
+      await revertRosterImport(revertTarget.batch.id, revertPassword);
+      setRevertPassword("");
       setRevertTarget(null);
       reloadBatches();
       getRemainingSeats().then(setRemainingSeats).catch(() => {});
@@ -360,9 +362,18 @@ export default function ImportPage() {
               ) : "."}
               {" "}This can&apos;t be undone.
             </div>
+            <input
+              type="password"
+              autoComplete="off"
+              value={revertPassword}
+              onChange={(e) => setRevertPassword(e.target.value)}
+              placeholder="Delete password (set by the owner in Settings)"
+              style={{ ...s.select, minWidth: 0 }}
+            />
+            {error && <div style={{ ...s.errBox, marginBottom: 0 }}>{error}</div>}
             <div style={s.btnRow}>
               <button style={s.ghost} onClick={() => setRevertTarget(null)} disabled={busy}>Cancel</button>
-              <button style={{ ...s.primary, background: "#ff7d7d", color: "#2a0c0c" }} onClick={confirmRevert} disabled={busy}>
+              <button style={{ ...s.primary, background: "#ff7d7d", color: "#2a0c0c" }} onClick={confirmRevert} disabled={busy || !revertPassword}>
                 {busy ? "Removing…" : "Delete them"}
               </button>
             </div>

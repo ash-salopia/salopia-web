@@ -191,19 +191,42 @@ export async function updateAthleteAerobicProfile(
   if (error) throw error;
 }
 
-export async function deleteAthlete(id: string): Promise<void> {
-  const supabase = createClient();
-  // Sessions reference athletes with ON DELETE CASCADE, so this also
-  // removes all of that athlete's sessions and exercises automatically.
-  const { error } = await supabase.from("athletes").delete().eq("id", id);
-  if (error) throw error;
+// Permanent deletes go through /api/athletes/delete, which checks the
+// caller is allowed (owner by default) and the org's delete password
+// (0114 - there's no browser-side delete policy on athletes any more).
+// Sessions etc. cascade from athletes, so this removes all their data.
+export async function deleteAthletes(ids: string[], password: string): Promise<void> {
+  if (!ids.length) return;
+  await postAthleteDelete({ ids, password });
 }
 
-export async function deleteAthletes(ids: string[]): Promise<void> {
-  if (!ids.length) return;
-  const supabase = createClient();
-  const { error } = await supabase.from("athletes").delete().in("id", ids);
-  if (error) throw error;
+export async function deleteAthlete(id: string, password: string): Promise<void> {
+  await postAthleteDelete({ ids: [id], password });
+}
+
+export async function postAthleteDelete(body: { ids?: string[]; importBatchId?: string; password: string }): Promise<void> {
+  const res = await fetch("/api/athletes/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Could not delete athlete");
+  }
+}
+
+export interface AthleteDeleteAccess {
+  canDelete: boolean;
+  isOwner: boolean;
+  passwordSet: boolean;
+}
+
+export async function getAthleteDeleteAccess(): Promise<AthleteDeleteAccess> {
+  const res = await fetch("/api/athletes/delete", { cache: "no-store" });
+  if (!res.ok) return { canDelete: false, isOwner: false, passwordSet: false };
+  return res.json();
 }
 
 // Thrown when starring would take the Live Group over the plan's athlete
