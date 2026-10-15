@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { updatePB, deletePBsForExercise, createManualPB, formatPBValue } from "@/lib/data/personal-bests";
 import { listLibrary } from "@/lib/data/library";
-import { archiveAthlete, updateAthleteRtpStatus } from "@/lib/data/athletes";
+import { archiveAthlete, updateAthleteRtpStatus, deleteAthlete, getAthleteDeleteAccess } from "@/lib/data/athletes";
+import DeleteAthleteModal from "@/components/DeleteAthleteModal";
 import { RTP_STATUSES } from "@/lib/rtp";
 import { updateAthleteAvatar } from "@/lib/data/avatars";
 import { listAthleteOneRMs, upsertAthleteOneRM, deleteAthleteOneRM } from "@/lib/data/one-rm";
@@ -225,6 +226,11 @@ export default function AthleteProfilePage() {
   const [loading, setLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(false);
   const [error, setError] = useState("");
+  const [canDelete, setCanDelete] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  useEffect(() => {
+    getAthleteDeleteAccess().then((a) => setCanDelete(a.canDelete)).catch(() => {});
+  }, []);
   const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
@@ -443,18 +449,11 @@ export default function AthleteProfilePage() {
           <button style={p.ghostBtn} onClick={() => setExportOpen(true)}>
             📥 Export
           </button>
-          <button style={p.dangerBtn} onClick={async () => {
-            if (!athlete) return;
-            if (!confirm(`Permanently delete ${athlete.name}? This removes all their sessions, exercises and data. This cannot be undone.`)) return;
-            try {
-              const { createClient } = await import("@/lib/supabase-browser");
-              const supabase = createClient();
-              await supabase.from("athletes").delete().eq("id", athleteId);
-              router.push("/athletes");
-            } catch { setError("Could not delete athlete"); }
-          }}>
-            Delete athlete
-          </button>
+          {canDelete && (
+            <button style={p.dangerBtn} onClick={() => athlete && setDeleteOpen(true)}>
+              Delete athlete
+            </button>
+          )}
           <button style={p.dangerBtn} onClick={async () => {
             if (!athlete) return;
             if (!confirm(`Archive ${athlete.name}? They will be hidden from your active roster but nothing is deleted.`)) return;
@@ -469,6 +468,18 @@ export default function AthleteProfilePage() {
       </div>
 
       {error && <div style={p.errorBox}>{error}</div>}
+
+      {deleteOpen && athlete && (
+        <DeleteAthleteModal
+          title={`Permanently delete ${athlete.name}?`}
+          message="This removes all their sessions, exercises, PBs and test results. It cannot be undone. If you just want to hide them, use Archive instead."
+          onConfirm={async (password) => {
+            await deleteAthlete(athleteId, password);
+            router.push("/athletes");
+          }}
+          onClose={() => setDeleteOpen(false)}
+        />
+      )}
 
       {athlete && (
         <div style={p.header}>

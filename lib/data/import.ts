@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase-browser";
 import type { RosterRow } from "@/lib/import/roster";
+import { postAthleteDelete } from "@/lib/data/athletes";
 
 // Data layer for the customer-migration tooling. Coach-authenticated
 // (browser client, RLS-scoped to the coach's own org — same pattern as
@@ -171,25 +172,9 @@ export async function getRosterRevertImpact(batchId: string): Promise<RevertImpa
   };
 }
 
-export async function revertRosterImport(batchId: string): Promise<void> {
-  const supabase = createClient();
-  const orgId = await myOrgId(supabase);
-
-  const { data: batch } = await supabase
-    .from("import_batches")
-    .select("id, entity, status, organisation_id")
-    .eq("id", batchId)
-    .single();
-  if (!batch || batch.organisation_id !== orgId) throw new Error("Import not found.");
-  if (batch.status === "reverted") throw new Error("This import has already been reverted.");
-  if (batch.entity !== "athletes") throw new Error("Only roster imports can be reverted here.");
-
-  // Deleting the athletes cascades to sessions / PBs / test sessions / etc.
-  const { error: delErr } = await supabase.from("athletes").delete().eq("import_batch_id", batchId);
-  if (delErr) throw new Error("Could not remove the imported athletes. Nothing was changed.");
-
-  await supabase
-    .from("import_batches")
-    .update({ status: "reverted", reverted_at: new Date().toISOString() })
-    .eq("id", batchId);
+// Deletes every athlete the import created (cascading to their sessions /
+// PBs / test sessions) and marks the batch reverted - server-side, since
+// it needs the org's delete password like any other athlete delete (0114).
+export async function revertRosterImport(batchId: string, password: string): Promise<void> {
+  await postAthleteDelete({ importBatchId: batchId, password });
 }

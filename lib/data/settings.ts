@@ -175,6 +175,9 @@ export interface OrgSettings {
   // metrics + coach-picked strength lifts. Off by default.
   leaderboards_enabled: boolean;
   leaderboards: LeaderboardSettings;
+  // 0114 — permanent athlete delete is owner-only unless this is on.
+  // Either way it needs the org's delete password (org_secrets).
+  coaches_can_delete_athletes: boolean;
 }
 
 // One picked strength lift + whether it gets a relative (÷BW) board, an
@@ -263,6 +266,7 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   acwr_high: 1.3,
   leaderboards_enabled: false,
   leaderboards: DEFAULT_LEADERBOARDS,
+  coaches_can_delete_athletes: false,
 };
 
 // Merge stored org settings over the defaults. A plain spread replaces nested
