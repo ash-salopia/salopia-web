@@ -220,7 +220,7 @@ export default function AthleteDetailPage() {
   const [lastCopyRangeStart, setLastCopyRangeStart] = useState("");
   const [lastCopyRangeEnd, setLastCopyRangeEnd] = useState("");
   const [libraryAccessOpen, setLibraryAccessOpen] = useState(false);
-  const [calView, setCalView] = useState<"dashboard" | "month" | "week" | "day">("month");
+  const [calView, setCalView] = useState<"dashboard" | "month" | "week" | "day">("week");
   // "By day" view: one weekday (0 = Mon) across the next N weeks, e.g.
   // every Tuesday, so a coach can tweak a recurring session week to week.
   const [byDayIndex, setByDayIndex] = useState<number>(() => (new Date().getDay() + 6) % 7);
@@ -1677,9 +1677,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   // Calendar
   calendarWrap: { marginTop: 8 },
-  calendarHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  calendarHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" as const, marginBottom: 12 },
   calTitle: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, color: "var(--text)" },
-  calNavBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: "pointer" },
+  calNavBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: "pointer", flexShrink: 0 },
   calGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 },
   calDayHeader: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const, padding: "4px 0", textTransform: "uppercase" as const },
   calCell: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 6px 4px", minHeight: 72, cursor: "pointer", display: "flex", flexDirection: "column" as const, gap: 3 },
