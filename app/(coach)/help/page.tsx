@@ -5,11 +5,12 @@ import Link from "next/link";
 import {
   HELP_ARTICLES,
   HELP_CATEGORIES,
-  articleText,
   type HelpArticle,
   type HelpBlock,
   type HelpCategoryId,
 } from "@/lib/help/content";
+import { searchHelp, queryWords, stem } from "@/lib/help/search";
+import SupportAgentChat from "@/components/SupportAgentChat";
 
 // ── inline **bold** → <strong> ────────────────────────────────────────
 function RichText({ text }: { text: string }) {
@@ -113,19 +114,14 @@ const CATEGORY_LABEL: Record<HelpCategoryId, string> = HELP_CATEGORIES.reduce(
   {} as Record<HelpCategoryId, string>
 );
 
-// pre-built search index
-const INDEX = HELP_ARTICLES.map((a) => ({
-  article: a,
-  title: a.title.toLowerCase(),
-  meta: (a.summary + " " + a.keywords.join(" ")).toLowerCase(),
-  haystack: articleText(a),
-}));
-
 export default function HelpPage() {
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState<HelpCategoryId>(HELP_CATEGORIES[0].id);
   const [openId, setOpenId] = useState<string | null>(null);
   const articleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // "Speak to an agent" - opens pre-filled with whatever was searched.
+  const [agentSeed, setAgentSeed] = useState<string | null>(null);
+  const openAgent = () => setAgentSeed(query.trim());
 
   // deep link: /help#article-id
   useEffect(() => {
@@ -141,33 +137,17 @@ export default function HelpPage() {
     }, 60);
   }, []);
 
+  // Highlight on word stems, so "deleting" lights up "delete" too.
   const tokens = useMemo(
-    () => query.trim().toLowerCase().split(/\s+/).filter(Boolean),
+    () => Array.from(new Set(queryWords(query).map(stem).filter((t) => t.length >= 2))),
     [query]
   );
 
-  const results = useMemo(() => {
-    if (!tokens.length) return null;
-    const scored = INDEX.map(({ article, title, meta, haystack }) => {
-      let score = 0;
-      for (const tok of tokens) {
-        if (!haystack.includes(tok)) return { article, score: -1 };
-        if (title.includes(tok)) score += 3;
-        else if (meta.includes(tok)) score += 2;
-        else score += 1;
-      }
-      return { article, score };
-    }).filter((r) => r.score >= 0);
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const ci =
-        HELP_CATEGORIES.findIndex((c) => c.id === a.article.category) -
-        HELP_CATEGORIES.findIndex((c) => c.id === b.article.category);
-      if (ci !== 0) return ci;
-      return HELP_ARTICLES.indexOf(a.article) - HELP_ARTICLES.indexOf(b.article);
-    });
-    return scored.map((s) => s.article);
-  }, [tokens]);
+  // Ranked, typo-tolerant search - see lib/help/search.ts.
+  const results = useMemo(
+    () => (query.trim() ? searchHelp(query).map((r) => r.article) : null),
+    [query]
+  );
 
   const openArticle = (art: HelpArticle) => {
     setActiveCat(art.category);
@@ -227,10 +207,12 @@ export default function HelpPage() {
                 </span>
               </button>
             ))}
+            <AgentPrompt text="Not what you're looking for?" onClick={openAgent} />
           </div>
         ) : (
           <div style={styles.noResults}>
-            No help articles match “{query.trim()}”. Try fewer words, or browse the sections below.
+            No help articles match “{query.trim()}”. Try different words, or ask our assistant.
+            <AgentPrompt text="" onClick={openAgent} />
           </div>
         )
       ) : null}
@@ -288,7 +270,11 @@ export default function HelpPage() {
       )}
 
       <div style={styles.footer}>
-        Still stuck? Email{" "}
+        Can&apos;t find what you need?{" "}
+        <button style={styles.footerBtn} onClick={openAgent}>
+          Speak to an agent
+        </button>
+        , email{" "}
         <a href="mailto:support@visbuild.co.uk" style={styles.footerLink}>
           support@visbuild.co.uk
         </a>
@@ -298,6 +284,30 @@ export default function HelpPage() {
         </Link>
         .
       </div>
+
+      {agentSeed !== null && (
+        <SupportAgentChat
+          initialQuestion={agentSeed}
+          onClose={() => setAgentSeed(null)}
+          onOpenArticle={(id) => {
+            const art = HELP_ARTICLES.find((a) => a.id === id);
+            if (!art) return;
+            setAgentSeed(null);
+            openArticle(art);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AgentPrompt({ text, onClick }: { text: string; onClick: () => void }) {
+  return (
+    <div style={styles.agentPrompt}>
+      {text && <span>{text}</span>}
+      <button style={styles.agentBtn} onClick={onClick}>
+        💬 Speak to an agent
+      </button>
     </div>
   );
 }
@@ -455,4 +465,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--mute)",
   },
   footerLink: { color: "var(--accent)", textDecoration: "none", fontWeight: 600 },
+  footerBtn: { background: "transparent", border: "none", padding: 0, color: "var(--accent)", fontWeight: 600, fontSize: "inherit", cursor: "pointer", fontFamily: "inherit" },
+  agentPrompt: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, fontSize: 13, color: "var(--mute)" },
+  agentBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
 };

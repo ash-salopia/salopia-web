@@ -207,7 +207,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Search this help centre first; email support@visbuild.co.uk for anything else.",
     keywords: ["help", "support", "contact", "email", "stuck"],
     body: [
-      { type: "p", text: "This Help & FAQ covers every feature — use the search box at the top, or browse the sections on the left." },
+      { type: "p", text: "This Help & FAQ covers every feature — use the search box at the top, or browse the sections on the left. Can't find it? Tap **Speak to an agent** for an instant AI answer drawn from these help articles." },
       { type: "steps", items: [
         `For a problem or question not answered here, email **${SUPPORT}**. Include: your organisation name, the athlete involved (if any), what you expected to happen, what happened instead, and a screenshot if you can.`,
         "For a feature idea or a vote on the roadmap, use the **Feature Requests** room in the **Coach Forum**.",
@@ -240,7 +240,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     category: "account",
     title: "How logging in works",
     summary: "Enter your email, get a one-time link, tap it on the same device.",
-    keywords: ["login", "sign in", "magic link", "password", "otp"],
+    keywords: ["login", "sign in", "magic link", "password", "forgot password", "reset password", "otp"],
     body: [
       { type: "p", text: "VIS BUILD has no passwords. To sign in, enter your email and click **Send sign-in link**. You'll get an email — open it on the device you want to be signed in on and tap the link." },
       { type: "p", text: "Your session then stays signed in on that device/browser until you sign out or clear site data." },
@@ -500,10 +500,11 @@ export const HELP_ARTICLES: HelpArticle[] = [
     category: "athletes",
     title: "Archive vs delete an athlete",
     summary: "Archive is reversible. Delete is permanent.",
-    keywords: ["archive", "delete", "remove athlete", "restore"],
+    keywords: ["archive", "delete", "remove athlete", "restore", "delete password", "can't delete"],
     body: [
-      { type: "p", text: "**Archive** (the **📦** button) hides the athlete from your roster, the Dashboard and every assignment picker. Nothing is deleted. Restore them any time from the **Archived** view." },
-      { type: "p", text: "**Permanently delete** (the **×** in the Archived view) removes the athlete and every session they ever had. It cannot be undone." },
+      { type: "p", text: "**Archive** (the **📦** button) hides the athlete from your roster, the Dashboard and every assignment picker. Nothing is deleted. Restore them any time from the **Archived** view. Any coach can archive." },
+      { type: "p", text: "**Permanently delete** (the **×** in the Archived view, or **Delete athlete** on their profile) removes the athlete and every session, PB and test result they ever had. It cannot be undone." },
+      { type: "note", text: "Deleting is owner-only by default and always asks for your organisation's **delete password**. The owner sets it in **Settings → Athlete deletion**, and can switch on **Let coaches delete athletes** there too. Until a password is set, nobody can delete athletes. Undoing a roster import asks for the same password." },
       { type: "tip", text: "Not coaching someone right now? Archive them rather than deleting — you keep all their history and can bring them back later." },
     ],
   },

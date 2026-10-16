@@ -20,6 +20,9 @@ export const AI_MODEL = {
   report: "claude-sonnet-5", // training-report-ai
   edit: "claude-sonnet-5", // session-modify
   parse: "claude-sonnet-5", // notes-parse, voice-parse, programme-assign-parse
+  // Help page "Speak to an agent" - answers from a handful of retrieved
+  // help articles, so the cheapest model is plenty (~0.04p a question).
+  support: "claude-haiku-5-5",
 } as const;
 // Everything is on Sonnet 5 — cheaper ($2/$10 vs the old 4-6's $3/$15),
 // faster, and at least as capable, so it's a strict win with no quality
