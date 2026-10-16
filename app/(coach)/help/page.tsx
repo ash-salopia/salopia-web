@@ -118,6 +118,7 @@ export default function HelpPage() {
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState<HelpCategoryId>(HELP_CATEGORIES[0].id);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [resultOpenId, setResultOpenId] = useState<string | null>(null);
   const articleRefs = useRef<Record<string, HTMLDivElement | null>>({});
   // "Speak to an agent" - opens pre-filled with whatever was searched.
   const [agentSeed, setAgentSeed] = useState<string | null>(null);
@@ -179,7 +180,10 @@ export default function HelpPage() {
 
       <input
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setResultOpenId(null);
+        }}
         placeholder='Search help — e.g. "build a session", "share link", "squad report"'
         style={styles.search}
         autoFocus
@@ -192,21 +196,34 @@ export default function HelpPage() {
             <div style={styles.resultsCount}>
               {results.length} {results.length === 1 ? "result" : "results"}
             </div>
-            {results.map((art) => (
-              <button
-                key={art.id}
-                style={styles.resultRow}
-                onClick={() => openArticle(art)}
-              >
-                <span style={styles.resultCat}>{CATEGORY_LABEL[art.category]}</span>
-                <span style={styles.resultTitle}>
-                  <Highlight text={art.title} tokens={tokens} />
-                </span>
-                <span style={styles.resultSnippet}>
-                  <Highlight text={snippetFor(art, tokens)} tokens={tokens} />
-                </span>
-              </button>
-            ))}
+            {results.map((art) => {
+              // Results open in place (like the browse cards), so the search
+              // and the rest of the results stay put.
+              const open = resultOpenId === art.id;
+              return (
+                <div key={art.id} style={styles.card}>
+                  <button
+                    style={styles.cardHead}
+                    onClick={() => setResultOpenId(open ? null : art.id)}
+                    aria-expanded={open}
+                  >
+                    <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={styles.resultCat}>{CATEGORY_LABEL[art.category]}</span>
+                      <span style={styles.resultTitle}>
+                        <Highlight text={art.title} tokens={tokens} />
+                      </span>
+                      {!open && (
+                        <span style={styles.resultSnippet}>
+                          <Highlight text={snippetFor(art, tokens)} tokens={tokens} />
+                        </span>
+                      )}
+                    </span>
+                    <span style={styles.chevron}>{open ? "▲" : "▼"}</span>
+                  </button>
+                  {open && <ArticleBody article={art} />}
+                </div>
+              );
+            })}
             <AgentPrompt text="Not what you're looking for?" onClick={openAgent} />
           </div>
         ) : (
@@ -331,17 +348,6 @@ const styles: Record<string, React.CSSProperties> = {
   // search results
   resultsList: { display: "flex", flexDirection: "column", gap: 8 },
   resultsCount: { fontSize: 12, color: "var(--mute)", marginBottom: 2 },
-  resultRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-    textAlign: "left",
-    background: "var(--panel)",
-    border: "1px solid var(--line)",
-    borderRadius: 10,
-    padding: "12px 14px",
-    cursor: "pointer",
-  },
   resultCat: {
     fontSize: 10,
     fontWeight: 700,
