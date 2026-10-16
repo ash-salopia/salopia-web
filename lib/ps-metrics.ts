@@ -3,7 +3,7 @@
 // A coach toggles which metrics an exercise tracks
 // (PSExercise.tracked_metrics). The coach card, the athlete view and the
 // reports all render / read one value per tracked metric:
-//   - "set" metrics (load, reps) — one value for the whole set
+//   - "set" metrics (load, reps, box height) — one value for the whole set
 //   - "rep" metrics (time, distance, height, …) — one value per rep
 //
 // Pure module (no "use client", no Supabase) so lib/report-calc.ts can
@@ -20,7 +20,7 @@ export type MeasurementType =
   | "time_s" | "height_cm" | "distance_m" | "rsi" | "power_w" | "velocity_ms" | "none";
 
 export type PSMetricKey =
-  | "load" | "reps"
+  | "load" | "reps" | "box_height"
   | "time" | "distance" | "distance_cm" | "height" | "velocity" | "power" | "rsi" | "contact_time";
 
 export interface PSMetricMeta {
@@ -34,12 +34,17 @@ export interface PSMetricMeta {
 }
 
 export const PS_METRIC_ORDER: PSMetricKey[] = [
-  "load", "reps", "time", "distance", "distance_cm", "height", "velocity", "power", "rsi", "contact_time",
+  "load", "reps", "box_height", "time", "distance", "distance_cm", "height", "velocity", "power", "rsi", "contact_time",
 ];
 
 export const PS_METRIC_META: Record<PSMetricKey, PSMetricMeta> = {
   load:         { key: "load",         label: "Load",         short: "Load", unit: "kg",  placeholder: "40",   scope: "set", lowerBetter: false },
   reps:         { key: "reps",         label: "Reps",         short: "Reps", unit: "",    placeholder: "5",    scope: "set", lowerBetter: false },
+  // Box/drop height for box jumps, depth jumps, drop jumps etc. - one
+  // value per set (same box for every rep), so it's a set metric like
+  // load. Logged as a condition of the set rather than a result, but
+  // "higher" still reads as progression in history/reports.
+  box_height:   { key: "box_height",   label: "Box height",   short: "Box",  unit: "cm",  placeholder: "30",   scope: "set", lowerBetter: false },
   time:         { key: "time",         label: "Time",         short: "Time", unit: "s",   placeholder: "4.20", scope: "rep", lowerBetter: true },
   // Two distance metrics, deliberately kept separate rather than one
   // metric with a switchable unit: different P/S exercises need
@@ -76,7 +81,7 @@ export function isPSMetricKey(v: unknown): v is PSMetricKey {
 
 export interface PSSetLog {
   done: boolean;
-  set_metrics: Partial<Record<PSMetricKey, string>>;   // load / reps
+  set_metrics: Partial<Record<PSMetricKey, string>>;   // load / reps / box_height
   rep_metrics: Partial<Record<PSMetricKey, string>>[]; // one entry per rep
   single_value: boolean;   // one rep_metrics entry applies to every rep
   rpe: string;
