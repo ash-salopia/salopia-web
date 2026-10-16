@@ -300,6 +300,11 @@ export default function HelpPage() {
           Coach Forum
         </Link>
         .
+        <div style={{ marginTop: 8 }}>
+          <a href="/privacy" target="_blank" style={styles.footerLink}>Privacy policy</a>
+          {" · "}
+          <a href="/terms" target="_blank" style={styles.footerLink}>Terms of use</a>
+        </div>
       </div>
 
       {agentSeed !== null && (

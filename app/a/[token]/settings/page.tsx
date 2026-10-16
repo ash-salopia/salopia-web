@@ -205,6 +205,11 @@ export default function AthleteSettingsPage() {
         </div>
         </>}
       </div>
+      <div style={{ textAlign: "center", fontSize: 12, color: "var(--mute)", marginTop: 20 }}>
+        <a href="/privacy" target="_blank" style={{ color: "var(--mute)" }}>Privacy policy</a>
+        {" · "}
+        <a href="/terms" target="_blank" style={{ color: "var(--mute)" }}>Terms of use</a>
+      </div>
     </div>
   );
 }

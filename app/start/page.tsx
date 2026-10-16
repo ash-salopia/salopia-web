@@ -67,6 +67,12 @@ export default function StartPage() {
           ))}
         </div>
       </div>
+
+      <div style={s.legal}>
+        <a href="/privacy" style={s.legalLink}>Privacy policy</a>
+        <span>·</span>
+        <a href="/terms" style={s.legalLink}>Terms of use</a>
+      </div>
     </div>
   );
 }
@@ -154,6 +160,8 @@ const s: Record<string, React.CSSProperties> = {
     color: "#8593A0",
     lineHeight: 1.5,
   },
+  legal: { display: "flex", gap: 10, marginTop: 40, fontSize: 13, color: "#8593A0" },
+  legalLink: { color: "#8593A0", textDecoration: "underline" },
   extras: {
     width: "100%",
     maxWidth: 720,
