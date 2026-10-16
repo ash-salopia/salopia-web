@@ -18,7 +18,9 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
-import type { DirectMessage } from "@/types";
+import { ReactionButtons, ReactionBadge } from "@/components/MessageReactions";
+import { reactToAthleteMessage } from "@/lib/data/messages";
+import type { DirectMessage, MessageReaction } from "@/types";
 
 interface Props {
   athleteId: string;
@@ -220,6 +222,22 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
     }
   };
 
+  // 👍/👎 on an athlete's message (0117) - optimistic, rolled back on failure.
+  const react = async (msg: DirectMessage, reaction: MessageReaction | null) => {
+    const before = msg;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msg.id ? { ...m, reaction, reaction_by_name: reaction ? coachName : null } : m
+      )
+    );
+    try {
+      await reactToAthleteMessage(msg, reaction, coachName);
+    } catch {
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? before : m)));
+      setError("Could not save reaction - please try again");
+    }
+  };
+
   const deleteMessage = async (id: string) => {
     if (!confirm("Delete this message? It will be removed for everyone.")) return;
     const before = messages;
@@ -280,6 +298,12 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
                     <span style={s.time}>
                       {formatTime(msg.created_at)}{msg.edited_at ? " · edited" : ""}
                     </span>
+                    {msg.sender_type === "athlete" && !msg.id.startsWith("optimistic") && (
+                      <ReactionButtons current={msg.reaction} onReact={(r) => react(msg, r)} />
+                    )}
+                    {msg.sender_type === "coach" && msg.reaction && (
+                      <ReactionBadge reaction={msg.reaction} by={msg.reaction_by_name} />
+                    )}
                     {isMe && (
                       <span style={s.msgActions}>
                         {!msg.audio_path && (

@@ -16,7 +16,9 @@ import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-ut
 import { getOrgSettings } from "@/lib/data/settings";
 import { listRecentOrgPBs, formatPBValue, type PersonalBest } from "@/lib/data/personal-bests";
 import { listLowRecoveryAlerts, type RecoveryAlert } from "@/lib/data/recovery";
-import { listRecentAthleteMessages, acknowledgeAthleteMessage, acknowledgeAthleteMessagesFor, type RecentDirectMessage } from "@/lib/data/messages";
+import { listRecentAthleteMessages, acknowledgeAthleteMessage, acknowledgeAthleteMessagesFor, reactToAthleteMessage, type RecentDirectMessage } from "@/lib/data/messages";
+import { ReactionButtons } from "@/components/MessageReactions";
+import type { MessageReaction } from "@/types";
 import { listTodayCheckIns } from "@/lib/data/checkins";
 import { flaggedConditions } from "@/lib/checkin";
 import { createClient } from "@/lib/supabase-browser";
@@ -328,6 +330,22 @@ export default function DashboardPage() {
     }
   };
 
+  // 👍/👎 straight from the panel (0117) - answers the athlete and clears it.
+  const handleReactMessage = async (m: RecentDirectMessage, reaction: MessageReaction | null) => {
+    if (!reaction) return;
+    setDismissingId(m.id);
+    const prev = recentMessages;
+    setRecentMessages((cur) => cur.filter((x) => x.id !== m.id)); // optimistic
+    try {
+      await reactToAthleteMessage(m, reaction, coachName || "Coach");
+    } catch {
+      setRecentMessages(prev);
+      setError("Could not save reaction - the reaction column may be missing (migration 0117)");
+    } finally {
+      setDismissingId(null);
+    }
+  };
+
   const handleDismissNote = async (sessionId: string) => {
     setDismissingId(sessionId);
     const prev = sessionNotes;
@@ -433,6 +451,13 @@ export default function DashboardPage() {
                         {m.audio_path ? "🎤 Voice note" : m.body}
                       </div>
                     </button>
+                    <span style={{ alignSelf: "center", flexShrink: 0 }}>
+                      <ReactionButtons
+                        current={m.reaction}
+                        onReact={(r) => handleReactMessage(m, r)}
+                        disabled={dismissingId === m.id}
+                      />
+                    </span>
                     <button
                       style={st.noteDismissBtn}
                       onClick={() => handleDismissMessage(m.id)}

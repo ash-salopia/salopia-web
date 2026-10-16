@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { feedDisplayName } from "@/lib/feed-name";
-import { notifyCoachesOfMessage } from "@/lib/push/send";
+import { notifyCoachesOfMessage, notifyCoachOfReaction } from "@/lib/push/send";
+import { REACTION_EMOJI, quoteForPush } from "@/lib/message-reactions";
 
 // Athlete side of the 1:1 direct-message thread with their coaches -
 // mirrors app/api/athlete-link/chat/route.ts's shape, but there's no
@@ -76,6 +77,58 @@ export async function POST(req: NextRequest) {
     body: text || "🎤 Voice note",
     url: `/athletes/${athlete.id}`,
   }).catch(() => {});
+
+  return NextResponse.json({ message: data });
+}
+
+// PATCH /api/athlete-link/direct-messages — athlete 👍/👎s one of their
+// coach's messages (0117), or clears it with reaction: null. The message
+// must be in THIS athlete's thread and sent by a coach.
+export async function PATCH(req: NextRequest) {
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+
+  const { token, messageId, reaction } = body;
+  if (!token || !messageId) return NextResponse.json({ error: "Missing token or message" }, { status: 400 });
+  if (reaction !== null && reaction !== "up" && reaction !== "down") {
+    return NextResponse.json({ error: "Invalid reaction" }, { status: 400 });
+  }
+
+  const athlete = await getAthleteByShareToken(token);
+  if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+
+  const supabase = createServiceRoleClient();
+  const { data: msg } = await supabase
+    .from("direct_messages")
+    .select("id, sender_id, body, audio_path")
+    .eq("id", messageId)
+    .eq("athlete_id", athlete.id)
+    .eq("sender_type", "coach")
+    .maybeSingle();
+  if (!msg) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+
+  const name = feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only);
+  const { data, error } = await supabase
+    .from("direct_messages")
+    .update(
+      reaction
+        ? { reaction, reaction_by_name: name, reacted_at: new Date().toISOString() }
+        : { reaction: null, reaction_by_name: null, reacted_at: null }
+    )
+    .eq("id", msg.id)
+    .select()
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (reaction) {
+    notifyCoachOfReaction(msg.sender_id, {
+      title: `${name} reacted ${REACTION_EMOJI[reaction as "up" | "down"]}`,
+      body: `To ${quoteForPush(msg.body ?? "", !!msg.audio_path)}`,
+      url: `/athletes/${athlete.id}`,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ message: data });
 }

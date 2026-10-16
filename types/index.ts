@@ -735,4 +735,10 @@ export interface DirectMessage {
   created_at: string;
   edited_at?: string | null;
   acknowledged_at?: string | null; // 0084 — coach dismissed it off the Dashboard
+  // 0117 — 👍/👎 quick reply, set by the other side of the thread
+  reaction?: MessageReaction | null;
+  reaction_by_name?: string | null;
+  reacted_at?: string | null;
 }
+
+export type MessageReaction = "up" | "down";

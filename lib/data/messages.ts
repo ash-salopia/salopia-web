@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase-browser";
-import type { DirectMessage } from "@/types";
+import type { DirectMessage, MessageReaction } from "@/types";
 
 export interface RecentDirectMessage extends DirectMessage {
   athlete?: { id: string; name: string } | null;
@@ -64,4 +64,33 @@ export async function listAthleteMessages(athleteId: string, limit = 8): Promise
     .limit(limit);
   if (error) throw error;
   return (data ?? []).slice().reverse();
+}
+
+// Coach 👍/👎 on an athlete's message (0117), or null to clear it.
+// Reacting counts as handling it, so it also clears the message off the
+// Dashboard panel (0084). Then pushes the athlete, best-effort.
+export async function reactToAthleteMessage(
+  message: Pick<DirectMessage, "id" | "athlete_id" | "body" | "audio_path">,
+  reaction: MessageReaction | null,
+  coachName: string
+): Promise<void> {
+  const supabase = createClient();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("direct_messages")
+    .update(
+      reaction
+        ? { reaction, reaction_by_name: coachName, reacted_at: now, acknowledged_at: now }
+        : { reaction: null, reaction_by_name: null, reacted_at: null }
+    )
+    .eq("id", message.id)
+    .eq("sender_type", "athlete");
+  if (error) throw error;
+  if (reaction) {
+    fetch("/api/direct-messages/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteId: message.athlete_id, reaction, messageId: message.id }),
+    }).catch(() => {});
+  }
 }

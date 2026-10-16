@@ -134,3 +134,16 @@ export async function notifyAthleteOfMessage(athleteId: string, payload: PushPay
   if (athlete?.notify_message === false) return;
   await sendPushToAthlete(athleteId, payload);
 }
+
+// An athlete 👍/👎'd a coach's message (0117) - just the coach who sent
+// it, only if they haven't turned message pushes off.
+export async function notifyCoachOfReaction(coachId: string, payload: PushPayload) {
+  const service = createServiceRoleClient();
+  const { data: coach } = await service
+    .from("coaches")
+    .select("notify_message")
+    .eq("id", coachId)
+    .maybeSingle();
+  if (!coach || coach.notify_message === false) return;
+  await sendPushToCoaches([coachId], payload);
+}
