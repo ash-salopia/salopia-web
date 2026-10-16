@@ -721,7 +721,7 @@ export default function AthleteDetailPage() {
   );
 
   return (
-    <div style={styles.page}>
+    <div style={calView === "week" || calView === "day" ? styles.pageWide : styles.page}>
       <button style={styles.backLink} onClick={() => router.push("/athletes")}>
         ← All athletes
       </button>
@@ -1524,6 +1524,8 @@ export default function AthleteDetailPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 900 },
+  // Week / By day: use the screen width so a whole week's exercises fit.
+  pageWide: { maxWidth: 1600 },
   backLink: {
     background: "transparent",
     border: "none",
@@ -1687,15 +1689,15 @@ const styles: Record<string, React.CSSProperties> = {
   reorderBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 8, cursor: "pointer", padding: "1px 2px", lineHeight: 1 },
   copySessionBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 4, fontSize: 10, cursor: "pointer", padding: "1px 4px", flexShrink: 0 },
   weekScrollWrap: { overflowX: "auto" as const, marginTop: 8 },
-  weekGrid: { display: "flex", gap: 6, minWidth: "fit-content" },
-  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, minWidth: 190, width: 190, flexShrink: 0, display: "flex", flexDirection: "column" as const },
+  weekGrid: { display: "flex", gap: 6 },
+  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, minWidth: 150, flex: "1 1 0", display: "flex", flexDirection: "column" as const },
   weekDayHeader: { padding: "8px 10px", borderBottom: "1px solid var(--line)", background: "var(--ink)" },
   weekDayBody: { flex: 1, padding: 8, display: "flex", flexDirection: "column" as const, gap: 6, cursor: "pointer" },
   weekSessionCard: { background: "var(--ink)", border: "1px solid var(--line)", borderLeft: "3px solid", borderRadius: 6, padding: "6px 8px", display: "flex", flexDirection: "column" as const, gap: 3 },
   weekExList: { display: "flex", flexDirection: "column" as const, gap: 2, marginTop: 2, paddingTop: 4, borderTop: "1px solid var(--line)" },
-  weekExRow: { display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10.5, lineHeight: 1.35 },
-  weekExName: { color: "var(--text)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
-  weekExDose: { color: "var(--mute)", flexShrink: 0, whiteSpace: "nowrap" as const },
+  weekExRow: { display: "flex", flexDirection: "column" as const, fontSize: 11, lineHeight: 1.3, padding: "2px 0" },
+  weekExName: { color: "var(--text)", wordBreak: "break-word" as const },
+  weekExDose: { color: "var(--mute)", fontSize: 10.5 },
   byDayBar: { display: "flex", gap: 4, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 4 },
   byDaySelect: { marginLeft: "auto", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 8px", fontSize: 12 },
   weekSessionName: { background: "transparent", border: "none", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, textAlign: "left" as const },
