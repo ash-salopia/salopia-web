@@ -207,7 +207,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Search this help centre first; email support@visbuild.co.uk for anything else.",
     keywords: ["help", "support", "contact", "email", "stuck"],
     body: [
-      { type: "p", text: "This Help & FAQ covers every feature — use the search box at the top, or browse the sections on the left. Can't find it? Tap **Speak to an agent** for an instant AI answer drawn from these help articles." },
+      { type: "p", text: "This Help & FAQ covers every feature — use the search box at the top, or browse the sections on the left. Can't find it? Tap **Need Help?** at the top of any page (or **Speak to an agent** here) for an instant AI answer drawn from these help articles. If it can't solve it, tap **Email support** in the same panel to reach a real person." },
       { type: "steps", items: [
         `For a problem or question not answered here, email **${SUPPORT}**. Include: your organisation name, the athlete involved (if any), what you expected to happen, what happened instead, and a screenshot if you can.`,
         "For a feature idea or a vote on the roadmap, use the **Feature Requests** room in the **Coach Forum**.",
