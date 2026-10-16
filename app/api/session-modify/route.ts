@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 
 type ConvMessage = { role: "user" | "assistant"; content: string };
@@ -87,6 +88,10 @@ Rules:
 - Keep reasons brief and factual`;
 
 export async function POST(req: NextRequest) {
+  // Verified login + daily cap - see lib/ai/usage-guard.ts.
+  const guard = await guardAIRequest("session-modify", req);
+  if (!guard.ok) return guard.response;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 500 });

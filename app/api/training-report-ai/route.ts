@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { createClient } from "@/lib/supabase-server";
 import { computeReport } from "@/lib/report-calc";
 import { computeLoadMonitoring } from "@/lib/training-load";
@@ -18,6 +19,10 @@ THEMES:
 <1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If athlete notes were not included below, or there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>`;
 
 export async function POST(req: NextRequest) {
+  // Verified login + daily cap - see lib/ai/usage-guard.ts.
+  const guard = await guardAIRequest("training-report-ai", req);
+  if (!guard.ok) return guard.response;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 500 });
 
