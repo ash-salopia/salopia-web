@@ -6,6 +6,7 @@ import CompetitionFeed, { type Competition } from "@/components/CompetitionFeed"
 import { formatPBValue, pbTypeLabel } from "@/lib/data/personal-bests";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
+import { ReactionButtons, ReactionBadge } from "@/components/MessageReactions";
 import AthletePageHeading from "@/components/AthletePageHeading";
 import LeaderboardsView from "@/components/LeaderboardsView";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
@@ -186,6 +187,23 @@ export default function AthleteCommunityPage() {
       throw new Error("send failed");
     } finally {
       setDmSending(false);
+    }
+  };
+
+  // 👍/👎 on a coach's message (0117) - optimistic, rolled back on failure.
+  const reactToDM = async (msg: any, reaction: "up" | "down" | null) => {
+    const before = msg;
+    setDmMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, reaction } : m)));
+    try {
+      const res = await fetch("/api/athlete-link/direct-messages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ token, messageId: msg.id, reaction }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setDmMessages((prev) => prev.map((m) => (m.id === msg.id ? before : m)));
     }
   };
 
@@ -512,9 +530,17 @@ export default function AthleteCommunityPage() {
                               msg.body
                             )}
                           </div>
-                          <div style={{ ...s.msgTime, textAlign: isMe ? "right" : "left" }}>
-                            {formatTime(msg.created_at)}
+                          <div style={{ ...s.msgTime, display: "flex", alignItems: "center", gap: 8, justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                            <span>{formatTime(msg.created_at)}</span>
+                            {isMe && msg.reaction && (
+                              <ReactionBadge reaction={msg.reaction} by={msg.reaction_by_name} />
+                            )}
                           </div>
+                          {msg.sender_type === "coach" && (
+                            <div style={{ marginTop: 4 }}>
+                              <ReactionButtons current={msg.reaction} onReact={(r) => reactToDM(msg, r)} />
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
