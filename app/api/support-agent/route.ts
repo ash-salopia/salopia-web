@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 import { callClaude, AI_MODEL } from "@/lib/ai/claude";
 import { searchHelp } from "@/lib/help/search";
 import { HELP_CATEGORIES, type HelpArticle } from "@/lib/help/content";
+import { helpPageContext } from "@/lib/help/page-context";
 
 export const dynamic = "force-dynamic";
 
@@ -93,19 +94,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Which page they asked from ("Need Help?" in the header) - favours
+  // that section's articles and tells the AI where they are.
+  const page = helpPageContext(typeof body.page === "string" ? body.page : null);
+  const searchOpts = { boostCategories: page?.categories };
+
   // Search on the new question plus the previous one, so a follow-up like
   // "and on my phone?" still finds the right articles.
   const userTurns = turns.filter((t) => t.role === "user");
-  let hits = searchHelp(userTurns.slice(-2).map((t) => t.content).join(" "), MAX_ARTICLES);
-  if (!hits.length) hits = searchHelp(last.content, MAX_ARTICLES);
+  let hits = searchHelp(userTurns.slice(-2).map((t) => t.content).join(" "), MAX_ARTICLES, searchOpts);
+  if (!hits.length) hits = searchHelp(last.content, MAX_ARTICLES, searchOpts);
   const articles = hits.map((h) => h.article);
 
   const context = articles.length
     ? `Help articles that may be relevant:\n\n${articles.map(articleForPrompt).join("\n\n")}`
     : "No help articles matched this question.";
 
+  const where = page ? `The coach is currently on ${page.label}.\n\n` : "";
   const messages = turns.map((t, i) =>
-    i === turns.length - 1 ? { role: t.role, content: `${context}\n\nCoach's question: ${t.content}` } : t
+    i === turns.length - 1 ? { role: t.role, content: `${context}\n\n${where}Coach's question: ${t.content}` } : t
   );
 
   const result = await callClaude({
@@ -133,15 +140,46 @@ export async function POST(req: NextRequest) {
   const sources = articles.filter((a) => usedIds.includes(a.id)).map((a) => ({ id: a.id, title: a.title }));
   const answered = usedIds.length > 0;
 
-  const { error: logError } = await service.from("support_agent_messages").insert({
-    organisation_id: coach.organisation_id,
-    coach_id: coach.id,
-    question: last.content,
-    answer,
-    article_ids: usedIds,
-    answered,
-  });
+  const { data: logged, error: logError } = await service
+    .from("support_agent_messages")
+    .insert({
+      organisation_id: coach.organisation_id,
+      coach_id: coach.id,
+      question: last.content,
+      answer,
+      article_ids: usedIds,
+      answered,
+    })
+    .select("id")
+    .single();
   if (logError) console.error("[support-agent] log failed", logError);
 
-  return NextResponse.json({ answer, sources, answered });
+  // id lets the coach rate this answer (PATCH below); null if logging failed.
+  return NextResponse.json({ id: logged?.id ?? null, answer, sources, answered });
+}
+
+// PATCH { id, helpful: boolean } - the coach's 👍/👎 on an answer.
+// Only their own answers can be rated.
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  if (typeof body.id !== "string" || typeof body.helpful !== "boolean") {
+    return NextResponse.json({ error: "Missing id or helpful" }, { status: 400 });
+  }
+
+  const { error } = await createServiceRoleClient()
+    .from("support_agent_messages")
+    .update({ helpful: body.helpful })
+    .eq("id", body.id)
+    .eq("coach_id", user.id);
+  if (error) {
+    console.error("[support-agent] feedback failed", error);
+    return NextResponse.json({ error: "Could not save feedback" }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }

@@ -9,6 +9,7 @@ import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
 import Avatar from "@/components/Avatar";
 import { useIsMobile } from "@/lib/use-is-mobile";
+import SupportAgentChat from "@/components/SupportAgentChat";
 
 const NAV_ITEMS = [
   { href: "/athletes",    label: "Athletes",    icon: "👤" },
@@ -49,6 +50,10 @@ export default function CoachShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  // "Need Help?" assistant - on every page except Help itself, which has
+  // its own "Speak to an agent" buttons.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const onHelpPage = pathname?.startsWith("/help");
 
   useEffect(() => {
     const root = document.documentElement;
@@ -114,6 +119,11 @@ export default function CoachShell({
         </div>
 
         <div style={styles.headerRight}>
+          {!onHelpPage && (
+            <button style={styles.helpBtn} onClick={() => setHelpOpen(true)}>
+              {isMobile ? "Help?" : "Need Help?"}
+            </button>
+          )}
           <Avatar name={coachName || "Coach"} avatarUrl={coachAvatarUrl} size={28} />
           {!isMobile && <span style={styles.coachInfo}>{coachName || "Coach"}</span>}
           <button style={styles.signOutBtn} onClick={handleSignOut}>Sign out</button>
@@ -161,6 +171,17 @@ export default function CoachShell({
         </aside>
         <main style={{ ...styles.main, ...(isMobile ? styles.mainMobile : {}) }}>{children}</main>
       </div>
+
+      {helpOpen && (
+        <SupportAgentChat
+          page={pathname ?? undefined}
+          onClose={() => setHelpOpen(false)}
+          onOpenArticle={(id) => {
+            setHelpOpen(false);
+            router.push(`/help#${id}`);
+          }}
+        />
+      )}
 
       {branding.showPoweredBy && (
         <div style={styles.poweredBy}>Powered by VISBUILD.CO.UK</div>
@@ -216,6 +237,16 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
     borderBottom: "1px solid #F59E0B44",
     flexShrink: 0,
+  },
+  helpBtn: {
+    background: "var(--accent-dim)",
+    border: "1px solid var(--accent)",
+    color: "var(--accent)",
+    borderRadius: 8,
+    padding: "6px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
   },
   signOutBtn: {
     background: "transparent",

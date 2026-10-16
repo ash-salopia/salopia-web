@@ -10,7 +10,7 @@
 //  - common synonyms map across ("client" → athlete, "workout" → session)
 //  - small typos still match ("sesion", "atheletes")
 
-import { HELP_ARTICLES, type HelpArticle } from "@/lib/help/content";
+import { HELP_ARTICLES, type HelpArticle, type HelpCategoryId } from "@/lib/help/content";
 
 const STOPWORDS = new Set(
   (
@@ -169,7 +169,13 @@ export interface HelpSearchResult {
   score: number;
 }
 
-export function searchHelp(query: string, limit = 20): HelpSearchResult[] {
+export function searchHelp(
+  query: string,
+  limit = 20,
+  // Nudge articles from these sections up a little - e.g. the section
+  // for the page the coach asked from (lib/help/page-context.ts).
+  opts: { boostCategories?: HelpCategoryId[] } = {}
+): HelpSearchResult[] {
   const words = Array.from(new Set(queryWords(query)));
   if (!words.length) return [];
   const { index, docFreq } = getIndex();
@@ -201,6 +207,7 @@ export function searchHelp(query: string, limit = 20): HelpSearchResult[] {
     // Reward articles that cover more of the question, and exact title phrases.
     score *= 0.4 + 0.6 * (matchedWords / words.length);
     if (words.length > 1 && doc.titleLower.includes(phrase)) score *= 1.5;
+    if (opts.boostCategories?.includes(doc.article.category)) score *= 1.3;
     results.push({ article: doc.article, score });
   }
 
