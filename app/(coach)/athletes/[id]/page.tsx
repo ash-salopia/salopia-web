@@ -47,12 +47,24 @@ const GoalsManager = dynamic(() => import("@/components/GoalsManager"), { ssr: f
 const ExportModal = dynamic(() => import("@/components/ExportModal"), { ssr: false });
 const RecoverySessionModal = dynamic(() => import("@/components/RecoverySessionModal"), { ssr: false });
 const AthleteDashboard = dynamic(() => import("@/components/AthleteDashboard"), { ssr: false });
+const SessionEditorModal = dynamic(() => import("@/components/SessionEditorModal"), { ssr: false });
+import type { SessionEditorModalItem } from "@/components/SessionEditorModal";
 import type { Athlete, Session, SessionType, Template } from "@/types";
 import { getOrgSettings } from "@/lib/data/settings";
 import { getMyBranding } from "@/lib/data/branding";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { listGoalMilestones, type GoalMilestone } from "@/lib/data/goals";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
+
+// "4×5 @ 80kg" - compact prescription for the Week / By day cards.
+function exerciseDose(ex: { sets?: number; reps?: string; time?: string; target_load?: string; use_percent_1rm?: boolean; set_percents?: string[] }): string {
+  const work = (ex.reps || ex.time || "").trim();
+  let out = ex.sets ? (work ? `${ex.sets}×${work}` : `${ex.sets} sets`) : work;
+  const pct = ex.use_percent_1rm ? (ex.set_percents ?? []).filter(Boolean) : [];
+  if (pct.length) out += ` @ ${pct[0]}${/%$/.test(pct[0]) ? "" : "%"}${pct.length > 1 && pct.some((p) => p !== pct[0]) ? "+" : ""}`;
+  else if ((ex.target_load ?? "").trim()) out += ` @ ${ex.target_load!.trim()}`;
+  return out;
+}
 
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
@@ -208,7 +220,13 @@ export default function AthleteDetailPage() {
   const [lastCopyRangeStart, setLastCopyRangeStart] = useState("");
   const [lastCopyRangeEnd, setLastCopyRangeEnd] = useState("");
   const [libraryAccessOpen, setLibraryAccessOpen] = useState(false);
-  const [calView, setCalView] = useState<"dashboard" | "month" | "week">("month");
+  const [calView, setCalView] = useState<"dashboard" | "month" | "week" | "day">("week");
+  // "By day" view: one weekday (0 = Mon) across the next N weeks, e.g.
+  // every Tuesday, so a coach can tweak a recurring session week to week.
+  const [byDayIndex, setByDayIndex] = useState<number>(() => (new Date().getDay() + 6) % 7);
+  const [byDayWeeks, setByDayWeeks] = useState(6);
+  // Session editor pop-up (Week / By day views), stepping through `items`.
+  const [editorModal, setEditorModal] = useState<{ items: SessionEditorModalItem[]; initialId: string } | null>(null);
   const [checkinEnabled, setCheckinEnabled] = useState(true);
   const [branding, setBranding] = useState<ResolvedBranding>(DEFAULT_BRANDING);
   const [goalMilestones, setGoalMilestones] = useState<GoalMilestone[]>([]);
@@ -671,6 +689,19 @@ export default function AthleteDetailPage() {
     return fmt(s) + " – " + fmt(e) + " " + e.getFullYear();
   })();
 
+  // By day: the chosen weekday in the week being viewed, then every week after.
+  const byDayDates: string[] = Array.from({ length: byDayWeeks }, (_, k) => {
+    const d = new Date(weekStart + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + byDayIndex + 7 * k);
+    return d.toISOString().slice(0, 10);
+  });
+
+  const byDayTitle = (() => {
+    const fmt = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const dayName = new Date(byDayDates[0] + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long" });
+    return `${dayName}s · ${fmt(byDayDates[0])} – ${fmt(byDayDates[byDayDates.length - 1])}`;
+  })();
+
   const prevWeek = () => {
     const d = new Date(weekStart + "T12:00:00Z");
     d.setDate(d.getDate() - 7);
@@ -690,7 +721,7 @@ export default function AthleteDetailPage() {
   );
 
   return (
-    <div style={styles.page}>
+    <div style={calView === "week" || calView === "day" ? styles.pageWide : styles.page}>
       <button style={styles.backLink} onClick={() => router.push("/athletes")}>
         ← All athletes
       </button>
@@ -824,7 +855,20 @@ export default function AthleteDetailPage() {
               ? `Add session - ${new Date(calendarAddDate + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
               : "Add session"}
           </button>
-          {copyModal && (
+          {editorModal && (
+        <SessionEditorModal
+          athleteId={athleteId}
+          items={editorModal.items}
+          initialId={editorModal.initialId}
+          onClose={async () => {
+            setEditorModal(null);
+            // Edits saved inside the pop-up - refresh the calendar cards.
+            try { setSessions(await listSessionsForAthlete(athleteId)); } catch {}
+          }}
+        />
+      )}
+
+      {copyModal && (
         <CopySessionModal
           sessionId={copyModal.sessionId}
           sessionName={copyModal.sessionName}
@@ -882,14 +926,14 @@ export default function AthleteDetailPage() {
           {calView !== "dashboard" && (
             <>
               <button style={styles.calNavBtn} onClick={calView === "month" ? prevMonth : prevWeek}>‹</button>
-              <span style={styles.calTitle}>{calView === "month" ? calendarTitle : weekTitle}</span>
+              <span style={styles.calTitle}>{calView === "month" ? calendarTitle : calView === "day" ? byDayTitle : weekTitle}</span>
               <button style={styles.calNavBtn} onClick={calView === "month" ? nextMonth : nextWeek}>›</button>
             </>
           )}
           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-            {(["dashboard", "month", "week"] as const).map(v => (
+            {(["dashboard", "month", "week", "day"] as const).map(v => (
               <button key={v} style={{ ...styles.viewTabBtn, ...(calView === v ? styles.viewTabBtnActive : {}) }} onClick={() => setCalView(v)}>
-                {v === "dashboard" ? "Dashboard" : v === "month" ? "Month" : "Week"}
+                {v === "dashboard" ? "Dashboard" : v === "month" ? "Month" : v === "week" ? "Week" : "By day"}
               </button>
             ))}
           </div>
@@ -910,14 +954,50 @@ export default function AthleteDetailPage() {
             onOpenMessages={() => setMessageOpen(true)}
             onOpenSession={(sid) => router.push(`/athletes/${athleteId}/sessions/${sid}`)}
           />
-        ) : calView === "week" ? (
-          <div style={styles.weekScrollWrap}>
-          <div style={styles.weekGrid}>
-            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((dayLabel, di) => {
-              const iso = weekDates[di];
+        ) : calView === "week" || calView === "day" ? (
+          <>
+            {calView === "day" && (
+              <div style={styles.byDayBar}>
+                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d, i) => (
+                  <button
+                    key={d}
+                    style={{ ...styles.viewTabBtn, ...(byDayIndex === i ? styles.viewTabBtnActive : {}) }}
+                    onClick={() => setByDayIndex(i)}
+                  >
+                    {d}
+                  </button>
+                ))}
+                <select
+                  value={byDayWeeks}
+                  onChange={(e) => setByDayWeeks(Number(e.target.value))}
+                  style={styles.byDaySelect}
+                  aria-label="Number of weeks"
+                >
+                  {[4, 6, 8, 12].map((n) => (
+                    <option key={n} value={n}>{n} weeks</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div style={styles.weekScrollWrap}>
+              <div style={styles.weekGrid}>
+                {(() => {
+                  const columns = calView === "week" ? weekDates : byDayDates;
+                  // Everything visible, in date order - what ‹ › steps through in the pop-up.
+                  const series: SessionEditorModalItem[] = columns.flatMap((iso) =>
+                    [...(sessionsByDate.get(iso) ?? [])]
+                      .sort((x, y) => ((x as any).sort_order ?? 0) - ((y as any).sort_order ?? 0))
+                      .map((sess) => ({
+                        id: sess.id,
+                        label: `${new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · ${sess.name}`,
+                      }))
+                  );
+                  const openEditor = (id: string) => setEditorModal({ items: series, initialId: id });
+                  return columns.map((iso) => {
               const daySess = [...(sessionsByDate.get(iso) ?? [])].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
               const isToday = iso === todayStr;
               const dayDate = new Date(iso + "T12:00:00Z");
+              const dayLabel = dayDate.toLocaleDateString("en-GB", { weekday: "short" });
               return (
                 <div key={iso} style={{ ...styles.weekCol, ...(isToday ? { borderColor: "var(--accent)44" } : {}) }}>
                   <div style={styles.weekDayHeader}>
@@ -953,7 +1033,9 @@ export default function AthleteDetailPage() {
                           draggable
                           onDragStart={(e) => { e.stopPropagation(); setDraggingSessionId(session.id); }}
                           onDragEnd={() => { setDraggingSessionId(null); setDragOverDate(null); }}
-                          style={{ ...styles.weekSessionCard, borderLeftColor: meta.color, cursor: "grab", opacity: draggingSessionId === session.id ? 0.4 : 1 }}
+                          onClick={(e) => { e.stopPropagation(); openEditor(session.id); }}
+                          title="Click to edit"
+                          style={{ ...styles.weekSessionCard, borderLeftColor: meta.color, cursor: "pointer", opacity: draggingSessionId === session.id ? 0.4 : 1 }}
                         >
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ fontSize: 9, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const }}>{meta.label}</span>
@@ -962,16 +1044,26 @@ export default function AthleteDetailPage() {
                               <button style={{ ...styles.reorderBtn, opacity: si === daySess.length - 1 ? 0.2 : 1 }} onClick={e => { e.stopPropagation(); handleReorderSessions(iso, daySess, "down", session.id); }}>▾</button>
                             </div>
                           </div>
-                          <button style={styles.weekSessionName} onClick={e => { e.stopPropagation(); router.push(`/athletes/${athleteId}/sessions/${session.id}`); }}>
+                          <div style={styles.weekSessionName}>
                             {hasAthleteNote(session) && <span style={styles.athleteNoteDot} title="Athlete left a note on this session" />}
                             {session.name}
-                          </button>
+                          </div>
                           {session.type === "recovery" ? (
                             <div style={{ fontSize: 10, color: "var(--mute)" }}>{recoverySessionCardLine(session)}</div>
                           ) : session.exercises && session.exercises.length > 0 && (
-                            <div style={{ fontSize: 10, color: "var(--mute)" }}>{session.exercises.length} exercises</div>
+                            <div style={styles.weekExList}>
+                              {session.exercises.map((ex) => (
+                                <div key={ex.id} style={styles.weekExRow}>
+                                  <span style={styles.weekExName}>
+                                    {ex.order ? <span style={{ color: "var(--mute)" }}>{ex.order} </span> : null}
+                                    {ex.name || "Untitled"}
+                                  </span>
+                                  <span style={styles.weekExDose}>{exerciseDose(ex)}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
-                          <button style={styles.copySessionBtn} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
+                          <button style={{ ...styles.copySessionBtn, alignSelf: "flex-start" }} onClick={e => { e.stopPropagation(); setCopyModal({ sessionId: session.id, sessionName: session.name, sessionDate: session.date }); }} title="Copy">⧉</button>
                         </div>
                       );
                     })}
@@ -979,9 +1071,11 @@ export default function AthleteDetailPage() {
                   </div>
                 </div>
               );
-            })}
-          </div>
-          </div>
+                  });
+                })()}
+              </div>
+            </div>
+          </>
         ) : (
         <div style={styles.calGrid}>
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -1430,6 +1524,8 @@ export default function AthleteDetailPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 900 },
+  // Week / By day: use the screen width so a whole week's exercises fit.
+  pageWide: { maxWidth: 1600 },
   backLink: {
     background: "transparent",
     border: "none",
@@ -1581,9 +1677,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   // Calendar
   calendarWrap: { marginTop: 8 },
-  calendarHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  calendarHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" as const, marginBottom: 12 },
   calTitle: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, color: "var(--text)" },
-  calNavBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: "pointer" },
+  calNavBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: "pointer", flexShrink: 0 },
   calGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 },
   calDayHeader: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textAlign: "center" as const, padding: "4px 0", textTransform: "uppercase" as const },
   calCell: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 6px 4px", minHeight: 72, cursor: "pointer", display: "flex", flexDirection: "column" as const, gap: 3 },
@@ -1593,11 +1689,17 @@ const styles: Record<string, React.CSSProperties> = {
   reorderBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 8, cursor: "pointer", padding: "1px 2px", lineHeight: 1 },
   copySessionBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 4, fontSize: 10, cursor: "pointer", padding: "1px 4px", flexShrink: 0 },
   weekScrollWrap: { overflowX: "auto" as const, marginTop: 8 },
-  weekGrid: { display: "flex", gap: 6, minWidth: "fit-content" },
-  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, minWidth: 150, width: 150, flexShrink: 0, display: "flex", flexDirection: "column" as const },
+  weekGrid: { display: "flex", gap: 6 },
+  weekCol: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minHeight: 180, minWidth: 150, flex: "1 1 0", display: "flex", flexDirection: "column" as const },
   weekDayHeader: { padding: "8px 10px", borderBottom: "1px solid var(--line)", background: "var(--ink)" },
   weekDayBody: { flex: 1, padding: 8, display: "flex", flexDirection: "column" as const, gap: 6, cursor: "pointer" },
   weekSessionCard: { background: "var(--ink)", border: "1px solid var(--line)", borderLeft: "3px solid", borderRadius: 6, padding: "6px 8px", display: "flex", flexDirection: "column" as const, gap: 3 },
+  weekExList: { display: "flex", flexDirection: "column" as const, gap: 2, marginTop: 2, paddingTop: 4, borderTop: "1px solid var(--line)" },
+  weekExRow: { display: "flex", flexDirection: "column" as const, fontSize: 11, lineHeight: 1.3, padding: "2px 0" },
+  weekExName: { color: "var(--text)", wordBreak: "break-word" as const },
+  weekExDose: { color: "var(--mute)", fontSize: 10.5 },
+  byDayBar: { display: "flex", gap: 4, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 4 },
+  byDaySelect: { marginLeft: "auto", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 8px", fontSize: 12 },
   weekSessionName: { background: "transparent", border: "none", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, textAlign: "left" as const },
   calSessionChip: { fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 5px", border: "1px solid", lineHeight: 1.4, cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap" as const },
   milestoneCard: { background: "var(--accent-dim)", border: "1px dashed var(--accent)66", borderRadius: 6, padding: "5px 8px", fontSize: 11, fontWeight: 700, color: "var(--accent)" },
