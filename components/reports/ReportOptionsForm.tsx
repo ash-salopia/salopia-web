@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  METRIC_FIELDS, COMPONENT_FIELDS, SCOPE_FIELDS, FIELD_SESSION_TYPES, SESSION_TYPE_META,
+  METRIC_FIELDS, COMPONENT_FIELDS, SCOPE_FIELDS, VISUAL_FIELDS, FIELD_SESSION_TYPES, SESSION_TYPE_META,
   DEFAULT_REPORT_OPTIONS, type ReportOptions, type ReportSessionType,
 } from "@/lib/report-options";
 import { METRIC_ORDER, METRIC_META } from "@/lib/cardio-metrics";
@@ -125,6 +125,8 @@ export default function ReportOptionsForm({
   const visibleMetricFields = METRIC_FIELDS.filter((f) => showField(f.key));
   const visibleComponentFields = COMPONENT_FIELDS.filter((f) => showField(f.key));
   const visibleScopeFields = SCOPE_FIELDS.filter((f) => showField(f.key));
+  // Not drawn by the PDF export yet, so hidden there rather than offered disabled.
+  const visibleVisualFields = disableCharts ? [] : VISUAL_FIELDS.filter((f) => showField(f.key));
 
   return (
     <>
@@ -151,6 +153,28 @@ export default function ReportOptionsForm({
       </div>
       {activeTypes.size === 0 && (
         <div style={{ ...s.warnText, marginBottom: 16 }}>Pick at least one session type above to see its report options.</div>
+      )}
+
+      {visibleVisualFields.length > 0 && (
+        <>
+          <div style={s.sectionLabel}>Visual summary</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+            {visibleVisualFields.map((f) => (
+              <label key={f.key} style={s.checkOption}>
+                <input
+                  type="checkbox"
+                  checked={options[f.key] !== false}
+                  onChange={(e) => set(f.key as keyof ReportOptions, e.target.checked as any)}
+                  style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+                />
+                <span>
+                  <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>{f.label}</span>
+                  <span style={{ fontSize: 11, color: "var(--mute)" }}>{f.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </>
       )}
 
       {activeTypes.size > 0 && (

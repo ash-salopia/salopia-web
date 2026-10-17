@@ -8,6 +8,8 @@ import { resolveCurrentOneRMWithSource } from "@/lib/data/one-rm";
 import { listVelocityProfiles } from "@/lib/data/velocity-profiles";
 import type { OneRMSource } from "@/lib/data/settings";
 import type { OneRMFormula } from "@/lib/one-rm";
+import { computeVisualSummary, previousRange, type ReportPB, type VisualSummary } from "@/lib/report-visuals";
+import { todayISO } from "@/lib/date-utils";
 
 export type { ReportRow, ExerciseMap, ExerciseSummary, WeeklyPoint, WeeklyExerciseMap, NoteEntry, RPEEntry, RPEWeeklyPoint, PowerSpeedRow, PowerSpeedMap, PowerSpeedSummary } from "@/lib/report-calc";
 export type { StrengthRow, StrengthExerciseMap, StrengthExerciseSummary, StrengthWeeklyPoint, StrengthWeeklyMap } from "@/lib/strength-report-calc";
@@ -39,6 +41,10 @@ export interface ReportData extends ComputedReport {
     spikePct: number;
   };
   athleteRtp: { status: string | null; note: string | null; since: string | null };
+  // Headline cards, consistency calendar, weekly sessions, PB wall.
+  // Only built when asked for (the single-athlete report) - bulk and
+  // squad callers skip the extra queries.
+  visual?: VisualSummary;
 }
 
 // Fetches an athlete's sessions in range and hands them to the shared
@@ -50,7 +56,8 @@ export interface ReportData extends ComputedReport {
 export async function generateReport(
   athleteId: string,
   rangeStart: string | null,
-  rangeEnd: string | null
+  rangeEnd: string | null,
+  opts: { visuals?: boolean } = {}
 ): Promise<ReportData> {
   const supabase = createClient();
 
@@ -101,6 +108,13 @@ export async function generateReport(
     })
   );
 
+  const visual = opts.visuals
+    ? await buildVisualSummary(athleteId, allSessions, rangeStart, rangeEnd, settings.pb_enabled !== false).catch((e) => {
+        console.error("[generateReport] visual summary failed", e);
+        return undefined; // the rest of the report still renders
+      })
+    : undefined;
+
   return {
     ...computeReport(allSessions, velocityProfiles),
     rangeStart,
@@ -127,5 +141,78 @@ export async function generateReport(
       note: (athleteRes.data as { rtp_note?: string | null } | null)?.rtp_note ?? null,
       since: (athleteRes.data as { rtp_since?: string | null } | null)?.rtp_since ?? null,
     },
+    visual,
   };
+}
+
+const PB_SELECT = "exercise_name, date, pb_type, weight_kg, reps, time_seconds";
+
+// PBs in a date range, as the community feed shows them: the classic
+// weight / bodyweight lanes only (e1RM and volume rows are bookkeeping
+// for the celebration pop-up), minus exercises the coach has hidden.
+async function listPBsInRange(
+  athleteId: string,
+  start: string | null,
+  end: string | null,
+  hidden: Set<string>
+): Promise<ReportPB[]> {
+  const supabase = createClient();
+  let q = supabase.from("personal_bests").select(PB_SELECT).eq("athlete_id", athleteId).in("pb_type", ["weight", "bw_reps", "bw_time"]);
+  if (start && end) q = q.gte("date", start).lte("date", end);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? [])
+    .filter((p) => !hidden.has(String(p.exercise_name).toLowerCase()))
+    .map((p) => ({
+      exercise: p.exercise_name,
+      date: p.date,
+      kind: p.pb_type as ReportPB["kind"],
+      weightKg: p.weight_kg,
+      reps: p.reps,
+      timeSeconds: p.time_seconds,
+    }));
+}
+
+async function buildVisualSummary(
+  athleteId: string,
+  sessions: Session[],
+  rangeStart: string | null,
+  rangeEnd: string | null,
+  orgPbEnabled: boolean
+): Promise<VisualSummary> {
+  const supabase = createClient();
+  // pb_enabled / pb_hidden are read separately (select *) so a missing
+  // column on an older database can't break the main athlete query.
+  const { data: ath } = await supabase.from("athletes").select("*").eq("id", athleteId).maybeSingle();
+  const pbOn = orgPbEnabled && (ath as { pb_enabled?: boolean } | null)?.pb_enabled !== false;
+  const hidden = new Set<string>(((ath as { pb_hidden?: string[] } | null)?.pb_hidden ?? []).map((h) => h.toLowerCase()));
+
+  const prev = rangeStart && rangeEnd ? previousRange(rangeStart, rangeEnd) : null;
+  const [pbs, prevPbs, prevSessions] = await Promise.all([
+    pbOn ? listPBsInRange(athleteId, rangeStart, rangeEnd, hidden) : Promise.resolve([]),
+    pbOn && prev ? listPBsInRange(athleteId, prev.start, prev.end, hidden) : Promise.resolve(null),
+    prev
+      ? supabase
+          .from("sessions")
+          .select("*, session_exercises(*)")
+          .eq("athlete_id", athleteId)
+          .in("session_source", ["programme", "athlete_logged"])
+          .gte("date", prev.start)
+          .lte("date", prev.end)
+          .then(({ data, error }) => {
+            if (error) throw error;
+            return (data ?? []).map((s) => ({ ...s, exercises: (s.session_exercises ?? []) as SessionExercise[] })) as Session[];
+          })
+      : Promise.resolve(null),
+  ]);
+
+  return computeVisualSummary({
+    sessions,
+    rangeStart,
+    rangeEnd,
+    pbs,
+    previousSessions: prevSessions,
+    previousPbCount: prevPbs ? prevPbs.length : null,
+    today: todayISO(),
+  });
 }

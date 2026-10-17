@@ -493,7 +493,7 @@ export default function AthleteDetailPage() {
     setAiReportSummary(null);
     setSquadComparison(null);
     try {
-      const data = await generateReport(athleteId, start, end);
+      const data = await generateReport(athleteId, start, end, { visuals: true });
       setReportData(data);
       setReportOptions(options);
       setReportRangeOpen(false);

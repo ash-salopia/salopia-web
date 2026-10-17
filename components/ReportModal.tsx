@@ -15,6 +15,8 @@ import { SESSION_TYPE_META } from "@/lib/report-options";
 import type { SquadComparisonContext, SquadComparisonMetric } from "@/lib/squad-comparison";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { brandHeaderHtml, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
+import { daySpan } from "@/lib/report-visuals";
+import { HeadlineCards, PBWall, ProgressBars, SmallMultiples, ConsistencyCalendar, WeeklySessionsChart, type ProgressRow, type TrendSeries } from "@/components/reports/ReportVisuals";
 
 function fmtDate(iso: string): string {
   try {
@@ -190,11 +192,14 @@ export default function ReportModal({
     oneRmSource,
     bodyweightKg,
     oneRmReference,
+    visual,
   } = data;
   // Shared "all sessions / weekly avg" toggle for the per-exercise
   // detail tables - governs both TTL and e1RM sections when both are
   // present, rather than each metric having its own.
   const [detailMode, setDetailMode] = useState<"all" | "weekly">("all");
+  // Per-exercise tables start folded away under "Full detail".
+  const [detailOpen, setDetailOpen] = useState(false);
 
   // 0084 — which exercise/modality groups to actually chart in the
   // Cardio/Hyrox Metrics sections, live in the report view (not a
@@ -256,6 +261,42 @@ export default function ReportModal({
   const trainingLoadLineSeries = [
     { name: "Weekly training load", points: trainingLoadWeekly.map((w) => ({ date: w.weekStart, value: w.totalLoad })) },
   ];
+
+  // Visual summary - strength progress reads off e1RM when there's any
+  // (it's always computed, whether or not the e1RM tables are ticked),
+  // else tonnage. A live toggle switches between the two.
+  const [visualMetricPick, setVisualMetricPick] = useState<"e1rm" | "ttl" | null>(null);
+  const visualMetric: "e1rm" | "ttl" = visualMetricPick ?? (hasE1rm ? "e1rm" : "ttl");
+  const useE1rm = visualMetric === "e1rm" && hasE1rm;
+  const visualUnit = useE1rm ? bwUnit : "kg";
+  const visualDecimals = useE1rm ? (options.bodyweightRelative && bodyweightKg ? 2 : 1) : 0;
+  const progressRows: ProgressRow[] = useE1rm
+    ? strength.exerciseSummaries
+        .filter((e) => e.overallPct != null && e.entries.length >= 2)
+        .map((e) => ({ name: e.name, pct: e.overallPct!, first: e1rmValue(e.entries[0].e1rm), latest: e1rmValue(e.entries[e.entries.length - 1].e1rm) }))
+    : exerciseSummaries
+        .filter((e) => e.overallPct != null && e.entries.length >= 2)
+        .map((e) => ({ name: e.name, pct: e.overallPct!, first: e.entries[0].ttl, latest: e.entries[e.entries.length - 1].ttl }));
+  const trendSeries: TrendSeries[] = (useE1rm
+    ? [...strength.exerciseSummaries]
+        .sort((a, b) => b.entries.length - a.entries.length)
+        .map((e) => ({ name: e.name, pct: e.overallPct, points: (strength.weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: e1rmValue(w.e1rm) })) }))
+    : [...exerciseSummaries]
+        .sort((a, b) => b.entries.length - a.entries.length)
+        .map((e) => ({ name: e.name, pct: e.overallPct, points: (weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: w.ttl })) }))
+  )
+    .filter((s) => s.points.length >= 2)
+    .slice(0, Math.max(options.exerciseLimit, 12));
+  const showProgressBars = options.progressBars !== false && progressRows.length > 0 && !dismissed.has("progress-bars");
+  const metricToggle = hasE1rm && hasStrength && (
+    <div style={styles.modeToggle} data-no-print="true">
+      {(["e1rm", "ttl"] as const).map((m) => (
+        <button key={m} style={{ ...styles.modeBtn, ...(visualMetric === m ? styles.modeBtnActive : {}) }} onClick={() => setVisualMetricPick(m)}>
+          {m === "e1rm" ? "e1RM" : "Tonnage"}
+        </button>
+      ))}
+    </div>
+  );
 
   const handleCopy = () => {
     const el = document.getElementById("report-content");
@@ -375,6 +416,17 @@ export default function ReportModal({
             </div>
           )}
 
+          {visual && options.headlineCards !== false && !dismissed.has("headline") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("headline")} />
+              <HeadlineCards
+                headline={visual.headline}
+                previous={visual.previous}
+                previousLabel={rangeStart && rangeEnd ? `previous ${Math.round(daySpan(rangeStart, rangeEnd) / 7)} weeks` : null}
+              />
+            </div>
+          )}
+
           {options.aiSummary && !dismissed.has("ai-summary") && (
             <div style={{ ...styles.aiBox, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("ai-summary")} />
@@ -397,7 +449,58 @@ export default function ReportModal({
             </div>
           )}
 
+          {visual && options.pbWall !== false && visual.pbs.length > 0 && !dismissed.has("pb-wall") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("pb-wall")} />
+              <div style={styles.sectionTitle}>🏆 Personal Bests</div>
+              <PBWall pbs={visual.pbs} />
+            </div>
+          )}
+
+          {showProgressBars && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("progress-bars")} />
+              <div style={styles.visualHead}>
+                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Strength Progress</div>
+                {metricToggle}
+              </div>
+              <div style={styles.visualSub}>
+                {useE1rm ? "Estimated 1RM" : "Total training load"}, first session in range → latest
+              </div>
+              <ProgressBars rows={progressRows} unit={visualUnit} decimals={visualDecimals} />
+            </div>
+          )}
+
+          {options.smallMultiples !== false && trendSeries.length > 0 && !dismissed.has("small-multiples") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("small-multiples")} />
+              <div style={styles.visualHead}>
+                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Exercise Trends</div>
+                {!showProgressBars && metricToggle}
+              </div>
+              <div style={styles.visualSub}>
+                Weekly {useE1rm ? "best estimated 1RM" : "training load"} per exercise, each on its own scale
+              </div>
+              <SmallMultiples series={trendSeries} unit={visualUnit} decimals={visualDecimals} />
+            </div>
+          )}
+
+          {visual && options.consistency !== false && visual.days.length > 0 && !dismissed.has("consistency") && (
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("consistency")} />
+              <div style={styles.sectionTitle}>Consistency</div>
+              <ConsistencyCalendar days={visual.days} />
+              {visual.weekly.length > 1 && (
+                <div style={{ marginTop: 18 }}>
+                  <div style={styles.metricSubheading}>Sessions per week</div>
+                  <WeeklySessionsChart weekly={visual.weekly} />
+                </div>
+              )}
+            </div>
+          )}
+
           {options.highlights &&
+            !showProgressBars &&
             !dismissed.has("highlights") &&
             ((options.ttl && (topProgressed.length > 0 || toReview.length > 0)) ||
               (options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0))) && (
@@ -569,355 +672,6 @@ export default function ReportModal({
                   <MultiTrendLineChart series={e1rmLineSeries} unit={bwUnit} fmtDate={fmtDate} />
                 </div>
               )}
-            </div>
-          )}
-
-          {options.loadProgression && options.ttl && hasStrength && !dismissed.has("load-progression-ttl") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
-              <DismissBtn onClick={() => dismiss("load-progression-ttl")} />
-              <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " - TTL" : ""}</div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr style={styles.theadRow}>
-                      {[
-                        "Exercise",
-                        "Sessions",
-                        "First TTL",
-                        "Latest TTL",
-                        "Δ kg",
-                        "% Change",
-                        ...(options.sparkline ? ["Trend"] : []),
-                      ].map((h) => (
-                        <th key={h} style={styles.th}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {exerciseSummaries.map((e) => {
-                      const first = e.entries[0];
-                      const last = e.entries[e.entries.length - 1];
-                      const delta = last.ttl - first.ttl;
-                      return (
-                        <tr key={e.name} style={styles.tr}>
-                          <td style={styles.td}>{e.name}</td>
-                          <td style={styles.td}>{e.entries.length}</td>
-                          <td style={styles.td}>{first.ttl.toFixed(0)} kg</td>
-                          <td style={styles.td}>{last.ttl.toFixed(0)} kg</td>
-                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 600 }}>
-                            {delta >= 0 ? "+" : ""}
-                            {delta.toFixed(0)}
-                          </td>
-                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
-                            {fmtPct(e.overallPct)}
-                          </td>
-                          {options.sparkline && (
-                            <td style={styles.td}>
-                              {e.entries.length >= 2 && (
-                                <Sparkline
-                                  points={e.entries.map((r) => ({ x: r.date, y: r.ttl }))}
-                                  color={pctColor(e.overallPct)}
-                                />
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {options.loadProgression && options.e1rm && hasE1rm && !dismissed.has("load-progression-e1rm") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
-              <DismissBtn onClick={() => dismiss("load-progression-e1rm")} />
-              <div style={styles.sectionTitle}>Load Progression - e1RM</div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr style={styles.theadRow}>
-                      {[
-                        "Exercise",
-                        "Sessions",
-                        `First (${bwUnit})`,
-                        `Latest (${bwUnit})`,
-                        `Δ (${bwUnit})`,
-                        "% Change",
-                        ...(options.sparkline ? ["Trend"] : []),
-                      ].map((h) => (
-                        <th key={h} style={styles.th}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {strength.exerciseSummaries.map((e) => {
-                      const first = e.entries[0];
-                      const last = e.entries[e.entries.length - 1];
-                      const ref = oneRmReference[e.name];
-                      const delta = last.e1rm - first.e1rm;
-                      return (
-                        <tr key={e.name} style={styles.tr}>
-                          <td style={styles.td}>
-                            {e.name}
-                            {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
-                          </td>
-                          <td style={styles.td}>{e.entries.length}</td>
-                          <td style={styles.td}>{e1rmDisplay(first.e1rm)}</td>
-                          <td style={styles.td}>{e1rmDisplay(last.e1rm)}</td>
-                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 600 }}>
-                            {delta >= 0 ? "+" : ""}
-                            {e1rmDisplay(delta)}
-                          </td>
-                          <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
-                            {fmtPct(e.overallPct)}
-                          </td>
-                          {options.sparkline && (
-                            <td style={styles.td}>
-                              {e.entries.length >= 2 && (
-                                <Sparkline
-                                  points={e.entries.map((r) => ({ x: r.date, y: r.e1rm }))}
-                                  color={pctColor(e.overallPct)}
-                                />
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {options.ttl && hasStrength && !dismissed.has("ttl-detail") && (
-            <div style={{ position: "relative" }}>
-              <DismissBtn onClick={() => dismiss("ttl-detail")} />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
-                  Strength - Total Training Load
-                  <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
-                    ({detailMode === "all" ? "all sessions" : "weekly avg"})
-                  </span>
-                </div>
-                <div style={styles.modeToggle} data-no-print="true">
-                  <button
-                    style={{ ...styles.modeBtn, ...(detailMode === "all" ? styles.modeBtnActive : {}) }}
-                    onClick={() => setDetailMode("all")}
-                  >
-                    All sessions
-                  </button>
-                  <button
-                    style={{ ...styles.modeBtn, ...(detailMode === "weekly" ? styles.modeBtnActive : {}) }}
-                    onClick={() => setDetailMode("weekly")}
-                  >
-                    Weekly avg
-                  </button>
-                </div>
-              </div>
-              {detailMode === "all"
-                ? Object.entries(exMap).map(([exName, entries]) => {
-                    const first = entries[0];
-                    const last = entries[entries.length - 1];
-                    const overallPct =
-                      entries.length >= 2 && first.ttl > 0 ? ((last.ttl - first.ttl) / first.ttl) * 100 : null;
-                    return (
-                      <div key={exName} style={{ marginBottom: 22 }}>
-                        <div style={styles.exTitle}>
-                          {exName}
-                          {last.eachSide && <span style={styles.eachSideTag}>(logged per hand, tonnage ×2)</span>}
-                        </div>
-                        <div style={{ overflowX: "auto" }}>
-                          <table style={styles.table}>
-                            <thead>
-                              <tr style={styles.theadRow}>
-                                {["Date", "Sets", "Reps", "Avg kg", "Max kg", "TTL (kg)", "vs Prev"].map((h) => (
-                                  <th key={h} style={styles.th}>
-                                    {h}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {entries.map((row, idx) => {
-                                const prev = idx > 0 ? entries[idx - 1] : null;
-                                const chg = prev && prev.ttl > 0 ? ((row.ttl - prev.ttl) / prev.ttl) * 100 : null;
-                                return (
-                                  <tr key={idx} style={styles.tr}>
-                                    <td style={styles.td}>{fmtDate(row.date)}</td>
-                                    <td style={styles.td}>{row.sets}</td>
-                                    <td style={styles.td}>{row.reps}</td>
-                                    <td style={styles.td}>{row.avgWeight.toFixed(1)}</td>
-                                    <td style={styles.td}>{row.maxWeight.toFixed(1)}</td>
-                                    <td style={{ ...styles.td, fontWeight: 700 }}>{row.ttl.toFixed(0)}</td>
-                                    <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>
-                                      {fmtPct(chg)}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        {overallPct != null && (
-                          <div style={{ ...styles.overallLine, color: pctColor(overallPct) }}>
-                            Overall: {fmtPct(overallPct)} across {entries.length} sessions · Best: {last.sets}×
-                            {last.reps}@{last.maxWeight}kg · TTL {last.ttl.toFixed(0)} kg
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                : Object.entries(weeklyExMap).map(([exName, weeks]) => (
-                    <div key={exName} style={{ marginBottom: 22 }}>
-                      <div style={styles.exTitle}>{exName}</div>
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={styles.table}>
-                          <thead>
-                            <tr style={styles.theadRow}>
-                              {["Week of", "Sessions", "Avg sets", "Avg TTL (kg)", "vs Prev week"].map((h) => (
-                                <th key={h} style={styles.th}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {weeks.map((wk, idx) => {
-                              const prev = idx > 0 ? weeks[idx - 1] : null;
-                              const chg = prev && prev.ttl > 0 ? ((wk.ttl - prev.ttl) / prev.ttl) * 100 : null;
-                              return (
-                                <tr key={idx} style={styles.tr}>
-                                  <td style={styles.td}>{fmtDate(wk.weekStart)}</td>
-                                  <td style={styles.td}>{wk.sessionCount}</td>
-                                  <td style={styles.td}>{wk.sets}</td>
-                                  <td style={{ ...styles.td, fontWeight: 700 }}>{wk.ttl.toFixed(0)}</td>
-                                  <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>{fmtPct(chg)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-            </div>
-          )}
-
-          {options.e1rm && hasE1rm && !dismissed.has("e1rm-detail") && (
-            <div style={{ position: "relative" }}>
-              <DismissBtn onClick={() => dismiss("e1rm-detail")} />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, marginTop: options.ttl ? 24 : 0 }}>
-                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
-                  Strength - Estimated 1RM
-                  <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
-                    ({detailMode === "all" ? "all sessions" : "weekly peak"})
-                  </span>
-                </div>
-                <div style={styles.modeToggle} data-no-print="true">
-                  <button
-                    style={{ ...styles.modeBtn, ...(detailMode === "all" ? styles.modeBtnActive : {}) }}
-                    onClick={() => setDetailMode("all")}
-                  >
-                    All sessions
-                  </button>
-                  <button
-                    style={{ ...styles.modeBtn, ...(detailMode === "weekly" ? styles.modeBtnActive : {}) }}
-                    onClick={() => setDetailMode("weekly")}
-                  >
-                    Weekly peak
-                  </button>
-                </div>
-              </div>
-              {detailMode === "all"
-                ? Object.entries(strength.exMap).map(([exName, entries]) => {
-                    const first = entries[0];
-                    const last = entries[entries.length - 1];
-                    const overallPct =
-                      entries.length >= 2 && first.e1rm > 0 ? ((last.e1rm - first.e1rm) / first.e1rm) * 100 : null;
-                    const ref = oneRmReference[exName];
-                    return (
-                      <div key={exName} style={{ marginBottom: 22 }}>
-                        <div style={styles.exTitle}>
-                          {exName}
-                          {last.eachSide && <span style={styles.eachSideTag}>(logged per hand)</span>}
-                          {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
-                        </div>
-                        <div style={{ overflowX: "auto" }}>
-                          <table style={styles.table}>
-                            <thead>
-                              <tr style={styles.theadRow}>
-                                {["Date", "Sets", "Best set", `e1RM (${bwUnit})`, "vs Prev"].map((h) => (
-                                  <th key={h} style={styles.th}>
-                                    {h}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {entries.map((row, idx) => {
-                                const prev = idx > 0 ? entries[idx - 1] : null;
-                                const chg = prev && prev.e1rm > 0 ? ((row.e1rm - prev.e1rm) / prev.e1rm) * 100 : null;
-                                return (
-                                  <tr key={idx} style={styles.tr}>
-                                    <td style={styles.td}>{fmtDate(row.date)}</td>
-                                    <td style={styles.td}>{row.sets}</td>
-                                    <td style={styles.td}>
-                                      {row.weight}kg × {row.reps}
-                                    </td>
-                                    <td style={{ ...styles.td, fontWeight: 700 }}>
-                                      {e1rmDisplay(row.e1rm)}
-                                      {row.lowConfidence && <span style={styles.lowConfidenceTag}>low-confidence</span>}
-                                    </td>
-                                    <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>
-                                      {fmtPct(chg)}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        {overallPct != null && (
-                          <div style={{ ...styles.overallLine, color: pctColor(overallPct) }}>
-                            Overall: {fmtPct(overallPct)} across {entries.length} sessions · Best: {last.weight}kg ×
-                            {last.reps} · e1RM {e1rmDisplay(last.e1rm)}{bwUnit === "kg" ? "kg" : ""}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                : Object.entries(strength.weeklyExMap).map(([exName, weeks]) => (
-                    <div key={exName} style={{ marginBottom: 22 }}>
-                      <div style={styles.exTitle}>{exName}</div>
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={styles.table}>
-                          <thead>
-                            <tr style={styles.theadRow}>
-                              {["Week of", "Sessions", "Avg sets", `Peak e1RM (${bwUnit})`, "vs Prev week"].map((h) => (
-                                <th key={h} style={styles.th}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {weeks.map((wk, idx) => {
-                              const prev = idx > 0 ? weeks[idx - 1] : null;
-                              const chg = prev && prev.e1rm > 0 ? ((wk.e1rm - prev.e1rm) / prev.e1rm) * 100 : null;
-                              return (
-                                <tr key={idx} style={styles.tr}>
-                                  <td style={styles.td}>{fmtDate(wk.weekStart)}</td>
-                                  <td style={styles.td}>{wk.sessionCount}</td>
-                                  <td style={styles.td}>{wk.sets}</td>
-                                  <td style={{ ...styles.td, fontWeight: 700 }}>{e1rmDisplay(wk.e1rm)}</td>
-                                  <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>{fmtPct(chg)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
             </div>
           )}
 
@@ -1293,6 +1047,379 @@ export default function ReportModal({
             </div>
           )}
 
+          {/* Per-exercise tables: the detail behind the charts above.
+              Collapsed by default so the report leads with the visuals;
+              Print includes them only when expanded. */}
+          {((options.loadProgression && ((options.ttl && hasStrength) || (options.e1rm && hasE1rm))) ||
+            (options.ttl && hasStrength) ||
+            (options.e1rm && hasE1rm)) && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={styles.detailHead}>
+                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Full detail</div>
+                <button data-no-print="true" style={styles.detailToggle} onClick={() => setDetailOpen((o) => !o)}>
+                  {detailOpen ? "Hide tables ▲" : "Show per-exercise tables ▼"}
+                </button>
+              </div>
+              {!detailOpen && (
+                <div data-no-print="true" style={styles.detailHint}>
+                  Session-by-session numbers for every exercise. Expand to include them when printing.
+                </div>
+              )}
+              {detailOpen && (
+                <div style={{ marginTop: 14 }}>
+            {options.loadProgression && options.ttl && hasStrength && !dismissed.has("load-progression-ttl") && (
+              <div style={{ marginBottom: 24, position: "relative" }}>
+                <DismissBtn onClick={() => dismiss("load-progression-ttl")} />
+                <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " - TTL" : ""}</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr style={styles.theadRow}>
+                        {[
+                          "Exercise",
+                          "Sessions",
+                          "First TTL",
+                          "Latest TTL",
+                          "Δ kg",
+                          "% Change",
+                          ...(options.sparkline ? ["Trend"] : []),
+                        ].map((h) => (
+                          <th key={h} style={styles.th}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {exerciseSummaries.map((e) => {
+                        const first = e.entries[0];
+                        const last = e.entries[e.entries.length - 1];
+                        const delta = last.ttl - first.ttl;
+                        return (
+                          <tr key={e.name} style={styles.tr}>
+                            <td style={styles.td}>{e.name}</td>
+                            <td style={styles.td}>{e.entries.length}</td>
+                            <td style={styles.td}>{first.ttl.toFixed(0)} kg</td>
+                            <td style={styles.td}>{last.ttl.toFixed(0)} kg</td>
+                            <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 600 }}>
+                              {delta >= 0 ? "+" : ""}
+                              {delta.toFixed(0)}
+                            </td>
+                            <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
+                              {fmtPct(e.overallPct)}
+                            </td>
+                            {options.sparkline && (
+                              <td style={styles.td}>
+                                {e.entries.length >= 2 && (
+                                  <Sparkline
+                                    points={e.entries.map((r) => ({ x: r.date, y: r.ttl }))}
+                                    color={pctColor(e.overallPct)}
+                                  />
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {options.loadProgression && options.e1rm && hasE1rm && !dismissed.has("load-progression-e1rm") && (
+              <div style={{ marginBottom: 24, position: "relative" }}>
+                <DismissBtn onClick={() => dismiss("load-progression-e1rm")} />
+                <div style={styles.sectionTitle}>Load Progression - e1RM</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr style={styles.theadRow}>
+                        {[
+                          "Exercise",
+                          "Sessions",
+                          `First (${bwUnit})`,
+                          `Latest (${bwUnit})`,
+                          `Δ (${bwUnit})`,
+                          "% Change",
+                          ...(options.sparkline ? ["Trend"] : []),
+                        ].map((h) => (
+                          <th key={h} style={styles.th}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {strength.exerciseSummaries.map((e) => {
+                        const first = e.entries[0];
+                        const last = e.entries[e.entries.length - 1];
+                        const ref = oneRmReference[e.name];
+                        const delta = last.e1rm - first.e1rm;
+                        return (
+                          <tr key={e.name} style={styles.tr}>
+                            <td style={styles.td}>
+                              {e.name}
+                              {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
+                            </td>
+                            <td style={styles.td}>{e.entries.length}</td>
+                            <td style={styles.td}>{e1rmDisplay(first.e1rm)}</td>
+                            <td style={styles.td}>{e1rmDisplay(last.e1rm)}</td>
+                            <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 600 }}>
+                              {delta >= 0 ? "+" : ""}
+                              {e1rmDisplay(delta)}
+                            </td>
+                            <td style={{ ...styles.td, color: pctColor(e.overallPct), fontWeight: 700 }}>
+                              {fmtPct(e.overallPct)}
+                            </td>
+                            {options.sparkline && (
+                              <td style={styles.td}>
+                                {e.entries.length >= 2 && (
+                                  <Sparkline
+                                    points={e.entries.map((r) => ({ x: r.date, y: r.e1rm }))}
+                                    color={pctColor(e.overallPct)}
+                                  />
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {options.ttl && hasStrength && !dismissed.has("ttl-detail") && (
+              <div style={{ position: "relative" }}>
+                <DismissBtn onClick={() => dismiss("ttl-detail")} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                    Strength - Total Training Load
+                    <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
+                      ({detailMode === "all" ? "all sessions" : "weekly avg"})
+                    </span>
+                  </div>
+                  <div style={styles.modeToggle} data-no-print="true">
+                    <button
+                      style={{ ...styles.modeBtn, ...(detailMode === "all" ? styles.modeBtnActive : {}) }}
+                      onClick={() => setDetailMode("all")}
+                    >
+                      All sessions
+                    </button>
+                    <button
+                      style={{ ...styles.modeBtn, ...(detailMode === "weekly" ? styles.modeBtnActive : {}) }}
+                      onClick={() => setDetailMode("weekly")}
+                    >
+                      Weekly avg
+                    </button>
+                  </div>
+                </div>
+                {detailMode === "all"
+                  ? Object.entries(exMap).map(([exName, entries]) => {
+                      const first = entries[0];
+                      const last = entries[entries.length - 1];
+                      const overallPct =
+                        entries.length >= 2 && first.ttl > 0 ? ((last.ttl - first.ttl) / first.ttl) * 100 : null;
+                      return (
+                        <div key={exName} style={{ marginBottom: 22 }}>
+                          <div style={styles.exTitle}>
+                            {exName}
+                            {last.eachSide && <span style={styles.eachSideTag}>(logged per hand, tonnage ×2)</span>}
+                          </div>
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={styles.table}>
+                              <thead>
+                                <tr style={styles.theadRow}>
+                                  {["Date", "Sets", "Reps", "Avg kg", "Max kg", "TTL (kg)", "vs Prev"].map((h) => (
+                                    <th key={h} style={styles.th}>
+                                      {h}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {entries.map((row, idx) => {
+                                  const prev = idx > 0 ? entries[idx - 1] : null;
+                                  const chg = prev && prev.ttl > 0 ? ((row.ttl - prev.ttl) / prev.ttl) * 100 : null;
+                                  return (
+                                    <tr key={idx} style={styles.tr}>
+                                      <td style={styles.td}>{fmtDate(row.date)}</td>
+                                      <td style={styles.td}>{row.sets}</td>
+                                      <td style={styles.td}>{row.reps}</td>
+                                      <td style={styles.td}>{row.avgWeight.toFixed(1)}</td>
+                                      <td style={styles.td}>{row.maxWeight.toFixed(1)}</td>
+                                      <td style={{ ...styles.td, fontWeight: 700 }}>{row.ttl.toFixed(0)}</td>
+                                      <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>
+                                        {fmtPct(chg)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {overallPct != null && (
+                            <div style={{ ...styles.overallLine, color: pctColor(overallPct) }}>
+                              Overall: {fmtPct(overallPct)} across {entries.length} sessions · Best: {last.sets}×
+                              {last.reps}@{last.maxWeight}kg · TTL {last.ttl.toFixed(0)} kg
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  : Object.entries(weeklyExMap).map(([exName, weeks]) => (
+                      <div key={exName} style={{ marginBottom: 22 }}>
+                        <div style={styles.exTitle}>{exName}</div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={styles.table}>
+                            <thead>
+                              <tr style={styles.theadRow}>
+                                {["Week of", "Sessions", "Avg sets", "Avg TTL (kg)", "vs Prev week"].map((h) => (
+                                  <th key={h} style={styles.th}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {weeks.map((wk, idx) => {
+                                const prev = idx > 0 ? weeks[idx - 1] : null;
+                                const chg = prev && prev.ttl > 0 ? ((wk.ttl - prev.ttl) / prev.ttl) * 100 : null;
+                                return (
+                                  <tr key={idx} style={styles.tr}>
+                                    <td style={styles.td}>{fmtDate(wk.weekStart)}</td>
+                                    <td style={styles.td}>{wk.sessionCount}</td>
+                                    <td style={styles.td}>{wk.sets}</td>
+                                    <td style={{ ...styles.td, fontWeight: 700 }}>{wk.ttl.toFixed(0)}</td>
+                                    <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>{fmtPct(chg)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+              </div>
+            )}
+
+            {options.e1rm && hasE1rm && !dismissed.has("e1rm-detail") && (
+              <div style={{ position: "relative" }}>
+                <DismissBtn onClick={() => dismiss("e1rm-detail")} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, marginTop: options.ttl ? 24 : 0 }}>
+                  <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                    Strength - Estimated 1RM
+                    <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
+                      ({detailMode === "all" ? "all sessions" : "weekly peak"})
+                    </span>
+                  </div>
+                  <div style={styles.modeToggle} data-no-print="true">
+                    <button
+                      style={{ ...styles.modeBtn, ...(detailMode === "all" ? styles.modeBtnActive : {}) }}
+                      onClick={() => setDetailMode("all")}
+                    >
+                      All sessions
+                    </button>
+                    <button
+                      style={{ ...styles.modeBtn, ...(detailMode === "weekly" ? styles.modeBtnActive : {}) }}
+                      onClick={() => setDetailMode("weekly")}
+                    >
+                      Weekly peak
+                    </button>
+                  </div>
+                </div>
+                {detailMode === "all"
+                  ? Object.entries(strength.exMap).map(([exName, entries]) => {
+                      const first = entries[0];
+                      const last = entries[entries.length - 1];
+                      const overallPct =
+                        entries.length >= 2 && first.e1rm > 0 ? ((last.e1rm - first.e1rm) / first.e1rm) * 100 : null;
+                      const ref = oneRmReference[exName];
+                      return (
+                        <div key={exName} style={{ marginBottom: 22 }}>
+                          <div style={styles.exTitle}>
+                            {exName}
+                            {last.eachSide && <span style={styles.eachSideTag}>(logged per hand)</span>}
+                            {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
+                          </div>
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={styles.table}>
+                              <thead>
+                                <tr style={styles.theadRow}>
+                                  {["Date", "Sets", "Best set", `e1RM (${bwUnit})`, "vs Prev"].map((h) => (
+                                    <th key={h} style={styles.th}>
+                                      {h}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {entries.map((row, idx) => {
+                                  const prev = idx > 0 ? entries[idx - 1] : null;
+                                  const chg = prev && prev.e1rm > 0 ? ((row.e1rm - prev.e1rm) / prev.e1rm) * 100 : null;
+                                  return (
+                                    <tr key={idx} style={styles.tr}>
+                                      <td style={styles.td}>{fmtDate(row.date)}</td>
+                                      <td style={styles.td}>{row.sets}</td>
+                                      <td style={styles.td}>
+                                        {row.weight}kg × {row.reps}
+                                      </td>
+                                      <td style={{ ...styles.td, fontWeight: 700 }}>
+                                        {e1rmDisplay(row.e1rm)}
+                                        {row.lowConfidence && <span style={styles.lowConfidenceTag}>low-confidence</span>}
+                                      </td>
+                                      <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>
+                                        {fmtPct(chg)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {overallPct != null && (
+                            <div style={{ ...styles.overallLine, color: pctColor(overallPct) }}>
+                              Overall: {fmtPct(overallPct)} across {entries.length} sessions · Best: {last.weight}kg ×
+                              {last.reps} · e1RM {e1rmDisplay(last.e1rm)}{bwUnit === "kg" ? "kg" : ""}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  : Object.entries(strength.weeklyExMap).map(([exName, weeks]) => (
+                      <div key={exName} style={{ marginBottom: 22 }}>
+                        <div style={styles.exTitle}>{exName}</div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={styles.table}>
+                            <thead>
+                              <tr style={styles.theadRow}>
+                                {["Week of", "Sessions", "Avg sets", `Peak e1RM (${bwUnit})`, "vs Prev week"].map((h) => (
+                                  <th key={h} style={styles.th}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {weeks.map((wk, idx) => {
+                                const prev = idx > 0 ? weeks[idx - 1] : null;
+                                const chg = prev && prev.e1rm > 0 ? ((wk.e1rm - prev.e1rm) / prev.e1rm) * 100 : null;
+                                return (
+                                  <tr key={idx} style={styles.tr}>
+                                    <td style={styles.td}>{fmtDate(wk.weekStart)}</td>
+                                    <td style={styles.td}>{wk.sessionCount}</td>
+                                    <td style={styles.td}>{wk.sets}</td>
+                                    <td style={{ ...styles.td, fontWeight: 700 }}>{e1rmDisplay(wk.e1rm)}</td>
+                                    <td style={{ ...styles.td, color: pctColor(chg), fontWeight: 600 }}>{fmtPct(chg)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+              </div>
+            )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={styles.credit}>
             <span style={styles.creditMark}>VIS BUILD</span>
             <span>{REPORT_CREDIT_TEXT}</span>
@@ -1304,6 +1431,11 @@ export default function ReportModal({
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  visualHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4, paddingRight: 28 },
+  visualSub: { fontSize: 12, color: "var(--mute)", marginBottom: 12 },
+  detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: "1px solid var(--line)", paddingTop: 18 },
+  detailToggle: { background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  detailHint: { fontSize: 12, color: "var(--mute)", marginTop: 6 },
   overlay: {
     position: "fixed",
     inset: 0,

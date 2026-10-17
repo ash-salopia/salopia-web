@@ -8,6 +8,13 @@ import type { SquadComparisonMetric } from "@/lib/squad-comparison";
 
 export interface ReportOptions {
   // Metrics - at least one required to generate.
+  // Visual summary (on by default; older presets merge over the defaults
+  // so they pick these up too).
+  headlineCards: boolean; // sessions, completion, PBs, RPE, tonnage - vs the previous period
+  pbWall: boolean; // trophy cards for PBs set in range
+  progressBars: boolean; // % change per exercise as sorted bars
+  smallMultiples: boolean; // one mini chart per exercise, each on its own scale
+  consistency: boolean; // day-by-day calendar + weekly sessions-by-type chart
   ttl: boolean; // Total Training Load (tonnage)
   e1rm: boolean; // Estimated 1RM (strength)
   // Per-metric display components - apply to whichever metric(s) above are ticked.
@@ -62,10 +69,15 @@ export interface ReportOptions {
 }
 
 export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
+  headlineCards: true,
+  pbWall: true,
+  progressBars: true,
+  smallMultiples: true,
+  consistency: true,
   ttl: true,
   e1rm: false,
   loadProgression: true,
-  highlights: true,
+  highlights: true, // on screen, the progress bars stand in for this when they're on
   sparkline: false,
   radar: false,
   lineChart: false,
@@ -116,6 +128,8 @@ export const SESSION_TYPE_META: Record<ReportSessionType, { label: string }> = {
 // speed applies to velocity-tracked strength exercises AND Power/Speed
 // sessions; training load applies to both Cardio and Hyrox).
 export const FIELD_SESSION_TYPES: Partial<Record<keyof ReportOptions, ReportSessionType[]>> = {
+  progressBars: ["strength"],
+  smallMultiples: ["strength"],
   ttl: ["strength"],
   e1rm: ["strength"],
   loadProgression: ["strength"],
@@ -140,9 +154,17 @@ export const METRIC_FIELDS: { key: "ttl" | "e1rm"; label: string; hint: string }
   { key: "e1rm", label: "Estimated 1RM (e1RM)", hint: "Strength progression, independent of volume" },
 ];
 
+export const VISUAL_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
+  { key: "headlineCards", label: "Headline numbers", hint: "Sessions, completion, PBs, RPE and tonnage at the top - with change vs the previous period" },
+  { key: "pbWall", label: "PB wall", hint: "Trophy cards for every PB set in this range" },
+  { key: "progressBars", label: "Strength progress bars", hint: "% change per exercise, best first" },
+  { key: "smallMultiples", label: "Exercise trend charts", hint: "One small chart per exercise, each on its own scale" },
+  { key: "consistency", label: "Consistency calendar", hint: "Every day coloured done / partial / missed, plus sessions per week" },
+];
+
 export const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "aiSummary", label: "AI summary", hint: "Short AI overview + recurring themes from notes, at the top" },
-  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review - per metric selected" },
+  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review - per metric selected (on screen, the progress bars show these instead when they're on)" },
   { key: "loadProgression", label: "Progression table", hint: "First / latest / Δ / % change per exercise" },
   { key: "sparkline", label: "Sparklines", hint: "Small mini-trend chart per exercise row" },
   { key: "radar", label: "Radar snapshot", hint: "Week 1 vs latest, normalised across exercises" },
@@ -169,6 +191,7 @@ export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: stri
 // bodyweightRelative is deliberately excluded - it's a display modifier
 // for e1RM, not content on its own.
 const CONTENT_FIELD_KEYS: (keyof ReportOptions)[] = [
+  "headlineCards", "pbWall", "consistency",
   "ttl", "e1rm", "aiSummary", "athleteNotes", "sessionRpe",
   "powerSpeedTrend", "barSpeedTrend", "cardioMetricsTrend", "hyroxMetricsTrend",
   "cardioSessionsList", "hyroxSessionsList", "trainingLoadTrend", "sessionCompletion",

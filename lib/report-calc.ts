@@ -663,7 +663,7 @@ export interface SessionTypeStats {
   completionPct: number | null; // null when nothing was prescribed, not 0
 }
 
-function sessionHasCompletion(s: Session): boolean {
+export function sessionHasCompletion(s: Session): boolean {
   if (s.type === "strength" || s.type === "power_speed") {
     return (s.exercises ?? []).some((ex) => !ex.is_primer && (ex.log ?? []).some((l) => l.done));
   }
