@@ -629,3 +629,86 @@ export function computeHrZoneSplit(
     hardPct: sum([4, 5]),
   };
 }
+
+// ── Shared by the on-screen report and the PDF export ────────────────────────
+
+/** One card per exercise + PB kind: its newest PB (always the best) and how many were set. */
+export function groupPBs(pbs: ReportPB[]): { pb: ReportPB; count: number }[] {
+  const groups = new Map<string, { pb: ReportPB; count: number }>();
+  for (const pb of pbs) {
+    const key = `${pb.exercise.toLowerCase()}|${pb.kind}`;
+    const g = groups.get(key);
+    if (!g) groups.set(key, { pb, count: 1 });
+    else {
+      g.count++;
+      if (pb.date > g.pb.date) g.pb = pb;
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => b.pb.date.localeCompare(a.pb.date));
+}
+
+export function pbValueText(pb: ReportPB): string {
+  if (pb.kind === "bw_time") return pb.timeSeconds != null ? `${pb.timeSeconds}s hold` : "-";
+  if (pb.kind === "bw_reps") return pb.reps != null ? `${pb.reps} reps` : "-";
+  if (pb.weightKg == null) return "-";
+  return pb.reps ? `${pb.weightKg}kg × ${pb.reps}` : `${pb.weightKg}kg`;
+}
+
+interface StrengthSummaryLike {
+  name: string;
+  overallPct: number | null;
+  entries: { e1rm: number }[];
+}
+interface TtlSummaryLike {
+  name: string;
+  overallPct: number | null;
+  entries: { ttl: number }[];
+}
+
+export interface ProgressRowData {
+  name: string;
+  pct: number;
+  first: number;
+  latest: number;
+}
+export interface TrendSeriesData {
+  name: string;
+  pct: number | null;
+  points: { date: string; value: number }[];
+}
+
+/** % change per exercise, first session in range → latest (e1RM or tonnage). */
+export function buildProgressRows(
+  metric: "e1rm" | "ttl",
+  strength: { exerciseSummaries: StrengthSummaryLike[] },
+  ttl: TtlSummaryLike[],
+  e1rmValue: (kg: number) => number
+): ProgressRowData[] {
+  return metric === "e1rm"
+    ? strength.exerciseSummaries
+        .filter((e) => e.overallPct != null && e.entries.length >= 2)
+        .map((e) => ({ name: e.name, pct: e.overallPct!, first: e1rmValue(e.entries[0].e1rm), latest: e1rmValue(e.entries[e.entries.length - 1].e1rm) }))
+    : ttl
+        .filter((e) => e.overallPct != null && e.entries.length >= 2)
+        .map((e) => ({ name: e.name, pct: e.overallPct!, first: e.entries[0].ttl, latest: e.entries[e.entries.length - 1].ttl }));
+}
+
+/** Weekly value per exercise, most-logged first. */
+export function buildTrendSeries(
+  metric: "e1rm" | "ttl",
+  strength: { exerciseSummaries: StrengthSummaryLike[]; weeklyExMap: Record<string, { weekStart: string; e1rm: number }[]> },
+  ttl: TtlSummaryLike[],
+  weeklyTtl: Record<string, { weekStart: string; ttl: number }[]>,
+  e1rmValue: (kg: number) => number,
+  limit: number
+): TrendSeriesData[] {
+  const list =
+    metric === "e1rm"
+      ? [...strength.exerciseSummaries]
+          .sort((a, b) => b.entries.length - a.entries.length)
+          .map((e) => ({ name: e.name, pct: e.overallPct, points: (strength.weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: e1rmValue(w.e1rm) })) }))
+      : [...ttl]
+          .sort((a, b) => b.entries.length - a.entries.length)
+          .map((e) => ({ name: e.name, pct: e.overallPct, points: (weeklyTtl[e.name] ?? []).map((w) => ({ date: w.weekStart, value: w.ttl })) }));
+  return list.filter((s) => s.points.length >= 2).slice(0, limit);
+}

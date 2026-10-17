@@ -15,7 +15,7 @@ import { SESSION_TYPE_META } from "@/lib/report-options";
 import type { SquadComparisonContext, SquadComparisonMetric } from "@/lib/squad-comparison";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { brandHeaderHtml, reportThemeColours, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
-import { daySpan } from "@/lib/report-visuals";
+import { daySpan, buildProgressRows, buildTrendSeries } from "@/lib/report-visuals";
 import EmailReportDialog from "@/components/reports/EmailReportDialog";
 
 export type ReportStyle = "white" | "colour";
@@ -172,6 +172,8 @@ export default function ReportModal({
   athleteId,
   athleteEmail,
   onAthleteEmailSaved,
+  initialEmailOpen = false,
+  onShared,
   onClose,
 }: {
   data: ReportData;
@@ -185,6 +187,8 @@ export default function ReportModal({
   athleteId?: string; // enables "Email report"
   athleteEmail?: string | null; // athletes.contact_email (0122), pre-fills the To field
   onAthleteEmailSaved?: (email: string) => void;
+  initialEmailOpen?: boolean; // open the Email dialog once the AI verdict is in (schedule reminders)
+  onShared?: () => void;
   onClose: () => void;
 }) {
   const {
@@ -302,23 +306,8 @@ export default function ReportModal({
   const useE1rm = visualMetric === "e1rm" && hasE1rm;
   const visualUnit = useE1rm ? bwUnit : "kg";
   const visualDecimals = useE1rm ? (options.bodyweightRelative && bodyweightKg ? 2 : 1) : 0;
-  const progressRows: ProgressRow[] = useE1rm
-    ? strength.exerciseSummaries
-        .filter((e) => e.overallPct != null && e.entries.length >= 2)
-        .map((e) => ({ name: e.name, pct: e.overallPct!, first: e1rmValue(e.entries[0].e1rm), latest: e1rmValue(e.entries[e.entries.length - 1].e1rm) }))
-    : exerciseSummaries
-        .filter((e) => e.overallPct != null && e.entries.length >= 2)
-        .map((e) => ({ name: e.name, pct: e.overallPct!, first: e.entries[0].ttl, latest: e.entries[e.entries.length - 1].ttl }));
-  const trendSeries: TrendSeries[] = (useE1rm
-    ? [...strength.exerciseSummaries]
-        .sort((a, b) => b.entries.length - a.entries.length)
-        .map((e) => ({ name: e.name, pct: e.overallPct, points: (strength.weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: e1rmValue(w.e1rm) })) }))
-    : [...exerciseSummaries]
-        .sort((a, b) => b.entries.length - a.entries.length)
-        .map((e) => ({ name: e.name, pct: e.overallPct, points: (weeklyExMap[e.name] ?? []).map((w) => ({ date: w.weekStart, value: w.ttl })) }))
-  )
-    .filter((s) => s.points.length >= 2)
-    .slice(0, Math.max(options.exerciseLimit, 12));
+  const progressRows: ProgressRow[] = buildProgressRows(useE1rm ? "e1rm" : "ttl", strength, exerciseSummaries, e1rmValue);
+  const trendSeries: TrendSeries[] = buildTrendSeries(useE1rm ? "e1rm" : "ttl", strength, exerciseSummaries, weeklyExMap, e1rmValue, Math.max(options.exerciseLimit, 12));
   const showProgressBars = options.progressBars !== false && progressRows.length > 0 && !dismissed.has("progress-bars");
   const metricToggle = hasE1rm && hasStrength && (
     <div style={styles.modeToggle} data-no-print="true">
@@ -468,6 +457,13 @@ ${fonts}
   };
 
   const [emailOpen, setEmailOpen] = useState(false);
+  const [autoEmailDone, setAutoEmailDone] = useState(false);
+  useEffect(() => {
+    if (initialEmailOpen && !autoEmailDone && !aiLoading && athleteId) {
+      setEmailOpen(true);
+      setAutoEmailDone(true);
+    }
+  }, [initialEmailOpen, autoEmailDone, aiLoading, athleteId]);
   const rangeLabel = rangeStart && rangeEnd ? `${fmtRangeDate(rangeStart)} – ${fmtRangeDate(rangeEnd)}` : "All time";
 
   return (
@@ -1619,6 +1615,7 @@ ${fonts}
             summary={visual?.headline ?? null}
             buildHtml={buildReportDocument}
             onSavedEmail={onAthleteEmailSaved}
+            onShared={onShared}
             onClose={() => setEmailOpen(false)}
           />
         )}

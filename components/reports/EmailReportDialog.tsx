@@ -24,6 +24,7 @@ export default function EmailReportDialog({
   summary,
   buildHtml,
   onSavedEmail,
+  onShared,
   onClose,
 }: {
   athleteId: string;
@@ -33,6 +34,7 @@ export default function EmailReportDialog({
   summary: Headline | null;
   buildHtml: (style: "white" | "colour") => string | null;
   onSavedEmail?: (email: string) => void;
+  onShared?: () => void;
   onClose: () => void;
 }) {
   const firstName = athleteName.split(" ")[0] || athleteName;
@@ -44,6 +46,7 @@ export default function EmailReportDialog({
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState(false);
   const [style, setStyle] = useState<"colour" | "white">("colour");
+  const [showInApp, setShowInApp] = useState(true);
 
   const recipients = to
     .split(/[,;\s]+/)
@@ -70,6 +73,8 @@ export default function EmailReportDialog({
           html,
           title: `${athleteName} - Training Report (${rangeLabel})`,
           rangeLabel,
+          style,
+          showInApp,
           message: withEmail ? message : "",
           emailTo: withEmail ? recipients : [],
           saveEmail: withEmail && saveEmail && differsFromSaved,
@@ -87,6 +92,7 @@ export default function EmailReportDialog({
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.url) throw new Error(json.error || "Couldn't share the report.");
       if (withEmail && saveEmail && differsFromSaved) onSavedEmail?.(firstRecipient);
+      onShared?.();
       setResult(json.emailed ? { kind: "sent", url: json.url, to: recipients } : { kind: "link", url: json.url, reason: json.reason, to: withEmail ? recipients : [] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't share the report.");
@@ -192,6 +198,11 @@ export default function EmailReportDialog({
 
             <div style={d.label}>Message</div>
             <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} style={{ ...d.input, resize: "vertical", fontFamily: "inherit" }} />
+
+            <label style={d.check}>
+              <input type="checkbox" checked={showInApp} onChange={(e) => setShowInApp(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+              Also show it in {firstName}&apos;s app (Reports tab)
+            </label>
 
             <div style={d.hint}>
               They&apos;ll get a short email with the headline numbers and a button to the full report. The link works for 90 days, and

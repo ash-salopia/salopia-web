@@ -26,6 +26,22 @@ import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
 import { rtpMeta } from "@/lib/rtp";
+import { buildProgressRows, buildTrendSeries, daySpan } from "@/lib/report-visuals";
+import { reportThemeColours } from "@/lib/report-branding";
+import {
+  PdfHeadline,
+  PdfCompetitions,
+  PdfVerdict,
+  PdfGoals,
+  PdfPBs,
+  PdfProgressBars,
+  PdfTrendGrid,
+  PdfBenchmarks,
+  PdfHrZones,
+  PdfConsistency,
+  PdfReadiness,
+  PdfAdherence,
+} from "@/components/reports/pdf/pdf-visuals";
 
 const rtpLabel = (status: string) => rtpMeta(status).label;
 
@@ -292,13 +308,16 @@ export default function AthleteReportPdf({
   branding = DEFAULT_BRANDING,
   exerciseSelection,
   powerSpeedSelection,
+  reportStyle = "white",
 }: {
   data: ReportData;
   athleteName: string;
   athleteGroup?: string;
   options: ReportOptions;
-  aiSummary?: { summary: string; themes: string } | null;
+  aiSummary?: { summary: string; themes: string; verdict?: { wentWell: string; workOn: string; nextFocus: string } } | null;
   branding?: ResolvedBranding;
+  /** "colour" adds a branded header band and brand-coloured headings. */
+  reportStyle?: "white" | "colour";
   // Manual tick-list override for the TTL/e1RM line chart and the
   // Power/Speed trend section, same pattern as the Squad Report's
   // trendExerciseOverride - empty/omitted keeps the existing
@@ -343,10 +362,34 @@ export default function AthleteReportPdf({
 
   const isEmpty = !hasStrength && !hasE1rm && !hasHyrox && !hasCardio && !hasPowerSpeed && !hasRpe && !notes.length;
 
+  // Visual summary (when generateReport was asked for it).
+  const visual = data.visual;
+  const theme = reportThemeColours(branding);
+  const accent = reportStyle === "colour" ? theme.text : C.accent;
+  const titleStyle = [s.sectionTitle, { color: accent }];
+  const visualMetric: "e1rm" | "ttl" = hasE1rm ? "e1rm" : "ttl";
+  const visualUnit = visualMetric === "e1rm" ? bwUnit : "kg";
+  const visualDecimals = visualMetric === "e1rm" ? (options.bodyweightRelative && bodyweightKg ? 2 : 1) : 0;
+  const progressRows = buildProgressRows(visualMetric, strength, exerciseSummaries, e1rmValue);
+  const trendSeries = buildTrendSeries(visualMetric, strength, exerciseSummaries, weeklyExMap, e1rmValue, Math.max(options.exerciseLimit, 12));
+  const showProgressBars = options.progressBars !== false && progressRows.length > 0;
+  const verdict = aiSummary?.verdict;
+  const prevLabel = rangeStart && rangeEnd ? `previous ${Math.round(daySpan(rangeStart, rangeEnd) / 7)} weeks` : null;
+
   return (
     <Document title={`${athleteName} - Training Load Report`}>
       <Page size="A4" style={s.page} wrap>
         <CreditFooter />
+        {reportStyle === "colour" && (
+          <View style={{ backgroundColor: theme.bandSolid, borderRadius: 10, padding: 18, marginBottom: 10 }}>
+            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 12, letterSpacing: 1.5, color: theme.brand }}>{branding.displayName}</Text>
+            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 22, color: "#ffffff", marginTop: 10 }}>{athleteName}</Text>
+            <Text style={{ fontSize: 9, color: "#ffffff", opacity: 0.85, marginTop: 2 }}>
+              Training Report{athleteGroup ? ` · ${athleteGroup}` : ""} · {rangeStart && rangeEnd ? `${fmtDate(rangeStart)} - ${fmtDate(rangeEnd)}` : "All time"}
+            </Text>
+          </View>
+        )}
+        {reportStyle !== "colour" && (
         <View>
           <View style={s.brandRow}>
             <BrandHeader branding={branding} />
@@ -357,8 +400,29 @@ export default function AthleteReportPdf({
             <Text style={s.metaLine}>e1RM formula: {formulaName} · Mode: {oneRmSource === "fixed" ? "Fixed (vs reference max)" : "Rolling"}</Text>
           )}
         </View>
+        )}
 
         {isEmpty && <Text style={s.emptyNote}>No logged data found in this range.</Text>}
+
+        {visual && options.headlineCards !== false && (
+          <View style={{ marginTop: 10 }}>
+            <PdfHeadline h={visual.headline} prev={visual.previous} prevLabel={prevLabel} />
+          </View>
+        )}
+
+        {visual && options.competitions !== false && visual.competitions.length > 0 && (
+          <View wrap={false}>
+            <Text style={titleStyle} minPresenceAhead={90}>COMING UP</Text>
+            <PdfCompetitions items={visual.competitions} />
+          </View>
+        )}
+
+        {options.coachVerdict !== false && verdict && (verdict.wentWell || verdict.workOn || verdict.nextFocus) && (
+          <View wrap={false}>
+            <Text style={titleStyle} minPresenceAhead={90}>COACH&apos;S VERDICT</Text>
+            <PdfVerdict verdict={verdict} />
+          </View>
+        )}
 
         {options.aiSummary && aiSummary && (
           <View style={s.aiBox}>
@@ -373,9 +437,73 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {options.highlights && ((options.ttl && (topProgressed.length > 0 || toReview.length > 0)) || (options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0))) && (
+        {visual && options.goalProgress !== false && visual.goals.length > 0 && (
           <View>
-            <Text style={s.sectionTitle}>HIGHLIGHTS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>GOAL PROGRESS</Text>
+            <PdfGoals goals={visual.goals} />
+          </View>
+        )}
+
+        {visual && options.pbWall !== false && visual.pbs.length > 0 && (
+          <View>
+            <Text style={titleStyle} minPresenceAhead={90}>PERSONAL BESTS</Text>
+            <PdfPBs pbs={visual.pbs} />
+          </View>
+        )}
+
+        {showProgressBars && (
+          <View>
+            <Text style={titleStyle} minPresenceAhead={90}>STRENGTH PROGRESS</Text>
+            <Text style={[s.metaLine, { marginTop: -4, marginBottom: 6 }]}>{visualMetric === "e1rm" ? "Estimated 1RM" : "Total training load"}, first session in range to latest</Text>
+            <PdfProgressBars rows={progressRows} unit={visualUnit} decimals={visualDecimals} />
+          </View>
+        )}
+
+        {options.smallMultiples !== false && trendSeries.length > 0 && (
+          <View>
+            <Text style={titleStyle} minPresenceAhead={90}>EXERCISE TRENDS</Text>
+            <PdfTrendGrid series={trendSeries} unit={visualUnit} decimals={visualDecimals} />
+          </View>
+        )}
+
+        {visual && options.benchmarks !== false && visual.benchmarks.length > 0 && (
+          <View>
+            <Text style={titleStyle} minPresenceAhead={90}>BENCHMARK WORKOUTS</Text>
+            <PdfBenchmarks groups={visual.benchmarks} />
+          </View>
+        )}
+
+        {visual && options.hrZones !== false && visual.hrZones && (
+          <View wrap={false}>
+            <Text style={titleStyle} minPresenceAhead={90}>HEART-RATE ZONES</Text>
+            <PdfHrZones split={visual.hrZones} />
+          </View>
+        )}
+
+        {visual && options.consistency !== false && visual.days.length > 0 && (
+          <View wrap={false}>
+            <Text style={titleStyle} minPresenceAhead={90}>CONSISTENCY</Text>
+            <PdfConsistency days={visual.days} weekly={visual.weekly} />
+          </View>
+        )}
+
+        {visual && options.readiness !== false && visual.readiness && (
+          <View wrap={false}>
+            <Text style={titleStyle} minPresenceAhead={90}>READINESS VS TRAINING</Text>
+            <PdfReadiness r={visual.readiness} />
+          </View>
+        )}
+
+        {visual && options.adherence !== false && visual.adherence.length > 0 && (
+          <View>
+            <Text style={titleStyle} minPresenceAhead={90}>SKIPPED & SWAPPED</Text>
+            <PdfAdherence rows={visual.adherence} />
+          </View>
+        )}
+
+        {!showProgressBars && options.highlights && ((options.ttl && (topProgressed.length > 0 || toReview.length > 0)) || (options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0))) && (
+          <View>
+            <Text style={titleStyle} minPresenceAhead={90}>HIGHLIGHTS</Text>
             {options.ttl && (topProgressed.length > 0 || toReview.length > 0) && (
               <View>
                 {options.e1rm && <Text style={s.metricSubheading}>TOTAL TRAINING LOAD</Text>}
@@ -399,7 +527,7 @@ export default function AthleteReportPdf({
 
         {options.sessionCompletion && (
           <View>
-            <Text style={s.sectionTitle}>SESSIONS LOGGED & COMPLETION</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>SESSIONS LOGGED & COMPLETION</Text>
             {(["strength", "power_speed", "cardio", "hyrox"] as const)
               .map((t) => sessionTypeStats[t])
               .filter((stat) => stat && stat.loggedCount > 0)
@@ -420,7 +548,7 @@ export default function AthleteReportPdf({
 
         {options.radar && (
           <View wrap={false}>
-            <Text style={s.sectionTitle}>RADAR SNAPSHOT</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>RADAR SNAPSHOT</Text>
             {options.ttl && hasStrength && (
               <View style={{ marginBottom: options.e1rm ? 10 : 0 }}>
                 {options.e1rm && <Text style={s.metricSubheading}>TOTAL TRAINING LOAD</Text>}
@@ -444,7 +572,7 @@ export default function AthleteReportPdf({
 
         {options.lineChart && (
           <View wrap={false}>
-            <Text style={s.sectionTitle}>TREND OVER TIME</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>TREND OVER TIME</Text>
             {options.ttl && hasStrength && ttlLineSeries.length > 0 && (
               <View style={{ marginBottom: options.e1rm ? 10 : 0 }}>
                 {options.e1rm && <Text style={s.metricSubheading}>TOTAL TRAINING LOAD</Text>}
@@ -462,7 +590,7 @@ export default function AthleteReportPdf({
 
         {options.loadProgression && options.ttl && hasStrength && (
           <View>
-            <Text style={s.sectionTitle}>LOAD PROGRESSION{options.e1rm ? " - TTL" : ""}</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>LOAD PROGRESSION{options.e1rm ? " - TTL" : ""}</Text>
             <Table
               headers={["Exercise", "Sess.", "First", "Latest", "D kg", "% Chg", ...(options.sparkline ? ["Trend"] : [])]}
               widths={[3, 1, 1.3, 1.3, 1, 1, ...(options.sparkline ? [1.3] : [])]}
@@ -490,7 +618,7 @@ export default function AthleteReportPdf({
 
         {options.loadProgression && options.e1rm && hasE1rm && (
           <View>
-            <Text style={s.sectionTitle}>LOAD PROGRESSION - e1RM</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>LOAD PROGRESSION - e1RM</Text>
             <Table
               headers={["Exercise", "Sess.", `First (${bwUnit})`, `Latest (${bwUnit})`, `D (${bwUnit})`, "% Chg"]}
               widths={[3, 1, 1.5, 1.5, 1.2, 1]}
@@ -516,7 +644,7 @@ export default function AthleteReportPdf({
 
         {options.ttl && hasStrength && (
           <View>
-            <Text style={s.sectionTitle}>STRENGTH - TOTAL TRAINING LOAD</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>STRENGTH - TOTAL TRAINING LOAD</Text>
             {Object.entries(exMap).map(([exName, entries]) => {
               const first = entries[0];
               const last = entries[entries.length - 1];
@@ -556,7 +684,7 @@ export default function AthleteReportPdf({
 
         {options.e1rm && hasE1rm && (
           <View>
-            <Text style={s.sectionTitle}>STRENGTH - ESTIMATED 1RM</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>STRENGTH - ESTIMATED 1RM</Text>
             {Object.entries(strength.exMap).map(([exName, entries]) => {
               const first = entries[0];
               const last = entries[entries.length - 1];
@@ -597,7 +725,7 @@ export default function AthleteReportPdf({
 
         {options.hyroxSessionsList && hasHyrox && (
           <View>
-            <Text style={s.sectionTitle}>HYBRID SESSIONS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>HYBRID SESSIONS</Text>
             {hyroxSessions.map((sess) => (
               <View key={sess.id} style={s.listRow}><Text>{fmtDate(sess.date)}</Text><Text>{sess.name}</Text></View>
             ))}
@@ -606,7 +734,7 @@ export default function AthleteReportPdf({
 
         {options.cardioSessionsList && hasCardio && (
           <View>
-            <Text style={s.sectionTitle}>CARDIO SESSIONS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>CARDIO SESSIONS</Text>
             {cardioSessions.map((sess) => (
               <View key={sess.id} style={s.listRow}><Text>{fmtDate(sess.date)}</Text><Text>{sess.name}</Text></View>
             ))}
@@ -615,7 +743,7 @@ export default function AthleteReportPdf({
 
         {options.powerSpeedTrend && hasPowerSpeed && (
           <View>
-            <Text style={s.sectionTitle}>POWER / SPEED SESSIONS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>POWER / SPEED SESSIONS</Text>
             {powerSpeedSessions.map((sess) => (
               <View key={sess.id} style={s.listRow}><Text>{fmtDate(sess.date)}</Text><Text>{sess.name}</Text></View>
             ))}
@@ -624,7 +752,7 @@ export default function AthleteReportPdf({
 
         {options.powerSpeedTrend && powerSpeedSummaries.some((ex) => ex.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>POWER / SPEED TRENDS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>POWER / SPEED TRENDS</Text>
             {/* single-entry summaries have nothing to chart - LineChart itself returns null below 2 points */}
             {(powerSpeedSelection?.length
               ? powerSpeedSummaries.filter((ex) => powerSpeedSelection.includes(ex.name))
@@ -646,7 +774,7 @@ export default function AthleteReportPdf({
 
         {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>VELOCITY BASED TRAINING</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>VELOCITY BASED TRAINING</Text>
             {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => {
               const oneRm = velocityOneRMSummaries.find((r) => r.name === ex.name);
               const hasOneRm = oneRm && oneRm.entries.length >= 2;
@@ -681,7 +809,7 @@ export default function AthleteReportPdf({
 
         {options.cardioMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "cardio" && options.cardioMetricKeys.includes(m.key) && m.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>CARDIO METRICS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>CARDIO METRICS</Text>
             {/* 0084 — 2-column grid instead of one long stacked column, same
                 reasoning as the on-screen report's metricGrid: a range with
                 many tracked exercises otherwise produces a very long page.
@@ -710,7 +838,7 @@ export default function AthleteReportPdf({
 
         {options.hyroxMetricsTrend && cardioMetricSummaries.some((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2) && (
           <View>
-            <Text style={s.sectionTitle}>HYBRID METRICS</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>HYBRID METRICS</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
               {cardioMetricSummaries.filter((m) => m.sessionType === "hyrox" && options.hyroxMetricKeys.includes(m.key) && m.entries.length >= 2).map((m) => {
                 const meta = METRIC_META[m.key];
@@ -735,7 +863,7 @@ export default function AthleteReportPdf({
         {options.sessionRpe && (
           <View>
             <View style={[s.row, { justifyContent: "space-between", alignItems: "baseline" }]}>
-              <Text style={s.sectionTitle}>SESSION RPE</Text>
+              <Text style={titleStyle} minPresenceAhead={90}>SESSION RPE</Text>
               {avgRpe != null && <Text style={[s.bold, { fontSize: 8, color: rpeColor(avgRpe) }]}>Avg {avgRpe}/10</Text>}
             </View>
             {!hasRpe ? (
@@ -756,7 +884,7 @@ export default function AthleteReportPdf({
 
         {options.trainingLoadTrend && (
           <View>
-            <Text style={s.sectionTitle}>TRAINING LOAD (sRPE)</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>TRAINING LOAD (sRPE)</Text>
             {!hasTrainingLoad ? (
               <Text style={s.emptyNote}>No training load to show — needs RPE plus a clear duration.</Text>
             ) : (
@@ -775,7 +903,7 @@ export default function AthleteReportPdf({
 
         {options.loadMonitoring && loadMonitoring && loadMonitoringSettings && (
           <View>
-            <Text style={s.sectionTitle}>TRAINING LOAD & AVAILABILITY</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>TRAINING LOAD & AVAILABILITY</Text>
 
             {loadMonitoringSettings.rtp_status && athleteRtp?.status && athleteRtp.status !== "available" && (
               <Text style={[s.emptyNote, { color: C.text }]}>
@@ -832,7 +960,7 @@ export default function AthleteReportPdf({
 
         {options.athleteNotes && (
           <View>
-            <Text style={s.sectionTitle}>ATHLETE NOTES</Text>
+            <Text style={titleStyle} minPresenceAhead={90}>ATHLETE NOTES</Text>
             {notes.length === 0 ? (
               <Text style={s.emptyNote}>No notes logged in this range.</Text>
             ) : (

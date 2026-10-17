@@ -82,5 +82,6 @@ export function reportThemeColours(branding: ResolvedBranding) {
     text, // headings / accents on white
     tint: mix(brand, [255, 255, 255], 0.9), // soft background wash
     band: `linear-gradient(135deg, #0d1724 0%, ${mix(brand, [13, 23, 36], 0.55)} 62%, ${mix(brand, [13, 23, 36], 0.15)} 100%)`,
+    bandSolid: mix(brand, [13, 23, 36], 0.6), // for PDFs (no gradients)
   };
 }

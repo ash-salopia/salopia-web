@@ -37,8 +37,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!UUID_RE.test(params.id)) return message("Report not found", "Check the link and try again.", 404);
 
   const supabase = createServiceRoleClient();
-  const { data, error } = await supabase.from("shared_reports").select("html, expires_at").eq("id", params.id).maybeSingle();
+  // select * so this keeps working whether or not 0123 (revoked_at) has run.
+  const { data, error } = await supabase.from("shared_reports").select("*").eq("id", params.id).maybeSingle();
   if (error || !data) return message("Report not found", "Check the link and try again.", 404);
+  if (data.revoked_at) return message("This report link has been withdrawn", "Ask your coach for a new one.", 410);
   if (new Date(data.expires_at).getTime() < Date.now()) {
     return message("This report link has expired", "Ask your coach to send a new one.", 410);
   }

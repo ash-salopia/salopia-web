@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { sendEmail } from "@/lib/email";
+import { sendPushToAthlete } from "@/lib/push/send";
 
 export const dynamic = "force-dynamic";
 
@@ -148,17 +150,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Daily email limit reached - copy the link instead, or try again tomorrow" }, { status: 429 });
   }
 
-  const { data: row, error: insErr } = await supabase
+  const showInApp = body.showInApp !== false;
+  const style = body.style === "colour" ? "colour" : "white";
+  const base = {
+    organisation_id: coach.organisation_id,
+    athlete_id: athlete.id,
+    created_by: coach.id,
+    title: title || `${athlete.name} - Training Report`,
+    html: sanitise(html),
+  };
+  // 0123 columns (history / athlete app); fall back to the 0122 shape if
+  // that migration hasn't been run yet.
+  let { data: row, error: insErr } = await supabase
     .from("shared_reports")
-    .insert({
-      organisation_id: coach.organisation_id,
-      athlete_id: athlete.id,
-      created_by: coach.id,
-      title: title || `${athlete.name} - Training Report`,
-      html: sanitise(html),
-    })
+    .insert({ ...base, visible_to_athlete: showInApp, style, range_label: rangeLabel })
     .select("id, expires_at")
     .single();
+  if (insErr?.code === "42703" || insErr?.code === "PGRST204") {
+    ({ data: row, error: insErr } = await supabase.from("shared_reports").insert(base).select("id, expires_at").single());
+  }
   if (insErr || !row) {
     console.error("[reports/share] insert failed", insErr);
     return NextResponse.json({ error: insErr?.message ?? "Could not save the report" }, { status: 500 });
@@ -172,44 +182,36 @@ export async function POST(req: NextRequest) {
     if (error) console.error("[reports/share] saving contact email failed", error);
   }
 
+  if (showInApp) {
+    const { data: ath } = await supabase.from("athletes").select("share_token").eq("id", athlete.id).maybeSingle();
+    if (ath?.share_token) {
+      sendPushToAthlete(athlete.id, {
+        title: "New training report",
+        body: `${String(coach.name || "Your coach")} shared your report${rangeLabel ? ` for ${rangeLabel}` : ""}`,
+        url: `/a/${ath.share_token}/reports`,
+      }).catch(() => {});
+    }
+  }
+
   if (!recipients.length) return NextResponse.json({ url, emailed: false });
 
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return NextResponse.json({ url, emailed: false, reason: "not_configured" });
-
-  // Sent from our domain (it has to be, to be delivered), shown as the
-  // coach, with replies going straight to the coach.
-  const fromEnv = process.env.REPORT_EMAIL_FROM || process.env.SUPPORT_EMAIL_FROM || "VIS BUILD <support@visbuild.co.uk>";
-  const fromAddress = fromEnv.match(/<([^>]+)>/)?.[1] ?? fromEnv;
   const coachName = String(coach.name || "Your coach").replace(/["<>\r\n]/g, "").slice(0, 60);
   const { data: org } = await supabase.from("organisations").select("name").eq("id", coach.organisation_id).maybeSingle();
   const brand = String(org?.name || "VIS BUILD");
   const subject =
     typeof body.subject === "string" && body.subject.trim()
-      ? body.subject.trim().replace(/[\r\n]/g, " ").slice(0, 150)
+      ? body.subject.trim()
       : `${athlete.name} - Training Report${rangeLabel ? ` (${rangeLabel})` : ""}`;
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: `"${coachName} via VIS BUILD" <${fromAddress}>`,
-        to: recipients,
-        reply_to: coach.email || undefined,
-        subject,
-        html: emailHtml({ brand, coachName, athleteName: athlete.name, rangeLabel, message, url, expires, summary: body.summary ?? null }),
-        text: `${message ? message + "\n\n" : ""}View ${athlete.name}'s full training report: ${url}\n\nThe link works until ${expires}. Reply to this email to reach ${coachName}.`,
-      }),
-    });
-    if (!res.ok) {
-      console.error("[reports/share] Resend failed", res.status, await res.text().catch(() => ""));
-      return NextResponse.json({ url, emailed: false, reason: "send_failed" });
-    }
-  } catch (e) {
-    console.error("[reports/share] Resend unreachable", e);
-    return NextResponse.json({ url, emailed: false, reason: "send_failed" });
-  }
+  const sent = await sendEmail({
+    to: recipients,
+    subject,
+    fromName: `${coachName} via VIS BUILD`,
+    replyTo: coach.email,
+    html: emailHtml({ brand, coachName, athleteName: athlete.name, rangeLabel, message, url, expires, summary: body.summary ?? null }),
+    text: `${message ? message + "\n\n" : ""}View ${athlete.name}'s full training report: ${url}\n\nThe link works until ${expires}. Reply to this email to reach ${coachName}.`,
+  });
+  if (!sent.ok) return NextResponse.json({ url, emailed: false, reason: sent.reason });
 
   await supabase.from("shared_reports").update({ emailed_to: recipients, emailed_at: new Date().toISOString() }).eq("id", row.id);
   return NextResponse.json({ url, emailed: true });

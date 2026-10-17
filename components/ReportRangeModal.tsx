@@ -6,6 +6,7 @@ import { DEFAULT_REPORT_OPTIONS, hasAnyContentSelected, type ReportOptions } fro
 import { listReportPresets, saveReportPreset, deleteReportPreset, type ReportPreset } from "@/lib/data/report-presets";
 import DateRangePicker from "@/components/reports/DateRangePicker";
 import ReportOptionsForm from "@/components/reports/ReportOptionsForm";
+import ReportHistoryPanel from "@/components/reports/ReportHistoryPanel";
 
 export { DEFAULT_REPORT_OPTIONS };
 export type { ReportOptions };
@@ -107,6 +108,7 @@ export default function ReportRangeModal({
           </button>
         </div>
         <div style={styles.scrollBody}>
+          {athleteId && <ReportHistoryPanel athleteId={athleteId} athleteName={athleteName} options={options} />}
           <div style={styles.helpText}>Choose how far back this report should cover.</div>
 
           <DateRangePicker

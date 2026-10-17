@@ -8,6 +8,7 @@
 // (light background) - anything not inline wouldn't survive the trip.
 
 import { useState } from "react";
+import { groupPBs, pbValueText } from "@/lib/report-visuals";
 import type {
   AdherenceRow,
   BenchmarkGroup,
@@ -139,13 +140,6 @@ export function HeadlineCards({ headline, previous, previousLabel }: { headline:
 
 // ── PB wall ──────────────────────────────────────────────────────────────────
 
-function pbValue(pb: ReportPB): string {
-  if (pb.kind === "bw_time") return pb.timeSeconds != null ? `${pb.timeSeconds}s hold` : "-";
-  if (pb.kind === "bw_reps") return pb.reps != null ? `${pb.reps} reps` : "-";
-  if (pb.weightKg == null) return "-";
-  return pb.reps ? `${pb.weightKg}kg × ${pb.reps}` : `${pb.weightKg}kg`;
-}
-
 const GOLD = "#C9A227";
 
 function MedalIcon() {
@@ -159,20 +153,7 @@ function MedalIcon() {
 }
 
 export function PBWall({ pbs, max = 12 }: { pbs: ReportPB[]; max?: number }) {
-  // One card per exercise (and PB kind): its newest PB - always the
-  // best, since each new PB beat the last - with a count when the
-  // athlete set several in the period.
-  const groups = new Map<string, { pb: ReportPB; count: number }>();
-  for (const pb of pbs) {
-    const key = `${pb.exercise.toLowerCase()}|${pb.kind}`;
-    const g = groups.get(key);
-    if (!g) groups.set(key, { pb, count: 1 });
-    else {
-      g.count++;
-      if (pb.date > g.pb.date) g.pb = pb;
-    }
-  }
-  const cards = Array.from(groups.values()).sort((a, b) => b.pb.date.localeCompare(a.pb.date));
+  const cards = groupPBs(pbs);
   const shown = cards.slice(0, max);
   return (
     <>
@@ -180,7 +161,7 @@ export function PBWall({ pbs, max = 12 }: { pbs: ReportPB[]; max?: number }) {
         {shown.map(({ pb, count }, i) => (
           <div key={`${pb.exercise}-${pb.kind}-${i}`} style={v.pbCard}>
             <div style={v.pbExercise}>{pb.exercise}</div>
-            <div style={v.pbValue}>{pbValue(pb)}</div>
+            <div style={v.pbValue}>{pbValueText(pb)}</div>
             <div style={v.pbMeta}>
               <MedalIcon />
               <span>{shortDate(pb.date)}</span>
@@ -583,7 +564,7 @@ export function CoachVerdict({ value, onChange, loading }: { value: Verdict; onC
                 style={v.verdictInput}
               />
             ) : loading && !text ? (
-              <div style={{ ...v.verdictText, color: "var(--mute)" }}>Drafting…</div>
+              <div data-no-print="true" style={{ ...v.verdictText, color: "var(--mute)" }}>Drafting…</div>
             ) : text ? (
               <div style={v.verdictText}>{text}</div>
             ) : (

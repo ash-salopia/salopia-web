@@ -125,8 +125,8 @@ export default function ReportOptionsForm({
   const visibleMetricFields = METRIC_FIELDS.filter((f) => showField(f.key));
   const visibleComponentFields = COMPONENT_FIELDS.filter((f) => showField(f.key));
   const visibleScopeFields = SCOPE_FIELDS.filter((f) => showField(f.key));
-  // Not drawn by the PDF export yet, so hidden there rather than offered disabled.
-  const visibleVisualFields = disableCharts ? [] : VISUAL_FIELDS.filter((f) => showField(f.key));
+  // Drawn by both the on-screen report and the PDF export.
+  const visibleVisualFields = VISUAL_FIELDS.filter((f) => showField(f.key));
 
   return (
     <>

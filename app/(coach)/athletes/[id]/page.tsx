@@ -23,6 +23,7 @@ import { computeSquadComparison, type SquadComparisonContext } from "@/lib/squad
 import { archiveAthlete, toggleLiveGroup, LiveGroupCapError, listGroups as listAthleteGroupTags } from "@/lib/data/athletes";
 import LiveGroupCapNotice from "@/components/LiveGroupCapNotice";
 import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
+import { getReportSchedule, markScheduledReportSent } from "@/lib/data/report-shares";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 
@@ -351,6 +352,23 @@ export default function AthleteDetailPage() {
   // Deep link from the dashboard's "Athlete messages" panel
   useEffect(() => {
     if (searchParams.get("openMessages") === "1") setMessageOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deep link from a report-schedule reminder (0123): build the report
+  // with the schedule's saved options over the last N weeks, then open
+  // the Email dialog once the AI verdict is ready.
+  const [emailOnOpen, setEmailOnOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("scheduledReport") !== "1") return;
+    getReportSchedule(athleteId).then((s) => {
+      const weeks = s?.every_weeks ?? 4;
+      const end = todayISO();
+      const d = new Date(end + "T12:00:00Z");
+      d.setUTCDate(d.getUTCDate() - (weeks * 7 - 1));
+      setEmailOnOpen(true);
+      handleGenerateReport(d.toISOString().slice(0, 10), end, { ...DEFAULT_REPORT_OPTIONS, ...(s?.options ?? {}) } as ReportOptions);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1288,7 +1306,9 @@ export default function AthleteDetailPage() {
           athleteId={athleteId}
           athleteEmail={athlete.contact_email ?? null}
           onAthleteEmailSaved={(email) => setAthlete((prev) => (prev ? { ...prev, contact_email: email } : prev))}
-          onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); }}
+          initialEmailOpen={emailOnOpen}
+          onShared={() => { markScheduledReportSent(athleteId).catch(() => {}); }}
+          onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); setEmailOnOpen(false); }}
         />
       )}
 

@@ -360,6 +360,9 @@ export default function AthleteLinkShell({
         <button style={st.tab} onClick={() => router.push(`/a/${token}/library`)}>
           📚 Library
         </button>
+        <button style={st.tab} onClick={() => router.push(`/a/${token}/reports`)}>
+          📊 Reports
+        </button>
       </div>
 
       {/* Calendar */}
