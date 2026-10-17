@@ -16,6 +16,13 @@ import type { SquadComparisonContext, SquadComparisonMetric } from "@/lib/squad-
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { brandHeaderHtml, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
 import { daySpan } from "@/lib/report-visuals";
+import EmailReportDialog from "@/components/reports/EmailReportDialog";
+
+const RANGE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtRangeDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${parseInt(d)} ${RANGE_MONTHS[parseInt(m) - 1]} ${y}`;
+}
 import { HeadlineCards, PBWall, ProgressBars, SmallMultiples, ConsistencyCalendar, WeeklySessionsChart, type ProgressRow, type TrendSeries } from "@/components/reports/ReportVisuals";
 
 function fmtDate(iso: string): string {
@@ -150,6 +157,9 @@ export default function ReportModal({
   aiLoading,
   squadComparison,
   branding = DEFAULT_BRANDING,
+  athleteId,
+  athleteEmail,
+  onAthleteEmailSaved,
   onClose,
 }: {
   data: ReportData;
@@ -160,6 +170,9 @@ export default function ReportModal({
   aiLoading?: boolean;
   squadComparison?: SquadComparisonContext[] | null;
   branding?: ResolvedBranding;
+  athleteId?: string; // enables "Email report"
+  athleteEmail?: string | null; // athletes.contact_email (0122), pre-fills the To field
+  onAthleteEmailSaved?: (email: string) => void;
   onClose: () => void;
 }) {
   const {
@@ -320,11 +333,11 @@ export default function ReportModal({
   // literal inline styles (which DO carry over via innerHTML) built
   // from CSS custom properties that wouldn't resolve in a blank
   // window without redefining them here.
-  const handlePrint = () => {
+  // The report as a standalone light-theme document - used by Print and
+  // by "Email report" (saved as the shared /r/<id> page).
+  const buildReportDocument = (): string | null => {
     const el = document.getElementById("report-content");
-    if (!el) return;
-    const printWindow = window.open("", "_blank", "width=900,height=1200");
-    if (!printWindow) return;
+    if (!el) return null;
 
     // Strip live UI controls (the All sessions / Weekly avg toggle)
     // that don't mean anything on paper - the section title already
@@ -335,10 +348,11 @@ export default function ReportModal({
     const esc = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    printWindow.document.write(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(athleteName)} - Training Load Report</title>
 <style>
   :root {
@@ -348,12 +362,13 @@ export default function ReportModal({
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 24px; background: #fff; color: var(--text);
+    margin: 0 auto; padding: 24px; max-width: 900px; background: #fff; color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
   }
   table { width: 100%; border-collapse: collapse; }
   tr { page-break-inside: avoid; }
   @page { margin: 16mm; }
+  @media (max-width: 600px) { body { padding: 14px; } }
 </style>
 </head>
 <body>
@@ -363,13 +378,34 @@ export default function ReportModal({
   ${options.e1rm ? `<div style="font-size:11px;color:var(--mute);margin-bottom:20px;">e1RM formula: ${esc(formulaName)} · Mode: ${esc(oneRmSource === "fixed" ? "Fixed (vs reference max)" : "Rolling")}</div>` : ""}
   ${clone.innerHTML}
 </body>
-</html>`);
+</html>`;
+  };
+
+  // window.print() on the modal itself printed incompletely - the
+  // modal is position:fixed with maxHeight:100vh + overflowY:auto so
+  // browsers clipped output to one screen's worth of content instead
+  // of paginating the rest, and there was no print stylesheet to
+  // reset that. Printing a separate, plain-flow document sidesteps
+  // that entirely (natural pagination) and swaps the dark in-app
+  // theme for a light one, since every section below is styled with
+  // literal inline styles (which DO carry over via innerHTML) built
+  // from CSS custom properties that wouldn't resolve in a blank
+  // window without redefining them here.
+  const handlePrint = () => {
+    const doc = buildReportDocument();
+    if (!doc) return;
+    const printWindow = window.open("", "_blank", "width=900,height=1200");
+    if (!printWindow) return;
+    printWindow.document.write(doc);
     printWindow.document.close();
     printWindow.onload = () => {
       printWindow.focus();
       printWindow.print();
     };
   };
+
+  const [emailOpen, setEmailOpen] = useState(false);
+  const rangeLabel = rangeStart && rangeEnd ? `${fmtRangeDate(rangeStart)} – ${fmtRangeDate(rangeEnd)}` : "All time";
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -399,6 +435,11 @@ export default function ReportModal({
             <button style={styles.ghostBtn} onClick={handlePrint}>
               🖨 Print
             </button>
+            {athleteId && (
+              <button style={styles.ghostBtn} onClick={() => setEmailOpen(true)}>
+                ✉️ Email report
+              </button>
+            )}
             <button style={styles.primaryBtnSmall} onClick={handleCopy}>
               📋 Copy text
             </button>
@@ -1425,6 +1466,18 @@ export default function ReportModal({
             <span>{REPORT_CREDIT_TEXT}</span>
           </div>
         </div>
+        {emailOpen && athleteId && (
+          <EmailReportDialog
+            athleteId={athleteId}
+            athleteName={athleteName}
+            savedEmail={athleteEmail ?? null}
+            rangeLabel={rangeLabel}
+            summary={visual?.headline ?? null}
+            buildHtml={buildReportDocument}
+            onSavedEmail={onAthleteEmailSaved}
+            onClose={() => setEmailOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

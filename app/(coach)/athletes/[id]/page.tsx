@@ -254,6 +254,7 @@ export default function AthleteDetailPage() {
   const [reportOptions, setReportOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
   const [squadComparison, setSquadComparison] = useState<SquadComparisonContext[] | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState(""); // shown inside the report options pop-up
   const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string } | null>(null);
   const [aiReportLoading, setAiReportLoading] = useState(false);
   const [rangeToolOpen, setRangeToolOpen] = useState<"copy" | "delete" | null>(null);
@@ -489,7 +490,7 @@ export default function AthleteDetailPage() {
 
   const handleGenerateReport = async (start: string | null, end: string | null, options: ReportOptions) => {
     setGeneratingReport(true);
-    setError("");
+    setReportError("");
     setAiReportSummary(null);
     setSquadComparison(null);
     try {
@@ -539,7 +540,7 @@ export default function AthleteDetailPage() {
           .finally(() => setAiReportLoading(false));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not generate report");
+      setReportError(e instanceof Error ? e.message : "Could not generate report");
     } finally {
       setGeneratingReport(false);
     }
@@ -1254,7 +1255,9 @@ export default function AthleteDetailPage() {
           squadComparisonEnabled={squadComparisonEnabled && (athlete as any).squad_comparison_enabled !== false}
           loadMonitoringEnabled={loadMonitoringEnabled}
           onGenerate={handleGenerateReport}
-          onClose={() => setReportRangeOpen(false)}
+          generating={generatingReport}
+          error={reportError}
+          onClose={() => { setReportRangeOpen(false); setReportError(""); }}
         />
       )}
 
@@ -1271,8 +1274,6 @@ export default function AthleteDetailPage() {
         />
       )}
 
-      {generatingReport && <div style={styles.empty}>Generating report…</div>}
-
       {reportData && (
         <ReportModal
           data={reportData}
@@ -1283,6 +1284,9 @@ export default function AthleteDetailPage() {
           aiLoading={aiReportLoading}
           squadComparison={squadComparison}
           branding={branding}
+          athleteId={athleteId}
+          athleteEmail={athlete.contact_email ?? null}
+          onAthleteEmailSaved={(email) => setAthlete((prev) => (prev ? { ...prev, contact_email: email } : prev))}
           onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); }}
         />
       )}

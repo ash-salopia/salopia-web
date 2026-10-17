@@ -31,7 +31,8 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/api/athlete-link/") || // athlete APIs — token-validated in each handler
     path.startsWith("/api/webhooks/") ||    // Stripe (and future) webhooks — signature-verified in the handler itself, no Supabase session exists
     path.startsWith("/demo") ||             // public demo login link — always signs in as the fixed demo coach, regardless of any existing session
-    path.startsWith("/start");              // public marketing/signup landing page — no session implications either way, unlike /login it doesn't need to redirect an already-signed-in visitor away
+    path.startsWith("/start") ||            // public marketing/signup landing page — no session implications either way, unlike /login it doesn't need to redirect an already-signed-in visitor away
+    path.startsWith("/r/");                 // shared Training Report links (0122) — uuid-keyed, served read-only by app/r/[id]/route.ts
 
   if (skipsAuthCheck) {
     return NextResponse.next({ request });

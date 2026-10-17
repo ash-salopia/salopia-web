@@ -17,6 +17,8 @@ export default function ReportRangeModal({
   squadComparisonEnabled = false,
   loadMonitoringEnabled = false,
   onGenerate,
+  generating = false,
+  error = "",
   onClose,
 }: {
   athleteName: string;
@@ -25,6 +27,8 @@ export default function ReportRangeModal({
   squadComparisonEnabled?: boolean;
   loadMonitoringEnabled?: boolean;
   onGenerate: (start: string | null, end: string | null, options: ReportOptions) => void;
+  generating?: boolean;
+  error?: string;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<ReportRangeMode>("4w");
@@ -164,20 +168,70 @@ export default function ReportRangeModal({
         </div>
 
         <div style={styles.footer}>
+          {error && !generating && <div style={styles.generateError}>Couldn&apos;t build the report: {error}</div>}
           <button
-            disabled={!canGenerate}
-            style={{ ...styles.primaryBtn, opacity: canGenerate ? 1 : 0.5 }}
+            disabled={!canGenerate || generating}
+            style={{ ...styles.primaryBtn, opacity: canGenerate || generating ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}
             onClick={handleGenerate}
           >
-            Generate report
+            {generating && <span style={styles.spinner} />}
+            {generating ? "Building report…" : "Generate report"}
           </button>
         </div>
+
+        {generating && <GeneratingOverlay athleteName={athleteName} />}
       </div>
     </div>
   );
 }
 
+// Shown over the options while the report builds - fetching sessions,
+// the previous period and PBs, then drawing - so it's obvious it's
+// working. The step text is a friendly rotation, not real progress.
+const STEPS = ["Loading sessions…", "Comparing with the previous period…", "Finding PBs…", "Drawing charts…"];
+
+function GeneratingOverlay({ athleteName }: { athleteName: string }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 1200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div style={styles.genOverlay} role="status" aria-live="polite">
+      <style>{`@keyframes vbSpin { to { transform: rotate(360deg); } }`}</style>
+      <span style={{ ...styles.spinner, width: 34, height: 34, borderWidth: 3, borderColor: "var(--line)", borderTopColor: "var(--accent)" }} />
+      <div style={styles.genTitle}>Building {athleteName}&apos;s report</div>
+      <div style={styles.genStep}>{STEPS[step]}</div>
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
+  spinner: {
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    border: "2px solid rgba(10,20,32,0.25)",
+    borderTopColor: "#0a1420",
+    display: "inline-block",
+    animation: "vbSpin 0.8s linear infinite",
+    flexShrink: 0,
+  },
+  genOverlay: {
+    position: "absolute",
+    inset: 0,
+    background: "rgba(14,19,25,0.92)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    borderRadius: "inherit",
+    zIndex: 2,
+  },
+  genTitle: { fontSize: 16, fontWeight: 700, color: "var(--text)", marginTop: 6 },
+  genStep: { fontSize: 13, color: "var(--mute)" },
+  generateError: { fontSize: 13, color: "#FF6B6B", background: "#2a0c0c", border: "1px solid #FF6B6B44", borderRadius: 8, padding: "8px 10px", marginBottom: 10 },
   overlay: {
     position: "fixed",
     inset: 0,
@@ -198,6 +252,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
+    position: "relative",
   },
   headerRow: {
     display: "flex",
