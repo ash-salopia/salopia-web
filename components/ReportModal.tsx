@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReportData } from "@/lib/data/reports";
 import type { ReportOptions } from "@/components/ReportRangeModal";
 import { FORMULAS } from "@/lib/one-rm";
@@ -23,6 +23,15 @@ function fmtRangeDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${parseInt(d)} ${RANGE_MONTHS[parseInt(m) - 1]} ${y}`;
 }
+import {
+  CompetitionStrip,
+  CoachVerdict,
+  GoalProgressList,
+  ReadinessPanel,
+  AdherenceList,
+  BenchmarkTables,
+  type Verdict,
+} from "@/components/reports/ReportVisuals";
 import { HeadlineCards, PBWall, ProgressBars, SmallMultiples, ConsistencyCalendar, WeeklySessionsChart, type ProgressRow, type TrendSeries } from "@/components/reports/ReportVisuals";
 
 function fmtDate(iso: string): string {
@@ -166,7 +175,7 @@ export default function ReportModal({
   athleteName: string;
   athleteGroup?: string;
   options: ReportOptions;
-  aiSummary?: { summary: string; themes: string } | null;
+  aiSummary?: { summary: string; themes: string; verdict?: Verdict } | null;
   aiLoading?: boolean;
   squadComparison?: SquadComparisonContext[] | null;
   branding?: ResolvedBranding;
@@ -213,6 +222,13 @@ export default function ReportModal({
   const [detailMode, setDetailMode] = useState<"all" | "weekly">("all");
   // Per-exercise tables start folded away under "Full detail".
   const [detailOpen, setDetailOpen] = useState(false);
+  // Coach's verdict - drafted by the AI call when it arrives, then the
+  // coach's own edits win (a late AI reply never overwrites them).
+  const [verdict, setVerdict] = useState<Verdict>({ wentWell: "", workOn: "", nextFocus: "" });
+  const [verdictEdited, setVerdictEdited] = useState(false);
+  useEffect(() => {
+    if (aiSummary?.verdict && !verdictEdited) setVerdict(aiSummary.verdict);
+  }, [aiSummary, verdictEdited]);
 
   // 0084 — which exercise/modality groups to actually chart in the
   // Cardio/Hyrox Metrics sections, live in the report view (not a
@@ -468,6 +484,29 @@ export default function ReportModal({
             </div>
           )}
 
+          {visual && options.competitions !== false && visual.competitions.length > 0 && !dismissed.has("competitions") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("competitions")} />
+              <div style={styles.sectionTitle}>Coming Up</div>
+              <CompetitionStrip competitions={visual.competitions} />
+            </div>
+          )}
+
+          {options.coachVerdict !== false && !dismissed.has("coach-verdict") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("coach-verdict")} />
+              <div style={styles.sectionTitle}>Coach&apos;s Verdict</div>
+              <CoachVerdict
+                value={verdict}
+                loading={aiLoading}
+                onChange={(next) => {
+                  setVerdict(next);
+                  setVerdictEdited(true);
+                }}
+              />
+            </div>
+          )}
+
           {options.aiSummary && !dismissed.has("ai-summary") && (
             <div style={{ ...styles.aiBox, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("ai-summary")} />
@@ -487,6 +526,14 @@ export default function ReportModal({
               ) : (
                 <div style={styles.aiLoading}>Summary unavailable.</div>
               )}
+            </div>
+          )}
+
+          {visual && options.goalProgress !== false && visual.goals.length > 0 && !dismissed.has("goal-progress") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("goal-progress")} />
+              <div style={styles.sectionTitle}>Goal Progress</div>
+              <GoalProgressList goals={visual.goals} />
             </div>
           )}
 
@@ -526,6 +573,15 @@ export default function ReportModal({
             </div>
           )}
 
+          {visual && options.benchmarks !== false && visual.benchmarks.length > 0 && !dismissed.has("benchmarks") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("benchmarks")} />
+              <div style={styles.sectionTitle}>Benchmark Workouts</div>
+              <div style={styles.visualSub}>The same workout done more than once - first attempt against the latest</div>
+              <BenchmarkTables groups={visual.benchmarks} />
+            </div>
+          )}
+
           {visual && options.consistency !== false && visual.days.length > 0 && !dismissed.has("consistency") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("consistency")} />
@@ -537,6 +593,23 @@ export default function ReportModal({
                   <WeeklySessionsChart weekly={visual.weekly} />
                 </div>
               )}
+            </div>
+          )}
+
+          {visual && options.readiness !== false && visual.readiness && !dismissed.has("readiness") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("readiness")} />
+              <div style={styles.sectionTitle}>Readiness vs Training</div>
+              <ReadinessPanel readiness={visual.readiness} />
+            </div>
+          )}
+
+          {visual && options.adherence !== false && visual.adherence.length > 0 && !dismissed.has("adherence") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("adherence")} />
+              <div style={styles.sectionTitle}>Skipped &amp; Swapped</div>
+              <div style={styles.visualSub}>Programmed exercises in sessions they trained - % is how often each was done as written</div>
+              <AdherenceList rows={visual.adherence} />
             </div>
           )}
 

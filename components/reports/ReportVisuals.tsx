@@ -7,7 +7,19 @@
 // DOM into a blank window that redefines those variables for paper
 // (light background) - anything not inline wouldn't survive the trip.
 
-import type { CalendarDay, Headline, ReportPB, VisualSessionType, WeeklySessions } from "@/lib/report-visuals";
+import { useState } from "react";
+import type {
+  AdherenceRow,
+  BenchmarkGroup,
+  CalendarDay,
+  GoalProgress,
+  Headline,
+  ReadinessSummary,
+  ReportPB,
+  UpcomingCompetition,
+  VisualSessionType,
+  WeeklySessions,
+} from "@/lib/report-visuals";
 
 export const GOOD = "#1baf7a";
 export const BAD = "#e5484d";
@@ -496,6 +508,337 @@ export function WeeklySessionsChart({ weekly }: { weekly: WeeklySessions[] }) {
   );
 }
 
+// ── Upcoming competitions ────────────────────────────────────────────────────
+
+export function CompetitionStrip({ competitions }: { competitions: UpcomingCompetition[] }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {competitions.map((c) => (
+        <div key={`${c.title}-${c.date}`} style={v.compRow}>
+          <div style={v.compDays}>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--text)" }}>{c.daysAway}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {c.daysAway === 1 ? "day" : "days"} to go
+            </div>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{c.title}</div>
+            <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>
+              {longDate(c.date)}
+              {c.location ? ` · ${c.location}` : ""}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function longDate(iso: string): string {
+  return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+// ── Coach's verdict ──────────────────────────────────────────────────────────
+
+export interface Verdict {
+  wentWell: string;
+  workOn: string;
+  nextFocus: string;
+}
+
+const VERDICT_FIELDS: { key: keyof Verdict; label: string; colour: string; placeholder: string }[] = [
+  { key: "wentWell", label: "What went well", colour: GOOD, placeholder: "e.g. Squat up 8kg and every session completed." },
+  { key: "workOn", label: "What to work on", colour: WARN, placeholder: "e.g. Upper-body pressing has stalled." },
+  { key: "nextFocus", label: "Focus for next block", colour: "var(--accent)", placeholder: "e.g. Build pressing volume ahead of the season." },
+];
+
+// Plain text on the page (so Print and Email carry it), with a pencil
+// to edit each box. Empty boxes are left off the printed copy.
+export function CoachVerdict({ value, onChange, loading }: { value: Verdict; onChange: (v: Verdict) => void; loading?: boolean }) {
+  const [editing, setEditing] = useState<keyof Verdict | null>(null);
+  return (
+    <div style={v.verdictGrid}>
+      {VERDICT_FIELDS.map((f) => {
+        const text = value[f.key];
+        const isEditing = editing === f.key;
+        return (
+          <div key={f.key} style={{ ...v.verdictCard, borderTop: `2px solid ${f.colour}` }} data-no-print={!text && !isEditing ? "true" : undefined}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ ...v.cardLabel, color: f.colour }}>{f.label}</div>
+              {!isEditing && (
+                <button data-no-print="true" style={v.editBtn} onClick={() => setEditing(f.key)} aria-label={`Edit ${f.label}`}>
+                  ✎ Edit
+                </button>
+              )}
+            </div>
+            {isEditing ? (
+              <textarea
+                autoFocus
+                value={text}
+                placeholder={f.placeholder}
+                rows={3}
+                onChange={(e) => onChange({ ...value, [f.key]: e.target.value })}
+                onBlur={() => setEditing(null)}
+                style={v.verdictInput}
+              />
+            ) : loading && !text ? (
+              <div style={{ ...v.verdictText, color: "var(--mute)" }}>Drafting…</div>
+            ) : text ? (
+              <div style={v.verdictText}>{text}</div>
+            ) : (
+              <div data-no-print="true" style={{ ...v.verdictText, color: "var(--mute)", fontStyle: "italic", cursor: "pointer" }} onClick={() => setEditing(f.key)}>
+                Click to add…
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Goal progress ────────────────────────────────────────────────────────────
+
+const GOAL_STATUS: Record<GoalProgress["status"], { label: string; colour: string }> = {
+  achieved: { label: "Achieved", colour: GOOD },
+  on_track: { label: "On track", colour: GOOD },
+  behind: { label: "Behind schedule", colour: WARN },
+  overdue: { label: "Past target date", colour: BAD },
+  in_progress: { label: "In progress", colour: "var(--accent)" },
+  no_data: { label: "Not measured yet", colour: "var(--mute)" },
+};
+
+function fmtGoalValue(n: number | null, unit: string): string {
+  if (n == null) return "-";
+  const s = Number.isInteger(n) ? String(n) : n.toFixed(Math.abs(n) < 10 ? 2 : 1);
+  return `${s}${unit ? (unit === "kg" || unit === "%" ? unit : ` ${unit}`) : ""}`;
+}
+
+export function GoalProgressList({ goals }: { goals: GoalProgress[] }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {goals.map((g) => {
+        const st = GOAL_STATUS[g.status];
+        return (
+          <div key={g.id} style={v.goalCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", minWidth: 0 }}>
+                {g.label}
+                {g.tier === "primary" && <span style={{ ...v.tag, color: "var(--accent)", borderColor: "var(--accent)", marginLeft: 8 }}>Main goal</span>}
+              </div>
+              <span style={{ ...v.statusPill, color: st.colour, borderColor: st.colour }}>{st.label}</span>
+            </div>
+            {g.target != null ? (
+              <>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--text)" }}>{fmtGoalValue(g.current, g.unit)}</span>
+                  <span style={{ fontSize: 12, color: "var(--mute)" }}>
+                    of {fmtGoalValue(g.target, g.unit)}
+                    {g.start != null ? ` · started at ${fmtGoalValue(g.start, g.unit)}` : ""}
+                  </span>
+                </div>
+                <div style={v.goalTrack}>
+                  <div style={{ ...v.goalFill, width: `${Math.round((g.pct ?? 0) * 100)}%`, background: st.colour }} />
+                </div>
+              </>
+            ) : (
+              g.note && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6 }}>{g.note}</div>
+            )}
+            {g.targetDate && (
+              <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 6 }}>
+                Target date {longDate(g.targetDate)}
+                {g.daysLeft != null && g.daysLeft >= 0 && g.status !== "achieved" ? ` · ${g.daysLeft} days left` : ""}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Readiness vs training ────────────────────────────────────────────────────
+
+function Gauge({ label, value, invert = false }: { label: string; value: number; invert?: boolean }) {
+  const good = invert ? 6 - value : value;
+  const colour = good >= 3.5 ? GOOD : good >= 2.5 ? WARN : BAD;
+  return (
+    <div style={v.card}>
+      <div style={v.cardLabel}>{label}</div>
+      <div style={{ ...v.cardValue, fontSize: 28 }}>
+        {value.toFixed(1)}
+        <span style={{ fontSize: 13, color: "var(--mute)", fontWeight: 600 }}> /5</span>
+      </div>
+      <div style={v.meter}>
+        <div style={{ ...v.meterFill, width: `${(value / 5) * 100}%`, background: colour }} />
+      </div>
+      {invert && <div style={{ ...v.cardSub, fontSize: 11 }}>Lower is better</div>}
+    </div>
+  );
+}
+
+export function ReadinessPanel({ readiness }: { readiness: ReadinessSummary }) {
+  const r = readiness;
+  const weeks = r.weekly;
+  const W = 640, H = 170, left = 26, right = 26, top = 10, bottom = 22;
+  const plotW = W - left - right, plotH = H - top - bottom;
+  const slot = plotW / Math.max(weeks.length, 1);
+  const barW = Math.min(30, slot * 0.5);
+  const maxS = Math.max(1, ...weeks.map((w) => w.sessionsDone));
+  const yS = (n: number) => top + plotH - (n / maxS) * plotH;
+  const yR = (x: number) => top + plotH - ((x - 1) / 4) * plotH; // 1-5 scale
+  const pts = weeks.map((w, i) => (w.readiness == null ? null : { x: left + slot * i + slot / 2, y: yR(w.readiness) })).filter(Boolean) as { x: number; y: number }[];
+  const labelEvery = Math.ceil(weeks.length / 10);
+
+  const lowRate = r.lowDaysWithSession ? Math.round((r.lowDaysCompleted / r.lowDaysWithSession) * 100) : null;
+  const goodRate = r.goodDaysWithSession ? Math.round((r.goodDaysCompleted / r.goodDaysWithSession) * 100) : null;
+
+  return (
+    <div>
+      <div style={v.cardGrid}>
+        <Gauge label="Readiness" value={r.avgReadiness} />
+        <Gauge label="Sleep" value={r.avgSleep} />
+        <Gauge label="Energy" value={r.avgEnergy} />
+        <Gauge label="Soreness" value={r.avgSoreness} invert />
+      </div>
+      <div style={{ ...v.more, marginTop: 6 }}>From {r.checkins} check-in{r.checkins === 1 ? "" : "s"}. Readiness combines sleep, energy and soreness.</div>
+      {weeks.length > 1 && pts.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: W }}>
+            {[1, 3, 5].map((t) => (
+              <g key={t}>
+                <line x1={left} x2={W - right} y1={yR(t)} y2={yR(t)} style={{ stroke: "var(--line)", strokeWidth: 1 }} />
+                <text x={W - right + 6} y={yR(t) + 3} style={{ fill: "var(--mute)", fontSize: 10 }}>{t}</text>
+              </g>
+            ))}
+            {[0, maxS].map((t) => (
+              <text key={t} x={left - 6} y={yS(t) + 3} textAnchor="end" style={{ fill: "var(--mute)", fontSize: 10 }}>{t}</text>
+            ))}
+            {weeks.map((w, i) => (
+              <g key={w.weekStart}>
+                {w.sessionsDone > 0 && (
+                  <rect x={left + slot * i + (slot - barW) / 2} y={yS(w.sessionsDone)} width={barW} height={yS(0) - yS(w.sessionsDone)} rx={2} style={{ fill: "var(--panel2)", stroke: "var(--line)" }} />
+                )}
+                {i % labelEvery === 0 && (
+                  <text x={left + slot * i + slot / 2} y={H - 6} textAnchor="middle" style={{ fill: "var(--mute)", fontSize: 10 }}>{shortDate(w.weekStart)}</text>
+                )}
+              </g>
+            ))}
+            {pts.length > 1 && <path d={pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} style={{ fill: "none", stroke: GOOD, strokeWidth: 2 }} />}
+            {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} style={{ fill: GOOD }} />)}
+          </svg>
+          <div style={v.legend}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 14, height: 2, background: GOOD, display: "inline-block" }} />
+              Weekly readiness (right axis, 1-5)
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--panel2)", border: "1px solid var(--line)", display: "inline-block" }} />
+              Sessions done
+            </span>
+          </div>
+        </div>
+      )}
+      {lowRate != null && r.lowDays > 0 && (
+        <div style={v.insight}>
+          On {r.lowDays} low-readiness day{r.lowDays === 1 ? "" : "s"}, {r.lowDaysCompleted} of {r.lowDaysWithSession} planned session
+          {r.lowDaysWithSession === 1 ? " was" : "s were"} still trained ({lowRate}%)
+          {goodRate != null ? `, against ${goodRate}% on other days.` : "."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Skipped & swapped ────────────────────────────────────────────────────────
+
+export function AdherenceList({ rows, max = 8 }: { rows: AdherenceRow[]; max?: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {rows.slice(0, max).map((r) => {
+        // "As written" = done, and not swapped for something else.
+        const swaps = r.swapped.reduce((n, s) => n + s.times, 0);
+        const rate = r.programmed ? Math.round((Math.max(r.completed - swaps, 0) / r.programmed) * 100) : 0;
+        return (
+          <div key={r.exercise} style={v.adhRow}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{r.exercise}</div>
+              <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>
+                {r.skipped > 0 && `Skipped ${r.skipped} of ${r.programmed}`}
+                {r.skipped > 0 && r.swapped.length > 0 && " · "}
+                {r.swapped.length > 0 && `Swapped for ${r.swapped.map((s) => `${s.to}${s.times > 1 ? ` (×${s.times})` : ""}`).join(", ")}`}
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <div style={{ ...v.goalTrack, width: 80, marginTop: 0 }}>
+                <div style={{ ...v.goalFill, width: `${rate}%`, background: rate >= 80 ? GOOD : rate >= 50 ? WARN : BAD }} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", minWidth: 34, textAlign: "right" }}>{rate}%</span>
+            </div>
+          </div>
+        );
+      })}
+      {rows.length > max && <div style={v.more}>+ {rows.length - max} more</div>}
+    </div>
+  );
+}
+
+// ── Benchmark workout repeats ────────────────────────────────────────────────
+
+function fmtBench(n: number | null): string {
+  if (n == null) return "-";
+  return Number.isInteger(n) ? String(n) : n.toFixed(Math.abs(n) < 10 ? 2 : 1);
+}
+
+export function BenchmarkTables({ groups }: { groups: BenchmarkGroup[] }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {groups.map((g) => (
+        <div key={g.name} style={v.benchCard}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{g.name}</div>
+            <div style={{ fontSize: 11, color: "var(--mute)" }}>
+              {g.totalAttempts} attempts{g.totalAttempts > g.attempts.length ? ` · first and latest ${g.attempts.length - 1} shown` : ""}
+            </div>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={v.benchTh}></th>
+                  {g.attempts.map((d) => (
+                    <th key={d} style={{ ...v.benchTh, textAlign: "right" }}>{shortDate(d)}</th>
+                  ))}
+                  <th style={{ ...v.benchTh, textAlign: "right" }}>Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.rows.map((r) => (
+                  <tr key={`${r.group}-${r.label}`}>
+                    <td style={v.benchTd}>
+                      <div style={{ fontWeight: 600, color: "var(--text)" }}>{r.group}</div>
+                      <div style={{ color: "var(--mute)", fontSize: 11 }}>
+                        {r.label}
+                        {r.lowerIsBetter && r.improved !== null ? " · lower is better" : ""}
+                      </div>
+                    </td>
+                    {r.values.map((val, i) => (
+                      <td key={i} style={{ ...v.benchTd, textAlign: "right", color: "var(--text)" }}>{fmtBench(val)}</td>
+                    ))}
+                    <td style={{ ...v.benchTd, textAlign: "right", fontWeight: 700, color: r.improved == null ? "var(--mute)" : r.improved ? GOOD : BAD, whiteSpace: "nowrap" }}>
+                      {r.changePct == null ? "-" : `${r.improved == null ? "" : r.improved ? "▲ " : "▼ "}${Math.abs(r.changePct).toFixed(1)}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const v: Record<string, React.CSSProperties> = {
   cardGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))", gap: 8 },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 12px", breakInside: "avoid", minWidth: 0 },
@@ -525,5 +868,21 @@ const v: Record<string, React.CSSProperties> = {
   smName: { fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   smValue: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--text)", margin: "2px 0 4px" },
   smAxis: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--mute)", marginTop: 3 },
+  compRow: { display: "flex", alignItems: "center", gap: 14, background: "var(--panel)", border: "1px solid var(--line)", borderLeft: "3px solid var(--accent)", borderRadius: 12, padding: "10px 14px", breakInside: "avoid" },
+  compDays: { textAlign: "center", minWidth: 64 },
+  verdictGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 },
+  verdictCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px", breakInside: "avoid" },
+  verdictText: { fontSize: 13, color: "var(--text)", lineHeight: 1.5, marginTop: 8, whiteSpace: "pre-wrap" },
+  verdictInput: { width: "100%", marginTop: 8, background: "var(--ink)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, lineHeight: 1.45, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" },
+  editBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  goalCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px", breakInside: "avoid" },
+  statusPill: { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", border: "1px solid", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" },
+  goalTrack: { height: 8, background: "var(--panel2)", borderRadius: 4, overflow: "hidden", marginTop: 8 },
+  goalFill: { height: "100%", borderRadius: 4 },
+  insight: { fontSize: 13, color: "var(--text)", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", marginTop: 12, lineHeight: 1.45 },
+  adhRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--line)", breakInside: "avoid" },
+  benchCard: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px", breakInside: "avoid" },
+  benchTh: { fontSize: 10, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.04em", padding: "4px 6px", borderBottom: "1px solid var(--line)", textAlign: "left", whiteSpace: "nowrap" },
+  benchTd: { padding: "7px 6px", borderBottom: "1px solid var(--line)", verticalAlign: "top" },
   legend: { display: "flex", flexWrap: "wrap", gap: 14, fontSize: 11, color: "var(--mute)", marginTop: 8, alignItems: "center" },
 };

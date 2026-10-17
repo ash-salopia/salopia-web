@@ -15,7 +15,16 @@ SUMMARY:
 <2-3 sentences on the overall training trend across the range, covering only the sections provided below - standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it. If session RPE and/or training load (sRPE) data is included, read it alongside whatever load/metric trend is also included rather than in isolation: rising load with stable or falling RPE reads as adapting well; rising RPE alongside flat or falling load is worth flagging as possible fatigue or overreaching; RPE isn't logged for recovery sessions and shouldn't be discussed as if it should be. If cardio and/or hybrid metric trends are included, comment on the genuinely notable movement (e.g. pace improving, distance climbing, HR drifting for the same effort) rather than restating every number. If only one section is included, write the summary about that section alone — don't apologise for or mention the absence of sections that weren't selected.>
 
 THEMES:
-<1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If athlete notes were not included below, or there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>`;
+<1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If athlete notes were not included below, or there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>
+
+WENT_WELL:
+<1-2 short sentences, written for the athlete (and possibly their parent) to read: the most genuine positive from the data - a specific lift, a benchmark, consistency. Plain English, no jargon like "e1RM" or "sRPE". Use their first name, third person.>
+
+WORK_ON:
+<1-2 short sentences, same audience and tone: the one most useful thing to improve, grounded in the data (e.g. a lift that has stalled, missed sessions, RPE creeping up). Constructive, never critical of the athlete as a person. If nothing stands out, suggest keeping the current consistency.>
+
+NEXT_FOCUS:
+<1 short sentence: what the next block should focus on, following from the above. If the coach context mentions an event, taper or injury, align with it.>`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -267,20 +276,27 @@ ${coachContext}` : "";
   // The prompt string IS the full report data (computeReport-derived
   // lines for every selected section). Any change to a logged set, note,
   // RPE, or the selected options changes the prompt → busts the cache.
-  const hash = fingerprintReportInput({ v: 2, model: AI_MODEL.report, prompt });
+  const hash = fingerprintReportInput({ v: 3, model: AI_MODEL.report, prompt });
   const cached = await getCachedReport(supabase, { athleteId, reportType: "training_load", hash });
   if (cached && typeof (cached as any).summary === "string") {
     return NextResponse.json(cached, { headers: { "x-cache": "hit" } });
   }
 
-  const r = await callClaude({ model: AI_MODEL.report, system: SYSTEM, maxTokens: 400, prompt });
+  const r = await callClaude({ model: AI_MODEL.report, system: SYSTEM, maxTokens: 700, prompt });
   if (!r.ok) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
 
-  const summaryMatch = r.text.match(/SUMMARY:\s*([\s\S]*?)(?:\n\s*THEMES:|$)/i);
-  const themesMatch = r.text.match(/THEMES:\s*([\s\S]*)$/i);
+  // Each heading's text runs up to the next heading (or the end).
+  const section = (name: string) =>
+    r.text.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?:\\n\\s*(?:SUMMARY|THEMES|WENT_WELL|WORK_ON|NEXT_FOCUS):|$)`, "i"))?.[1]?.trim() || "";
   const out = {
-    summary: summaryMatch?.[1]?.trim() || r.text.trim() || "Summary unavailable.",
-    themes: themesMatch?.[1]?.trim() || "No recurring themes noted.",
+    summary: section("SUMMARY") || r.text.trim() || "Summary unavailable.",
+    themes: section("THEMES") || "No recurring themes noted.",
+    // Coach's verdict draft - the coach edits it on the report itself.
+    verdict: {
+      wentWell: section("WENT_WELL"),
+      workOn: section("WORK_ON"),
+      nextFocus: section("NEXT_FOCUS"),
+    },
   };
 
   if (r.text.trim()) {

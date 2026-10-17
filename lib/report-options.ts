@@ -15,6 +15,12 @@ export interface ReportOptions {
   progressBars: boolean; // % change per exercise as sorted bars
   smallMultiples: boolean; // one mini chart per exercise, each on its own scale
   consistency: boolean; // day-by-day calendar + weekly sessions-by-type chart
+  coachVerdict: boolean; // what went well / what to work on / next focus - AI-drafted, coach-edited
+  goalProgress: boolean; // athlete_goals with current vs target and on-track status
+  competitions: boolean; // countdown to the next competitions
+  readiness: boolean; // check-in sleep/energy/soreness vs sessions trained
+  adherence: boolean; // exercises skipped or swapped
+  benchmarks: boolean; // repeated cardio/hybrid workouts compared attempt by attempt
   ttl: boolean; // Total Training Load (tonnage)
   e1rm: boolean; // Estimated 1RM (strength)
   // Per-metric display components - apply to whichever metric(s) above are ticked.
@@ -74,6 +80,12 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   progressBars: true,
   smallMultiples: true,
   consistency: true,
+  coachVerdict: true,
+  goalProgress: true,
+  competitions: true,
+  readiness: true,
+  adherence: true,
+  benchmarks: true,
   ttl: true,
   e1rm: false,
   loadProgression: true,
@@ -130,6 +142,8 @@ export const SESSION_TYPE_META: Record<ReportSessionType, { label: string }> = {
 export const FIELD_SESSION_TYPES: Partial<Record<keyof ReportOptions, ReportSessionType[]>> = {
   progressBars: ["strength"],
   smallMultiples: ["strength"],
+  adherence: ["strength", "power_speed"],
+  benchmarks: ["cardio", "hyrox"],
   ttl: ["strength"],
   e1rm: ["strength"],
   loadProgression: ["strength"],
@@ -155,11 +169,17 @@ export const METRIC_FIELDS: { key: "ttl" | "e1rm"; label: string; hint: string }
 ];
 
 export const VISUAL_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
+  { key: "coachVerdict", label: "Coach's verdict", hint: "What went well, what to work on, focus for next block - drafted by AI when the AI summary is on, editable on the report" },
+  { key: "goalProgress", label: "Goal progress", hint: "Each goal's current vs target, with on track / behind" },
+  { key: "competitions", label: "Competition countdown", hint: "Days to the athlete's next competitions" },
   { key: "headlineCards", label: "Headline numbers", hint: "Sessions, completion, PBs, RPE and tonnage at the top - with change vs the previous period" },
   { key: "pbWall", label: "PB wall", hint: "Trophy cards for every PB set in this range" },
   { key: "progressBars", label: "Strength progress bars", hint: "% change per exercise, best first" },
   { key: "smallMultiples", label: "Exercise trend charts", hint: "One small chart per exercise, each on its own scale" },
   { key: "consistency", label: "Consistency calendar", hint: "Every day coloured done / partial / missed, plus sessions per week" },
+  { key: "readiness", label: "Readiness vs training", hint: "Check-in sleep, energy and soreness against sessions trained" },
+  { key: "adherence", label: "Skipped & swapped exercises", hint: "Which programmed exercises get skipped or swapped most" },
+  { key: "benchmarks", label: "Benchmark workout repeats", hint: "Same cardio/hybrid workout done more than once, compared attempt by attempt" },
 ];
 
 export const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
@@ -191,7 +211,7 @@ export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: stri
 // bodyweightRelative is deliberately excluded - it's a display modifier
 // for e1RM, not content on its own.
 const CONTENT_FIELD_KEYS: (keyof ReportOptions)[] = [
-  "headlineCards", "pbWall", "consistency",
+  "headlineCards", "pbWall", "consistency", "coachVerdict", "goalProgress", "readiness", "benchmarks",
   "ttl", "e1rm", "aiSummary", "athleteNotes", "sessionRpe",
   "powerSpeedTrend", "barSpeedTrend", "cardioMetricsTrend", "hyroxMetricsTrend",
   "cardioSessionsList", "hyroxSessionsList", "trainingLoadTrend", "sessionCompletion",

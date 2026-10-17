@@ -8,7 +8,20 @@ import { resolveCurrentOneRMWithSource } from "@/lib/data/one-rm";
 import { listVelocityProfiles } from "@/lib/data/velocity-profiles";
 import type { OneRMSource } from "@/lib/data/settings";
 import type { OneRMFormula } from "@/lib/one-rm";
-import { computeVisualSummary, previousRange, type ReportPB, type VisualSummary } from "@/lib/report-visuals";
+import {
+  computeVisualSummary,
+  computeGoalProgress,
+  previousRange,
+  type CheckInInput,
+  type GoalInput,
+  type GoalProgress,
+  type ReportPB,
+  type StrengthPBRow,
+  type UpcomingCompetition,
+  type VisualSummary,
+} from "@/lib/report-visuals";
+import { daySpan } from "@/lib/report-visuals";
+import { latestTestValues, listTestMetrics } from "@/lib/data/testing";
 import { todayISO } from "@/lib/date-utils";
 
 export type { ReportRow, ExerciseMap, ExerciseSummary, WeeklyPoint, WeeklyExerciseMap, NoteEntry, RPEEntry, RPEWeeklyPoint, PowerSpeedRow, PowerSpeedMap, PowerSpeedSummary } from "@/lib/report-calc";
@@ -206,6 +219,44 @@ async function buildVisualSummary(
       : Promise.resolve(null),
   ]);
 
+  const today = todayISO();
+  const dates = sessions.map((s) => s.date).filter(Boolean).sort();
+  const checkinFrom = rangeStart ?? dates[0] ?? today;
+  const checkinTo = rangeEnd ?? today;
+
+  // Each extra is best-effort: one failing (or a table missing on an
+  // older database) just leaves its section out of the report.
+  const [goals, competitions, checkins] = await Promise.all([
+    loadGoalProgress(athleteId, today).catch((e) => {
+      console.error("[generateReport] goals failed", e);
+      return [] as GoalProgress[];
+    }),
+    supabase
+      .from("competitions")
+      .select("title, competition_date, location")
+      .eq("athlete_id", athleteId)
+      .gte("competition_date", today)
+      .order("competition_date", { ascending: true })
+      .limit(3)
+      .then(({ data }) =>
+        (data ?? []).map(
+          (c): UpcomingCompetition => ({
+            title: c.title,
+            date: c.competition_date,
+            location: c.location ?? null,
+            daysAway: daySpan(today, c.competition_date) - 1,
+          })
+        )
+      ),
+    supabase
+      .from("checkins")
+      .select("date, energy, sleep, soreness")
+      .eq("athlete_id", athleteId)
+      .gte("date", checkinFrom)
+      .lte("date", checkinTo)
+      .then(({ data }) => (data ?? []) as CheckInInput[]),
+  ]);
+
   return computeVisualSummary({
     sessions,
     rangeStart,
@@ -213,6 +264,46 @@ async function buildVisualSummary(
     pbs,
     previousSessions: prevSessions,
     previousPbCount: prevPbs ? prevPbs.length : null,
-    today: todayISO(),
+    today,
+    goals,
+    competitions,
+    checkins,
   });
+}
+
+// Goal progress (athlete_goals): current best lifts come from the PB
+// table (all time, weight + e1RM lanes, which both record the actual
+// set lifted); test goals read the latest test result.
+async function loadGoalProgress(athleteId: string, today: string): Promise<GoalProgress[]> {
+  const supabase = createClient();
+  const { data: goals, error } = await supabase.from("athlete_goals").select("*").eq("athlete_id", athleteId);
+  if (error) throw error;
+  if (!goals?.length) return [];
+
+  const exerciseNames = Array.from(new Set(goals.filter((g) => g.goal_type === "exercise" && g.exercise_name).map((g) => g.exercise_name as string)));
+  const hasTestGoals = goals.some((g) => g.goal_type === "test" && g.test_metric_id);
+
+  const [pbRows, testLatest, metrics] = await Promise.all([
+    exerciseNames.length
+      ? supabase
+          .from("personal_bests")
+          .select("exercise_name, date, weight_kg, reps")
+          .eq("athlete_id", athleteId)
+          .in("pb_type", ["weight", "e1rm"])
+          .then(({ data }) => data ?? [])
+      : Promise.resolve([]),
+    hasTestGoals ? latestTestValues(athleteId) : Promise.resolve({} as Record<string, { value: number; date: string }>),
+    hasTestGoals ? listTestMetrics() : Promise.resolve([]),
+  ]);
+
+  const strengthPbs: StrengthPBRow[] = (pbRows as { exercise_name: string; date: string; weight_kg: number | null; reps: number | null }[]).map((r) => ({
+    exercise: r.exercise_name,
+    date: r.date,
+    weightKg: r.weight_kg,
+    reps: r.reps,
+  }));
+  const testLowerIsBetter: Record<string, boolean> = {};
+  for (const m of metrics) testLowerIsBetter[m.id] = m.better_direction === "lower";
+
+  return computeGoalProgress({ goals: goals as GoalInput[], strengthPbs, testLatest, testLowerIsBetter, today });
 }

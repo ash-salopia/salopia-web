@@ -255,7 +255,7 @@ export default function AthleteDetailPage() {
   const [squadComparison, setSquadComparison] = useState<SquadComparisonContext[] | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState(""); // shown inside the report options pop-up
-  const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string } | null>(null);
+  const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string; verdict?: { wentWell: string; workOn: string; nextFocus: string } } | null>(null);
   const [aiReportLoading, setAiReportLoading] = useState(false);
   const [rangeToolOpen, setRangeToolOpen] = useState<"copy" | "delete" | null>(null);
   const [rangeStart, setRangeStart] = useState(todayISO());
@@ -510,7 +510,8 @@ export default function AthleteDetailPage() {
           setSquadComparison(null); // squad context failing shouldn't block the report itself
         }
       }
-      if (options.aiSummary) {
+      // The same AI call also drafts the Coach's verdict.
+      if (options.aiSummary || options.coachVerdict !== false) {
         setAiReportLoading(true);
         fetch("/api/training-report-ai", {
           method: "POST",
@@ -535,7 +536,7 @@ export default function AthleteDetailPage() {
           }),
         })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
-          .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes }))
+          .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes, verdict: json.verdict }))
           .catch(() => setAiReportSummary({ summary: "Couldn't generate an AI summary right now.", themes: "" }))
           .finally(() => setAiReportLoading(false));
       }
