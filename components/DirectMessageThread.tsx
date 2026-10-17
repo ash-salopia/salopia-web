@@ -272,7 +272,7 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
 
       <div style={s.messageList}>
         {messages.length === 0 && (
-          <div style={s.empty}>No messages yet - start the conversation with {athleteName}.</div>
+          <div style={s.empty}>{off ? "No messages." : `No messages yet - start the conversation with ${athleteName}.`}</div>
         )}
         {messages.map((msg) => {
           const isMe = msg.sender_id === coachId && msg.sender_type === "coach";
