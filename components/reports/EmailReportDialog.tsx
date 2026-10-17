@@ -31,7 +31,7 @@ export default function EmailReportDialog({
   savedEmail: string | null;
   rangeLabel: string;
   summary: Headline | null;
-  buildHtml: () => string | null;
+  buildHtml: (style: "white" | "colour") => string | null;
   onSavedEmail?: (email: string) => void;
   onClose: () => void;
 }) {
@@ -43,6 +43,7 @@ export default function EmailReportDialog({
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState(false);
+  const [style, setStyle] = useState<"colour" | "white">("colour");
 
   const recipients = to
     .split(/[,;\s]+/)
@@ -56,7 +57,7 @@ export default function EmailReportDialog({
     setError("");
     if (withEmail && !recipients.length) return setError("Add an email address.");
     if (withEmail && invalid) return setError(`"${invalid}" doesn't look like an email address.`);
-    const html = buildHtml();
+    const html = buildHtml(style);
     if (!html) return setError("Couldn't read the report - close it and generate it again.");
     setSending(true);
     try {
@@ -171,6 +172,24 @@ export default function EmailReportDialog({
               </label>
             )}
 
+            <div style={d.label}>Report style</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {([
+                ["colour", "Colour", "Branded, best on screen"],
+                ["white", "White", "Plain, print-friendly"],
+              ] as const).map(([key, label, hint]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStyle(key)}
+                  style={{ ...d.styleOpt, ...(style === key ? d.styleOptOn : {}) }}
+                >
+                  <b>{label}</b>
+                  <span style={{ fontSize: 11, color: "var(--mute)", fontWeight: 400 }}>{hint}</span>
+                </button>
+              ))}
+            </div>
+
             <div style={d.label}>Message</div>
             <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} style={{ ...d.input, resize: "vertical", fontFamily: "inherit" }} />
 
@@ -209,6 +228,8 @@ const d: Record<string, React.CSSProperties> = {
   error: { fontSize: 13, color: "#FF6B6B", background: "#2a0c0c", border: "1px solid #FF6B6B44", borderRadius: 8, padding: "8px 10px", marginTop: 12 },
   success: { fontSize: 14, fontWeight: 700, color: "#1baf7a", marginTop: 6 },
   warn: { fontSize: 13, color: "#F59E0B", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 8, padding: "10px 12px", marginTop: 6, lineHeight: 1.45 },
+  styleOpt: { flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "9px 11px", fontSize: 13, cursor: "pointer", textAlign: "left" },
+  styleOptOn: { borderColor: "var(--accent)", background: "var(--accent-dim)" },
   linkRow: { display: "flex", gap: 8 },
   primaryBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 9, padding: "11px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" },
   ghostBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center" },

@@ -14,9 +14,11 @@ import { METRIC_META } from "@/lib/cardio-metrics";
 import { SESSION_TYPE_META } from "@/lib/report-options";
 import type { SquadComparisonContext, SquadComparisonMetric } from "@/lib/squad-comparison";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
-import { brandHeaderHtml, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
+import { brandHeaderHtml, reportThemeColours, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
 import { daySpan } from "@/lib/report-visuals";
 import EmailReportDialog from "@/components/reports/EmailReportDialog";
+
+export type ReportStyle = "white" | "colour";
 
 const RANGE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtRangeDate(iso: string): string {
@@ -340,19 +342,9 @@ export default function ReportModal({
       });
   };
 
-  // window.print() on the modal itself printed incompletely - the
-  // modal is position:fixed with maxHeight:100vh + overflowY:auto so
-  // browsers clipped output to one screen's worth of content instead
-  // of paginating the rest, and there was no print stylesheet to
-  // reset that. Printing a separate, plain-flow document sidesteps
-  // that entirely (natural pagination) and swaps the dark in-app
-  // theme for a light one, since every section below is styled with
-  // literal inline styles (which DO carry over via innerHTML) built
-  // from CSS custom properties that wouldn't resolve in a blank
-  // window without redefining them here.
   // The report as a standalone light-theme document - used by Print and
   // by "Email report" (saved as the shared /r/<id> page).
-  const buildReportDocument = (): string | null => {
+  const buildReportDocument = (style: ReportStyle = "white"): string | null => {
     const el = document.getElementById("report-content");
     if (!el) return null;
 
@@ -364,13 +356,65 @@ export default function ReportModal({
 
     const esc = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const title = `${esc(athleteName)} - Training Report`;
+    const rangeText = rangeStart && rangeEnd ? `${esc(fmtRangeDate(rangeStart))} – ${esc(fmtRangeDate(rangeEnd))}` : "All time";
+    const fonts = `<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">`;
+
+    if (style === "colour") {
+      const c = reportThemeColours(branding);
+      const brandMark = branding.logoUrl
+        ? `<img src="${esc(branding.logoUrl)}" alt="${esc(branding.displayName)}" style="height:30px;max-width:200px;object-fit:contain;display:block;background:#fff;border-radius:8px;padding:4px 8px" />`
+        : `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;letter-spacing:2px;color:${c.brand}">${esc(branding.displayName)}</div>`;
+      return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+${fonts}
+<style>
+  :root {
+    --ink: #ffffff; --panel: #f6f8fb; --panel2: #edf1f6; --line: #e1e6ee;
+    --text: #121a24; --mute: #64707f; --accent: ${c.text}; --accent-dim: ${c.tint};
+    --good: #1a8f57; --good-dim: #e6f7ee;
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html { background: #eef2f7; }
+  body {
+    margin: 0 auto; padding: 24px; max-width: 920px; background: #eef2f7; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  tr { page-break-inside: avoid; }
+  #vb-report > div {
+    background: #fff; border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px 22px; margin-bottom: 16px !important; box-shadow: 0 1px 3px rgba(16, 24, 40, .05);
+  }
+  @page { margin: 12mm; }
+  @media print { html, body { background: #eef2f7; } body { padding: 0; } }
+  @media (max-width: 600px) { body { padding: 12px; } #vb-report > div { padding: 16px 14px; } }
+</style>
+</head>
+<body>
+  <div style="background:${c.band};border-radius:18px;padding:26px 26px 24px;margin-bottom:16px;color:#fff">
+    ${brandMark}
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:700;line-height:1.05;margin-top:18px;letter-spacing:.5px">${esc(athleteName)}</div>
+    <div style="font-size:14px;opacity:.85;margin-top:4px">Training Report${athleteGroup ? ` · ${esc(athleteGroup)}` : ""}</div>
+    <div style="display:inline-block;margin-top:14px;font-size:12px;font-weight:700;letter-spacing:.04em;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:5px 12px">${rangeText}</div>
+  </div>
+  <div id="vb-report">${clone.innerHTML}</div>
+  <div style="font-size:11px;color:#8a94a1;text-align:center;margin-top:8px">Generated ${esc(generated)}</div>
+</body>
+</html>`;
+    }
 
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(athleteName)} - Training Load Report</title>
+<title>${title}</title>
+${fonts}
 <style>
   :root {
     --ink: #ffffff; --panel: #f7f8fa; --panel2: #eef0f3; --line: #d8dde3;
@@ -408,8 +452,10 @@ export default function ReportModal({
   // literal inline styles (which DO carry over via innerHTML) built
   // from CSS custom properties that wouldn't resolve in a blank
   // window without redefining them here.
-  const handlePrint = () => {
-    const doc = buildReportDocument();
+  const [printMenuOpen, setPrintMenuOpen] = useState(false);
+  const handlePrint = (style: ReportStyle) => {
+    setPrintMenuOpen(false);
+    const doc = buildReportDocument(style);
     if (!doc) return;
     const printWindow = window.open("", "_blank", "width=900,height=1200");
     if (!printWindow) return;
@@ -448,17 +494,32 @@ export default function ReportModal({
               </div>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button style={styles.ghostBtn} onClick={handlePrint}>
-              🖨 Print
-            </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div style={{ position: "relative" }}>
+              <button style={styles.ghostBtn} onClick={() => setPrintMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={printMenuOpen}>
+                🖨 Print / PDF ▾
+              </button>
+              {printMenuOpen && (
+                <div style={styles.printMenu} role="menu">
+                  <button style={styles.printMenuItem} role="menuitem" onClick={() => handlePrint("white")}>
+                    <b>White</b>
+                    <span style={styles.printMenuHint}>Print-friendly, saves ink</span>
+                  </button>
+                  <button style={styles.printMenuItem} role="menuitem" onClick={() => handlePrint("colour")}>
+                    <b>Colour</b>
+                    <span style={styles.printMenuHint}>Branded - best for PDFs to send</span>
+                  </button>
+                  <div style={styles.printMenuFoot}>To save a PDF, choose &ldquo;Save as PDF&rdquo; in the print window.</div>
+                </div>
+              )}
+            </div>
             {athleteId && (
               <button style={styles.ghostBtn} onClick={() => setEmailOpen(true)}>
                 ✉️ Email report
               </button>
             )}
             <button style={styles.primaryBtnSmall} onClick={handleCopy}>
-              📋 Copy text
+              📋 Copy
             </button>
             <button style={styles.closeBtn} onClick={onClose}>
               ✕
@@ -1570,6 +1631,10 @@ export default function ReportModal({
 const SECTION_GAP = 40;
 
 const styles: Record<string, React.CSSProperties> = {
+  printMenu: { position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 6, width: 250, boxShadow: "0 12px 32px rgba(0,0,0,.35)" },
+  printMenuItem: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, width: "100%", background: "transparent", border: "none", color: "var(--text)", borderRadius: 8, padding: "9px 10px", fontSize: 13, textAlign: "left", cursor: "pointer" },
+  printMenuHint: { fontSize: 11, color: "var(--mute)", fontWeight: 400 },
+  printMenuFoot: { fontSize: 11, color: "var(--mute)", padding: "6px 10px 4px", borderTop: "1px solid var(--line)", marginTop: 4 },
   visualHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4, paddingRight: 28 },
   visualSub: { fontSize: 12, color: "var(--mute)", marginBottom: 12 },
   detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: "1px solid var(--line)", paddingTop: 18 },
@@ -1638,6 +1703,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "7px 12px",
     fontSize: 12,
     cursor: "pointer",
+    whiteSpace: "nowrap",
   },
   primaryBtnSmall: {
     background: "var(--accent)",
@@ -1648,6 +1714,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 700,
     cursor: "pointer",
+    whiteSpace: "nowrap",
   },
   closeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer" },
   emptyNote: { color: "var(--mute)", fontSize: 14, padding: "20px 0" },
