@@ -1,5 +1,6 @@
 "use client";
 
+import { ReactionBadge } from "@/components/MessageReactions";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import VideoModal from "@/components/VideoModal";
@@ -241,7 +242,8 @@ export default function AthleteSessionView({
   };
 
   const handleAthleteNotesChange = (athlete_notes: string) => {
-    setSession((prev) => (prev ? { ...prev, athlete_notes } : prev));
+    // Editing the comment clears the coach's 👍/👎 (server does the same, 0120).
+    setSession((prev) => (prev ? { ...prev, athlete_notes, athlete_notes_reaction: null, athlete_notes_reaction_by: null } : prev));
   };
 
   // Fires once, when the athlete leaves the notes field, rather than on
@@ -982,6 +984,12 @@ export default function AthleteSessionView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
+      {session.athlete_notes_reaction && (session.athlete_notes ?? "").trim() && (
+        <div style={styles.noteReaction}>
+          <ReactionBadge reaction={session.athlete_notes_reaction} by={session.athlete_notes_reaction_by} />
+          <span>{session.athlete_notes_reaction_by || "Your coach"} reacted to your note</span>
+        </div>
+      )}
 
       <button style={styles.summaryBtn} onClick={() => setSummaryOpen(true)}>
         📊 Session summary
@@ -1067,6 +1075,7 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
     flexShrink: 0,
   },
+  noteReaction: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--mute)", margin: "-4px 0 12px" },
   summaryBtn: {
     width: "100%",
     marginTop: 16,

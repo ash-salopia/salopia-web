@@ -442,6 +442,8 @@ export interface Session {
   warmup_video_url: string | null; // 0105 — optional video link on the Warm-up block
   cooldown_video_url: string | null; // 0105 — optional video link on the Cool-down block
   athlete_notes: string | null; // 0033 — athlete's own note on the session, separate from the coach's session_notes
+  athlete_notes_reaction?: "up" | "down" | null; // 0120 — coach's 👍/👎 on athlete_notes
+  athlete_notes_reaction_by?: string | null;       // 0120 — name of the coach who reacted
   athlete_notes_acknowledged: boolean; // 0036 — coach has dismissed this note off the dashboard
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation
   rpe: number | null;              // 0031 — post-session RPE (1-10) logged by athlete

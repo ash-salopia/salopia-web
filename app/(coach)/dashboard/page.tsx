@@ -10,6 +10,7 @@ import {
   getWeekCompletionData,
   listUnacknowledgedSessionNotes,
   acknowledgeSessionNote,
+  reactToSessionNote,
   type SessionNoteAlert,
 } from "@/lib/data/sessions";
 import { programmeStatus, addDaysISO, type ProgrammeStatus } from "@/lib/date-utils";
@@ -346,6 +347,22 @@ export default function DashboardPage() {
     }
   };
 
+  // 👍/👎 on a session comment (0120) - answers the athlete and clears it.
+  const handleReactNote = async (sessionId: string, reaction: MessageReaction | null) => {
+    if (!reaction) return;
+    setDismissingId(sessionId);
+    const prev = sessionNotes;
+    setSessionNotes((cur) => cur.filter((n) => n.sessionId !== sessionId)); // optimistic
+    try {
+      await reactToSessionNote(sessionId, reaction, coachName || "Coach");
+    } catch {
+      setSessionNotes(prev);
+      setError("Could not save reaction - the reaction column may be missing (migration 0120)");
+    } finally {
+      setDismissingId(null);
+    }
+  };
+
   const handleDismissNote = async (sessionId: string) => {
     setDismissingId(sessionId);
     const prev = sessionNotes;
@@ -398,6 +415,13 @@ export default function DashboardPage() {
                       </div>
                       <div style={st.noteText}>{n.note}</div>
                     </button>
+                    <span style={{ alignSelf: "center", flexShrink: 0 }}>
+                      <ReactionButtons
+                        current={null}
+                        onReact={(r) => handleReactNote(n.sessionId, r)}
+                        disabled={dismissingId === n.sessionId}
+                      />
+                    </span>
                     <button
                       style={st.noteMsgBtn}
                       onClick={() => setDmModal({

@@ -1,5 +1,5 @@
 "use client";
-import { reorderSessionsOnDay, copySessionToDates } from "@/lib/data/sessions";
+import { reorderSessionsOnDay, copySessionToDates, reactToSessionNote, acknowledgeSessionNote } from "@/lib/data/sessions";
 import dynamic from "next/dynamic";
 
 import { useEffect, useState, useMemo } from "react";
@@ -265,6 +265,9 @@ export default function AthleteDetailPage() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
+  // Set when the thread is opened from a session comment's 💬 button:
+  // pre-fills the reply, and sending it marks that comment as read.
+  const [messageDraft, setMessageDraft] = useState<{ text: string; sessionId: string } | null>(null);
   const [coachId, setCoachId] = useState("");
   const [coachName, setCoachName] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -951,7 +954,23 @@ export default function AthleteDetailPage() {
             loadMonitoringEnabled={loadMonitoringEnabled}
             rtpStatus={(athlete as any).rtp_status ?? null}
             rtpSince={(athlete as any).rtp_since ?? null}
-            onOpenMessages={() => setMessageOpen(true)}
+            onOpenMessages={() => { setMessageDraft(null); setMessageOpen(true); }}
+            onMessageAboutNote={(sess) => {
+              setMessageDraft({ text: `Re: your note on "${sess.name}" (${sess.date}) — `, sessionId: sess.id });
+              setMessageOpen(true);
+            }}
+            onReactToNote={async (sess, reaction) => {
+              const before = sessions;
+              setSessions((prev) => prev.map((x) => (x.id === sess.id
+                ? { ...x, athlete_notes_reaction: reaction, athlete_notes_reaction_by: reaction ? coachName : null, ...(reaction ? { athlete_notes_acknowledged: true } : {}) }
+                : x)));
+              try {
+                await reactToSessionNote(sess.id, reaction, coachName || "Coach");
+              } catch {
+                setSessions(before);
+                setError("Could not save reaction - the reaction column may be missing (migration 0120)");
+              }
+            }}
             onOpenSession={(sid) => router.push(`/athletes/${athleteId}/sessions/${sid}`)}
           />
         ) : calView === "week" || calView === "day" ? (
@@ -1505,12 +1524,22 @@ export default function AthleteDetailPage() {
       )}
 
       {messageOpen && athlete && (
-        <div style={styles.overlay} onClick={() => setMessageOpen(false)}>
+        <div style={styles.overlay} onClick={() => { setMessageOpen(false); setMessageDraft(null); }}>
           <div style={{ ...styles.modal, maxWidth: 480, padding: 0, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ ...styles.modalTitle, padding: "16px 16px 0" }}>Message {athlete.name}</div>
             <div style={{ padding: 16 }}>
               {coachId ? (
-                <DirectMessageThread athleteId={athleteId} athleteName={athlete.name} coachId={coachId} coachName={coachName} />
+                <DirectMessageThread
+                  athleteId={athleteId}
+                  athleteName={athlete.name}
+                  coachId={coachId}
+                  coachName={coachName}
+                  initialText={messageDraft?.text}
+                  onSent={() => {
+                    // Replied about a session comment - that counts as read.
+                    if (messageDraft) acknowledgeSessionNote(messageDraft.sessionId).catch(() => {});
+                  }}
+                />
               ) : (
                 <p style={styles.modalNote}>Loading…</p>
               )}

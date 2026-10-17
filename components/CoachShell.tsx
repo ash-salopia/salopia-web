@@ -12,6 +12,7 @@ import { useIsMobile } from "@/lib/use-is-mobile";
 import SupportAgentChat from "@/components/SupportAgentChat";
 
 const NAV_ITEMS = [
+  { href: "/dashboard",   label: "Dashboard",   icon: "📋" },
   { href: "/athletes",    label: "Athletes",    icon: "👤" },
   { href: "/live",        label: "Live group",  icon: "⭐" },
   { href: "/community",   label: "Community",   icon: "💬" },
@@ -22,7 +23,6 @@ const NAV_ITEMS = [
   { href: "/programmes",  label: "Programmes",  icon: "📆" },
   { href: "/library",     label: "Library",     icon: "📚" },
   { href: "/reporting",   label: "Reporting",   icon: "📊" },
-  { href: "/dashboard",   label: "Dashboard",   icon: "📋" },
   { href: "/settings",    label: "Settings",    icon: "⚙️" },
   { href: "/forum",       label: "Coach Forum", icon: "🗣️" },
   { href: "/help",        label: "Help & FAQ",  icon: "❓" },
