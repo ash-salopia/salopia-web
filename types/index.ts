@@ -54,6 +54,8 @@ export interface Athlete {
   pb_enabled: boolean; // 0073 — per-athlete override of the org-level Personal Bests toggle (lib/data/settings.ts); org setting still wins if it's off. Distinct from hide_pbs_from_feed (0047), which only hides an already-tracked PB from the community feed — this instead turns detection/tracking off entirely.
   pb_hidden: string[]; // 0092 — lower-cased exercise names a coach has hidden from the PB list (covers PBs re-derived from logged sessions, which deleting a personal_bests row can't touch)
   challenges_enabled: boolean; // 0074 — per-athlete override of the org-level Challenges toggle (lib/data/settings.ts); org setting still wins if it's off
+  direct_messages_enabled?: boolean; // 0121 — per-athlete coach-messages switch; account and group switches can still turn it off
+  group_chat_enabled?: boolean; // 0121 — per-athlete group-chat switch
   squad_comparison_enabled: boolean; // 0075 — per-athlete override of the org-level "Compare to squad" report toggle (lib/data/settings.ts); org setting still wins if it's off
   rtp_status: RtpStatus; // 0088 — availability / return-to-play status; 'available' is the default for everyone
   rtp_note: string | null; // 0088 — coach/physio-only context for the current status (e.g. "L hamstring strain grade 2, running progression")

@@ -36,6 +36,12 @@ export async function POST(req: NextRequest) {
   const { data: athlete } = await supabase.from("athletes").select("id, share_token").eq("id", athleteId).maybeSingle();
   if (!athlete) return NextResponse.json({ error: "Athlete not found" }, { status: 404 });
 
+  // Messaging switched off for this athlete (0121): they can't see the
+  // thread, so don't push them about it. An rpc error (0121 not run yet)
+  // counts as on.
+  const { data: dmOn, error: dmErr } = await supabase.rpc("athlete_direct_messages_enabled", { p_athlete_id: athleteId });
+  if (!dmErr && dmOn === false) return NextResponse.json({ ok: true, skipped: "messaging off" });
+
   // A 👍/👎 on one of the athlete's messages (0117) rather than a new message.
   if (reaction === "up" || reaction === "down") {
     if (!messageId) return NextResponse.json({ error: "messageId required" }, { status: 400 });

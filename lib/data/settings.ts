@@ -178,6 +178,11 @@ export interface OrgSettings {
   // 0114 — permanent athlete delete is owner-only unless this is on.
   // Either way it needs the org's delete password (org_secrets).
   coaches_can_delete_athletes: boolean;
+  // 0121 — messaging switches. Account-wide; each also has a per-athlete
+  // switch (athletes.*) and a per-group one (groups.*). Off = hidden for
+  // athletes and no new messages either way (DB triggers enforce it).
+  direct_messages_enabled: boolean; // 1-to-1 coach <-> athlete messages
+  group_chat_enabled: boolean; // Community group chats
 }
 
 // One picked strength lift + whether it gets a relative (÷BW) board, an
@@ -267,6 +272,8 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   leaderboards_enabled: false,
   leaderboards: DEFAULT_LEADERBOARDS,
   coaches_can_delete_athletes: false,
+  direct_messages_enabled: true,
+  group_chat_enabled: true,
 };
 
 // Merge stored org settings over the defaults. A plain spread replaces nested

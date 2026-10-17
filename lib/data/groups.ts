@@ -8,6 +8,8 @@ export interface Group {
   colour: string;
   created_at: string;
   member_count?: number;
+  chat_enabled?: boolean; // 0121 — this group's chat on/off
+  direct_messages_enabled?: boolean; // 0121 — off = no coach messages for any member
 }
 
 export interface GroupMember {
@@ -65,7 +67,7 @@ export async function createGroup(
 
 export async function updateGroup(
   id: string,
-  updates: Partial<Pick<Group, "name" | "description" | "colour">>
+  updates: Partial<Pick<Group, "name" | "description" | "colour" | "chat_enabled" | "direct_messages_enabled">>
 ): Promise<Group> {
   const supabase = createClient();
   const { data, error } = await supabase

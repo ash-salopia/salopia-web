@@ -59,6 +59,7 @@ export default function CommunityPage() {
   const [coachName, setCoachName] = useState("");
   const [pbEnabled, setPbEnabled] = useState(true);
   const [leaderboardsEnabled, setLeaderboardsEnabled] = useState(false);
+  const [groupChatEnabled, setGroupChatEnabled] = useState(true); // 0121 account switch
   const [leaderboards, setLeaderboards] = useState<LeaderboardsData | null>(null);
   const [orgAthletes, setOrgAthletes] = useState<{ id: string; name: string }[]>([]);
   const [branding, setBranding] = useState<ResolvedBranding>(DEFAULT_BRANDING);
@@ -80,6 +81,7 @@ export default function CommunityPage() {
     getOrgSettings().then((s) => {
       setPbEnabled(s.pb_enabled !== false);
       if (s.pb_enabled === false) setTab((t) => (t === "feed" ? "groups" : t));
+      setGroupChatEnabled(s.group_chat_enabled !== false);
       setLeaderboardsEnabled(s.leaderboards_enabled === true);
       if (s.leaderboards_enabled !== true) setTab((t) => (t === "leaderboards" ? "groups" : t));
       else getLeaderboards().then(setLeaderboards).catch(() => {});
@@ -166,7 +168,13 @@ export default function CommunityPage() {
             />
           )}
           {tab === "chat" && (
-            <ChatTab groups={groups} coachId={coachId} coachName={coachName} />
+            groupChatEnabled ? (
+              <ChatTab groups={groups} coachId={coachId} coachName={coachName} />
+            ) : (
+              <div style={s.tabContent}>
+                <div style={s.empty}>Group chat is turned off for your account. Past messages are kept - turn it back on in Settings → Messaging.</div>
+              </div>
+            )
           )}
           {tab === "comps" && (
             <CoachCompsTab
@@ -250,6 +258,18 @@ function GroupsTab({ groups, onGroupsChange }: {
       setError(e instanceof Error ? e.message : "Could not save changes");
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  // 0121 — per-group messaging switches, saved straight away.
+  const toggleGroupFlag = async (group: Group, key: "chat_enabled" | "direct_messages_enabled") => {
+    const next = group[key] === false;
+    onGroupsChange(groups.map((g) => (g.id === group.id ? { ...g, [key]: next } : g)));
+    try {
+      await updateGroup(group.id, { [key]: next });
+    } catch (e) {
+      onGroupsChange(groups.map((g) => (g.id === group.id ? { ...g, [key]: !next } : g)));
+      setError(e instanceof Error ? e.message : "Could not save change");
     }
   };
 
@@ -405,6 +425,8 @@ function GroupsTab({ groups, onGroupsChange }: {
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {group.chat_enabled === false && <span style={s.offBadge}>Chat off</span>}
+              {group.direct_messages_enabled === false && <span style={s.offBadge}>Coach msgs off</span>}
               <span style={s.memberCount}>{group.member_count ?? 0} members</span>
               <button style={s.ghostBtn} onClick={() => startEdit(group)}>Edit</button>
               <button style={s.ghostBtn} onClick={() => handleExpand(group.id)}>
@@ -421,6 +443,28 @@ function GroupsTab({ groups, onGroupsChange }: {
                 <div style={s.loadingMsg}>Loading members…</div>
               ) : (
                 <>
+                  <div style={s.memberSection}>
+                    <div style={s.fieldLabel}>Messaging</div>
+                    {([
+                      ["chat_enabled", "Group chat", "Members can see and post in this group's chat."],
+                      ["direct_messages_enabled", "Coach messages", "Members can message their coaches 1-to-1. Off hides it for everyone in this group, even if it's on for them elsewhere."],
+                    ] as const).map(([key, label, desc]) => (
+                      <div key={key} style={s.switchRow}>
+                        <div style={{ flex: 1 }}>
+                          <div style={s.memberName}>{label}</div>
+                          <div style={s.switchDesc}>{desc}</div>
+                        </div>
+                        <button
+                          aria-label={label}
+                          style={{ ...s.switchBtn, background: group[key] !== false ? "var(--accent)" : "var(--panel2)" }}
+                          onClick={() => toggleGroupFlag(group, key)}
+                        >
+                          <span style={{ ...s.switchThumb, transform: group[key] !== false ? "translateX(20px)" : "translateX(0)" }} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
                   <div style={s.memberSection}>
                     <div style={s.fieldLabel}>Current members</div>
                     {members.length === 0 && (
@@ -1078,7 +1122,12 @@ function ChatTab({ groups, coachId, coachName }: {
           </button>
         ))}
       </div>
-      {selectedGroup && coachId && (
+      {selectedGroup?.chat_enabled === false && (
+        <div style={s.empty}>
+          Chat is turned off for {selectedGroup.name}. Past messages are kept - turn it back on in Groups → Manage.
+        </div>
+      )}
+      {selectedGroup && selectedGroup.chat_enabled !== false && coachId && (
         <GroupChat
           groupId={selectedGroup.id}
           groupName={selectedGroup.name}
@@ -1094,6 +1143,11 @@ function ChatTab({ groups, coachId, coachName }: {
 
 const s: Record<string, React.CSSProperties> = {
   page: { maxWidth: 720, margin: "0 auto" },
+  offBadge: { fontSize: 11, fontWeight: 600, color: "var(--mute)", border: "1px solid var(--line)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" as const },
+  switchRow: { display: "flex", alignItems: "center", gap: 12, padding: "8px 0" },
+  switchDesc: { fontSize: 12, color: "var(--mute)", marginTop: 2 },
+  switchBtn: { width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative" as const, flexShrink: 0, transition: "background 0.2s" },
+  switchThumb: { position: "absolute" as const, top: 3, left: 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "transform 0.2s" },
   headRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
   heading: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--text)", margin: 0 },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },

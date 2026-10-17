@@ -57,8 +57,19 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  // Coach messages switched off for this athlete (0121) - account,
+  // athlete or one of their groups. The thread stays readable; sending
+  // is hidden (and blocked by the database anyway).
+  const [off, setOff] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    supabase
+      .rpc("athlete_direct_messages_enabled", { p_athlete_id: athleteId })
+      .then(({ data, error: err }) => { if (!err) setOff(data === false); }); // error = 0121 not run yet → treat as on
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteId]);
 
   useEffect(() => {
     let mounted = true;
@@ -298,7 +309,7 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
                     <span style={s.time}>
                       {formatTime(msg.created_at)}{msg.edited_at ? " · edited" : ""}
                     </span>
-                    {msg.sender_type === "athlete" && !msg.id.startsWith("optimistic") && (
+                    {msg.sender_type === "athlete" && !off && !msg.id.startsWith("optimistic") && (
                       <ReactionButtons current={msg.reaction} onReact={(r) => react(msg, r)} />
                     )}
                     {msg.sender_type === "coach" && msg.reaction && (
@@ -321,6 +332,12 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
         <div ref={bottomRef} />
       </div>
 
+      {off ? (
+        <div style={s.offNote}>
+          Messaging is turned off for {athleteName}, so they can&apos;t see this thread. Past messages are kept. Turn it
+          back on from their profile, their group (Community → Groups), or Settings → Messaging.
+        </div>
+      ) : (
       <div style={s.inputRow}>
         <input
           value={input}
@@ -339,6 +356,7 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
           ↑
         </button>
       </div>
+      )}
     </div>
   );
 }
@@ -366,6 +384,7 @@ const s: Record<string, React.CSSProperties> = {
   editActions: { display: "flex", gap: 6, justifyContent: "flex-end" },
   editCancel: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
   editSave: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  offNote: { fontSize: 12, color: "var(--mute)", padding: "10px 14px", borderTop: "1px solid var(--line)", background: "var(--ink)", lineHeight: 1.45 },
   inputRow: { display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid var(--line)", background: "var(--ink)" },
   input: { flex: 1, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 10, padding: "10px 12px", fontSize: 14 },
   sendBtn: { width: 40, height: 40, background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, fontSize: 18, fontWeight: 700, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },

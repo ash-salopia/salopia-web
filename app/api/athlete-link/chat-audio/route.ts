@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getMessagingAccess } from "@/lib/messaging-access";
 
 // Athlete-side voice-note upload for chat (group or direct) - mirrors
 // app/api/chat-audio/route.ts but resolves identity from share_token
@@ -22,6 +23,12 @@ export async function POST(req: NextRequest) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+
+  // No upload when the athlete has nowhere to send it (0121).
+  const access = await getMessagingAccess(athlete as any);
+  if (!access.directMessages && access.chatGroupIds.size === 0) {
+    return NextResponse.json({ error: "Messaging is turned off" }, { status: 403 });
+  }
 
   const ext = (file.type.split("/")[1] || "webm").split(";")[0];
   const storagePath = `${(athlete as any).organisation_id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
