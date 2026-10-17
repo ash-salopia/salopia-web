@@ -30,6 +30,7 @@ import {
   ReadinessPanel,
   AdherenceList,
   BenchmarkTables,
+  HrZoneChart,
   type Verdict,
 } from "@/components/reports/ReportVisuals";
 import { HeadlineCards, PBWall, ProgressBars, SmallMultiples, ConsistencyCalendar, WeeklySessionsChart, type ProgressRow, type TrendSeries } from "@/components/reports/ReportVisuals";
@@ -579,6 +580,15 @@ export default function ReportModal({
               <div style={styles.sectionTitle}>Benchmark Workouts</div>
               <div style={styles.visualSub}>The same workout done more than once - first attempt against the latest</div>
               <BenchmarkTables groups={visual.benchmarks} />
+            </div>
+          )}
+
+          {visual && options.hrZones !== false && visual.hrZones && !dismissed.has("hr-zones") && (
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
+              <DismissBtn onClick={() => dismiss("hr-zones")} />
+              <div style={styles.sectionTitle}>Heart-Rate Zones</div>
+              <div style={styles.visualSub}>Cardio and hybrid sessions combined</div>
+              <HrZoneChart split={visual.hrZones} />
             </div>
           )}
 

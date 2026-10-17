@@ -22,6 +22,7 @@ import {
 } from "@/lib/report-visuals";
 import { daySpan } from "@/lib/report-visuals";
 import { latestTestValues, listTestMetrics } from "@/lib/data/testing";
+import { computeZones, estimateMaxHr, DEFAULT_ZONE_MODEL, type ZoneModel } from "@/lib/training-zones";
 import { todayISO } from "@/lib/date-utils";
 
 export type { ReportRow, ExerciseMap, ExerciseSummary, WeeklyPoint, WeeklyExerciseMap, NoteEntry, RPEEntry, RPEWeeklyPoint, PowerSpeedRow, PowerSpeedMap, PowerSpeedSummary } from "@/lib/report-calc";
@@ -122,7 +123,7 @@ export async function generateReport(
   );
 
   const visual = opts.visuals
-    ? await buildVisualSummary(athleteId, allSessions, rangeStart, rangeEnd, settings.pb_enabled !== false).catch((e) => {
+    ? await buildVisualSummary(athleteId, allSessions, rangeStart, rangeEnd, settings.pb_enabled !== false, settings.zone_model).catch((e) => {
         console.error("[generateReport] visual summary failed", e);
         return undefined; // the rest of the report still renders
       })
@@ -191,7 +192,8 @@ async function buildVisualSummary(
   sessions: Session[],
   rangeStart: string | null,
   rangeEnd: string | null,
-  orgPbEnabled: boolean
+  orgPbEnabled: boolean,
+  zoneModel?: ZoneModel
 ): Promise<VisualSummary> {
   const supabase = createClient();
   // pb_enabled / pb_hidden are read separately (select *) so a missing
@@ -268,7 +270,24 @@ async function buildVisualSummary(
     goals,
     competitions,
     checkins,
+    hrZones: hrZonesFor(ath as AerobicSource | null, zoneModel),
   });
+}
+
+interface AerobicSource {
+  max_hr?: number | null;
+  resting_hr?: number | null;
+  date_of_birth?: string | null;
+}
+
+// The athlete's HR zones: their set max HR, else the age estimate.
+function hrZonesFor(ath: AerobicSource | null, zoneModel?: ZoneModel) {
+  if (!ath) return null;
+  const set = ath.max_hr && ath.max_hr > 0 ? ath.max_hr : null;
+  const maxHr = set ?? estimateMaxHr(ath.date_of_birth ?? null);
+  if (!maxHr) return null;
+  const zones = computeZones({ max_hr: maxHr, resting_hr: ath.resting_hr ?? null, mas_kmh: null }, zoneModel ?? DEFAULT_ZONE_MODEL);
+  return { zones, maxHrSource: (set ? "set" : "estimated") as "set" | "estimated" };
 }
 
 // Goal progress (athlete_goals): current best lifts come from the PB

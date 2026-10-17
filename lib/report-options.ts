@@ -21,6 +21,7 @@ export interface ReportOptions {
   readiness: boolean; // check-in sleep/energy/soreness vs sessions trained
   adherence: boolean; // exercises skipped or swapped
   benchmarks: boolean; // repeated cardio/hybrid workouts compared attempt by attempt
+  hrZones: boolean; // % of logged cardio/hybrid time in each HR zone
   ttl: boolean; // Total Training Load (tonnage)
   e1rm: boolean; // Estimated 1RM (strength)
   // Per-metric display components - apply to whichever metric(s) above are ticked.
@@ -86,6 +87,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   readiness: true,
   adherence: true,
   benchmarks: true,
+  hrZones: true,
   ttl: true,
   e1rm: false,
   loadProgression: true,
@@ -144,6 +146,7 @@ export const FIELD_SESSION_TYPES: Partial<Record<keyof ReportOptions, ReportSess
   smallMultiples: ["strength"],
   adherence: ["strength", "power_speed"],
   benchmarks: ["cardio", "hyrox"],
+  hrZones: ["cardio", "hyrox"],
   ttl: ["strength"],
   e1rm: ["strength"],
   loadProgression: ["strength"],
@@ -179,6 +182,7 @@ export const VISUAL_FIELDS: { key: keyof ReportOptions; label: string; hint: str
   { key: "consistency", label: "Consistency calendar", hint: "Every day coloured done / partial / missed, plus sessions per week" },
   { key: "readiness", label: "Readiness vs training", hint: "Check-in sleep, energy and soreness against sessions trained" },
   { key: "adherence", label: "Skipped & swapped exercises", hint: "Which programmed exercises get skipped or swapped most" },
+  { key: "hrZones", label: "Heart-rate zone split", hint: "% of cardio and hybrid time spent in each HR zone (needs avg HR logged, and a max HR or date of birth)" },
   { key: "benchmarks", label: "Benchmark workout repeats", hint: "Same cardio/hybrid workout done more than once, compared attempt by attempt" },
 ];
 
@@ -211,7 +215,7 @@ export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: stri
 // bodyweightRelative is deliberately excluded - it's a display modifier
 // for e1RM, not content on its own.
 const CONTENT_FIELD_KEYS: (keyof ReportOptions)[] = [
-  "headlineCards", "pbWall", "consistency", "coachVerdict", "goalProgress", "readiness", "benchmarks",
+  "headlineCards", "pbWall", "consistency", "coachVerdict", "goalProgress", "readiness", "benchmarks", "hrZones",
   "ttl", "e1rm", "aiSummary", "athleteNotes", "sessionRpe",
   "powerSpeedTrend", "barSpeedTrend", "cardioMetricsTrend", "hyroxMetricsTrend",
   "cardioSessionsList", "hyroxSessionsList", "trainingLoadTrend", "sessionCompletion",

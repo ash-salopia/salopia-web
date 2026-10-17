@@ -5,7 +5,7 @@
 // the inputs and attaches the result as ReportData.visual.
 
 import type { Session } from "@/types";
-import { sessionHasCompletion, weekStartISO, findRepeatedSessionGroups, compareSessionGroup } from "@/lib/report-calc";
+import { sessionHasCompletion, weekStartISO, findRepeatedSessionGroups, compareSessionGroup, extractMetricEntries } from "@/lib/report-calc";
 import { METRIC_META, LOWER_IS_BETTER_METRICS, type MetricKey } from "@/lib/cardio-metrics";
 
 export type VisualSessionType = "strength" | "power_speed" | "cardio" | "hyrox" | "other";
@@ -53,6 +53,7 @@ export interface VisualSummary {
   readiness: ReadinessSummary | null;
   adherence: AdherenceRow[];
   benchmarks: BenchmarkGroup[];
+  hrZones: HrZoneSplit | null;
 }
 
 const CALENDAR_MAX_DAYS = 26 * 7;
@@ -143,6 +144,7 @@ export function computeVisualSummary(input: {
   goals?: GoalProgress[];
   competitions?: UpcomingCompetition[];
   checkins?: CheckInInput[];
+  hrZones?: { zones: { n: number; name: string; hr: { low: number; high: number } | null }[]; maxHrSource: "set" | "estimated" } | null;
 }): VisualSummary {
   const { sessions, pbs, today } = input;
   const real = countable(sessions);
@@ -199,6 +201,7 @@ export function computeVisualSummary(input: {
     readiness: computeReadiness((input.checkins ?? []).filter((c) => c.date >= start && c.date <= end), sessions, weekly),
     adherence: computeAdherence(sessions, today),
     benchmarks: computeBenchmarks(sessions),
+    hrZones: input.hrZones ? computeHrZoneSplit(sessions, input.hrZones.zones, input.hrZones.maxHrSource) : null,
   };
 }
 
@@ -539,4 +542,90 @@ export function computeBenchmarks(sessions: Session[], limit = 4): BenchmarkGrou
     if (out.length >= limit) break;
   }
   return out;
+}
+
+// ── Heart-rate zone split (Hybrid + Cardio combined) ─────────────────────────
+
+export interface HrZoneBand {
+  n: number;
+  name: string;
+  low: number; // bpm
+  high: number;
+  amount: number; // minutes, or efforts when basis = "efforts"
+  pct: number;
+}
+
+export interface HrZoneSplit {
+  zones: HrZoneBand[];
+  basis: "minutes" | "efforts"; // minutes when durations were logged alongside HR
+  total: number;
+  sessions: number;
+  maxHrSource: "set" | "estimated";
+  easyPct: number; // Z1-2
+  moderatePct: number; // Z3
+  hardPct: number; // Z4-5
+}
+
+// Each logged block (a run, an erg piece, a whole session) has one
+// average HR and usually a duration. Its minutes go to the zone its
+// average HR falls in - an approximation of true time-in-zone, which
+// would need second-by-second HR data. Blocks with HR but no duration
+// share the session's own length; if no durations are logged at all,
+// the split is by number of efforts instead.
+export function computeHrZoneSplit(
+  sessions: Session[],
+  zones: { n: number; name: string; hr: { low: number; high: number } | null }[],
+  maxHrSource: "set" | "estimated"
+): HrZoneSplit | null {
+  const bands = zones.filter((z) => z.hr) as { n: number; name: string; hr: { low: number; high: number } }[];
+  if (bands.length === 0) return null;
+  const zoneFor = (hr: number) => {
+    for (const z of bands) if (hr < z.hr.high) return z.n;
+    return bands[bands.length - 1].n;
+  };
+  const minutes: Record<number, number> = {};
+  const efforts: Record<number, number> = {};
+  let sessionsCounted = 0;
+  let anyMinutes = false;
+
+  for (const s of countable(sessions)) {
+    if ((s.type !== "hyrox" && s.type !== "cardio") || !isDone(s)) continue;
+    const blocks = extractMetricEntries(s)
+      .map((e) => ({ hr: parseFloat(String(e.values.avg_hr ?? "")), min: parseFloat(String(e.values.duration ?? "")) }))
+      .filter((b) => Number.isFinite(b.hr) && b.hr > 40 && b.hr < 230);
+    if (!blocks.length) continue;
+    sessionsCounted++;
+    const untimed = blocks.filter((b) => !(b.min > 0));
+    const share = s.duration_min && untimed.length ? s.duration_min / untimed.length : null;
+    for (const b of blocks) {
+      const z = zoneFor(b.hr);
+      efforts[z] = (efforts[z] ?? 0) + 1;
+      const m = b.min > 0 ? b.min : share;
+      if (m) {
+        minutes[z] = (minutes[z] ?? 0) + m;
+        anyMinutes = true;
+      }
+    }
+  }
+  if (!sessionsCounted) return null;
+
+  const basis = anyMinutes ? "minutes" : "efforts";
+  const src = basis === "minutes" ? minutes : efforts;
+  const total = Object.values(src).reduce((a, b) => a + b, 0);
+  if (!total) return null;
+  const out = bands.map((z) => {
+    const amount = Math.round((src[z.n] ?? 0) * 10) / 10;
+    return { n: z.n, name: z.name, low: z.hr.low, high: z.hr.high, amount, pct: Math.round(((src[z.n] ?? 0) / total) * 1000) / 10 };
+  });
+  const sum = (ns: number[]) => Math.round(out.filter((z) => ns.includes(z.n)).reduce((a, z) => a + z.pct, 0));
+  return {
+    zones: out,
+    basis,
+    total: Math.round(total),
+    sessions: sessionsCounted,
+    maxHrSource,
+    easyPct: sum([1, 2]),
+    moderatePct: sum([3]),
+    hardPct: sum([4, 5]),
+  };
 }

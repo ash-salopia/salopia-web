@@ -14,6 +14,7 @@ import type {
   CalendarDay,
   GoalProgress,
   Headline,
+  HrZoneSplit,
   ReadinessSummary,
   ReportPB,
   UpcomingCompetition,
@@ -835,6 +836,58 @@ export function BenchmarkTables({ groups }: { groups: BenchmarkGroup[] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Heart-rate zone split ────────────────────────────────────────────────────
+
+export const ZONE_COLOUR: Record<number, string> = { 1: "#94A3B8", 2: "#3B82F6", 3: "#10B981", 4: "#F59E0B", 5: "#E5484D" };
+
+export function HrZoneChart({ split }: { split: HrZoneSplit }) {
+  const unit = split.basis === "minutes" ? "min" : "efforts";
+  return (
+    <div>
+      <div style={{ display: "flex", height: 26, borderRadius: 7, overflow: "hidden", border: "1px solid var(--line)" }}>
+        {split.zones.filter((z) => z.pct > 0).map((z) => (
+          <div key={z.n} title={`Z${z.n} ${z.name}: ${z.pct}%`} style={{ width: `${z.pct}%`, background: ZONE_COLOUR[z.n], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff", minWidth: 0, overflow: "hidden" }}>
+            {z.pct >= 8 ? `Z${z.n}` : ""}
+          </div>
+        ))}
+      </div>
+      <div style={{ ...v.cardGrid, marginTop: 12 }}>
+        {([
+          ["Easy", "Z1–2", split.easyPct, ZONE_COLOUR[2]],
+          ["Moderate", "Z3", split.moderatePct, ZONE_COLOUR[3]],
+          ["Hard", "Z4–5", split.hardPct, ZONE_COLOUR[5]],
+        ] as const).map(([label, zones, pct, colour]) => (
+          <div key={label} style={{ ...v.card, borderTop: `2px solid ${colour}` }}>
+            <div style={v.cardLabel}>{label} <span style={{ fontWeight: 600 }}>· {zones}</span></div>
+            <div style={{ ...v.cardValue, fontSize: 28 }}>{pct}%</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+        {split.zones.map((z) => (
+          <div key={z.n} style={{ display: "grid", gridTemplateColumns: "minmax(130px, 34%) 1fr 92px", alignItems: "center", gap: 10, breakInside: "avoid" }}>
+            <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 2, background: ZONE_COLOUR[z.n], display: "inline-block", flexShrink: 0 }} />
+              Z{z.n} {z.name}
+              <span style={{ fontSize: 11, color: "var(--mute)", fontWeight: 500 }}>{z.low}–{z.high}</span>
+            </div>
+            <div style={v.goalTrack}>
+              <div style={{ ...v.goalFill, width: `${z.pct}%`, background: ZONE_COLOUR[z.n] }} />
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text)", textAlign: "right", whiteSpace: "nowrap" }}>
+              <b>{z.pct}%</b> <span style={{ color: "var(--mute)" }}>· {z.amount} {unit}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ ...v.more, marginTop: 10 }}>
+        From {split.sessions} cardio/hybrid session{split.sessions === 1 ? "" : "s"} with heart rate logged ({split.total} {unit}). Each block counts in the zone of
+        its average heart rate.{split.maxHrSource === "estimated" ? " Max HR estimated from age - set it on the athlete's profile for accurate zones." : ""}
+      </div>
     </div>
   );
 }

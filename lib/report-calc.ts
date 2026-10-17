@@ -279,7 +279,7 @@ const CARDIO_GROUP_LABEL: Record<string, string> = {
   cardioIntervals: "Intervals / VO2max", overUnder: "Over-Unders",
 };
 
-interface GroupedMetricEntry {
+export interface GroupedMetricEntry {
   group: string;
   values: MetricValues;
 }
@@ -297,7 +297,7 @@ function asMetricList(m: unknown): MetricValues[] {
   return m && typeof m === "object" ? [m as MetricValues] : [];
 }
 
-function extractMetricEntries(session: Session): GroupedMetricEntry[] {
+export function extractMetricEntries(session: Session): GroupedMetricEntry[] {
   const isHyrox = session.type === "hyrox";
   const subType = (isHyrox ? session.hyrox_type : (session as any).cardio_type) as string;
   const cfg: any = (isHyrox ? session.hyrox_config : (session as any).cardio_config) ?? {};
