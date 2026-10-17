@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { sendEmail, simpleEmailHtml, escapeHtml } from "@/lib/email";
 import { sendPushToCoaches } from "@/lib/push/send";
+import { runStoreSeatReminders } from "@/lib/store/server";
 
 // Once-a-day coach jobs, run from the existing morning cron (Vercel's
 // Hobby plan allows only two cron entries, both already used). Each job
@@ -71,6 +72,11 @@ export async function runDailyCoachJobs(origin: string): Promise<Record<string, 
     out.reportReminders = await runReportReminders(origin);
   } catch (e) {
     console.error("[daily-jobs] report reminders failed", e);
+  }
+  try {
+    out.storeSeatReminders = await runStoreSeatReminders(origin);
+  } catch (e) {
+    console.error("[daily-jobs] store seat reminders failed", e);
   }
   return out;
 }

@@ -63,7 +63,14 @@ export async function updateProgramme(
 export async function deleteProgramme(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("programmes").delete().eq("id", id);
-  if (error) throw error;
+  if (error) {
+    // 0124: store listings and athletes' programme libraries keep their
+    // programme (on delete restrict) so buyers never lose what they paid for.
+    if (error.code === "23503") {
+      throw new Error("This programme is listed in your Online Store or owned by athletes who bought it, so it can't be deleted. Hide or remove it from the store instead.");
+    }
+    throw error;
+  }
 }
 
 // Converts a Template Library entry into a new Programme — each
