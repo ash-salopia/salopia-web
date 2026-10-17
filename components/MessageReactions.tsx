@@ -52,7 +52,20 @@ export function ReactionBadge({ reaction, by }: { reaction: MessageReaction; by?
   );
 }
 
+/** Athlete app: "Ash reacted 👍 to your note", under the session's notes
+ *  box (0120). Every session layout shows it, not just strength. */
+export function NoteReactionLine({ reaction, by }: { reaction: MessageReaction | null | undefined; by?: string | null }) {
+  if (!reaction) return null;
+  return (
+    <div style={st.noteLine}>
+      <ReactionBadge reaction={reaction} by={by} />
+      <span>{by || "Your coach"} reacted to your note</span>
+    </div>
+  );
+}
+
 const st: Record<string, React.CSSProperties> = {
+  noteLine: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--mute)", margin: "-4px 0 12px" },
   wrap: { display: "inline-flex", gap: 4 },
   btn: {
     background: "var(--ink)",
