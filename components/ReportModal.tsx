@@ -417,7 +417,7 @@ export default function ReportModal({
           )}
 
           {visual && options.headlineCards !== false && !dismissed.has("headline") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("headline")} />
               <HeadlineCards
                 headline={visual.headline}
@@ -450,15 +450,15 @@ export default function ReportModal({
           )}
 
           {visual && options.pbWall !== false && visual.pbs.length > 0 && !dismissed.has("pb-wall") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("pb-wall")} />
-              <div style={styles.sectionTitle}>🏆 Personal Bests</div>
+              <div style={styles.sectionTitle}>Personal Bests</div>
               <PBWall pbs={visual.pbs} />
             </div>
           )}
 
           {showProgressBars && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("progress-bars")} />
               <div style={styles.visualHead}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Strength Progress</div>
@@ -472,7 +472,7 @@ export default function ReportModal({
           )}
 
           {options.smallMultiples !== false && trendSeries.length > 0 && !dismissed.has("small-multiples") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("small-multiples")} />
               <div style={styles.visualHead}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Exercise Trends</div>
@@ -486,7 +486,7 @@ export default function ReportModal({
           )}
 
           {visual && options.consistency !== false && visual.days.length > 0 && !dismissed.has("consistency") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("consistency")} />
               <div style={styles.sectionTitle}>Consistency</div>
               <ConsistencyCalendar days={visual.days} />
@@ -569,7 +569,7 @@ export default function ReportModal({
             )}
 
           {options.sessionCompletion && !dismissed.has("sessions-completion") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("sessions-completion")} />
               <div style={styles.sectionTitle}>Sessions Logged & Completion</div>
               <div style={styles.hyroxList}>
@@ -597,7 +597,7 @@ export default function ReportModal({
           )}
 
           {options.squadComparison && squadComparison && squadComparison.length > 0 && !dismissed.has("squad-comparison") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("squad-comparison")} />
               <div style={styles.sectionTitle}>Squad Comparison</div>
               <div style={styles.hyroxList}>
@@ -618,7 +618,7 @@ export default function ReportModal({
           )}
 
           {options.radar && !dismissed.has("radar") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("radar")} />
               <div style={styles.sectionTitle}>Radar Snapshot</div>
               {options.ttl && hasStrength && (
@@ -657,7 +657,7 @@ export default function ReportModal({
           )}
 
           {options.lineChart && !dismissed.has("line-chart") && (
-            <div style={{ marginBottom: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("line-chart")} />
               <div style={styles.sectionTitle}>Trend Over Time</div>
               {options.ttl && hasStrength && ttlLineSeries.length > 0 && (
@@ -676,9 +676,9 @@ export default function ReportModal({
           )}
 
           {options.hyroxSessionsList && hasHyrox && !dismissed.has("hyrox-sessions-list") && (
-            <div style={{ position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("hyrox-sessions-list")} />
-              <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Hybrid Sessions</div>
+              <div style={styles.sectionTitle}>Hybrid Sessions</div>
               <div style={styles.hyroxList}>
                 {hyroxSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -691,9 +691,9 @@ export default function ReportModal({
           )}
 
           {options.cardioSessionsList && hasCardio && !dismissed.has("cardio-sessions-list") && (
-            <div style={{ position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("cardio-sessions-list")} />
-              <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Cardio Sessions</div>
+              <div style={styles.sectionTitle}>Cardio Sessions</div>
               <div style={styles.hyroxList}>
                 {cardioSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -793,9 +793,9 @@ export default function ReportModal({
           })()}
 
           {options.powerSpeedTrend && hasPowerSpeed && !dismissed.has("powerspeed-sessions-list") && (
-            <div style={{ position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("powerspeed-sessions-list")} />
-              <div style={{ ...styles.sectionTitle, marginTop: 24 }}>Power / Speed Sessions</div>
+              <div style={styles.sectionTitle}>Power / Speed Sessions</div>
               <div style={styles.hyroxList}>
                 {powerSpeedSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -808,7 +808,7 @@ export default function ReportModal({
           )}
 
           {options.powerSpeedTrend && powerSpeedSummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("powerspeed-trends") && (
-            <div style={{ marginTop: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("powerspeed-trends")} />
               <div style={styles.sectionTitle}>Power / Speed Trends</div>
               {/* single-entry summaries have nothing to chart - MultiTrendLineChart returns null below 2 points, leaving a label with no chart under it */}
@@ -834,7 +834,7 @@ export default function ReportModal({
           )}
 
           {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("barspeed-trends") && (
-            <div style={{ marginTop: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("barspeed-trends")} />
               <div style={styles.sectionTitle}>Velocity Based Training</div>
               {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
@@ -886,7 +886,7 @@ export default function ReportModal({
           )}
 
           {options.sessionRpe && !dismissed.has("session-rpe") && (
-            <div style={{ marginTop: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("session-rpe")} />
               <div style={{ ...styles.sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span>Session RPE</span>
@@ -921,7 +921,7 @@ export default function ReportModal({
           )}
 
           {options.trainingLoadTrend && !dismissed.has("training-load") && (
-            <div style={{ marginTop: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("training-load")} />
               <div style={styles.sectionTitle}>Training Load (sRPE)</div>
               {!hasTrainingLoad ? (
@@ -952,7 +952,7 @@ export default function ReportModal({
           )}
 
           {options.loadMonitoring && loadMonitoring && loadMonitoringSettings && !dismissed.has("load-monitoring") && (
-            <div style={{ marginTop: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("load-monitoring")} />
               <div style={styles.sectionTitle}>Training Load &amp; Availability</div>
 
@@ -1027,7 +1027,7 @@ export default function ReportModal({
           )}
 
           {options.athleteNotes && !dismissed.has("athlete-notes") && (
-            <div style={{ marginTop: 24, position: "relative" }}>
+            <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("athlete-notes")} />
               <div style={styles.sectionTitle}>Athlete Notes</div>
               {notes.length === 0 ? (
@@ -1053,7 +1053,7 @@ export default function ReportModal({
           {((options.loadProgression && ((options.ttl && hasStrength) || (options.e1rm && hasE1rm))) ||
             (options.ttl && hasStrength) ||
             (options.e1rm && hasE1rm)) && (
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: SECTION_GAP }}>
               <div style={styles.detailHead}>
                 <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Full detail</div>
                 <button data-no-print="true" style={styles.detailToggle} onClick={() => setDetailOpen((o) => !o)}>
@@ -1430,6 +1430,9 @@ export default function ReportModal({
   );
 }
 
+// Space between report sections (screen and print).
+const SECTION_GAP = 40;
+
 const styles: Record<string, React.CSSProperties> = {
   visualHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4, paddingRight: 28 },
   visualSub: { fontSize: 12, color: "var(--mute)", marginBottom: 12 },
@@ -1517,7 +1520,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid var(--accent)",
     borderRadius: 12,
     padding: "14px 16px",
-    marginBottom: 24,
+    marginBottom: SECTION_GAP,
   },
   aiLabel: { fontSize: 12, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
   aiSubLabel: { fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 10, marginBottom: 4 },

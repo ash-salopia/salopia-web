@@ -78,7 +78,7 @@ export function HeadlineCards({ headline, previous, previousLabel }: { headline:
     {
       label: "PBs",
       value: `${h.pbCount}`,
-      sub: h.pbCount ? "🏆 personal bests" : "No PBs this period",
+      sub: h.pbCount ? `personal best${h.pbCount === 1 ? "" : "s"}` : "None this period",
       delta: <Delta now={h.pbCount} before={p?.pbCount ?? null} />,
     },
     {
@@ -133,6 +133,18 @@ function pbValue(pb: ReportPB): string {
   return pb.reps ? `${pb.weightKg}kg × ${pb.reps}` : `${pb.weightKg}kg`;
 }
 
+const GOLD = "#C9A227";
+
+function MedalIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="15" r="6" style={{ fill: "none", stroke: GOLD, strokeWidth: 2.2 }} />
+      <path d="M8 2l3 6M16 2l-3 6" style={{ stroke: GOLD, strokeWidth: 2.2, strokeLinecap: "round" }} />
+      <path d="M12 12.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z" style={{ fill: GOLD }} />
+    </svg>
+  );
+}
+
 export function PBWall({ pbs, max = 12 }: { pbs: ReportPB[]; max?: number }) {
   // One card per exercise (and PB kind): its newest PB - always the
   // best, since each new PB beat the last - with a count when the
@@ -154,13 +166,13 @@ export function PBWall({ pbs, max = 12 }: { pbs: ReportPB[]; max?: number }) {
       <div style={v.pbGrid}>
         {shown.map(({ pb, count }, i) => (
           <div key={`${pb.exercise}-${pb.kind}-${i}`} style={v.pbCard}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 22, lineHeight: 1 }}>🏆</span>
-              {count > 1 && <span style={v.pbCount}>{count} PBs</span>}
-            </div>
             <div style={v.pbExercise}>{pb.exercise}</div>
             <div style={v.pbValue}>{pbValue(pb)}</div>
-            <div style={v.pbDate}>{shortDate(pb.date)}</div>
+            <div style={v.pbMeta}>
+              <MedalIcon />
+              <span>{shortDate(pb.date)}</span>
+              {count > 1 && <span style={{ color: "var(--mute)" }}>· {count} PBs this period</span>}
+            </div>
           </div>
         ))}
       </div>
@@ -493,12 +505,11 @@ const v: Record<string, React.CSSProperties> = {
   meter: { height: 6, background: "var(--line)", borderRadius: 3, overflow: "hidden", marginTop: 6 },
   meterFill: { height: "100%", borderRadius: 3 },
   delta: { fontSize: 11, color: "var(--mute)", marginTop: 8, fontWeight: 600 },
-  pbGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 },
-  pbCard: { background: "linear-gradient(160deg, rgba(245,158,11,0.16), rgba(245,158,11,0.03))", border: "1px solid rgba(245,158,11,0.45)", borderRadius: 12, padding: "12px 14px", breakInside: "avoid" },
-  pbExercise: { fontSize: 13, fontWeight: 700, color: "var(--text)", marginTop: 8 },
-  pbValue: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: WARN, lineHeight: 1.15, marginTop: 2 },
-  pbCount: { fontSize: 10, fontWeight: 800, color: WARN, border: `1px solid ${WARN}`, borderRadius: 999, padding: "1px 7px" },
-  pbDate: { fontSize: 11, color: "var(--mute)", marginTop: 2 },
+  pbGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 },
+  pbCard: { background: "var(--panel)", border: "1px solid var(--line)", borderTop: `2px solid ${GOLD}`, borderRadius: 12, padding: "12px 14px", breakInside: "avoid", minWidth: 0 },
+  pbExercise: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.05em", lineHeight: 1.35 },
+  pbValue: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--text)", lineHeight: 1.1, marginTop: 6 },
+  pbMeta: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: GOLD, marginTop: 6, flexWrap: "wrap" },
   more: { fontSize: 12, color: "var(--mute)", marginTop: 8 },
   barRow: { display: "flex", flexDirection: "column", gap: 4, breakInside: "avoid" },
   barTop: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 },
