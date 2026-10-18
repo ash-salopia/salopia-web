@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Icon from "@/components/ui/Icon";
 import { formatPBValue, pbTypeLabel, type PBType } from "@/lib/data/personal-bests";
 
 export interface CelebratedPB {
@@ -37,7 +38,7 @@ export default function PBCelebrationModal({ exerciseName, pbs, onClose }: Props
   return (
     <div style={s.overlay} onClick={onClose}>
       <div style={s.card} onClick={(e) => e.stopPropagation()}>
-        <div style={s.emoji}>🏆</div>
+        <div style={s.emoji}><Icon name="trophy" size={46} strokeWidth={1.6} style={{ color: "#C9A227" }} /></div>
         <div style={s.title}>{pbs.length > 1 ? "New PBs!" : "New PB!"}</div>
         <div style={s.exercise}>{exerciseName}</div>
         {pbs.map((pb, i) => {
@@ -58,7 +59,7 @@ export default function PBCelebrationModal({ exerciseName, pbs, onClose }: Props
             </div>
           );
         })}
-        <div style={s.sub}>Well done - nice work! 💪</div>
+        <div style={s.sub}>Well done - nice work!</div>
         <button style={s.closeBtn} onClick={onClose}>Nice!</button>
       </div>
     </div>

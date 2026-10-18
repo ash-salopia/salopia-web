@@ -46,7 +46,7 @@ export default function SessionRPEBlock({ value, onSave }: Props) {
   return (
     <div style={s.wrap}>
       <div style={s.headerRow}>
-        <span style={s.icon}>🔥</span>
+        
         <span style={s.label}>Session RPE</span>
         {localValue != null && (
           <span style={s.badge}>{localValue}/10 · {RPE_LABELS[localValue]}</span>

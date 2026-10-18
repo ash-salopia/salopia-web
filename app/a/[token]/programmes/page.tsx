@@ -114,7 +114,7 @@ export default function AthleteProgrammesPage() {
         <div style={s.brand}>VIS BUILD</div>
         <div style={{ width: 60 }} />
       </div>
-      <AthletePageHeading emoji="🏋️" title="My Programmes" />
+      <AthletePageHeading title="My Programmes" />
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}
@@ -124,7 +124,7 @@ export default function AthleteProgrammesPage() {
           <div style={s.muted}>Loading…</div>
         ) : library.length === 0 ? (
           <div style={s.empty}>
-            <div style={{ fontSize: 36 }}>🏋️</div>
+            
             <div style={{ fontWeight: 700 }}>No programmes yet</div>
             <div style={s.muted}>Programmes you buy will appear here, ready to start whenever you are.</div>
           </div>

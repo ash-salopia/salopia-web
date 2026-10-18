@@ -53,7 +53,7 @@ export default function RecoveryBlockAthleteCard({
               block.rest ? `rest ${block.rest}` : "",
             ].filter(Boolean).join(" · ")}
           </div>
-          {block.equipment && <div style={s.equipment}>🎒 {block.equipment}</div>}
+          {block.equipment && <div style={s.equipment}>Equipment: {block.equipment}</div>}
           {block.notes && <div style={s.text}>{block.notes}</div>}
         </>
       );

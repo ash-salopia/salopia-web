@@ -104,7 +104,7 @@ function GoalCard({
           {goal.notes && <div style={s.cardNotes}>{goal.notes}</div>}
         </div>
         <button style={s.starBtn} onClick={handleStar} disabled={starring}>
-          {goal.starred ? "⭐" : "☆"}
+          {goal.starred ? "★" : "☆"}
         </button>
       </div>
 
@@ -209,7 +209,7 @@ function GoalCard({
 
       {goal.target_date && (
         <div style={s.deadline}>
-          {goal.show_on_calendar ? "🎯 " : "📅 "}
+          
           Target date: <strong>{fmtDate(goal.target_date)}</strong>
           {goal.show_on_calendar ? " · on your calendar" : ""}
         </div>
@@ -332,7 +332,7 @@ export default function AthleteGoalsPage() {
         </button>
       </div>
 
-      <AthletePageHeading emoji="🎯" title="My Goals" />
+      <AthletePageHeading title="My Goals" />
 
       <div style={s.content}>
 
@@ -342,7 +342,7 @@ export default function AthleteGoalsPage() {
           <div style={s.loading}>Loading…</div>
         ) : goals.length === 0 && !adding ? (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>🎯</div>
+            
             <div style={s.emptyText}>No goals set yet.</div>
             <div style={s.emptySubtext}>Your coach will add goals for you, or you can add your own below.</div>
           </div>
@@ -350,7 +350,7 @@ export default function AthleteGoalsPage() {
           <>
             {starred.length > 0 && (
               <div style={s.section}>
-                <div style={s.sectionTitle}>⭐ Priority goals</div>
+                <div style={s.sectionTitle}>Priority goals</div>
                 {starred.map((g) => (
                   <GoalCard key={g.id} goal={g} token={token} onStarToggle={handleStarToggle} />
                 ))}
@@ -380,7 +380,7 @@ export default function AthleteGoalsPage() {
                   : ["text", "weight", "time"]) as ("text" | "test" | "weight" | "time")[]).map((t) => (
                   <button key={t} style={{ ...s.typeBtn, ...(newType === t ? s.typeBtnActive : {}) }}
                     onClick={() => setNewType(t)}>
-                    {t === "text" ? "📝 General" : t === "test" ? "📊 Test" : t === "weight" ? "⚖️ Weight" : "⏱ Time"}
+                    {t === "text" ? "General" : t === "test" ? "Test" : t === "weight" ? "Weight" : "Time"}
                   </button>
                 ))}
               </div>
@@ -441,7 +441,7 @@ export default function AthleteGoalsPage() {
               <label style={s.calCheck}>
                 <input type="checkbox" checked={newOnCalendar} onChange={(e) => setNewOnCalendar(e.target.checked)}
                   style={{ accentColor: "var(--accent)" }} />
-                Show as a 🎯 milestone on my calendar
+                Show as a milestone on my calendar
               </label>
             )}
             <div>

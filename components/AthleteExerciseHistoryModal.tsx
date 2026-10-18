@@ -76,7 +76,7 @@ export default function AthleteExerciseHistoryModal({ token, exerciseName, onClo
       <div style={s.modal}>
         <div style={s.header}>
           <div>
-            <div style={s.title}>📊 {exerciseName}</div>
+            <div style={s.title}>{exerciseName}</div>
             <div style={s.subtitle}>History & personal best</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
@@ -90,7 +90,7 @@ export default function AthleteExerciseHistoryModal({ token, exerciseName, onClo
           <div style={s.body}>
             {pb && (
               <div style={s.pbBanner}>
-                <div style={s.pbLabel}>🏆 Personal Best</div>
+                <div style={s.pbLabel}>Personal Best</div>
                 <div style={s.pbValue}>{formatPBValue(pb)}</div>
                 <div style={s.pbDate}>{formatDate(pb.date)}</div>
               </div>

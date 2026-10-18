@@ -103,7 +103,7 @@ export default function AthleteSwapExerciseModal({
       <div style={s.modal}>
         <div style={s.header}>
           <div>
-            <div style={s.title}>🔀 Swap &quot;{currentName}&quot;</div>
+            <div style={s.title}>Swap &quot;{currentName}&quot;</div>
             <div style={s.subtitle}>Only affects this session - your regular programme stays the same.</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
@@ -172,7 +172,7 @@ export default function AthleteSwapExerciseModal({
           </div>
 
           <button style={s.skipBtn} onClick={performSkip} disabled={!!working}>
-            {working === "__skip__" ? "Skipping…" : "⏭ Skip this exercise (no replacement)"}
+            {working === "__skip__" ? "Skipping…" : "Skip this exercise (no replacement)"}
           </button>
         </div>
       </div>

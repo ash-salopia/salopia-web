@@ -137,7 +137,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, rea
         {/* Header */}
         <div style={s.header}>
           <div>
-            <div style={s.title}>📝 Weekly Reflection</div>
+            <div style={s.title}>Weekly Reflection</div>
             <div style={s.subtitle}>{weekLabel}</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
@@ -152,7 +152,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, rea
 
             {readOnly && (
               <div style={s.readOnlyBanner}>
-                🔒 This week isn’t over yet — you can complete this reflection from Saturday.
+                This week isn’t over yet — you can complete this reflection from Saturday.
               </div>
             )}
 

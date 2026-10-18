@@ -53,7 +53,7 @@ export default function AthleteLibraryPage() {
         <div style={s.brand}>VIS BUILD</div>
         <div style={{ width: 60 }} />
       </div>
-      <AthletePageHeading emoji="📚" title="Session Library" />
+      <AthletePageHeading title="Session Library" />
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}
@@ -62,7 +62,7 @@ export default function AthleteLibraryPage() {
           <div style={s.loading}>Loading…</div>
         ) : templates.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>📚</div>
+            
             <div style={s.emptyText}>No library sessions yet</div>
             <div style={s.emptySubtext}>
               Your coach can share extra sessions here for you to do informally - separate from your regular programme.

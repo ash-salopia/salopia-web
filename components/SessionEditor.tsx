@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
+import { listAthleteExerciseSetups } from "@/lib/data/exercise-setups";
 import dynamic from "next/dynamic";
 import { getOrgSettings } from "@/lib/data/settings";
 import { resolveCurrentOneRM } from "@/lib/data/one-rm";
@@ -78,6 +79,11 @@ export default function SessionEditor({ athleteId, sessionId, onBack, onOpenSess
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [session, setSession] = useState<Session | null>(null);
+  // The athlete's own recurring setup notes (0125), shown on each exercise.
+  const [athleteSetups, setAthleteSetups] = useState<Record<string, string>>({});
+  useEffect(() => {
+    listAthleteExerciseSetups(athleteId).then(setAthleteSetups).catch(() => {});
+  }, [athleteId]);
   // Mirrors `session` for the undo restore closure below - by the time
   // a coach clicks Undo, other edits may have happened since the
   // delete, so the restore needs to read the *current* exercise list
@@ -1120,6 +1126,7 @@ export default function SessionEditor({ athleteId, sessionId, onBack, onOpenSess
                 exercise={ex}
                 library={library}
                 athleteId={athleteId}
+                athleteSetup={athleteSetups[ex.name.trim().toLowerCase()]}
                 currentSessionId={sessionId}
                 percentTargets={oneRmTargets[ex.id]}
                 onEdit={(patch) => handleEditExercise(ex.id, patch)}

@@ -113,7 +113,7 @@ export default function HyroxCardioAthleteView({
       {error && <div style={styles.errorBox}>{error}</div>}
       {saving && <div style={styles.savingNote}>Saving…</div>}
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly videoUrl={(session as any).session_notes_video_url ?? ""} />
-      <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" icon="🔥" videoUrl={(session as any).warmup_video_url ?? ""} />
+      <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" videoUrl={(session as any).warmup_video_url ?? ""} />
       <div style={{ position: "relative" as const }}>
         <div style={locked ? lockedContentStyle : undefined}>
           {subType && <HyroxTimer session={session} color={color} />}
@@ -121,14 +121,13 @@ export default function HyroxCardioAthleteView({
         </div>
         {lockOverlay}
       </div>
-      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" videoUrl={(session as any).cooldown_video_url ?? ""} />
+      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" videoUrl={(session as any).cooldown_video_url ?? ""} />
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
         value={session.athlete_notes ?? ""}
         onChange={handleAthleteNotesChange}
         onBlur={saveAthleteNotes}
         label="Your Notes"
-        icon="📝"
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />

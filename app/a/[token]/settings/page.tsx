@@ -90,7 +90,7 @@ export default function AthleteSettingsPage() {
         </button>
       </div>
 
-      <AthletePageHeading emoji="🔒" title="Privacy" />
+      <AthletePageHeading title="Privacy" />
 
       <div style={s.content}>
         <div style={s.pageSubtitle}>
@@ -106,7 +106,7 @@ export default function AthleteSettingsPage() {
           const m = rtpMeta(availability.status);
           return (
             <>
-              <AthletePageHeading emoji="🩹" title="Your availability" style={{ padding: "24px 0 4px" }} />
+              <AthletePageHeading title="Your availability" style={{ padding: "24px 0 4px" }} />
               <div style={s.pageSubtitle}>Set by your coach. Follow this until they change it.</div>
               <div style={{ ...s.card, border: `1px solid ${m.color}66`, background: `${m.color}12` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
@@ -164,7 +164,7 @@ export default function AthleteSettingsPage() {
         )}
 
         {zoneData?.enabled !== false && <>
-        <AthletePageHeading emoji="🫀" title="Training zones" style={{ padding: "24px 0 4px" }} />
+        <AthletePageHeading title="Training zones" style={{ padding: "24px 0 4px" }} />
         <div style={s.pageSubtitle}>
           Your heart-rate and pace targets for each conditioning zone. Set by your coach.
         </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Icon from "@/components/ui/Icon";
+import ExerciseSetupNote, { useExerciseSetups } from "@/components/ExerciseSetupNote";
 import { useRouter } from "next/navigation";
 import VideoModal from "@/components/VideoModal";
 import CheckInModal from "@/components/CheckInModal";
@@ -151,6 +153,9 @@ export default function AthleteSessionView({
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [historyExercise, setHistoryExercise] = useState<string | null>(null);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
+  // Recurring per-exercise setup notes (0125)
+  const setups = useExerciseSetups(token);
+  const [setupEditingId, setSetupEditingId] = useState<string | null>(null);
   const [pbCelebration, setPbCelebration] = useState<DetectedPB[] | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [checkedInToday, setCheckedInToday] = useState(initialCheckedInToday ?? false);
@@ -538,14 +543,14 @@ export default function AthleteSessionView({
 
       {pendingSaves > 0 && (
         <div style={styles.pendingBox}>
-          ☁️ {pendingSaves} change{pendingSaves !== 1 ? "s" : ""} waiting for a connection - will save automatically
+          {pendingSaves} change{pendingSaves !== 1 ? "s" : ""} waiting for a connection - will save automatically
         </div>
       )}
 
       {failedSaves > 0 && (
         <div style={styles.failedBox}>
           <span>
-            ⚠️ {failedSaves} change{failedSaves !== 1 ? "s" : ""} couldn&apos;t be saved - you may need to log{" "}
+            {failedSaves} change{failedSaves !== 1 ? "s" : ""} couldn&apos;t be saved - you may need to log{" "}
             {failedSaves !== 1 ? "these" : "this"} again
           </span>
           <button style={styles.failedDismissBtn} onClick={() => clearFailedSaves()}>Dismiss</button>
@@ -564,7 +569,6 @@ export default function AthleteSessionView({
         onChange={() => {}}
         readOnly={true}
         label="Warm-up"
-        icon="🔥"
         videoUrl={(session as any).warmup_video_url ?? ""}
       />
 
@@ -586,8 +590,9 @@ export default function AthleteSessionView({
                     style={styles.historyBtn}
                     onClick={() => setHistoryExercise(ex.name)}
                     title="View history & PB"
+                    aria-label="History"
                   >
-                    📈
+                    <Icon name="history" size={16} />
                   </button>
                 )}
                 {!ex.opted_out && (
@@ -595,17 +600,29 @@ export default function AthleteSessionView({
                     style={styles.historyBtn}
                     onClick={() => setSwapExerciseId(ex.id)}
                     title="Swap or skip this exercise"
+                    aria-label="Swap"
                   >
-                    🔀
+                    <Icon name="swap" size={16} />
                   </button>
                 )}
                 <button
                   style={{ ...styles.historyBtn, ...(ex.athlete_exercise_notes ? styles.historyBtnActive : {}) }}
                   onClick={() => toggleNotesFor(ex.id)}
                   title="Note on this exercise"
+                  aria-label="Note"
                 >
-                  📝
+                  <Icon name="note" size={16} />
                 </button>
+                {ex.name.trim() && (
+                  <button
+                    style={{ ...styles.historyBtn, ...(setups.get(ex.name) ? styles.historyBtnActive : {}) }}
+                    onClick={() => setSetupEditingId(setupEditingId === ex.id ? null : ex.id)}
+                    title="My setup for this exercise (saved for every session)"
+                    aria-label="Setup"
+                  >
+                    <Icon name="wrench" size={16} />
+                  </button>
+                )}
                 {ex.video_url && (
                   <button
                     style={styles.watchBtn}
@@ -617,13 +634,23 @@ export default function AthleteSessionView({
               </div>
             </div>
 
+            {ex.name.trim() && (
+              <ExerciseSetupNote
+                exerciseName={ex.name}
+                note={setups.get(ex.name)}
+                editing={setupEditingId === ex.id}
+                onEditingChange={(v) => setSetupEditingId(v ? ex.id : null)}
+                onSave={setups.save}
+              />
+            )}
+
             {ex.swapped_from && (
-              <div style={styles.swappedNote}>🔀 Swapped from &quot;{ex.swapped_from}&quot;</div>
+              <div style={styles.swappedNote}>Swapped from &quot;{ex.swapped_from}&quot;</div>
             )}
 
             {ex.opted_out ? (
               <div style={styles.optedOutRow}>
-                <span style={styles.optedOutLabel}>⏭ Skipped for this session</span>
+                <span style={styles.optedOutLabel}>Skipped for this session</span>
                 <button style={styles.undoSkipBtn} onClick={() => handleUndoOptOut(ex.id)}>
                   ↩ Undo
                 </button>
@@ -634,7 +661,7 @@ export default function AthleteSessionView({
                   {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "-"}
                   {ex.each_side ? " each side" : ""}
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
-                  {ex.is_bodyweight ? " · 🏋️ bodyweight" : ""}
+                  {ex.is_bodyweight ? " · bodyweight" : ""}
                   {ex.target_load ? ` · ${ex.target_load}` : ""}
                   {/* Tempo is a rep-cadence concept (e.g. 3-1-1-0) - doesn't
                       apply to a timed hold, so it only shows for reps-based
@@ -646,7 +673,7 @@ export default function AthleteSessionView({
                 </div>
                 {ex.notes && <div style={styles.notes}>{ex.notes}</div>}
                 {priorAnswer === "yes" && (
-                  <div style={styles.progressReminder}>💪 Last time you said you could progress this - try more weight or reps!</div>
+                  <div style={styles.progressReminder}>Last time you said you could progress this - try more weight or reps!</div>
                 )}
 
                 {openNotesFor.has(ex.id) && (
@@ -907,7 +934,7 @@ export default function AthleteSessionView({
                         style={styles.restTimerStartBtn}
                         onClick={() => setRestTimer({ exerciseId: ex.id, endAt: Date.now() + restSeconds * 1000, total: restSeconds })}
                       >
-                        ⏱ Start rest ({ex.rest})
+                        Start rest ({ex.rest})
                       </button>
                     );
                   }
@@ -920,7 +947,7 @@ export default function AthleteSessionView({
                       </div>
                       <div style={styles.restTimerRow}>
                         <span style={{ ...styles.restTimerLabel, ...(done ? { color: "var(--good)" } : {}) }}>
-                          {done ? "✓ Rest complete" : `⏱ Resting… ${formatMMSS(restRemaining)}`}
+                          {done ? "✓ Rest complete" : `Resting… ${formatMMSS(restRemaining)}`}
                         </span>
                         <button style={styles.restTimerSkipBtn} onClick={() => setRestTimer(null)}>
                           {done ? "Dismiss" : "Skip"}
@@ -954,7 +981,7 @@ export default function AthleteSessionView({
       {locked && (
         <div style={styles.lockOverlay} onClick={() => setCheckInOpen(true)}>
           <div style={styles.lockCard}>
-            <div style={styles.lockEmoji}>🔒</div>
+            <div style={styles.lockEmoji}><Icon name="lock" size={28} /></div>
             <div style={styles.lockTitle}>Complete your check-in to unlock today's session</div>
             <button style={styles.lockBtn} onClick={() => setCheckInOpen(true)}>Check in now</button>
           </div>
@@ -967,7 +994,6 @@ export default function AthleteSessionView({
         onChange={() => {}}
         readOnly={true}
         label="Cool-down"
-        icon="🧊"
         videoUrl={(session as any).cooldown_video_url ?? ""}
       />
 
@@ -978,13 +1004,12 @@ export default function AthleteSessionView({
         onChange={handleAthleteNotesChange}
         onBlur={() => saveAthleteNotes(session.id, session.athlete_notes ?? "")}
         label="Your Notes"
-        icon="📝"
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
 
       <button style={styles.summaryBtn} onClick={() => setSummaryOpen(true)}>
-        📊 Session summary
+        Session summary
       </button>
 
       {summaryOpen && (

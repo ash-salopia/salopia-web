@@ -317,7 +317,7 @@ export default function AthleteCommunityPage() {
         </button>
       </div>
 
-      <AthletePageHeading emoji="💬" title="Community" />
+      <AthletePageHeading title="Community" />
 
       <div style={s.tabs}>
         <button style={{ ...s.tab, ...(tab === "announcements" ? s.tabActive : {}) }}
@@ -338,16 +338,16 @@ export default function AthleteCommunityPage() {
         )}
         <button style={{ ...s.tab, ...(tab === "coach" ? s.tabActive : {}) }}
           onClick={() => setTab("coach")}>
-          💬 Coach
+          Coach
         </button>
         <button style={{ ...s.tab, ...(tab === "comps" ? s.tabActive : {}) }}
           onClick={() => setTab("comps")}>
-          🏆 Comps
+          Competitions
         </button>
         {leaderboards?.enabled && (
           <button style={{ ...s.tab, ...(tab === "leaderboards" ? s.tabActive : {}) }}
             onClick={() => setTab("leaderboards")}>
-            🥇 Leaderboards
+            Leaderboards
           </button>
         )}
       </div>
@@ -698,7 +698,7 @@ function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, onPbDel
           )
         )}
       </div>
-      <div style={s.pbExercise}>🏆 {pb.exercise_name}{pbTypeLabel(pb.pb_type) ? ` · ${pbTypeLabel(pb.pb_type)}` : ""}</div>
+      <div style={s.pbExercise}>{pb.exercise_name}{pbTypeLabel(pb.pb_type) ? ` · ${pbTypeLabel(pb.pb_type)}` : ""}</div>
       <div style={s.pbWeight}>{formatPBValue(pb)}</div>
       <div style={s.pbDate}>{pb.date} · {timeAgo(pb.created_at)}</div>
 
@@ -720,7 +720,7 @@ function AthletePBCard({ pb, token, athleteId, athleteName, onPbUpdated, onPbDel
           style={s.commentToggleBtn}
           onClick={() => setShowComments((v) => !v)}
         >
-          💬 {comments.length > 0 ? comments.length : ""} {showComments ? "▴" : "▾"}
+          Comments{comments.length > 0 ? ` (${comments.length})` : ""} {showComments ? "▴" : "▾"}
         </button>
       </div>
 

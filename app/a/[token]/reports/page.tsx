@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Icon from "@/components/ui/Icon";
 import { useParams, useRouter } from "next/navigation";
 import AthletePageHeading from "@/components/AthletePageHeading";
 
@@ -46,7 +47,7 @@ export default function AthleteReportsPage() {
         <div style={s.brand}>VIS BUILD</div>
         <div style={{ width: 60 }} />
       </div>
-      <AthletePageHeading emoji="📊" title="Reports" />
+      <AthletePageHeading title="Reports" />
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}
@@ -54,14 +55,14 @@ export default function AthleteReportsPage() {
           <div style={s.loading}>Loading…</div>
         ) : reports.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={{ fontSize: 40 }}>📊</div>
+            
             <div style={s.emptyText}>No reports yet</div>
             <div style={s.emptySubtext}>When your coach shares a training report, it&apos;ll appear here.</div>
           </div>
         ) : (
           reports.map((r) => (
             <a key={r.id} href={`/r/${r.id}`} style={s.card}>
-              <div style={{ fontSize: 24 }}>📈</div>
+              <Icon name="history" size={22} style={{ color: "var(--accent)" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={s.cardTitle}>{r.range_label || r.title}</div>
                 <div style={s.cardMeta}>Shared {formatDate(r.created_at)} · available until {formatDate(r.expires_at)}</div>
