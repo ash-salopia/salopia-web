@@ -58,8 +58,15 @@ import { listGoalMilestones, type GoalMilestone } from "@/lib/data/goals";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 
 // "4×5 @ 80kg" - compact prescription for the Week / By day cards.
+// A bare number in the time field is seconds ("45" -> "45s"); anything
+// that already says how it's measured ("1:30", "2min", "45s") is left as is.
+function timeLabel(time: string): string {
+  const t = time.trim();
+  return /^\d+(\.\d+)?$/.test(t) ? `${t}s` : t;
+}
+
 function exerciseDose(ex: { sets?: number; reps?: string; time?: string; target_load?: string; use_percent_1rm?: boolean; set_percents?: string[] }): string {
-  const work = (ex.reps || ex.time || "").trim();
+  const work = ((ex.reps ?? "").trim() || timeLabel(ex.time ?? ""));
   let out = ex.sets ? (work ? `${ex.sets}×${work}` : `${ex.sets} sets`) : work;
   const pct = ex.use_percent_1rm ? (ex.set_percents ?? []).filter(Boolean) : [];
   if (pct.length) out += ` @ ${pct[0]}${/%$/.test(pct[0]) ? "" : "%"}${pct.length > 1 && pct.some((p) => p !== pct[0]) ? "+" : ""}`;
@@ -1369,27 +1376,28 @@ export default function AthleteDetailPage() {
         </div>
       )}
 
-      <button
-        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #A855F744", background: "#A855F708" }}
-        onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
-      >
-        <div>
-          <div style={{ ...styles.testingTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
-          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>10m, 20m, CMJ, RSI, Broad Jump, 505 →</div>
-        </div>
-        <span style={{ fontSize: 20, color: "#A855F7" }}>›</span>
-      </button>
-
-      <button
-        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #4DC3FF44", background: "#4DC3FF08", marginTop: 10 }}
-        onClick={() => router.push(`/athletes/${athleteId}/testing`)}
-      >
-        <div>
-          <div style={{ ...styles.testingTitle, color: "#4DC3FF" }}>🧪 Testing</div>
-          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>Log test sessions, track progress, generate reports →</div>
-        </div>
-        <span style={{ fontSize: 20, color: "#4DC3FF" }}>›</span>
-      </button>
+      <div style={styles.linkCardRow}>
+        <button
+          style={{ ...styles.linkCard, borderColor: "#A855F744", background: "#A855F70a" }}
+          onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...styles.linkCardTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
+            <div style={styles.linkCardSub}>10m, 20m, CMJ, RSI, Broad Jump, 505</div>
+          </div>
+          <span style={{ ...styles.linkCardArrow, color: "#A855F7" }}>›</span>
+        </button>
+        <button
+          style={{ ...styles.linkCard, borderColor: "#4DC3FF44", background: "#4DC3FF0a" }}
+          onClick={() => router.push(`/athletes/${athleteId}/testing`)}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...styles.linkCardTitle, color: "#4DC3FF" }}>🧪 Testing</div>
+            <div style={styles.linkCardSub}>Log test sessions, track progress, generate reports</div>
+          </div>
+          <span style={{ ...styles.linkCardArrow, color: "#4DC3FF" }}>›</span>
+        </button>
+      </div>
 
       {/* Testing schedule card */}
       <div style={styles.testingCard}>
@@ -1598,6 +1606,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  // Power/Speed + Testing shortcuts: equal-width cards side by side,
+  // wrapping to one per row on a phone.
+  linkCardRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginTop: 16 },
+  linkCard: {
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+    width: "100%", textAlign: "left", border: "1px solid", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: "var(--text)",
+  },
+  linkCardTitle: { fontSize: 14, fontWeight: 700 },
+  linkCardSub: { fontSize: 12, color: "var(--mute)", marginTop: 3 },
+  linkCardArrow: { fontSize: 22, lineHeight: 1, flexShrink: 0 },
   testingCard: {
     background: "var(--panel)",
     border: "1px solid var(--line)",
