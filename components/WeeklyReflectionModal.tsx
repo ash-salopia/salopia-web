@@ -16,9 +16,11 @@ interface Props {
   weekStart: string;
   weekLabel: string;
   /** True Mon–Fri of the in-progress week: the form is shown but can't be
-   *  submitted yet (completion opens on Saturday). Past weeks are never
+   *  submitted yet (completion opens on the day of the week's last programmed session). Past weeks are never
    *  read-only — they can be back-filled any time. */
   readOnly?: boolean;
+  /** Day the in-progress week's reflection opens (e.g. "Friday"). */
+  opensDay?: string;
   onClose: () => void;
 }
 
@@ -77,7 +79,7 @@ export function weekStartLabel(weekStart: string): string {
   return "w/c " + d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function WeeklyReflectionModal({ token, weekStart, weekLabel, readOnly = false, onClose }: Props) {
+export default function WeeklyReflectionModal({ token, weekStart, weekLabel, readOnly = false, opensDay = "Saturday", onClose }: Props) {
   const [config, setConfig]   = useState<ReflectionConfig | null>(null);
   const [scores, setScores]   = useState<Record<string, number>>({});
   const [good, setGood]       = useState("");
@@ -152,7 +154,7 @@ export default function WeeklyReflectionModal({ token, weekStart, weekLabel, rea
 
             {readOnly && (
               <div style={s.readOnlyBanner}>
-                This week isn’t over yet — you can complete this reflection from Saturday.
+                You can complete this reflection from {opensDay}, after your last session of the week.
               </div>
             )}
 

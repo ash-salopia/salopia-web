@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-service";
+import { reflectionWindow, opensLabel, type ReflectionSessionLike } from "@/lib/reflection-window";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 
 // GET /api/athlete-link/reflections?token=xxx&week=YYYY-MM-DD
@@ -75,9 +77,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "That week hasn't started yet." }, { status: 400 });
   }
   if (week_start === thisMonday) {
-    const dow = new Date().getUTCDay(); // 0 Sun, 6 Sat
-    if (dow !== 6 && dow !== 0) {
-      return NextResponse.json({ error: "This week's reflection opens on Saturday." }, { status: 403 });
+    // Opens on the day of this week's last programmed session (or once
+    // it's logged) - lib/reflection-window.ts, the same rule the app shows.
+    const weekEnd = new Date(thisMonday + "T12:00:00Z");
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+    const { data: weekSessions } = await createServiceRoleClient()
+      .from("sessions")
+      .select("date, session_source, is_primer, rpe, session_exercises(log)")
+      .eq("athlete_id", athlete.id)
+      .gte("date", thisMonday)
+      .lte("date", weekEnd.toISOString().slice(0, 10));
+    const win = reflectionWindow((weekSessions ?? []) as ReflectionSessionLike[], thisMonday, new Date().toISOString().slice(0, 10));
+    if (!win.open) {
+      return NextResponse.json({ error: `This week's reflection opens on ${opensLabel(win.opensOn)}.` }, { status: 403 });
     }
   }
 

@@ -9,6 +9,7 @@ import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/compo
 import LogSportModal from "@/components/sport/LogSportModal";
 import Avatar from "@/components/Avatar";
 import Icon from "@/components/ui/Icon";
+import { reflectionWindow, opensLabel } from "@/lib/reflection-window";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import { rtpMeta } from "@/lib/rtp";
 import { isPushSupported, currentPushSubscription, subscribeToPush } from "@/lib/push/subscribe-client";
@@ -257,14 +258,20 @@ export default function AthleteLinkShell({
 
   // Weekly reflection - anchored to the week being viewed (week view) or
   // the current week (month view). Shown for the current week and any past
-  // week, hidden for future weeks. The in-progress week is read-only until
-  // Saturday; once a week is over it can always be back-filled.
+  // week, hidden for future weeks. The in-progress week opens on the day of
+  // its last programmed session (lib/reflection-window.ts - same rule the
+  // API enforces); once a week is over it can always be back-filled.
   const thisWeekMonday = currentWeekStart();
   const reflectionWeek = calView === "week" ? weekStart : thisWeekMonday;
   const reflectionIsFuture = reflectionWeek > thisWeekMonday;
   const reflectionIsCurrent = reflectionWeek === thisWeekMonday;
-  const weekendNow = [0, 6].includes(new Date().getDay()); // Sat or Sun
-  const reflectionReadOnly = reflectionIsCurrent && !weekendNow;
+  const todayLocal = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const reflectionWin = reflectionWindow(sessions, thisWeekMonday, todayLocal);
+  const reflectionReadOnly = reflectionIsCurrent && !reflectionWin.open;
+  const reflectionOpensDay = opensLabel(reflectionWin.opensOn);
   const showReflection = reflectionEnabled && !reflectionIsFuture;
 
   const prevMonth = () => setCalendarMonth(({ year, month }) =>
@@ -523,7 +530,7 @@ export default function AthleteLinkShell({
               <div style={{ fontSize: 11, color: "var(--mute)" }}>{weekStartLabel(reflectionWeek)}</div>
             </div>
             <span style={{ color: reflectionReadOnly ? "var(--mute)" : "var(--accent)", fontSize: 12, fontWeight: 700 }}>
-              {reflectionReadOnly ? "Opens Sat" : "Complete →"}
+              {reflectionReadOnly ? `Opens ${reflectionOpensDay.slice(0, 3)}` : "Complete →"}
             </span>
           </button>
         )}
@@ -596,6 +603,7 @@ export default function AthleteLinkShell({
           weekStart={reflectionWeek}
           weekLabel={weekStartLabel(reflectionWeek)}
           readOnly={reflectionReadOnly}
+          opensDay={reflectionOpensDay}
           onClose={() => setReflectionOpen(false)}
         />
       )}
