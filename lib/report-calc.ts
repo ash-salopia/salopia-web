@@ -279,7 +279,7 @@ const CARDIO_GROUP_LABEL: Record<string, string> = {
   cardioIntervals: "Intervals / VO2max", overUnder: "Over-Unders",
 };
 
-interface GroupedMetricEntry {
+export interface GroupedMetricEntry {
   group: string;
   values: MetricValues;
 }
@@ -289,7 +289,15 @@ interface GroupedMetricEntry {
 // list of {group, values} entries, so the aggregation below doesn't
 // need to know which of the 9 sub-types it's looking at - it just
 // groups whatever comes back.
-function extractMetricEntries(session: Session): GroupedMetricEntry[] {
+// Per-round metrics are normally an array, but some saved sessions hold
+// a single object instead - treat that as one entry rather than crashing
+// the whole report on .map.
+function asMetricList(m: unknown): MetricValues[] {
+  if (Array.isArray(m)) return m as MetricValues[];
+  return m && typeof m === "object" ? [m as MetricValues] : [];
+}
+
+export function extractMetricEntries(session: Session): GroupedMetricEntry[] {
   const isHyrox = session.type === "hyrox";
   const subType = (isHyrox ? session.hyrox_type : (session as any).cardio_type) as string;
   const cfg: any = (isHyrox ? session.hyrox_config : (session as any).cardio_config) ?? {};
@@ -306,7 +314,8 @@ function extractMetricEntries(session: Session): GroupedMetricEntry[] {
   // prefer round-level (the finer-grained true total) when both are on,
   // so ticking both doesn't double-count the same work into the sum.
   if (isHyrox && (subType === "fixed" || subType === "cycling" || subType === "circuit")) {
-    const items = subType === "fixed" ? (cfg.steps ?? []) : (cfg.exercises ?? []);
+    const rawItems = subType === "fixed" ? cfg.steps : cfg.exercises;
+    const items: any[] = Array.isArray(rawItems) ? rawItems : [];
     const levels: string[] = cfg.record_levels ?? ["round"];
     const exerciseEntries: GroupedMetricEntry[] = items.flatMap((it: any) => {
       const group = it.exercise || sessionLabel;
@@ -323,15 +332,15 @@ function extractMetricEntries(session: Session): GroupedMetricEntry[] {
     const sessionModality = cfg.modality || sessionLabel;
     // A block's own Activity override (0076) gets its own group, e.g. a
     // bike warm-up block reports separately from a running main set.
-    return (cfg.blocks ?? []).map((b: any) => ({ group: b.modality || sessionModality, values: b.metrics ?? {} }));
+    return (Array.isArray(cfg.blocks) ? cfg.blocks : []).map((b: any) => ({ group: b.modality || sessionModality, values: b.metrics ?? {} }));
   }
   if (isHyrox && subType === "interval") {
     const group = cfg.exercise || sessionLabel;
-    return ((cfg.metrics ?? []) as MetricValues[]).map((v) => ({ group, values: v }));
+    return asMetricList(cfg.metrics).map((v) => ({ group, values: v }));
   }
   if (!isHyrox && (subType === "cardioIntervals" || subType === "overUnder")) {
     const group = cfg.modality || sessionLabel;
-    return ((cfg.metrics ?? []) as MetricValues[]).map((v) => ({ group, values: v }));
+    return asMetricList(cfg.metrics).map((v) => ({ group, values: v }));
   }
   if (!isHyrox && subType === "continuous") {
     const group = cfg.modality || sessionLabel;
@@ -654,7 +663,7 @@ export interface SessionTypeStats {
   completionPct: number | null; // null when nothing was prescribed, not 0
 }
 
-function sessionHasCompletion(s: Session): boolean {
+export function sessionHasCompletion(s: Session): boolean {
   if (s.type === "strength" || s.type === "power_speed") {
     return (s.exercises ?? []).some((ex) => !ex.is_primer && (ex.log ?? []).some((l) => l.done));
   }

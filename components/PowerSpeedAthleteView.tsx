@@ -8,6 +8,7 @@
 // same /api/athlete-link/log route the strength logger uses.
 
 import { useState, useEffect, Fragment } from "react";
+import Icon from "@/components/ui/Icon";
 import { saveWithRetry } from "@/lib/save-queue";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
@@ -108,7 +109,7 @@ export default function PowerSpeedAthleteView({
   return (
     <div style={s.page}>
       <button style={s.backLink} onClick={onBack}>← Back to sessions</button>
-      <AthletePageHeading emoji="⚡" title={session.name} />
+      <AthletePageHeading title={session.name} />
       <div style={s.metaRow}>
         <div style={s.meta}>{session.date} · Power / Speed</div>
         {checkInButton}
@@ -121,7 +122,7 @@ export default function PowerSpeedAthleteView({
           SessionNotesBlock here, which has one (reported live: "not
           showing a hide/unhide option", Power/Speed only) (0109). */}
       <SessionNotesBlock value={session.session_notes ?? ""} onChange={() => {}} readOnly videoUrl={(session as any).session_notes_video_url ?? ""} />
-      <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" icon="🔥" videoUrl={(session as any).warmup_video_url ?? ""} />
+      <SessionNotesBlock value={(session as any).warmup_notes ?? ""} onChange={() => {}} readOnly label="Warm-up" videoUrl={(session as any).warmup_video_url ?? ""} />
 
       <div style={{ position: "relative" as const }}>
         <div style={locked ? lockedContentStyle : undefined}>
@@ -148,7 +149,7 @@ export default function PowerSpeedAthleteView({
         {lockOverlay}
       </div>
 
-      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" icon="🧊" videoUrl={(session as any).cooldown_video_url ?? ""} />
+      <SessionNotesBlock value={(session as any).cooldown_notes ?? ""} onChange={() => {}} readOnly label="Cool-down" videoUrl={(session as any).cooldown_video_url ?? ""} />
 
       <SessionRPEBlock value={session.rpe ?? null} onSave={handleRPESave} />
       <SessionNotesBlock
@@ -156,7 +157,6 @@ export default function PowerSpeedAthleteView({
         onChange={handleNotesChange}
         onBlur={saveNotes}
         label="Your Notes"
-        icon="📝"
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
@@ -271,17 +271,18 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
 
         <span style={s.actionRow}>
           {ex.name.trim() && (
-            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setHistoryOpen(true); }} title="View history & PB">📈</button>
+            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setHistoryOpen(true); }} title="View history & PB" aria-label="History"><Icon name="history" size={16} /></button>
           )}
           {!ex.opted_out && (
-            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setSwapOpen(true); }} title="Swap or skip this exercise">🔀</button>
+            <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setSwapOpen(true); }} title="Swap or skip this exercise" aria-label="Swap"><Icon name="swap" size={16} /></button>
           )}
           <button
             style={{ ...s.actionBtn, ...(ex.athlete_exercise_notes ? s.actionBtnActive : {}) }}
             onClick={(e) => { e.stopPropagation(); setNotesOpen((v) => !v); }}
             title="Note on this exercise"
+            aria-label="Note"
           >
-            📝
+            <Icon name="note" size={16} />
           </button>
           {ex.video_url && (
             <button style={s.actionBtn} onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }} title="Watch demo video">▶</button>
@@ -297,7 +298,7 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
       </div>
 
       {ex.swapped_from && (
-        <div style={s.swappedNote}>🔀 Swapped from &quot;{ex.swapped_from}&quot;</div>
+        <div style={s.swappedNote}>Swapped from &quot;{ex.swapped_from}&quot;</div>
       )}
 
       {notesOpen && (
@@ -312,7 +313,7 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
 
       {ex.opted_out && (
         <div style={s.optedOutRow}>
-          <span style={s.optedOutLabel}>⏭ Skipped for this session</span>
+          <span style={s.optedOutLabel}>Skipped for this session</span>
           <button style={s.undoSkipBtn} onClick={handleUndoOptOut} disabled={undoingOptOut}>
             {undoingOptOut ? "…" : "↩ Undo"}
           </button>

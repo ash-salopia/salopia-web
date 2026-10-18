@@ -12,6 +12,7 @@ interface Props {
   exercise: SessionExercise;
   library?: LibraryEntry[];
   athleteId?: string;
+  athleteSetup?: string; // 0125 — the athlete's recurring setup note for this exercise
   currentSessionId?: string;
   // Calculated %1RM target per set (kg), when the exercise prescribes
   // one - shown as a preview in the load box, purely for the coach to
@@ -92,6 +93,7 @@ export default function ExerciseCard({
   exercise,
   library = [],
   athleteId,
+  athleteSetup,
   currentSessionId,
   percentTargets,
   onEdit,
@@ -528,9 +530,15 @@ export default function ExerciseCard({
         </div>
       )}
 
+      {athleteSetup && (
+        <div style={styles.athleteExerciseNote} title="The athlete's own setup for this exercise - shown every session">
+          <b>Athlete&apos;s setup:</b> {athleteSetup}
+        </div>
+      )}
+
       {exercise.athlete_exercise_notes && (
         <div style={styles.athleteExerciseNote} title="Athlete's own note on this exercise">
-          📝 {exercise.athlete_exercise_notes}
+          <b>Athlete&apos;s note:</b> {exercise.athlete_exercise_notes}
         </div>
       )}
 

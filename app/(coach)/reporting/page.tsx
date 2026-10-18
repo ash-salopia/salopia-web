@@ -174,6 +174,8 @@ export default function ReportingPage() {
   // so it needs its own explicit opt-in rather than inheriting the
   // single-report default.
   const [includeBulkAi, setIncludeBulkAi] = useState(false);
+  const [pdfStyle, setPdfStyle] = useState<"white" | "colour">("colour");
+  const [pdfProgress, setPdfProgress] = useState<{ done: number; total: number } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
   // Report presets - saved ReportOptions selections, reusable across
@@ -659,7 +661,7 @@ export default function ReportingPage() {
       const { start, end } = resolveDateRange(mode, customStart, customEnd);
       const id = targetIds[0];
       const athlete = athleteById(id);
-      const data = await generateReport(id, start, end);
+      const data = await generateReport(id, start, end, { visuals: true });
       const aiSummary =
         options.aiSummary && includeBulkAi
           ? await fetchAiSummary(id, start, end, options)
@@ -674,6 +676,7 @@ export default function ReportingPage() {
           branding={branding}
           exerciseSelection={exerciseSelection}
           powerSpeedSelection={powerSpeedSelection}
+          reportStyle={pdfStyle}
         />
       ).toBlob();
       const url = URL.createObjectURL(blob);
@@ -702,9 +705,10 @@ export default function ReportingPage() {
       // Sequential, not Promise.all - a large squad means N Supabase reads
       // plus (if includeBulkAi) N paid AI calls; running them one at a
       // time avoids hammering either service for a bulk action.
+      setPdfProgress({ done: 0, total: targetIds.length });
       for (const id of targetIds) {
         const athlete = athleteById(id);
-        const data = await generateReport(id, start, end);
+        const data = await generateReport(id, start, end, { visuals: true });
         const aiSummary =
           options.aiSummary && includeBulkAi
             ? await fetchAiSummary(id, start, end, options)
@@ -719,10 +723,12 @@ export default function ReportingPage() {
             branding={branding}
             exerciseSelection={exerciseSelection}
             powerSpeedSelection={powerSpeedSelection}
+            reportStyle={pdfStyle}
           />
         ).toBlob();
         const slug = (athlete?.name ?? "athlete").toLowerCase().replace(/\s+/g, "-");
         zip.file(`${slug}-training-report-${todayISO()}.pdf`, blob);
+        setPdfProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
       }
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(zipBlob);
@@ -737,6 +743,7 @@ export default function ReportingPage() {
       setPdfError(e instanceof Error ? e.message : "Could not generate reports");
     } finally {
       setPdfBusy(false);
+      setPdfProgress(null);
     }
   };
 
@@ -926,8 +933,29 @@ export default function ReportingPage() {
                   onChange={(e) => setIncludeBulkAi(e.target.checked)}
                   style={{ accentColor: "var(--accent)" }}
                 />
-                Include AI summary ({targetIds.length || 0} extra AI call{targetIds.length === 1 ? "" : "s"})
+                Include AI summary &amp; coach&apos;s verdict ({targetIds.length || 0} extra AI call{targetIds.length === 1 ? "" : "s"})
               </label>
+              <div style={{ display: "flex", gap: 6, margin: "10px 0 4px" }}>
+                {([
+                  ["colour", "Colour", "Branded header"],
+                  ["white", "White", "Print-friendly"],
+                ] as const).map(([key, label, hint]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setPdfStyle(key)}
+                    style={{
+                      flex: 1, textAlign: "left", cursor: "pointer", borderRadius: 9, padding: "8px 10px", fontSize: 13,
+                      background: pdfStyle === key ? "var(--accent-dim)" : "var(--ink)",
+                      border: `1px solid ${pdfStyle === key ? "var(--accent)" : "var(--line)"}`,
+                      color: "var(--text)",
+                    }}
+                  >
+                    <b>{label}</b>
+                    <span style={{ display: "block", fontSize: 11, color: "var(--mute)" }}>{hint}</span>
+                  </button>
+                ))}
+              </div>
               {!options.aiSummary && <div style={s.hint}>Turn on "AI summary" under Metrics first.</div>}
               <div style={s.actionRow}>
                 <button
@@ -942,7 +970,11 @@ export default function ReportingPage() {
                   disabled={!targetIds.length || pdfBusy}
                   onClick={handleDownloadAll}
                 >
-                  {pdfBusy ? "Generating…" : `📦 Download reports (${targetIds.length || 0}) as ZIP`}
+                  {pdfBusy
+                    ? pdfProgress
+                      ? `Building ${Math.min(pdfProgress.done + 1, pdfProgress.total)} of ${pdfProgress.total}…`
+                      : "Generating…"
+                    : `📦 Download reports (${targetIds.length || 0}) as ZIP`}
                 </button>
               </div>
               {pdfError && <div style={s.errorHint}>{pdfError}</div>}

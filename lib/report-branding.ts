@@ -41,3 +41,47 @@ export function reportCreditFooterHtml(): string {
     <span>${REPORT_CREDIT_TEXT}</span>
   </div>`;
 }
+
+// ── Colour report theme ──────────────────────────────────────────────────────
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].split("").map((c) => c + c).join("") : m[1];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function toHex([r, g, b]: [number, number, number]): string {
+  return "#" + [r, g, b].map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0")).join("");
+}
+
+function mix(hex: string, target: [number, number, number], amount: number): string {
+  const rgb = hexToRgb(hex) ?? [31, 111, 214];
+  return toHex(rgb.map((c, i) => c + (target[i] - c) * amount) as [number, number, number]);
+}
+
+function luminance(hex: string): number {
+  const rgb = hexToRgb(hex) ?? [31, 111, 214];
+  const [r, g, b] = rgb.map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * Colours for the coloured (share / PDF) report, derived from the org's
+ * brand colour. A light brand colour (e.g. the default cyan) is darkened
+ * for text so headings stay readable on white.
+ */
+export function reportThemeColours(branding: ResolvedBranding) {
+  const brand = hexToRgb(branding.primaryColor || "") ? branding.primaryColor : "#1f6fd6";
+  const text = luminance(brand) > 0.35 ? mix(brand, [0, 0, 0], 0.45) : brand;
+  return {
+    brand,
+    text, // headings / accents on white
+    tint: mix(brand, [255, 255, 255], 0.9), // soft background wash
+    band: `linear-gradient(135deg, #0d1724 0%, ${mix(brand, [13, 23, 36], 0.55)} 62%, ${mix(brand, [13, 23, 36], 0.15)} 100%)`,
+    bandSolid: mix(brand, [13, 23, 36], 0.6), // for PDFs (no gradients)
+  };
+}

@@ -110,8 +110,8 @@ export default function RecoverySessionAthleteView({
 
           {(config.duration_minutes != null || intensityLabel) && (
             <div style={s.metaRow}>
-              {config.duration_minutes != null && <div style={s.metaChip}>⏱ {config.duration_minutes} min</div>}
-              {intensityLabel && <div style={s.metaChip}>🔥 {intensityLabel} intensity</div>}
+              {config.duration_minutes != null && <div style={s.metaChip}>{config.duration_minutes} min</div>}
+              {intensityLabel && <div style={s.metaChip}>{intensityLabel} intensity</div>}
             </div>
           )}
 
@@ -176,7 +176,6 @@ export default function RecoverySessionAthleteView({
         onChange={handleAthleteNotesChange}
         onBlur={saveAthleteNotes}
         label="Your Notes"
-        icon="✏️"
         placeholder="How did it feel?"
         enableTemplates={false}
       />

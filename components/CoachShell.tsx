@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/testing",     label: "Testing",     icon: "🧪" },
   { href: "/templates",   label: "Templates",   icon: "📝" },
   { href: "/programmes",  label: "Programmes",  icon: "📆" },
+  { href: "/shop",        label: "Online Store", icon: "🛒" },
   { href: "/library",     label: "Library",     icon: "📚" },
   { href: "/reporting",   label: "Reporting",   icon: "📊" },
   { href: "/settings",    label: "Settings",    icon: "⚙️" },

@@ -78,7 +78,7 @@ export default function AthleteChallengesPage() {
         </button>
       </div>
 
-      <AthletePageHeading emoji="🏆" title="Challenges" />
+      <AthletePageHeading title="Challenges" />
 
       <div style={s.content}>
 
@@ -89,12 +89,12 @@ export default function AthleteChallengesPage() {
           <div style={s.loading}>Loading…</div>
         ) : !challengesEnabled ? (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>🏆</div>
+            
             <div style={s.emptyText}>Challenges aren&apos;t switched on right now.</div>
           </div>
         ) : challenges.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>🏆</div>
+            
             <div style={s.emptyText}>No challenges yet.</div>
             <div style={s.emptySubtext}>Your coach hasn&apos;t set any up - check back after your next session.</div>
           </div>

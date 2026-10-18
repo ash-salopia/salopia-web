@@ -8,6 +8,20 @@ import type { SquadComparisonMetric } from "@/lib/squad-comparison";
 
 export interface ReportOptions {
   // Metrics - at least one required to generate.
+  // Visual summary (on by default; older presets merge over the defaults
+  // so they pick these up too).
+  headlineCards: boolean; // sessions, completion, PBs, RPE, tonnage - vs the previous period
+  pbWall: boolean; // trophy cards for PBs set in range
+  progressBars: boolean; // % change per exercise as sorted bars
+  smallMultiples: boolean; // one mini chart per exercise, each on its own scale
+  consistency: boolean; // day-by-day calendar + weekly sessions-by-type chart
+  coachVerdict: boolean; // what went well / what to work on / next focus - AI-drafted, coach-edited
+  goalProgress: boolean; // athlete_goals with current vs target and on-track status
+  competitions: boolean; // countdown to the next competitions
+  readiness: boolean; // check-in sleep/energy/soreness vs sessions trained
+  adherence: boolean; // exercises skipped or swapped
+  benchmarks: boolean; // repeated cardio/hybrid workouts compared attempt by attempt
+  hrZones: boolean; // % of logged cardio/hybrid time in each HR zone
   ttl: boolean; // Total Training Load (tonnage)
   e1rm: boolean; // Estimated 1RM (strength)
   // Per-metric display components - apply to whichever metric(s) above are ticked.
@@ -62,10 +76,22 @@ export interface ReportOptions {
 }
 
 export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
+  headlineCards: true,
+  pbWall: true,
+  progressBars: true,
+  smallMultiples: true,
+  consistency: true,
+  coachVerdict: true,
+  goalProgress: true,
+  competitions: true,
+  readiness: true,
+  adherence: true,
+  benchmarks: true,
+  hrZones: true,
   ttl: true,
   e1rm: false,
   loadProgression: true,
-  highlights: true,
+  highlights: true, // on screen, the progress bars stand in for this when they're on
   sparkline: false,
   radar: false,
   lineChart: false,
@@ -116,6 +142,11 @@ export const SESSION_TYPE_META: Record<ReportSessionType, { label: string }> = {
 // speed applies to velocity-tracked strength exercises AND Power/Speed
 // sessions; training load applies to both Cardio and Hyrox).
 export const FIELD_SESSION_TYPES: Partial<Record<keyof ReportOptions, ReportSessionType[]>> = {
+  progressBars: ["strength"],
+  smallMultiples: ["strength"],
+  adherence: ["strength", "power_speed"],
+  benchmarks: ["cardio", "hyrox"],
+  hrZones: ["cardio", "hyrox"],
   ttl: ["strength"],
   e1rm: ["strength"],
   loadProgression: ["strength"],
@@ -140,9 +171,24 @@ export const METRIC_FIELDS: { key: "ttl" | "e1rm"; label: string; hint: string }
   { key: "e1rm", label: "Estimated 1RM (e1RM)", hint: "Strength progression, independent of volume" },
 ];
 
+export const VISUAL_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
+  { key: "coachVerdict", label: "Coach's verdict", hint: "What went well, what to work on, focus for next block - drafted by AI when the AI summary is on, editable on the report" },
+  { key: "goalProgress", label: "Goal progress", hint: "Each goal's current vs target, with on track / behind" },
+  { key: "competitions", label: "Competition countdown", hint: "Days to the athlete's next competitions" },
+  { key: "headlineCards", label: "Headline numbers", hint: "Sessions, completion, PBs, RPE and tonnage at the top - with change vs the previous period" },
+  { key: "pbWall", label: "PB wall", hint: "Trophy cards for every PB set in this range" },
+  { key: "progressBars", label: "Strength progress bars", hint: "% change per exercise, best first" },
+  { key: "smallMultiples", label: "Exercise trend charts", hint: "One small chart per exercise, each on its own scale" },
+  { key: "consistency", label: "Consistency calendar", hint: "Every day coloured done / partial / missed, plus sessions per week" },
+  { key: "readiness", label: "Readiness vs training", hint: "Check-in sleep, energy and soreness against sessions trained" },
+  { key: "adherence", label: "Skipped & swapped exercises", hint: "Which programmed exercises get skipped or swapped most" },
+  { key: "hrZones", label: "Heart-rate zone split", hint: "% of cardio and hybrid time spent in each HR zone (needs avg HR logged, and a max HR or date of birth)" },
+  { key: "benchmarks", label: "Benchmark workout repeats", hint: "Same cardio/hybrid workout done more than once, compared attempt by attempt" },
+];
+
 export const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
   { key: "aiSummary", label: "AI summary", hint: "Short AI overview + recurring themes from notes, at the top" },
-  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review - per metric selected" },
+  { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review - per metric selected (on screen, the progress bars show these instead when they're on)" },
   { key: "loadProgression", label: "Progression table", hint: "First / latest / Δ / % change per exercise" },
   { key: "sparkline", label: "Sparklines", hint: "Small mini-trend chart per exercise row" },
   { key: "radar", label: "Radar snapshot", hint: "Week 1 vs latest, normalised across exercises" },
@@ -169,6 +215,7 @@ export const SCOPE_FIELDS: { key: keyof ReportOptions; label: string; hint: stri
 // bodyweightRelative is deliberately excluded - it's a display modifier
 // for e1RM, not content on its own.
 const CONTENT_FIELD_KEYS: (keyof ReportOptions)[] = [
+  "headlineCards", "pbWall", "consistency", "coachVerdict", "goalProgress", "readiness", "benchmarks", "hrZones",
   "ttl", "e1rm", "aiSummary", "athleteNotes", "sessionRpe",
   "powerSpeedTrend", "barSpeedTrend", "cardioMetricsTrend", "hyroxMetricsTrend",
   "cardioSessionsList", "hyroxSessionsList", "trainingLoadTrend", "sessionCompletion",

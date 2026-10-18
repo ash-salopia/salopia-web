@@ -22,17 +22,17 @@ function formatBytes(bytes: number): string {
 }
 
 function fileIcon(mimeType: string | null): string {
-  if (!mimeType) return "📄";
-  if (mimeType === "application/pdf") return "📕";
-  if (mimeType.includes("word")) return "📘";
-  if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) return "📗";
-  return "📄";
+  if (!mimeType) return "FILE";
+  if (mimeType === "application/pdf") return "PDF";
+  if (mimeType.includes("word")) return "DOC";
+  if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) return "XLS";
+  return "FILE";
 }
 
 function videoIcon(url: string): string {
-  if (url.includes("youtube") || url.includes("youtu.be")) return "▶️";
-  if (url.includes("vimeo")) return "🎬";
-  return "🔗";
+  if (url.includes("youtube") || url.includes("youtu.be")) return "VIDEO";
+  if (url.includes("vimeo")) return "VIDEO";
+  return "LINK";
 }
 
 function formatDate(iso: string): string {
@@ -89,7 +89,7 @@ export default function AthleteDocumentsPage() {
         <div style={s.brand}>VIS BUILD</div>
         <div style={{ width: 60 }} />
       </div>
-      <AthletePageHeading emoji="📁" title="Documents" />
+      <AthletePageHeading title="Documents" />
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}
@@ -98,7 +98,7 @@ export default function AthleteDocumentsPage() {
           <div style={s.loading}>Loading…</div>
         ) : docs.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>📂</div>
+            
             <div style={s.emptyText}>No documents yet</div>
             <div style={s.emptySubtext}>
               Your coach will share programmes, plans, and resources here.
@@ -161,7 +161,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "var(--panel)", border: "1px solid var(--line)",
     borderRadius: 12, padding: 14, display: "flex", alignItems: "flex-start", gap: 12,
   },
-  cardIcon: { fontSize: 24, flexShrink: 0, marginTop: 1 },
+  cardIcon: { fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 6, padding: "4px 6px", flexShrink: 0, marginTop: 2, minWidth: 40, textAlign: "center" as const },
   cardBody: { flex: 1, minWidth: 0 },
   cardTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 3 },
   cardMeta: { fontSize: 11, color: "var(--mute)" },

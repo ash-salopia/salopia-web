@@ -77,3 +77,17 @@ multi-block recovery routines. Add these by hand in the demo org if needed.
 
 Standalone — sets one athlete's marker session date so the dashboard
 "Programme status" panel shows a chosen state. Takes an offset in days.
+
+## `seed-demo-weekly-bulk.js`
+
+Additive, safe to re-run. Fills out the 7 base athletes + Marcus Webb (VBT)
+with a weekly mix beyond the twice-weekly strength: power/speed (10m sprint,
+broad jump, box jump), zone-2 runs and hybrid SkiErg/Row intervals for the
+last 12 weeks (~88% logged, with progressions) and 4 weeks planned, plus
+check-ins on training days. Skips any week that already has that session
+and any day that already has a session. Deterministic numbers per athlete.
+
+```bash
+node scripts/seed-demo-weekly-bulk.js
+DRY_RUN=1 node scripts/seed-demo-weekly-bulk.js
+```

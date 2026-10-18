@@ -23,6 +23,7 @@ import { computeSquadComparison, type SquadComparisonContext } from "@/lib/squad
 import { archiveAthlete, toggleLiveGroup, LiveGroupCapError, listGroups as listAthleteGroupTags } from "@/lib/data/athletes";
 import LiveGroupCapNotice from "@/components/LiveGroupCapNotice";
 import ReportRangeModal, { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/components/ReportRangeModal";
+import { getReportSchedule, markScheduledReportSent } from "@/lib/data/report-shares";
 import { updateAthleteTestingSchedule, updateAthlete } from "@/lib/data/athletes";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 
@@ -57,8 +58,15 @@ import { listGoalMilestones, type GoalMilestone } from "@/lib/data/goals";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 
 // "4×5 @ 80kg" - compact prescription for the Week / By day cards.
+// A bare number in the time field is seconds ("45" -> "45s"); anything
+// that already says how it's measured ("1:30", "2min", "45s") is left as is.
+function timeLabel(time: string): string {
+  const t = time.trim();
+  return /^\d+(\.\d+)?$/.test(t) ? `${t}s` : t;
+}
+
 function exerciseDose(ex: { sets?: number; reps?: string; time?: string; target_load?: string; use_percent_1rm?: boolean; set_percents?: string[] }): string {
-  const work = (ex.reps || ex.time || "").trim();
+  const work = ((ex.reps ?? "").trim() || timeLabel(ex.time ?? ""));
   let out = ex.sets ? (work ? `${ex.sets}×${work}` : `${ex.sets} sets`) : work;
   const pct = ex.use_percent_1rm ? (ex.set_percents ?? []).filter(Boolean) : [];
   if (pct.length) out += ` @ ${pct[0]}${/%$/.test(pct[0]) ? "" : "%"}${pct.length > 1 && pct.some((p) => p !== pct[0]) ? "+" : ""}`;
@@ -254,7 +262,8 @@ export default function AthleteDetailPage() {
   const [reportOptions, setReportOptions] = useState<ReportOptions>(DEFAULT_REPORT_OPTIONS);
   const [squadComparison, setSquadComparison] = useState<SquadComparisonContext[] | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
-  const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string } | null>(null);
+  const [reportError, setReportError] = useState(""); // shown inside the report options pop-up
+  const [aiReportSummary, setAiReportSummary] = useState<{ summary: string; themes: string; verdict?: { wentWell: string; workOn: string; nextFocus: string } } | null>(null);
   const [aiReportLoading, setAiReportLoading] = useState(false);
   const [rangeToolOpen, setRangeToolOpen] = useState<"copy" | "delete" | null>(null);
   const [rangeStart, setRangeStart] = useState(todayISO());
@@ -353,6 +362,23 @@ export default function AthleteDetailPage() {
   // Deep link from the dashboard's "Athlete messages" panel
   useEffect(() => {
     if (searchParams.get("openMessages") === "1") setMessageOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deep link from a report-schedule reminder (0123): build the report
+  // with the schedule's saved options over the last N weeks, then open
+  // the Email dialog once the AI verdict is ready.
+  const [emailOnOpen, setEmailOnOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("scheduledReport") !== "1") return;
+    getReportSchedule(athleteId).then((s) => {
+      const weeks = s?.every_weeks ?? 4;
+      const end = todayISO();
+      const d = new Date(end + "T12:00:00Z");
+      d.setUTCDate(d.getUTCDate() - (weeks * 7 - 1));
+      setEmailOnOpen(true);
+      handleGenerateReport(d.toISOString().slice(0, 10), end, { ...DEFAULT_REPORT_OPTIONS, ...(s?.options ?? {}) } as ReportOptions);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -492,11 +518,11 @@ export default function AthleteDetailPage() {
 
   const handleGenerateReport = async (start: string | null, end: string | null, options: ReportOptions) => {
     setGeneratingReport(true);
-    setError("");
+    setReportError("");
     setAiReportSummary(null);
     setSquadComparison(null);
     try {
-      const data = await generateReport(athleteId, start, end);
+      const data = await generateReport(athleteId, start, end, { visuals: true });
       setReportData(data);
       setReportOptions(options);
       setReportRangeOpen(false);
@@ -512,7 +538,8 @@ export default function AthleteDetailPage() {
           setSquadComparison(null); // squad context failing shouldn't block the report itself
         }
       }
-      if (options.aiSummary) {
+      // The same AI call also drafts the Coach's verdict.
+      if (options.aiSummary || options.coachVerdict !== false) {
         setAiReportLoading(true);
         fetch("/api/training-report-ai", {
           method: "POST",
@@ -537,12 +564,12 @@ export default function AthleteDetailPage() {
           }),
         })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
-          .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes }))
+          .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes, verdict: json.verdict }))
           .catch(() => setAiReportSummary({ summary: "Couldn't generate an AI summary right now.", themes: "" }))
           .finally(() => setAiReportLoading(false));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not generate report");
+      setReportError(e instanceof Error ? e.message : "Could not generate report");
     } finally {
       setGeneratingReport(false);
     }
@@ -1273,7 +1300,9 @@ export default function AthleteDetailPage() {
           squadComparisonEnabled={squadComparisonEnabled && (athlete as any).squad_comparison_enabled !== false}
           loadMonitoringEnabled={loadMonitoringEnabled}
           onGenerate={handleGenerateReport}
-          onClose={() => setReportRangeOpen(false)}
+          generating={generatingReport}
+          error={reportError}
+          onClose={() => { setReportRangeOpen(false); setReportError(""); }}
         />
       )}
 
@@ -1290,8 +1319,6 @@ export default function AthleteDetailPage() {
         />
       )}
 
-      {generatingReport && <div style={styles.empty}>Generating report…</div>}
-
       {reportData && (
         <ReportModal
           data={reportData}
@@ -1302,7 +1329,12 @@ export default function AthleteDetailPage() {
           aiLoading={aiReportLoading}
           squadComparison={squadComparison}
           branding={branding}
-          onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); }}
+          athleteId={athleteId}
+          athleteEmail={athlete.contact_email ?? null}
+          onAthleteEmailSaved={(email) => setAthlete((prev) => (prev ? { ...prev, contact_email: email } : prev))}
+          initialEmailOpen={emailOnOpen}
+          onShared={() => { markScheduledReportSent(athleteId).catch(() => {}); }}
+          onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); setEmailOnOpen(false); }}
         />
       )}
 
@@ -1363,27 +1395,28 @@ export default function AthleteDetailPage() {
         </div>
       )}
 
-      <button
-        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #A855F744", background: "#A855F708" }}
-        onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
-      >
-        <div>
-          <div style={{ ...styles.testingTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
-          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>10m, 20m, CMJ, RSI, Broad Jump, 505 →</div>
-        </div>
-        <span style={{ fontSize: 20, color: "#A855F7" }}>›</span>
-      </button>
-
-      <button
-        style={{ ...styles.testingCard, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #4DC3FF44", background: "#4DC3FF08", marginTop: 10 }}
-        onClick={() => router.push(`/athletes/${athleteId}/testing`)}
-      >
-        <div>
-          <div style={{ ...styles.testingTitle, color: "#4DC3FF" }}>🧪 Testing</div>
-          <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>Log test sessions, track progress, generate reports →</div>
-        </div>
-        <span style={{ fontSize: 20, color: "#4DC3FF" }}>›</span>
-      </button>
+      <div style={styles.linkCardRow}>
+        <button
+          style={{ ...styles.linkCard, borderColor: "#A855F744", background: "#A855F70a" }}
+          onClick={() => router.push(`/athletes/${athleteId}/power-speed`)}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...styles.linkCardTitle, color: "#A855F7" }}>⚡ Power / Speed Benchmarks</div>
+            <div style={styles.linkCardSub}>10m, 20m, CMJ, RSI, Broad Jump, 505</div>
+          </div>
+          <span style={{ ...styles.linkCardArrow, color: "#A855F7" }}>›</span>
+        </button>
+        <button
+          style={{ ...styles.linkCard, borderColor: "#4DC3FF44", background: "#4DC3FF0a" }}
+          onClick={() => router.push(`/athletes/${athleteId}/testing`)}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...styles.linkCardTitle, color: "#4DC3FF" }}>🧪 Testing</div>
+            <div style={styles.linkCardSub}>Log test sessions, track progress, generate reports</div>
+          </div>
+          <span style={{ ...styles.linkCardArrow, color: "#4DC3FF" }}>›</span>
+        </button>
+      </div>
 
       {/* Testing schedule card */}
       <div style={styles.testingCard}>
@@ -1602,6 +1635,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  // Power/Speed + Testing shortcuts: equal-width cards side by side,
+  // wrapping to one per row on a phone.
+  linkCardRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginTop: 16 },
+  linkCard: {
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+    width: "100%", textAlign: "left", border: "1px solid", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: "var(--text)",
+  },
+  linkCardTitle: { fontSize: 14, fontWeight: 700 },
+  linkCardSub: { fontSize: 12, color: "var(--mute)", marginTop: 3 },
+  linkCardArrow: { fontSize: 22, lineHeight: 1, flexShrink: 0 },
   testingCard: {
     background: "var(--panel)",
     border: "1px solid var(--line)",

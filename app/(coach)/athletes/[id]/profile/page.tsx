@@ -928,6 +928,28 @@ export default function AthleteProfilePage() {
                 }}
               />
             </div>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, flex: "1 1 100%", minWidth: 200 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>Email (for reports)</label>
+              <input
+                type="email"
+                defaultValue={athlete?.contact_email ?? ""}
+                key={athlete?.contact_email ?? "email"}
+                placeholder="Athlete's or parent's email"
+                style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 13 }}
+                onBlur={async (e) => {
+                  const val = e.target.value.trim().toLowerCase() || null;
+                  if (val === (athlete?.contact_email ?? null)) return;
+                  if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) {
+                    setError("That email address doesn't look right.");
+                    return;
+                  }
+                  const supabase = createClient();
+                  const { error: upErr } = await supabase.from("athletes").update({ contact_email: val }).eq("id", athleteId);
+                  if (upErr) setError("Could not save email: " + upErr.message);
+                  else setAthlete((prev) => prev ? { ...prev, contact_email: val } : prev);
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>

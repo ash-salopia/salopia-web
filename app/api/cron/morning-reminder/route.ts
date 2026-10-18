@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { sendPushToAthlete } from "@/lib/push/send";
+import { runDailyCoachJobs } from "@/lib/daily-jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,10 @@ export async function GET(req: NextRequest) {
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
+
+  // Coach jobs that need a daily tick (report schedule reminders) -
+  // piggybacked here rather than a third cron entry (Hobby allows two).
+  await runDailyCoachJobs(req.nextUrl.origin);
 
   const service = createServiceRoleClient();
   const now = new Date();

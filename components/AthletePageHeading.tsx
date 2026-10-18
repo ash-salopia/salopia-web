@@ -1,20 +1,18 @@
-// Shared page heading for the athlete share-link app — the emoji sits on
-// its own line above the title, so every page header reads the same on a
-// phone.
+// Shared page heading for the athlete share-link app. Title only - the
+// app no longer uses emoji in headings, for a cleaner, professional look
+// (`emoji` is still accepted so older call sites compile, but ignored).
 
 export default function AthletePageHeading({
-  emoji,
   title,
   style,
 }: {
-  emoji: string;
+  emoji?: string;
   title: string;
   style?: React.CSSProperties;
 }) {
   return (
-    <div style={{ padding: "14px 16px 4px", ...style }}>
-      <div style={{ fontSize: 20, lineHeight: 1.1 }} aria-hidden>{emoji}</div>
-      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--text)", lineHeight: 1.15, marginTop: 2 }}>
+    <div style={{ padding: "16px 16px 4px", ...style }}>
+      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: "var(--text)", lineHeight: 1.15 }}>
         {title}
       </div>
     </div>

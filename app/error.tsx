@@ -8,6 +8,30 @@
 import { useEffect } from "react";
 import * as Sentry from "@sentry/nextjs";
 
+// A tab opened before a deploy still points at the old build's
+// JavaScript files; the first on-demand load after the deploy (e.g.
+// opening Reports) 404s with a ChunkLoadError. Reloading picks up the
+// new build. Guarded to once a minute so a genuinely missing file can't
+// cause a reload loop.
+function isStaleBuild(error: Error): boolean {
+  return (
+    error.name === "ChunkLoadError" ||
+    /Loading chunk [\w-]+ failed|Failed to fetch dynamically imported module|Importing a module script failed/i.test(error.message ?? "")
+  );
+}
+const RELOAD_KEY = "visbuild:chunk-reload-at";
+function reloadOnceForStaleBuild(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_KEY) || 0);
+    if (Date.now() - last < 60_000) return false;
+    sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  } catch {
+    return false; // no storage = no loop guard, so don't auto-reload
+  }
+  window.location.reload();
+  return true;
+}
+
 export default function ErrorBoundary({
   error,
   reset,
@@ -22,6 +46,7 @@ export default function ErrorBoundary({
   // doesn't just disappear into their own browser console. Both are
   // fire-and-forget: a logging failure must never block the error UI.
   useEffect(() => {
+    if (isStaleBuild(error) && reloadOnceForStaleBuild()) return;
     Sentry.captureException(error);
     fetch("/api/client-error", {
       method: "POST",

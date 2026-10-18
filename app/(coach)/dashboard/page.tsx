@@ -24,6 +24,7 @@ import { listTodayCheckIns } from "@/lib/data/checkins";
 import { flaggedConditions } from "@/lib/checkin";
 import { createClient } from "@/lib/supabase-browser";
 import DirectMessageThread from "@/components/DirectMessageThread";
+import RecommendedActions, { type RecInputs } from "@/components/dashboard/RecommendedActions";
 import type { Athlete } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -382,9 +383,29 @@ export default function DashboardPage() {
   const needsAttention = rows.filter((r) => r.status.daysLeft == null || r.status.daysLeft <= 7);
   const onTrack = rows.filter((r) => r.status.daysLeft != null && r.status.daysLeft > 7);
 
+  const recInputs: RecInputs = {
+    programmes: rows.map((r) => ({ athleteId: r.athlete.id, athleteName: r.athlete.name, daysLeft: r.status.daysLeft, lastDate: r.status.lastDate })),
+    messages: recentMessages.map((m) => ({ id: m.id, athleteId: m.athlete_id, athleteName: m.athlete?.name ?? "Athlete", body: m.body, createdAt: m.created_at })),
+    sessionComments: sessionNotes.map((n) => ({ ...n })),
+    poorCheckIns: checkInAlerts,
+    unavailable: unavailable.map((a) => ({ athleteId: a.id, athleteName: a.name, status: rtpMeta((a as any).rtp_status).label })),
+    loadFlags,
+    recovery: recoveryAlerts,
+    testsDue: testsDue.map((t) => ({ athleteId: t.athlete.id, athleteName: t.athlete.name, daysUntilTest: t.daysUntilTest })),
+    reportsDue: reportsDue.map((r) => ({ athleteId: r.athlete.id, athleteName: r.athlete.name, daysOverdue: r.daysOverdue })),
+    notTrained: notTrained.map((n) => ({ athleteId: n.athlete.id, athleteName: n.athlete.name })),
+    lowCompletion: lowCompletion.map((l) => ({ athleteId: l.athlete.id, athleteName: l.athlete.name, completionPct: l.completionPct })),
+  };
+
   return (
     <div style={st.page}>
       <h1 style={st.title}>Dashboard</h1>
+
+      <RecommendedActions
+        inputs={recInputs}
+        onMessage={(athleteId, athleteName, initialText) => setDmModal({ athleteId, athleteName, initialText })}
+        onOpenAthlete={(athleteId, label) => router.push(label === "Testing" ? `/athletes/${athleteId}/testing` : `/athletes/${athleteId}`)}
+      />
 
       {/* ── This week ─────────────────────────────────────────────────────── */}
       <div style={st.weekCard}>

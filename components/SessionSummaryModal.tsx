@@ -180,7 +180,7 @@ export default function SessionSummaryModal({ session, allSessions, token, onClo
           )}
           {!!sessionPBs?.length && (
             <div style={{ ...s.stat, borderColor: "var(--good)", background: "var(--good-dim)" }}>
-              <div style={{ ...s.statValue, color: "var(--good)" }}>🏆 {sessionPBs.length}</div>
+              <div style={{ ...s.statValue, color: "var(--good)" }}>{sessionPBs.length}</div>
               <div style={s.statLabel}>{sessionPBs.length === 1 ? "New PB" : "New PBs"}</div>
             </div>
           )}

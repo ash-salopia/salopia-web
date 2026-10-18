@@ -8,6 +8,8 @@ import type { Athlete, Session, SessionType } from "@/types";
 import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/components/WeeklyReflectionModal";
 import LogSportModal from "@/components/sport/LogSportModal";
 import Avatar from "@/components/Avatar";
+import Icon from "@/components/ui/Icon";
+import { reflectionWindow, opensLabel } from "@/lib/reflection-window";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import { rtpMeta } from "@/lib/rtp";
 import { isPushSupported, currentPushSubscription, subscribeToPush } from "@/lib/push/subscribe-client";
@@ -68,6 +70,7 @@ export default function AthleteLinkShell({
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(athlete.avatar_url ?? null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
 
   const handleAvatarUpload = async (file: File) => {
@@ -255,14 +258,20 @@ export default function AthleteLinkShell({
 
   // Weekly reflection - anchored to the week being viewed (week view) or
   // the current week (month view). Shown for the current week and any past
-  // week, hidden for future weeks. The in-progress week is read-only until
-  // Saturday; once a week is over it can always be back-filled.
+  // week, hidden for future weeks. The in-progress week opens on the day of
+  // its last programmed session (lib/reflection-window.ts - same rule the
+  // API enforces); once a week is over it can always be back-filled.
   const thisWeekMonday = currentWeekStart();
   const reflectionWeek = calView === "week" ? weekStart : thisWeekMonday;
   const reflectionIsFuture = reflectionWeek > thisWeekMonday;
   const reflectionIsCurrent = reflectionWeek === thisWeekMonday;
-  const weekendNow = [0, 6].includes(new Date().getDay()); // Sat or Sun
-  const reflectionReadOnly = reflectionIsCurrent && !weekendNow;
+  const todayLocal = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const reflectionWin = reflectionWindow(sessions, thisWeekMonday, todayLocal);
+  const reflectionReadOnly = reflectionIsCurrent && !reflectionWin.open;
+  const reflectionOpensDay = opensLabel(reflectionWin.opensOn);
   const showReflection = reflectionEnabled && !reflectionIsFuture;
 
   const prevMonth = () => setCalendarMonth(({ year, month }) =>
@@ -281,7 +290,7 @@ export default function AthleteLinkShell({
       {showPushPrompt && (
         <div style={st.pushBanner}>
           <div>
-            <div style={st.pushBannerTitle}>🔔 Turn on notifications?</div>
+            <div style={st.pushBannerTitle}>Turn on notifications?</div>
             <div style={st.pushBannerDesc}>Get reminded when you have a session, or if you forget to log one.</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
@@ -317,13 +326,37 @@ export default function AthleteLinkShell({
             <div style={st.brand}>{branding?.displayName ?? "VIS BUILD"}</div>
             <div style={st.athleteName}>{athlete.name}</div>
           </div>
-          <button
-            style={st.settingsBtn}
-            onClick={() => router.push(`/a/${token}/settings`)}
-            title="Privacy settings"
-          >
-            ⚙️
-          </button>
+          <div style={{ position: "relative" }}>
+            <button style={st.menuBtn} onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen}>
+              <Icon name="menu" size={18} />
+              <span>Menu</span>
+            </button>
+            {menuOpen && (
+              <>
+                <div style={st.menuBackdrop} onClick={() => setMenuOpen(false)} />
+                <nav style={st.menuPanel} role="menu">
+                  {[
+                    { href: "programmes", label: "My Programmes" },
+                    { href: "reports", label: "Reports" },
+                    { href: "goals", label: "Goals" },
+                    { href: "community", label: "Community" },
+                    ...(challengesEnabled ? [{ href: "challenges", label: "Challenges" }] : []),
+                    { href: "documents", label: "Documents" },
+                    { href: "library", label: "Session Library" },
+                  ].map((item) => (
+                    <button key={item.href} role="menuitem" style={st.menuItem} onClick={() => { setMenuOpen(false); router.push(`/a/${token}/${item.href}`); }}>
+                      {item.label}
+                    </button>
+                  ))}
+                  <div style={st.menuDivider} />
+                  <button role="menuitem" style={st.menuItem} onClick={() => { setMenuOpen(false); router.push(`/a/${token}/settings`); }}>
+                    <Icon name="settings" size={15} style={{ marginRight: 8, color: "var(--mute)" }} />
+                    Settings
+                  </button>
+                </nav>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -340,27 +373,6 @@ export default function AthleteLinkShell({
           </div>
         );
       })()}
-
-      {/* Nav tabs */}
-      <div style={st.tabs}>
-        <button style={st.tab} onClick={() => router.push(`/a/${token}/community`)}>
-          💬 Community
-        </button>
-        <button style={st.tab} onClick={() => router.push(`/a/${token}/goals`)}>
-          🎯 Goals
-        </button>
-        {challengesEnabled && (
-          <button style={st.tab} onClick={() => router.push(`/a/${token}/challenges`)}>
-            🏆 Challenges
-          </button>
-        )}
-        <button style={st.tab} onClick={() => router.push(`/a/${token}/documents`)}>
-          📁 Docs
-        </button>
-        <button style={st.tab} onClick={() => router.push(`/a/${token}/library`)}>
-          📚 Library
-        </button>
-      </div>
 
       {/* Calendar */}
       <div style={st.calWrap}>
@@ -401,7 +413,7 @@ export default function AthleteLinkShell({
                   <div style={{ padding: 8, display: "flex", flexDirection: "column" as const, gap: 6 }}>
                     {(milestonesByDate.get(iso) ?? []).map((ms) => (
                       <button key={ms.id} style={st.milestoneRow} onClick={() => router.push(`/a/${token}/goals`)}>
-                        <span style={{ fontSize: 13 }}>🎯</span>
+                        <Icon name="target" size={14} style={{ color: "var(--accent)" }} />
                         <span style={{ flex: 1, textAlign: "left" as const, fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>{ms.label}</span>
                         <span style={{ fontSize: 10, color: "var(--mute)", fontWeight: 700 }}>MILESTONE</span>
                       </button>
@@ -475,11 +487,11 @@ export default function AthleteLinkShell({
                   {(milestonesByDate.get(iso) ?? []).map((ms) => (
                     <button
                       key={ms.id}
-                      title={`🎯 ${ms.label}`}
+                      title={`Goal: ${ms.label}`}
                       style={{ ...st.chip, background: "var(--accent)28", borderColor: "var(--accent)88", color: "var(--accent)" }}
                       onClick={() => router.push(`/a/${token}/goals`)}
                     >
-                      🎯
+                      <Icon name="target" size={12} />
                     </button>
                   ))}
 
@@ -512,20 +524,20 @@ export default function AthleteLinkShell({
             back-fill; the in-progress week is read-only until Saturday. */}
         {showReflection && (
           <button style={st.reflectionPrompt} onClick={() => setReflectionOpen(true)}>
-            <span style={{ fontSize: 18 }}>📝</span>
+            <Icon name="note" size={18} style={{ color: "var(--accent)" }} />
             <div style={{ flex: 1, textAlign: "left" as const }}>
               <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>Weekly Reflection</div>
               <div style={{ fontSize: 11, color: "var(--mute)" }}>{weekStartLabel(reflectionWeek)}</div>
             </div>
             <span style={{ color: reflectionReadOnly ? "var(--mute)" : "var(--accent)", fontSize: 12, fontWeight: 700 }}>
-              {reflectionReadOnly ? "Opens Sat" : "Complete →"}
+              {reflectionReadOnly ? `Opens ${reflectionOpensDay.slice(0, 3)}` : "Complete →"}
             </span>
           </button>
         )}
 
         {loadMonitoringEnabled && (
           <button style={st.reflectionPrompt} onClick={() => setLogSportOpen(true)}>
-            <span style={{ fontSize: 18 }}>⚽</span>
+            <Icon name="history" size={18} style={{ color: "var(--accent)" }} />
             <div style={{ flex: 1, textAlign: "left" as const }}>
               <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>Log a sport / other session</div>
               <div style={{ fontSize: 11, color: "var(--mute)" }}>Club training, a match, a swim, a ride…</div>
@@ -591,6 +603,7 @@ export default function AthleteLinkShell({
           weekStart={reflectionWeek}
           weekLabel={weekStartLabel(reflectionWeek)}
           readOnly={reflectionReadOnly}
+          opensDay={reflectionOpensDay}
           onClose={() => setReflectionOpen(false)}
         />
       )}
@@ -628,6 +641,11 @@ const st: Record<string, React.CSSProperties> = {
     fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
   },
   brand: { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: 2, color: "var(--accent)" },
+  menuBtn: { display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
+  menuBackdrop: { position: "fixed", inset: 0, zIndex: 40 },
+  menuPanel: { position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 41, width: 220, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 6, boxShadow: "0 14px 36px rgba(0,0,0,.4)", display: "flex", flexDirection: "column" },
+  menuItem: { display: "flex", alignItems: "center", width: "100%", background: "transparent", border: "none", color: "var(--text)", fontSize: 14, fontWeight: 600, padding: "11px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" },
+  menuDivider: { height: 1, background: "var(--line)", margin: "4px 6px" },
   settingsBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },
   athleteName: { fontSize: 22, fontWeight: 700, color: "var(--text)", marginTop: 2 },
   tabs: { display: "flex", gap: 6, padding: "10px 16px", borderBottom: "1px solid var(--line)" },

@@ -44,6 +44,7 @@ export interface Athlete {
   sex: "male" | "female" | null;
   date_of_birth: string | null; // YYYY-MM-DD
   bodyweight_kg: number | null; // 0028 — default for test sessions / IMTP relative strength
+  contact_email?: string | null; // 0122 — where Training Reports are emailed (athlete's or a parent's)
   max_hr: number | null; // 0086 — max heart rate (bpm), drives HR training zones
   resting_hr: number | null; // 0086 — resting HR (bpm); when set, HR zones use Karvonen / HR-reserve
   mas_kmh: number | null; // 0086 — Maximal Aerobic Speed (km/h), drives per-zone pace/speed targets

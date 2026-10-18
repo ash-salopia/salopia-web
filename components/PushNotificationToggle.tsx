@@ -195,7 +195,7 @@ export default function PushNotificationToggle({ mode, token, label }: Props) {
     <div style={s.wrap}>
       <div style={s.row}>
         <div>
-          <div style={s.title}>🔔 {label ?? "Push notifications"}</div>
+          <div style={s.title}>{label ?? "Push notifications"}</div>
           <div style={s.desc}>
             {mode === "coach"
               ? "Get notified on this device when an athlete hits a PB."

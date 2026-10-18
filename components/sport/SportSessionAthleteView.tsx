@@ -105,8 +105,8 @@ export default function SportSessionAthleteView({
       {planned && (planned.duration_min != null || planned.rpe != null) && (
         <div style={s.planRow}>
           <span style={s.planLabel}>Planned:</span>
-          {planned.duration_min != null && <span style={s.planChip}>⏱ {planned.duration_min} min</span>}
-          {planned.rpe != null && <span style={s.planChip}>🔥 RPE {planned.rpe}/10</span>}
+          {planned.duration_min != null && <span style={s.planChip}>{planned.duration_min} min</span>}
+          {planned.rpe != null && <span style={s.planChip}>RPE {planned.rpe}/10</span>}
         </div>
       )}
 
