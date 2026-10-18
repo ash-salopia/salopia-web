@@ -3,6 +3,7 @@ import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { feedDisplayName } from "@/lib/feed-name";
 import { notifyCoachesOfMessage } from "@/lib/push/send";
+import { getMessagingAccess } from "@/lib/messaging-access";
 
 // GET — returns athlete's groups + messages for a given group
 export async function GET(req: NextRequest) {
@@ -22,9 +23,12 @@ export async function GET(req: NextRequest) {
     .select("group_id, groups(id, name, colour)")
     .eq("athlete_id", athlete.id);
 
+  // Only groups whose chat is open to this athlete (0121) - a group with
+  // chat switched off, or chat off for the account/athlete, isn't listed.
+  const access = await getMessagingAccess(athlete as any);
   const groups = (memberships ?? [])
     .map((m: any) => Array.isArray(m.groups) ? m.groups[0] : m.groups)
-    .filter(Boolean);
+    .filter((g: any) => g && access.chatGroupIds.has(g.id));
 
   // Get messages for the requested group (or first group if none specified)
   const targetGroupId = groupId ?? groups[0]?.id;
@@ -32,7 +36,7 @@ export async function GET(req: NextRequest) {
   const displayName = feedDisplayName((athlete as any).name, (athlete as any).feed_first_name_only);
 
   if (!targetGroupId) {
-    return NextResponse.json({ groups, messages: [], athleteId: athlete.id, athleteName: displayName });
+    return NextResponse.json({ groups, messages: [], athleteId: athlete.id, athleteName: displayName, disabled: !access.groupChat });
   }
 
   // Verify athlete is a member of this group
@@ -86,6 +90,9 @@ export async function POST(req: NextRequest) {
 
   if (!membership) {
     return NextResponse.json({ error: "Not a member of this group" }, { status: 403 });
+  }
+  if (!(await getMessagingAccess(athlete as any)).chatGroupIds.has(group_id)) {
+    return NextResponse.json({ error: "Chat is turned off for this group" }, { status: 403 });
   }
 
   const senderName = feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only);

@@ -54,6 +54,8 @@ export interface Athlete {
   pb_enabled: boolean; // 0073 — per-athlete override of the org-level Personal Bests toggle (lib/data/settings.ts); org setting still wins if it's off. Distinct from hide_pbs_from_feed (0047), which only hides an already-tracked PB from the community feed — this instead turns detection/tracking off entirely.
   pb_hidden: string[]; // 0092 — lower-cased exercise names a coach has hidden from the PB list (covers PBs re-derived from logged sessions, which deleting a personal_bests row can't touch)
   challenges_enabled: boolean; // 0074 — per-athlete override of the org-level Challenges toggle (lib/data/settings.ts); org setting still wins if it's off
+  direct_messages_enabled?: boolean; // 0121 — per-athlete coach-messages switch; account and group switches can still turn it off
+  group_chat_enabled?: boolean; // 0121 — per-athlete group-chat switch
   squad_comparison_enabled: boolean; // 0075 — per-athlete override of the org-level "Compare to squad" report toggle (lib/data/settings.ts); org setting still wins if it's off
   rtp_status: RtpStatus; // 0088 — availability / return-to-play status; 'available' is the default for everyone
   rtp_note: string | null; // 0088 — coach/physio-only context for the current status (e.g. "L hamstring strain grade 2, running progression")
@@ -442,6 +444,8 @@ export interface Session {
   warmup_video_url: string | null; // 0105 — optional video link on the Warm-up block
   cooldown_video_url: string | null; // 0105 — optional video link on the Cool-down block
   athlete_notes: string | null; // 0033 — athlete's own note on the session, separate from the coach's session_notes
+  athlete_notes_reaction?: "up" | "down" | null; // 0120 — coach's 👍/👎 on athlete_notes
+  athlete_notes_reaction_by?: string | null;       // 0120 — name of the coach who reacted
   athlete_notes_acknowledged: boolean; // 0036 — coach has dismissed this note off the dashboard
   source_session_id: string | null; // 0029 — links copies back to their original for future-update propagation
   rpe: number | null;              // 0031 — post-session RPE (1-10) logged by athlete

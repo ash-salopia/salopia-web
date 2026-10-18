@@ -11,6 +11,7 @@ import { useState, useEffect, Fragment } from "react";
 import { saveWithRetry } from "@/lib/save-queue";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import { NoteReactionLine } from "@/components/MessageReactions";
 import AthletePageHeading from "@/components/AthletePageHeading";
 import VideoModal from "@/components/VideoModal";
 import AthleteExerciseHistoryModal from "@/components/AthleteExerciseHistoryModal";
@@ -95,7 +96,10 @@ export default function PowerSpeedAthleteView({
     if (!result.ok && !result.queued) { setError(result.error); throw new Error(result.error); }
   };
 
-  const handleNotesChange = (athlete_notes: string) => setSession((prev) => ({ ...prev, athlete_notes } as Session));
+  // Editing the note retracts the coach's reaction to it (the server
+  // clears it on save too).
+  const handleNotesChange = (athlete_notes: string) =>
+    setSession((prev) => ({ ...prev, athlete_notes, athlete_notes_reaction: null, athlete_notes_reaction_by: null } as Session));
   const saveNotes = async () => {
     const result = await saveWithRetry(`notes:${session.id}`, "/api/athlete-link/session-notes", { token, sessionId: session.id, notes: session.athlete_notes ?? "" });
     if (!result.ok && !result.queued) setError(result.error);
@@ -156,6 +160,9 @@ export default function PowerSpeedAthleteView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
+      {(session.athlete_notes ?? "").trim() && (
+        <NoteReactionLine reaction={session.athlete_notes_reaction} by={session.athlete_notes_reaction_by} />
+      )}
       {checkInModal}
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import { NoteReactionLine } from "@/components/MessageReactions";
 import { saveWithRetry } from "@/lib/save-queue";
 import { useSessionCheckIn, lockedContentStyle } from "@/lib/use-session-checkin";
 import type { Session } from "@/types";
@@ -135,10 +136,18 @@ export default function SportSessionAthleteView({
               rows={3}
               value={notes}
               placeholder="How it went, any niggles, anything your coach should know…"
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                // Editing the note retracts the coach's reaction to it
+                // (the server clears it on save too).
+                if (session.athlete_notes_reaction) setSession((prev) => ({ ...prev, athlete_notes_reaction: null, athlete_notes_reaction_by: null }));
+              }}
               onBlur={saveNotes}
             />
           </div>
+          {notes.trim() && (
+            <NoteReactionLine reaction={session.athlete_notes_reaction} by={session.athlete_notes_reaction_by} />
+          )}
         </div>
         {lockOverlay}
       </div>

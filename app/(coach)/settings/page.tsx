@@ -292,6 +292,61 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      {/* ── Messaging (0121) ── */}
+      <CollapsibleSection title="Messaging">
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Coach messages</div>
+              <div style={s.cardDesc}>
+                1-to-1 messages between coaches and athletes (the athlete's "💬 Coach" tab). Off hides
+                it for every athlete and stops new messages either way; past messages are kept and come
+                back if you turn it on again. Can also be switched off for one athlete (their profile)
+                or for everyone in a group (Community → Groups → Manage).
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.direct_messages_enabled ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, direct_messages_enabled: !prev.direct_messages_enabled }))}
+              aria-label="Coach messages"
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.direct_messages_enabled ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={s.cardLabel}>Group chat</div>
+              <div style={s.cardDesc}>
+                Group chats in Community. Off hides every group chat for athletes and coaches; past
+                messages are kept. Can also be switched off for one group (Community → Groups → Manage)
+                or for one athlete (their profile).
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.group_chat_enabled ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, group_chat_enabled: !prev.group_chat_enabled }))}
+              aria-label="Group chat"
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.group_chat_enabled ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
       {/* ── Challenges ── */}
       <CollapsibleSection title="Challenges">
         <div style={s.card}>

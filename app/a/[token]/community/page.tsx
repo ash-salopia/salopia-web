@@ -51,6 +51,8 @@ export default function AthleteCommunityPage() {
   const [dmInput, setDmInput] = useState("");
   const [dmSending, setDmSending] = useState(false);
   const [dmLoading, setDmLoading] = useState(true);
+  // Coach messages switched off for this athlete (0121) - hide the tab.
+  const [dmDisabled, setDmDisabled] = useState(false);
   const dmBottomRef = useRef<HTMLDivElement>(null);
   const dmPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
@@ -136,13 +138,19 @@ export default function AthleteCommunityPage() {
     if (!token) return;
     fetch(`/api/athlete-link/direct-messages?token=${token}`)
       .then((r) => r.json())
-      .then((data) => { if (data.messages) setDmMessages(data.messages); })
+      .then((data) => {
+        if (data.disabled) {
+          setDmDisabled(true);
+          setTab((t) => (t === "coach" ? "announcements" : t));
+        }
+        if (data.messages) setDmMessages(data.messages);
+      })
       .catch(() => {})
       .finally(() => setDmLoading(false));
   }, [token]);
 
   useEffect(() => {
-    if (tab !== "coach") {
+    if (tab !== "coach" || dmDisabled) {
       dmPollRef.current && clearInterval(dmPollRef.current);
       return;
     }
@@ -155,7 +163,7 @@ export default function AthleteCommunityPage() {
     };
     dmPollRef.current = setInterval(poll, 3000);
     return () => { dmPollRef.current && clearInterval(dmPollRef.current); };
-  }, [tab, token]);
+  }, [tab, token, dmDisabled]);
 
   useEffect(() => { dmBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [dmMessages]);
 
@@ -336,10 +344,12 @@ export default function AthleteCommunityPage() {
             Chat
           </button>
         )}
-        <button style={{ ...s.tab, ...(tab === "coach" ? s.tabActive : {}) }}
-          onClick={() => setTab("coach")}>
-          💬 Coach
-        </button>
+        {!dmDisabled && (
+          <button style={{ ...s.tab, ...(tab === "coach" ? s.tabActive : {}) }}
+            onClick={() => setTab("coach")}>
+            💬 Coach
+          </button>
+        )}
         <button style={{ ...s.tab, ...(tab === "comps" ? s.tabActive : {}) }}
           onClick={() => setTab("comps")}>
           🏆 Comps
@@ -509,7 +519,7 @@ export default function AthleteCommunityPage() {
           )}
 
           {/* Direct thread with the coach team */}
-          {tab === "coach" && (
+          {tab === "coach" && !dmDisabled && (
             <div style={s.chatPage}>
               <div style={s.messageList}>
                 {dmLoading ? (

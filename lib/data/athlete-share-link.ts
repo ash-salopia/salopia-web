@@ -392,10 +392,16 @@ export async function updateAthleteSessionNotes(
   // A new/changed non-empty note needs the coach's attention again —
   // reset acknowledged so it (re)surfaces on the dashboard. Clearing
   // the note back to empty needs no review, so mark it acknowledged.
-  const { error } = await supabase
+  //
+  // An edited comment also drops the coach's 👍/👎 (0120) - that was a
+  // reply to the old text. Falls back to the plain update if the 0120
+  // columns don't exist yet, so saving a note never breaks over it.
+  const base = { athlete_notes: athleteNotes, athlete_notes_acknowledged: !athleteNotes.trim() };
+  let { error } = await supabase
     .from("sessions")
-    .update({ athlete_notes: athleteNotes, athlete_notes_acknowledged: !athleteNotes.trim() })
+    .update({ ...base, athlete_notes_reaction: null, athlete_notes_reaction_by: null, athlete_notes_reacted_at: null })
     .eq("id", sessionId);
+  if (error) ({ error } = await supabase.from("sessions").update(base).eq("id", sessionId));
   if (error) throw error;
 }
 

@@ -12,6 +12,7 @@
 // history); messages, check-ins and PBs are fetched here.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { ReactionButtons } from "@/components/MessageReactions";
 import { useEffect, useMemo, useState } from "react";
 import { listAthleteMessages } from "@/lib/data/messages";
 import { listAthleteCheckIns } from "@/lib/data/checkins";
@@ -20,7 +21,7 @@ import { computeLoadMonitoring } from "@/lib/training-load";
 import { rtpMeta } from "@/lib/rtp";
 import { flaggedConditions, CHECKIN_QUESTIONS } from "@/lib/checkin";
 import type { CheckInRules } from "@/lib/checkin";
-import type { CheckIn, DirectMessage, Session } from "@/types";
+import type { CheckIn, DirectMessage, MessageReaction, Session } from "@/types";
 
 interface Props {
   athleteId: string;
@@ -35,6 +36,10 @@ interface Props {
   rtpSince?: string | null;
   onOpenMessages: () => void;
   onOpenSession: (sessionId: string) => void;
+  /** Open the message thread pre-filled with a reply to this session comment. */
+  onMessageAboutNote?: (session: Session) => void;
+  /** Coach 👍/👎 on a session comment (0120); null clears it. */
+  onReactToNote?: (session: Session, reaction: MessageReaction | null) => void;
 }
 
 const DAY_MS = 86400000;
@@ -89,7 +94,7 @@ const SCORE_COLOR = (key: string, v: number): string => {
 
 export default function AthleteDashboard({
   athleteId, athleteName, sessions, lastTestDate, retestWeeks,
-  checkinEnabled, checkinRules, loadMonitoringEnabled, rtpStatus, rtpSince, onOpenMessages, onOpenSession,
+  checkinEnabled, checkinRules, loadMonitoringEnabled, rtpStatus, rtpSince, onOpenMessages, onOpenSession, onMessageAboutNote, onReactToNote,
 }: Props) {
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
@@ -234,13 +239,27 @@ export default function AthleteDashboard({
           <div style={st.list}>
             {sessionNotes.length === 0 && <div style={st.empty}>No athlete notes on recent sessions.</div>}
             {sessionNotes.map((s) => (
-              <button key={s.id} style={st.row} onClick={() => onOpenSession(s.id)}>
-                <div style={st.rowMeta}>
-                  <span style={{ fontWeight: 700, color: "var(--text)" }}>{s.name}</span>
-                  <span>· {fmtDate(s.date)}</span>
-                </div>
-                <div style={st.rowText}>{s.athlete_notes}</div>
-              </button>
+              <div key={s.id} style={st.noteCard}>
+                <button style={{ ...st.row, border: "none", padding: 0, background: "transparent" }} onClick={() => onOpenSession(s.id)}>
+                  <div style={st.rowMeta}>
+                    <span style={{ fontWeight: 700, color: "var(--text)" }}>{s.name}</span>
+                    <span>· {fmtDate(s.date)}</span>
+                  </div>
+                  <div style={st.rowText}>{s.athlete_notes}</div>
+                </button>
+                {(onReactToNote || onMessageAboutNote) && (
+                  <div style={st.noteActions}>
+                    {onReactToNote && (
+                      <ReactionButtons current={s.athlete_notes_reaction} onReact={(r) => onReactToNote(s, r)} />
+                    )}
+                    {onMessageAboutNote && (
+                      <button style={st.noteMsgBtn} onClick={() => onMessageAboutNote(s)} title={`Message ${athleteName} about this comment`}>
+                        💬 Message
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -357,6 +376,9 @@ const st: Record<string, React.CSSProperties> = {
     display: "block", width: "100%", textAlign: "left", cursor: "pointer",
     background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px",
   },
+  noteCard: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 },
+  noteActions: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  noteMsgBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   rowMeta: { fontSize: 10.5, fontWeight: 600, color: "var(--mute)", display: "flex", gap: 4, flexWrap: "wrap" },
   rowText: { fontSize: 12.5, color: "var(--text)", marginTop: 3, lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word" },
 

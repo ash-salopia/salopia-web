@@ -14,6 +14,7 @@ import HyroxCardioLog, { HYROX_LABEL, CARDIO_LABEL } from "@/components/HyroxCar
 import { HyroxTimer } from "@/components/HyroxCardioBuilder";
 import SessionRPEBlock from "@/components/SessionRPEBlock";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
+import { NoteReactionLine } from "@/components/MessageReactions";
 import { useSessionCheckIn, lockedContentStyle } from "@/lib/use-session-checkin";
 import type { Session } from "@/types";
 import type { ComputedZone } from "@/lib/training-zones";
@@ -69,7 +70,9 @@ export default function HyroxCardioAthleteView({
   };
 
   const handleAthleteNotesChange = (athlete_notes: string) => {
-    setSession((prev) => ({ ...prev, athlete_notes } as Session));
+    // Editing the note retracts the coach's reaction to it (the server
+    // clears it on save too).
+    setSession((prev) => ({ ...prev, athlete_notes, athlete_notes_reaction: null, athlete_notes_reaction_by: null } as Session));
   };
   // Fires once, when the athlete leaves the notes field, rather than on
   // every keystroke - same reasoning as AthleteSessionView's
@@ -132,6 +135,9 @@ export default function HyroxCardioAthleteView({
         placeholder="How did the session feel? Anything to flag for your coach…"
         enableTemplates={false}
       />
+      {(session.athlete_notes ?? "").trim() && (
+        <NoteReactionLine reaction={session.athlete_notes_reaction} by={session.athlete_notes_reaction_by} />
+      )}
       {checkInModal}
     </div>
   );

@@ -4,6 +4,9 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 import { feedDisplayName } from "@/lib/feed-name";
 import { notifyCoachesOfMessage, notifyCoachOfReaction } from "@/lib/push/send";
 import { REACTION_EMOJI, quoteForPush } from "@/lib/message-reactions";
+import { getMessagingAccess } from "@/lib/messaging-access";
+
+const OFF = { error: "Messaging with your coach is turned off" };
 
 // Athlete side of the 1:1 direct-message thread with their coaches -
 // mirrors app/api/athlete-link/chat/route.ts's shape, but there's no
@@ -17,6 +20,11 @@ export async function GET(req: NextRequest) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+
+  // Switched off (0121): the thread is hidden, not deleted.
+  if (!(await getMessagingAccess(athlete as any)).directMessages) {
+    return NextResponse.json({ messages: [], disabled: true, athleteId: athlete.id });
+  }
 
   const supabase = createServiceRoleClient();
   const { data: messages, error } = await supabase
@@ -51,6 +59,7 @@ export async function POST(req: NextRequest) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+  if (!(await getMessagingAccess(athlete as any)).directMessages) return NextResponse.json(OFF, { status: 403 });
 
   const supabase = createServiceRoleClient();
   const senderName = feedDisplayName((athlete as any).name ?? "Athlete", (athlete as any).feed_first_name_only);
@@ -98,6 +107,7 @@ export async function PATCH(req: NextRequest) {
 
   const athlete = await getAthleteByShareToken(token);
   if (!athlete) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
+  if (!(await getMessagingAccess(athlete as any)).directMessages) return NextResponse.json(OFF, { status: 403 });
 
   const supabase = createServiceRoleClient();
   const { data: msg } = await supabase

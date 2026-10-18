@@ -54,6 +54,33 @@ export async function listUnacknowledgedSessionNotes(): Promise<SessionNoteAlert
   });
 }
 
+// Coach 👍/👎 on an athlete's session comment (0120), or null to clear.
+// Reacting counts as reading it, so it also leaves the Dashboard panel.
+// Pushes the athlete, best-effort.
+export async function reactToSessionNote(
+  sessionId: string,
+  reaction: "up" | "down" | null,
+  coachName: string
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("sessions")
+    .update(
+      reaction
+        ? { athlete_notes_reaction: reaction, athlete_notes_reaction_by: coachName, athlete_notes_reacted_at: new Date().toISOString(), athlete_notes_acknowledged: true }
+        : { athlete_notes_reaction: null, athlete_notes_reaction_by: null, athlete_notes_reacted_at: null }
+    )
+    .eq("id", sessionId);
+  if (error) throw error;
+  if (reaction) {
+    fetch("/api/session-comments/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => {});
+  }
+}
+
 export async function acknowledgeSessionNote(sessionId: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase

@@ -766,6 +766,78 @@ export default function AthleteProfilePage() {
 
         <div style={{ ...p.checkinCard, marginTop: 8 }}>
           <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Coach messages</div>
+            <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
+              {(athlete as any).direct_messages_enabled !== false
+                ? "This athlete can message their coaches (unless it's off in Settings or for one of their groups)."
+                : "Coach messages are off for this athlete - the 💬 Coach tab is hidden and nobody can send new messages. Past messages are kept."}
+            </div>
+          </div>
+          <button
+            aria-label="Coach messages"
+            style={{
+              width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
+              background: (athlete as any).direct_messages_enabled !== false ? "var(--accent)" : "var(--panel2)",
+              position: "relative" as const, flexShrink: 0, transition: "background 0.2s",
+            }}
+            onClick={async () => {
+              const current = (athlete as any).direct_messages_enabled;
+              const next = current === false ? true : false;
+              setAthlete((prev) => prev ? { ...prev, direct_messages_enabled: next } as any : prev);
+              const supabase = createClient();
+              const { error: upErr } = await supabase.from("athletes").update({ direct_messages_enabled: next }).eq("id", athleteId);
+              if (upErr) {
+                setAthlete((prev) => prev ? { ...prev, direct_messages_enabled: current } as any : prev);
+                setError("Could not update Coach messages setting: " + upErr.message);
+              }
+            }}
+          >
+            <div style={{
+              position: "absolute" as const, top: 3, left: 3, width: 18, height: 18,
+              borderRadius: "50%", background: "#fff", transition: "transform 0.2s",
+              transform: (athlete as any).direct_messages_enabled !== false ? "translateX(20px)" : "translateX(0)",
+            }} />
+          </button>
+        </div>
+
+        <div style={{ ...p.checkinCard, marginTop: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Group chat</div>
+            <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
+              {(athlete as any).group_chat_enabled !== false
+                ? "This athlete can see and post in their groups' chats (unless chat is off in Settings or for that group)."
+                : "Group chat is off for this athlete - they won't see any group chats. Past messages are kept."}
+            </div>
+          </div>
+          <button
+            aria-label="Group chat"
+            style={{
+              width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
+              background: (athlete as any).group_chat_enabled !== false ? "var(--accent)" : "var(--panel2)",
+              position: "relative" as const, flexShrink: 0, transition: "background 0.2s",
+            }}
+            onClick={async () => {
+              const current = (athlete as any).group_chat_enabled;
+              const next = current === false ? true : false;
+              setAthlete((prev) => prev ? { ...prev, group_chat_enabled: next } as any : prev);
+              const supabase = createClient();
+              const { error: upErr } = await supabase.from("athletes").update({ group_chat_enabled: next }).eq("id", athleteId);
+              if (upErr) {
+                setAthlete((prev) => prev ? { ...prev, group_chat_enabled: current } as any : prev);
+                setError("Could not update Group chat setting: " + upErr.message);
+              }
+            }}
+          >
+            <div style={{
+              position: "absolute" as const, top: 3, left: 3, width: 18, height: 18,
+              borderRadius: "50%", background: "#fff", transition: "transform 0.2s",
+              transform: (athlete as any).group_chat_enabled !== false ? "translateX(20px)" : "translateX(0)",
+            }} />
+          </button>
+        </div>
+
+        <div style={{ ...p.checkinCard, marginTop: 8 }}>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Squad comparison</div>
             <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 3 }}>
               {(athlete as any).squad_comparison_enabled !== false
