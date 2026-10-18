@@ -284,7 +284,7 @@ export default function ShopPage() {
                 <option value="">Choose a programme…</option>
                 {programmes.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} ({(p.sessions ?? []).length} sessions{weeksOf(p) ? `, ${weeksOf(p)} weeks` : ""})
+                    {p.name} ({(p.sessions ?? []).length} sessions{weeksOf(p) ? `, ${weeksOf(p)} week${weeksOf(p) === 1 ? "" : "s"}` : ""})
                   </option>
                 ))}
               </select>
@@ -314,7 +314,7 @@ export default function ShopPage() {
               <div style={{ fontWeight: 700 }}>{p.title}</div>
               <div style={s.muted}>
                 {progById[p.programme_id]?.name ?? "Programme"} · {(progById[p.programme_id]?.sessions ?? []).length} sessions
-                {weeksOf(progById[p.programme_id]) ? ` · ${weeksOf(progById[p.programme_id])} weeks` : ""}
+                {weeksOf(progById[p.programme_id]) ? ` · ${weeksOf(progById[p.programme_id])} week${weeksOf(progById[p.programme_id]) === 1 ? "" : "s"}` : ""}
                 {!p.active ? " · hidden" : ""}
               </div>
             </div>

@@ -1,5 +1,6 @@
 import "server-only";
 import type Stripe from "stripe";
+import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
 import { sendEmail, simpleEmailHtml, escapeHtml } from "@/lib/email";
@@ -64,6 +65,7 @@ export interface PublicStore {
 }
 
 export async function getStoreBySlug(slug: string): Promise<PublicStore | null> {
+  noStore(); // public page: prices/listings must never be served from Next's data cache
   const service = createServiceRoleClient();
   const { data: org } = await service
     .from("organisations")
@@ -75,6 +77,7 @@ export async function getStoreBySlug(slug: string): Promise<PublicStore | null> 
 }
 
 export async function getStoreForOrg(organisationId: string): Promise<PublicStore | null> {
+  noStore();
   const service = createServiceRoleClient();
   const { data: org } = await service
     .from("organisations")
@@ -86,6 +89,7 @@ export async function getStoreForOrg(organisationId: string): Promise<PublicStor
 }
 
 async function buildStore(service: Service, org: Record<string, any>): Promise<PublicStore> {
+  noStore();
   const { data: products } = await service
     .from("store_products")
     .select("id, title, description, price_pence, currency, programme_id, sort_order")

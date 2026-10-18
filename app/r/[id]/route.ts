@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
+import { unstable_noStore as noStore } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ To keep a copy, use your browser&rsquo;s <b>Print</b> option and choose <b>Save 
 <style>@media print { .vb-share-bar { display: none !important; } }</style>`;
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  noStore(); // a withdrawn or expired link must stop working immediately
   if (!UUID_RE.test(params.id)) return message("Report not found", "Check the link and try again.", 404);
 
   const supabase = createServiceRoleClient();

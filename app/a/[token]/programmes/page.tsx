@@ -135,7 +135,7 @@ export default function AthleteProgrammesPage() {
                 <div style={{ minWidth: 0 }}>
                   <div style={s.cardTitle}>{item.title}</div>
                   <div style={s.muted}>
-                    {item.weeks ? `${item.weeks} weeks · ` : ""}
+                    {item.weeks ? `${item.weeks} week${item.weeks === 1 ? "" : "s"} · ` : ""}
                     {item.sessions} sessions
                   </div>
                 </div>
@@ -187,7 +187,7 @@ export default function AthleteProgrammesPage() {
               <div key={p.id} style={s.card}>
                 <div style={s.cardTitle}>{p.title}</div>
                 <div style={s.muted}>
-                  {p.weeks ? `${p.weeks} weeks · ` : ""}
+                  {p.weeks ? `${p.weeks} week${p.weeks === 1 ? "" : "s"} · ` : ""}
                   {p.sessions} sessions
                 </div>
                 {p.description && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{p.description}</div>}
