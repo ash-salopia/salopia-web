@@ -64,14 +64,32 @@ export async function POST(req: NextRequest) {
   try {
     if (body.action === "dashboard") {
       if (!org.stripe_connect_account_id) return NextResponse.json({ error: "Not connected yet" }, { status: 400 });
-      const link = await stripe.accounts.createLoginLink(org.stripe_connect_account_id);
-      return NextResponse.json({ url: link.url });
+      // Coaches have their own full Stripe account (see below), so the
+      // dashboard is just Stripe's own site. Older Express accounts still
+      // get a one-off login link.
+      const acct = await stripe.accounts.retrieve(org.stripe_connect_account_id);
+      if (acct.controller?.stripe_dashboard?.type === "express") {
+        const link = await stripe.accounts.createLoginLink(org.stripe_connect_account_id);
+        return NextResponse.json({ url: link.url });
+      }
+      return NextResponse.json({ url: "https://dashboard.stripe.com/" });
     }
 
     let accountId = org.stripe_connect_account_id as string | null;
     if (!accountId) {
+      // Stripe now requires new connected accounts to have Stripe (not the
+      // platform) liable for losses - "Managed Risk". That rules out the
+      // Express dashboard on the stable API, so each coach gets their own
+      // full Stripe account: they own it, see everything in Stripe's
+      // dashboard, pay Stripe's fees directly, and VIS BUILD carries no
+      // chargeback/negative-balance risk. Works with our direct charges.
       const acct = await stripe.accounts.create({
-        type: "express",
+        controller: {
+          losses: { payments: "stripe" },
+          fees: { payer: "account" },
+          requirement_collection: "stripe",
+          stripe_dashboard: { type: "full" },
+        },
         country: "GB",
         email: coach.email ?? undefined,
         business_profile: { name: org.name ?? undefined, product_description: "Training programmes sold through VIS BUILD" },
