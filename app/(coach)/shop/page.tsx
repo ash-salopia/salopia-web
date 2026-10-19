@@ -48,14 +48,15 @@ export default function ShopPage() {
 
   const load = useCallback(async () => {
     try {
-      const [st, prods, progs, sales, cs] = await Promise.all([
-        getStoreSettings(),
+      const st = await getStoreSettings();
+      setSettings(st);
+      if (!st.canManage) return;
+      const [prods, progs, sales, cs] = await Promise.all([
         listStoreProducts(),
         listProgrammes(),
         listPurchases(),
         fetch("/api/store/connect", { cache: "no-store" }).then((r) => r.json()),
       ]);
-      setSettings(st);
       setForm({ store_slug: st.store_slug ?? "", store_name: st.store_name ?? st.orgName, store_description: st.store_description });
       setProducts(prods);
       setProgrammes(progs);
@@ -148,6 +149,18 @@ export default function ShopPage() {
   };
 
   if (loading) return <div style={s.page}><div style={s.muted}>Loading…</div></div>;
+
+  if (settings && !settings.canManage) {
+    return (
+      <div style={s.page}>
+        <h1 style={s.title}>Online Store</h1>
+        <section style={s.card}>
+          <div style={s.cardTitle}>You don&apos;t have access to the store</div>
+          <div style={s.text}>Sales and store listings are visible to the account owner. Ask them to switch on store access for you in Settings → Team.</div>
+        </section>
+      </div>
+    );
+  }
 
   const seats = settings ? { used: settings.athletesUsed, limit: settings.seat_limit } : null;
   const seatPct = seats?.limit ? seats.used / seats.limit : 0;

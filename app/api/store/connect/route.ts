@@ -19,7 +19,7 @@ async function coachOrg() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: coach } = await supabase.from("coaches").select("id, email, role, organisation_id").eq("id", user.id).single();
+  const { data: coach } = await supabase.from("coaches").select("*").eq("id", user.id).single();
   if (!coach) return null;
   const service = createServiceRoleClient();
   const { data: org } = await service
@@ -33,7 +33,8 @@ async function coachOrg() {
 export async function GET() {
   const ctx = await coachOrg();
   if (!ctx) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  const { org, service } = ctx;
+  const { coach, org, service } = ctx;
+  if (coach.role !== "owner" && coach.can_manage_store !== true) return NextResponse.json({ error: "No access to the online store" }, { status: 403 });
   if (!org.stripe_connect_account_id) return NextResponse.json({ connected: false, chargesEnabled: false, detailsSubmitted: false });
   if (!process.env.STRIPE_SECRET_KEY) return NextResponse.json({ connected: true, chargesEnabled: org.stripe_connect_charges_enabled, detailsSubmitted: org.stripe_connect_details_submitted });
   try {

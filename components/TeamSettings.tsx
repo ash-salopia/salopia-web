@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import CoachAthleteAssignModal from "@/components/CoachAthleteAssignModal";
-import { setCoachAthleteAccess, listCoachAssignedAthleteIds } from "@/lib/data/coach-access";
+import { setCoachAthleteAccess, setCoachStoreAccess, listCoachAssignedAthleteIds } from "@/lib/data/coach-access";
 
 interface Coach {
   id: string;
@@ -20,6 +20,7 @@ interface Coach {
   accepted_at: string | null;
   archived: boolean;
   athlete_access: "all" | "assigned";
+  can_manage_store?: boolean;
 }
 
 interface Props {
@@ -39,12 +40,13 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
 
   async function loadCoaches() {
     const supabase = createClient();
+    // select("*") so the list still loads if migration 0126 (can_manage_store) hasn't run.
     const { data } = await supabase
       .from("coaches")
-      .select("id, name, email, role, accepted_at, archived, athlete_access")
+      .select("*")
       .eq("organisation_id", orgId)
       .order("created_at", { ascending: true });
-    setCoaches(data ?? []);
+    setCoaches((data ?? []) as Coach[]);
     setLoading(false);
 
     const restricted = (data ?? []).filter((c) => c.athlete_access === "assigned");
@@ -101,6 +103,15 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
       if (access === "assigned") setAssignModalCoach({ ...coach, athlete_access: access });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not update athlete access");
+    }
+  }
+
+  async function handleStoreAccessChange(coach: Coach, on: boolean) {
+    try {
+      await setCoachStoreAccess(coach.id, on);
+      setCoaches((prev) => prev.map((c) => (c.id === coach.id ? { ...c, can_manage_store: on } : c)));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not update store access");
     }
   }
 
@@ -169,6 +180,14 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
                       Manage athletes ({assignedCounts[c.id] ?? 0})
                     </button>
                   )}
+                  <label style={s.storeToggle} title="See sales and manage the Online Store. Connecting Stripe stays with the owner.">
+                    <input
+                      type="checkbox"
+                      checked={c.can_manage_store === true}
+                      onChange={(e) => handleStoreAccessChange(c, e.target.checked)}
+                    />
+                    Online store access
+                  </label>
                 </div>
               )}
             </div>
@@ -275,7 +294,8 @@ const s: Record<string, React.CSSProperties> = {
   list: { display: "flex", flexDirection: "column" as const, gap: 8 },
   rowWrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" },
   row: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
-  accessRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)" },
+  storeToggle: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer", marginLeft: "auto" },
+  accessRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)" },
   accessSelect: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 600 },
   manageBtn: { background: "transparent", border: "1px solid var(--accent)", color: "var(--accent)", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   rowMain: { minWidth: 0 },

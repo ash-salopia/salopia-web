@@ -1,7 +1,10 @@
 import { createClient } from "@/lib/supabase-browser";
 
-// Coach-side data for the Programme Store (0124). Store details live on
-// organisations (owner-only updates, 0060); products are org-wide; sales
+// Coach-side data for the Programme Store (0124). Only the owner and
+// coaches the owner has given store access (coaches.can_manage_store,
+// 0126) can see products and sales - RLS enforces it. Store details live
+// on organisations and are saved through update_store_settings() so a
+// store manager doesn't need owner rights on the whole org row. Sales
 // are read-only here (written by the payment webhook).
 
 export interface StoreSettings {
@@ -43,13 +46,19 @@ async function myOrg() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");
-  const { data: coach } = await supabase.from("coaches").select("organisation_id, role").eq("id", user.id).single();
+  const { data: coach } = await supabase.from("coaches").select("*").eq("id", user.id).single();
   if (!coach) throw new Error("Coach profile not found");
-  return { supabase, orgId: coach.organisation_id as string, isOwner: coach.role === "owner" };
+  const isOwner = coach.role === "owner";
+  return { supabase, orgId: coach.organisation_id as string, isOwner, canManage: isOwner || coach.can_manage_store === true };
 }
 
-export async function getStoreSettings(): Promise<StoreSettings & { isOwner: boolean; athletesUsed: number; orgName: string }> {
-  const { supabase, orgId, isOwner } = await myOrg();
+/** Owner, or a coach the owner has given store access. */
+export async function canManageStore(): Promise<boolean> {
+  return (await myOrg()).canManage;
+}
+
+export async function getStoreSettings(): Promise<StoreSettings & { isOwner: boolean; canManage: boolean; athletesUsed: number; orgName: string }> {
+  const { supabase, orgId, isOwner, canManage } = await myOrg();
   const [{ data: org, error }, { count }] = await Promise.all([
     supabase.from("organisations").select("name, store_slug, store_name, store_description, seat_limit").eq("id", orgId).single(),
     supabase.from("athletes").select("id", { count: "exact", head: true }).eq("organisation_id", orgId).eq("archived", false),
@@ -62,19 +71,22 @@ export async function getStoreSettings(): Promise<StoreSettings & { isOwner: boo
     seat_limit: org.seat_limit ?? null,
     orgName: org.name ?? "",
     isOwner,
+    canManage,
     athletesUsed: count ?? 0,
   };
 }
 
 export async function saveStoreSettings(patch: { store_slug: string; store_name: string; store_description: string }): Promise<void> {
-  const { supabase, orgId } = await myOrg();
+  const { supabase } = await myOrg();
   const slug = patch.store_slug.trim().toLowerCase();
   if (!/^[a-z0-9-]{2,40}$/.test(slug)) throw new Error("The store address can only use letters, numbers and dashes (2-40 characters).");
-  const { error } = await supabase
-    .from("organisations")
-    .update({ store_slug: slug, store_name: patch.store_name.trim() || null, store_description: patch.store_description.trim() })
-    .eq("id", orgId);
+  const { error } = await supabase.rpc("update_store_settings", {
+    p_slug: slug,
+    p_name: patch.store_name,
+    p_description: patch.store_description,
+  });
   if (error) {
+    if (error.code === "42501") throw new Error("You don't have access to the online store.");
     if (error.code === "23505") throw new Error("That store address is taken - try another.");
     throw error;
   }

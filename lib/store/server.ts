@@ -124,9 +124,10 @@ async function buildStore(service: Service, org: Record<string, any>): Promise<P
   };
 }
 
+/** Who hears about sales and seat limits: the owner plus coaches with store access (0126). */
 async function orgCoaches(service: Service, organisationId: string): Promise<{ id: string; name: string; email: string | null; role: string }[]> {
-  const { data } = await service.from("coaches").select("id, name, email, role, archived").eq("organisation_id", organisationId);
-  return ((data ?? []) as any[]).filter((c) => !c.archived);
+  const { data } = await service.from("coaches").select("*").eq("organisation_id", organisationId);
+  return ((data ?? []) as any[]).filter((c) => !c.archived && (c.role === "owner" || c.can_manage_store === true));
 }
 
 /**
