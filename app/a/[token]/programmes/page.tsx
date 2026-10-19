@@ -49,7 +49,8 @@ export default function AthleteProgrammesPage() {
   const [starting, setStarting] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(iso(new Date()));
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState("");
+  const [done, setDone] = useState<{ text: string; startDate: string } | null>(null);
+  const viewCalendar = (date: string) => router.push(`/a/${token}?week=${date}`);
 
   const load = useCallback(() => {
     fetch(`/api/athlete-link/programmes?token=${token}`, { cache: "no-store" })
@@ -78,7 +79,7 @@ export default function AthleteProgrammesPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Couldn't start the programme.");
-      setDone(`${item.title} starts ${fmt(startDate)} - ${json.sessions} sessions are on your calendar.`);
+      setDone({ text: `${item.title} starts ${fmt(startDate)} - ${json.sessions} sessions are on your calendar.`, startDate });
       setStarting(null);
       load();
     } catch (e) {
@@ -118,7 +119,14 @@ export default function AthleteProgrammesPage() {
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}
-        {done && <div style={s.okBox}>✓ {done}</div>}
+        {done && (
+          <div style={s.okBox}>
+            <div>✓ {done.text}</div>
+            <button style={{ ...s.primary, marginTop: 10, width: "100%" }} onClick={() => viewCalendar(done.startDate)}>
+              View calendar
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div style={s.muted}>Loading…</div>
@@ -145,7 +153,12 @@ export default function AthleteProgrammesPage() {
               </div>
 
               {item.status === "active" && item.startDate && (
-                <div style={{ ...s.muted, marginTop: 8 }}>Started {fmt(item.startDate)} - your sessions are on your calendar.</div>
+                <>
+                  <div style={{ ...s.muted, marginTop: 8 }}>Started {fmt(item.startDate)} - your sessions are on your calendar.</div>
+                  <button style={{ ...s.ghost, marginTop: 10, width: "100%" }} onClick={() => viewCalendar(item.startDate!)}>
+                    View calendar
+                  </button>
+                </>
               )}
 
               {item.status === "ready" &&
@@ -172,7 +185,7 @@ export default function AthleteProgrammesPage() {
                     </div>
                   </div>
                 ) : (
-                  <button style={{ ...s.primary, marginTop: 12, width: "100%" }} onClick={() => { setStarting(item.id); setDone(""); setStartDate(iso(new Date())); }}>
+                  <button style={{ ...s.primary, marginTop: 12, width: "100%" }} onClick={() => { setStarting(item.id); setDone(null); setStartDate(iso(new Date())); }}>
                     Start when ready
                   </button>
                 ))}
