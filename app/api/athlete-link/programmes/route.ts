@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
       sessions: (byProg[r.programme_id] ?? []).length,
     })),
     store:
-      store && store.canSell && forSale.length ? { name: store.name, products: forSale } : null,
+      store && store.canSell && forSale.length
+        ? { name: store.name, sellerName: store.seller.tradingName || store.name, refundPolicy: store.seller.refundPolicy, products: forSale }
+        : null,
   });
 }

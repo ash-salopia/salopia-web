@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
-import { getStoreBySlug, getStoreForOrg, seatStatus, notifySeatLimitBlocked, STORE_FEE_PERCENT } from "@/lib/store/server";
+import { getStoreBySlug, getStoreForOrg, seatStatus, notifySeatLimitBlocked, checkoutConsentText, STORE_FEE_PERCENT } from "@/lib/store/server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 //   { slug, productId, name, email }  - public store; a new buyer will
 //                                       become an athlete (uses a seat)
 //   { token, productId }              - an existing athlete buying in-app
+// Both must send acceptTerms: true - the buyer ticked that they want
+// immediate access (so lose the 14-day cancellation right) and agree to
+// the coach's refund policy. We store when and the exact wording (0127).
 // A sale that would need a seat the org doesn't have is refused BEFORE
 // payment (and the coach is told), so nobody pays for something we
 // can't deliver.
@@ -44,6 +47,8 @@ export async function POST(req: NextRequest) {
   }
   if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
   if (!store.canSell || !store.accountId) return NextResponse.json({ error: "This store isn't taking payments yet." }, { status: 409 });
+  if (body.acceptTerms !== true) return NextResponse.json({ error: "Please tick the box to confirm before paying." }, { status: 400 });
+  const termsText = checkoutConsentText(store.name);
   const product = store.products.find((p) => p.id === body.productId);
   if (!product) return NextResponse.json({ error: "That programme isn't available." }, { status: 404 });
 
@@ -88,7 +93,10 @@ export async function POST(req: NextRequest) {
         customer_email: buyerEmail || undefined,
         success_url: `${origin}/store/${encodeURIComponent(store.slug || "app")}/thanks?session_id={CHECKOUT_SESSION_ID}&o=${store.organisationId}`,
         cancel_url: backTo,
-        metadata: { organisation_id: store.organisationId, product_id: product.id, athlete_id: athlete?.id ?? "" },
+        metadata: { organisation_id: store.organisationId, product_id: product.id, athlete_id: athlete?.id ?? "", terms_accepted: "immediate_access_and_refund_policy" },
+        custom_text: {
+          submit: { message: "You asked for immediate access to this digital programme, so the 14-day right to cancel won't apply once it's delivered." },
+        },
         ...(STORE_FEE_PERCENT > 0 ? { payment_intent_data: { application_fee_amount: Math.round((product.pricePence * STORE_FEE_PERCENT) / 100) } } : {}),
       },
       { stripeAccount: store.accountId }
@@ -103,6 +111,8 @@ export async function POST(req: NextRequest) {
       currency: product.currency,
       stripe_checkout_session_id: session.id,
       status: "pending",
+      terms_accepted_at: new Date().toISOString(),
+      terms_text: termsText,
     });
     if (error) throw error;
     return NextResponse.json({ url: session.url });

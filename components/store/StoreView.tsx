@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { ResolvedBranding } from "@/types/branding";
+import type { StoreSeller } from "@/lib/store/server";
+import CheckoutConsent from "@/components/store/CheckoutConsent";
 
 // Public Programme Store page (/store/<slug>). Pick a programme, enter
 // name + email, pay on Stripe Checkout, land on the thank-you page with
@@ -20,12 +22,13 @@ export default function StoreView({
   store,
   branding,
 }: {
-  store: { slug: string; name: string; description: string; canSell: boolean; products: StoreProductView[] };
+  store: { slug: string; name: string; description: string; canSell: boolean; seller: StoreSeller; products: StoreProductView[] };
   branding: ResolvedBranding;
 }) {
   const [buying, setBuying] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,7 +40,7 @@ export default function StoreView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ slug: store.slug, productId, name, email }),
+        body: JSON.stringify({ slug: store.slug, productId, name, email, acceptTerms: agreed }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.url) throw new Error(json.error || "Couldn't start checkout.");
@@ -102,9 +105,10 @@ export default function StoreView({
                         <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
                       </label>
                       <div style={s.small}>We&apos;ll email your link to the training app here. You&apos;ll pay securely with Stripe on the next page.</div>
+                      <CheckoutConsent storeName={store.seller.tradingName || store.name} refundPolicy={store.seller.refundPolicy} checked={agreed} onChange={setAgreed} />
                       {error && <div style={s.error}>{error}</div>}
                       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                        <button type="submit" style={{ ...s.buyBtn, flex: 1, opacity: busy ? 0.7 : 1 }} disabled={busy}>
+                        <button type="submit" style={{ ...s.buyBtn, flex: 1, opacity: busy || !agreed ? 0.6 : 1 }} disabled={busy || !agreed}>
                           {busy ? "Opening checkout…" : `Continue to payment · ${p.price}`}
                         </button>
                         <button type="button" style={s.ghost} onClick={() => setBuying(null)} disabled={busy}>
@@ -118,6 +122,26 @@ export default function StoreView({
             })}
           </div>
         )}
+
+        <section style={s.seller}>
+          <div style={s.sellerTitle}>Seller details</div>
+          <div style={s.sellerText}>
+            {[store.seller.tradingName || store.name, store.seller.address].filter(Boolean).join(" · ")}
+            {store.seller.email && (
+              <>
+                <br />
+                <a href={`mailto:${store.seller.email}`} style={{ color: "var(--accent)" }}>{store.seller.email}</a>
+                {store.seller.phone ? ` · ${store.seller.phone}` : ""}
+              </>
+            )}
+          </div>
+          {store.seller.refundPolicy && (
+            <details style={{ marginTop: 10 }}>
+              <summary style={s.summary}>Refund policy</summary>
+              <div style={{ ...s.sellerText, whiteSpace: "pre-wrap", marginTop: 8 }}>{store.seller.refundPolicy}</div>
+            </details>
+          )}
+        </section>
 
         <footer style={s.footer}>
           After you buy, the programme waits in your training app until you press Start - then every session lands on your calendar.
@@ -151,5 +175,9 @@ const s: Record<string, React.CSSProperties> = {
   input: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "11px 12px", fontSize: 15 },
   small: { fontSize: 12, color: "var(--mute)", lineHeight: 1.45 },
   error: { fontSize: 13, color: "#FF6B6B", background: "#2a0c0c", border: "1px solid #FF6B6B44", borderRadius: 8, padding: "8px 10px" },
+  seller: { marginTop: 32, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, padding: "16px 18px" },
+  sellerTitle: { fontSize: 11, fontWeight: 800, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 },
+  sellerText: { fontSize: 13, color: "var(--text)", lineHeight: 1.55 },
+  summary: { fontSize: 13, fontWeight: 700, color: "var(--accent)", cursor: "pointer" },
   footer: { marginTop: 32, fontSize: 12, color: "var(--mute)", textAlign: "center", lineHeight: 1.5 },
 };

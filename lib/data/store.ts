@@ -12,7 +12,27 @@ export interface StoreSettings {
   store_name: string | null;
   store_description: string;
   seat_limit: number | null;
+  // 0127 - seller details + refund policy (trading name, email, policy required to sell)
+  store_trading_name: string;
+  store_contact_email: string;
+  store_contact_phone: string;
+  store_business_address: string;
+  store_refund_policy: string;
 }
+
+export type StoreSettingsForm = Pick<
+  StoreSettings,
+  "store_description" | "store_trading_name" | "store_contact_email" | "store_contact_phone" | "store_business_address" | "store_refund_policy"
+> & { store_slug: string; store_name: string };
+
+/** A starting point coaches can edit - fair, and in line with UK rules for digital content. */
+export const DEFAULT_REFUND_POLICY = `Because programmes are digital and delivered to your training app straight away, you agree at checkout to immediate access, so the usual 14-day cancellation right doesn't apply once it's delivered.
+
+If you haven't pressed Start on the programme yet, contact us within 14 days of buying and we'll refund you in full.
+
+If something is wrong with the programme (for example it doesn't load or isn't as described), contact us and we'll fix it or refund you.
+
+This doesn't affect your statutory rights.`;
 
 export interface StoreProductRow {
   id: string;
@@ -60,7 +80,7 @@ export async function canManageStore(): Promise<boolean> {
 export async function getStoreSettings(): Promise<StoreSettings & { isOwner: boolean; canManage: boolean; athletesUsed: number; orgName: string }> {
   const { supabase, orgId, isOwner, canManage } = await myOrg();
   const [{ data: org, error }, { count }] = await Promise.all([
-    supabase.from("organisations").select("name, store_slug, store_name, store_description, seat_limit").eq("id", orgId).single(),
+    supabase.from("organisations").select("*").eq("id", orgId).single(),
     supabase.from("athletes").select("id", { count: "exact", head: true }).eq("organisation_id", orgId).eq("archived", false),
   ]);
   if (error) throw error;
@@ -69,6 +89,11 @@ export async function getStoreSettings(): Promise<StoreSettings & { isOwner: boo
     store_name: org.store_name ?? null,
     store_description: org.store_description ?? "",
     seat_limit: org.seat_limit ?? null,
+    store_trading_name: org.store_trading_name ?? "",
+    store_contact_email: org.store_contact_email ?? "",
+    store_contact_phone: org.store_contact_phone ?? "",
+    store_business_address: org.store_business_address ?? "",
+    store_refund_policy: org.store_refund_policy ?? "",
     orgName: org.name ?? "",
     isOwner,
     canManage,
@@ -76,14 +101,21 @@ export async function getStoreSettings(): Promise<StoreSettings & { isOwner: boo
   };
 }
 
-export async function saveStoreSettings(patch: { store_slug: string; store_name: string; store_description: string }): Promise<void> {
+export async function saveStoreSettings(patch: StoreSettingsForm): Promise<void> {
   const { supabase } = await myOrg();
   const slug = patch.store_slug.trim().toLowerCase();
+  const contact = patch.store_contact_email.trim();
+  if (contact && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact)) throw new Error("Check the contact email address.");
   if (!/^[a-z0-9-]{2,40}$/.test(slug)) throw new Error("The store address can only use letters, numbers and dashes (2-40 characters).");
   const { error } = await supabase.rpc("update_store_settings", {
     p_slug: slug,
     p_name: patch.store_name,
     p_description: patch.store_description,
+    p_trading_name: patch.store_trading_name,
+    p_contact_email: patch.store_contact_email,
+    p_contact_phone: patch.store_contact_phone,
+    p_business_address: patch.store_business_address,
+    p_refund_policy: patch.store_refund_policy,
   });
   if (error) {
     if (error.code === "42501") throw new Error("You don't have access to the online store.");
