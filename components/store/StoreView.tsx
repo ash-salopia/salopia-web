@@ -145,7 +145,10 @@ export default function StoreView({
 
         <footer style={s.footer}>
           After you buy, the programme waits in your training app until you press Start - then every session lands on your calendar.
-          <div style={{ marginTop: 8 }}>Powered by VIS BUILD</div>
+          <div style={{ marginTop: 8 }}>
+            Powered by VIS BUILD ·{" "}
+            <a href="/privacy" style={{ color: "var(--mute)" }}>Privacy</a>
+          </div>
         </footer>
       </div>
     </div>
