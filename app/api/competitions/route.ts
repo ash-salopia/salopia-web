@@ -6,9 +6,17 @@ import { createClient } from "@/lib/supabase-server";
 
 export async function GET(_req: NextRequest) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { data: coach } = await supabase.from("coaches").select("organisation_id").eq("id", user.id).single();
+  if (!coach) return NextResponse.json({ error: "Not a coach" }, { status: 403 });
+
+  // Org filter on top of RLS (0118): a stray permissive policy once let
+  // every org's competitions through, so don't rely on RLS alone here.
   const { data, error } = await supabase
     .from("competitions")
     .select(`*, athlete:athletes(id, name), reactions:competition_reactions(*), comments:competition_comments(*)`)
+    .eq("organisation_id", coach.organisation_id)
     .order("competition_date", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ competitions: data ?? [] });

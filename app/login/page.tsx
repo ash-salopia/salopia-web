@@ -145,6 +145,14 @@ function LoginForm() {
             <button type="submit" disabled={status === "sending"} style={styles.primaryBtn}>
               {status === "sending" ? "Sending link…" : "Send sign-in link"}
             </button>
+            {showSignupFields && (
+              <p style={styles.legalNote}>
+                By creating an account you agree to our{" "}
+                <a href="/terms" target="_blank" style={styles.legalLink}>Terms of use</a>, including the data
+                processing terms for your athletes&apos; data, and our{" "}
+                <a href="/privacy" target="_blank" style={styles.legalLink}>Privacy policy</a>.
+              </p>
+            )}
           </form>
         )}
       </div>
@@ -153,6 +161,8 @@ function LoginForm() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  legalNote: { fontSize: 12, color: "#8593A0", lineHeight: 1.5, margin: "12px 0 0", textAlign: "center" },
+  legalLink: { color: "#3B8BEB", textDecoration: "none" },
   page: {
     minHeight: "100vh",
     display: "flex",

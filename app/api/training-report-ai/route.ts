@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { createClient } from "@/lib/supabase-server";
 import { computeReport } from "@/lib/report-calc";
 import { computeLoadMonitoring } from "@/lib/training-load";
@@ -27,6 +28,10 @@ NEXT_FOCUS:
 <1 short sentence: what the next block should focus on, following from the above. If the coach context mentions an event, taper or injury, align with it.>`;
 
 export async function POST(req: NextRequest) {
+  // Verified login + daily cap - see lib/ai/usage-guard.ts.
+  const guard = await guardAIRequest("training-report-ai", req);
+  if (!guard.ok) return guard.response;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 500 });
 
