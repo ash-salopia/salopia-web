@@ -32,7 +32,13 @@ export async function GET(req: NextRequest) {
   for (const s of sessions ?? []) (byProg[s.programme_id] ??= []).push(s);
 
   const store = await getStoreForOrg((athlete as any).organisation_id);
+  // Don't offer programmes the athlete already has.
   const owned = new Set((rows ?? []).map((r) => r.programme_id));
+  const { data: ownedProducts } = owned.size
+    ? await service.from("store_products").select("id").in("programme_id", Array.from(owned))
+    : { data: [] as { id: string }[] };
+  const ownedProductIds = new Set((ownedProducts ?? []).map((p) => p.id));
+  const forSale = (store?.products ?? []).filter((p) => !ownedProductIds.has(p.id));
   return NextResponse.json({
     library: (rows ?? []).map((r) => ({
       id: r.id,
@@ -43,9 +49,8 @@ export async function GET(req: NextRequest) {
       sessions: (byProg[r.programme_id] ?? []).length,
     })),
     store:
-      store && store.canSell && store.products.length
-        ? { name: store.name, products: store.products.map((p) => ({ ...p, owned: false })) }
+      store && store.canSell && forSale.length
+        ? { name: store.name, sellerName: store.seller.tradingName || store.name, refundPolicy: store.seller.refundPolicy, products: forSale }
         : null,
-    ownedProgrammeIds: Array.from(owned).length,
   });
 }

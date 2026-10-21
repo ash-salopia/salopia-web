@@ -47,3 +47,15 @@ export async function setCoachAssignedAthletes(coachId: string, athleteIds: stri
     .insert(athleteIds.map((athlete_id) => ({ coach_id: coachId, athlete_id })));
   if (insertError) throw insertError;
 }
+
+// Online Store access (0126): owners always have it; the owner can
+// switch it on for other coaches. Service-role route, like the above.
+export async function setCoachStoreAccess(coachId: string, canManageStore: boolean): Promise<void> {
+  const res = await fetch("/api/coaches/store-access", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ coachId, canManageStore }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not update store access");
+}

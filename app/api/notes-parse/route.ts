@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 import { QUALITY_META, isPSMetricKey } from "@/lib/ps-metrics";
 
@@ -211,6 +212,10 @@ Splitting or merging sessions during a correction:
 export async function POST(
   req: NextRequest
 ): Promise<NextResponse<ParseResponse | { error: string }>> {
+  // Verified login + daily cap - see lib/ai/usage-guard.ts.
+  const guard = await guardAIRequest("notes-parse", req);
+  if (!guard.ok) return guard.response;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 500 });

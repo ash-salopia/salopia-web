@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AthletePageHeading from "@/components/AthletePageHeading";
+import CheckoutConsent from "@/components/store/CheckoutConsent";
 
 // The athlete's programme library (0124): programmes they've bought or
 // been given, each started when they're ready (sessions land on their
@@ -43,13 +44,16 @@ export default function AthleteProgrammesPage() {
   const router = useRouter();
   const token = params?.token as string;
   const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [store, setStore] = useState<{ name: string; products: StoreProduct[] } | null>(null);
+  const [store, setStore] = useState<{ name: string; sellerName: string; refundPolicy: string; products: StoreProduct[] } | null>(null);
+  const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(iso(new Date()));
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState("");
+  const [done, setDone] = useState<{ text: string; startDate: string } | null>(null);
+  const viewCalendar = (date: string) => router.push(`/a/${token}?week=${date}`);
 
   const load = useCallback(() => {
     fetch(`/api/athlete-link/programmes?token=${token}`, { cache: "no-store" })
@@ -78,7 +82,7 @@ export default function AthleteProgrammesPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Couldn't start the programme.");
-      setDone(`${item.title} starts ${fmt(startDate)} - ${json.sessions} sessions are on your calendar.`);
+      setDone({ text: `${item.title} starts ${fmt(startDate)} - ${json.sessions} sessions are on your calendar.`, startDate });
       setStarting(null);
       load();
     } catch (e) {
@@ -96,7 +100,7 @@ export default function AthleteProgrammesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ token, productId }),
+        body: JSON.stringify({ token, productId, acceptTerms: agreed }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.url) throw new Error(json.error || "Couldn't start checkout.");
@@ -118,7 +122,14 @@ export default function AthleteProgrammesPage() {
 
       <div style={s.content}>
         {error && <div style={s.errorBox}>{error}</div>}
-        {done && <div style={s.okBox}>✓ {done}</div>}
+        {done && (
+          <div style={s.okBox}>
+            <div>✓ {done.text}</div>
+            <button style={{ ...s.primary, marginTop: 10, width: "100%" }} onClick={() => viewCalendar(done.startDate)}>
+              View calendar
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div style={s.muted}>Loading…</div>
@@ -145,7 +156,12 @@ export default function AthleteProgrammesPage() {
               </div>
 
               {item.status === "active" && item.startDate && (
-                <div style={{ ...s.muted, marginTop: 8 }}>Started {fmt(item.startDate)} - your sessions are on your calendar.</div>
+                <>
+                  <div style={{ ...s.muted, marginTop: 8 }}>Started {fmt(item.startDate)} - your sessions are on your calendar.</div>
+                  <button style={{ ...s.ghost, marginTop: 10, width: "100%" }} onClick={() => viewCalendar(item.startDate!)}>
+                    View calendar
+                  </button>
+                </>
               )}
 
               {item.status === "ready" &&
@@ -172,7 +188,7 @@ export default function AthleteProgrammesPage() {
                     </div>
                   </div>
                 ) : (
-                  <button style={{ ...s.primary, marginTop: 12, width: "100%" }} onClick={() => { setStarting(item.id); setDone(""); setStartDate(iso(new Date())); }}>
+                  <button style={{ ...s.primary, marginTop: 12, width: "100%" }} onClick={() => { setStarting(item.id); setDone(null); setStartDate(iso(new Date())); }}>
                     Start when ready
                   </button>
                 ))}
@@ -193,8 +209,21 @@ export default function AthleteProgrammesPage() {
                 {p.description && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{p.description}</div>}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
                   <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700 }}>{p.price}</div>
-                  <button style={{ ...s.primary, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={() => buy(p.id)}>Buy</button>
+                  {buyingId !== p.id && (
+                    <button style={s.primary} disabled={busy} onClick={() => { setBuyingId(p.id); setAgreed(false); setError(""); }}>Buy</button>
+                  )}
                 </div>
+                {buyingId === p.id && (
+                  <div style={s.startBox}>
+                    <CheckoutConsent storeName={store.sellerName} refundPolicy={store.refundPolicy} checked={agreed} onChange={setAgreed} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button style={{ ...s.primary, flex: 1, opacity: busy || !agreed ? 0.6 : 1 }} disabled={busy || !agreed} onClick={() => buy(p.id)}>
+                        {busy ? "Opening checkout…" : `Continue to payment · ${p.price}`}
+                      </button>
+                      <button style={s.ghost} onClick={() => setBuyingId(null)} disabled={busy}>Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </>

@@ -1,5 +1,6 @@
 "use client";
 import { reorderSessionsOnDay, copySessionToDates, reactToSessionNote, acknowledgeSessionNote } from "@/lib/data/sessions";
+import { exerciseDose } from "@/lib/exercise-dose";
 import dynamic from "next/dynamic";
 
 import { useEffect, useState, useMemo } from "react";
@@ -60,20 +61,6 @@ import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
 // "4×5 @ 80kg" - compact prescription for the Week / By day cards.
 // A bare number in the time field is seconds ("45" -> "45s"); anything
 // that already says how it's measured ("1:30", "2min", "45s") is left as is.
-function timeLabel(time: string): string {
-  const t = time.trim();
-  return /^\d+(\.\d+)?$/.test(t) ? `${t}s` : t;
-}
-
-function exerciseDose(ex: { sets?: number; reps?: string; time?: string; target_load?: string; use_percent_1rm?: boolean; set_percents?: string[] }): string {
-  const work = ((ex.reps ?? "").trim() || timeLabel(ex.time ?? ""));
-  let out = ex.sets ? (work ? `${ex.sets}×${work}` : `${ex.sets} sets`) : work;
-  const pct = ex.use_percent_1rm ? (ex.set_percents ?? []).filter(Boolean) : [];
-  if (pct.length) out += ` @ ${pct[0]}${/%$/.test(pct[0]) ? "" : "%"}${pct.length > 1 && pct.some((p) => p !== pct[0]) ? "+" : ""}`;
-  else if ((ex.target_load ?? "").trim()) out += ` @ ${ex.target_load!.trim()}`;
-  return out;
-}
-
 const TYPE_META: Record<SessionType, { label: string; color: string }> = {
   strength: { label: "Strength", color: "#3B8BEB" },
   hyrox: { label: "Hybrid", color: "#B388FF" },

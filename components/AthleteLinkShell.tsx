@@ -9,6 +9,7 @@ import WeeklyReflectionModal, { currentWeekStart, weekStartLabel } from "@/compo
 import LogSportModal from "@/components/sport/LogSportModal";
 import Avatar from "@/components/Avatar";
 import Icon from "@/components/ui/Icon";
+import WorkoutPreview from "@/components/WorkoutPreview";
 import { reflectionWindow, opensLabel } from "@/lib/reflection-window";
 import { recoverySessionCardLine } from "@/lib/recovery-constants";
 import { rtpMeta } from "@/lib/rtp";
@@ -181,6 +182,7 @@ export default function AthleteLinkShell({
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const [calView, setCalView] = useState<"month" | "week">("week");
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [reflectionOpen, setReflectionOpen] = useState(false);
   const [logSportOpen, setLogSportOpen] = useState(false);
   const [weekStart, setWeekStart] = useState<string>(() => {
@@ -190,6 +192,19 @@ export default function AthleteLinkShell({
     mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
     return mon.toISOString().slice(0, 10);
   });
+
+  // ?week=YYYY-MM-DD opens the week containing that date (e.g. "View
+  // calendar" after starting a programme). Read after mount, not in the
+  // initial state, so the server and browser render the same first.
+  useEffect(() => {
+    const w = new URLSearchParams(window.location.search).get("week");
+    if (!w || !/^\d{4}-\d{2}-\d{2}$/.test(w)) return;
+    const d = new Date(w + "T12:00:00Z");
+    const dow = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+    setWeekStart(d.toISOString().slice(0, 10));
+    setCalView("week");
+  }, []);
 
   const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
     // Start on the month with the next upcoming session, or current month
@@ -421,10 +436,13 @@ export default function AthleteLinkShell({
                     {daySess.length === 0 && (milestonesByDate.get(iso) ?? []).length === 0 && <div style={{ fontSize: 12, color: "var(--line)", padding: "4px 0" }}>Rest</div>}
                     {daySess.map(session => {
                       const meta = TYPE_META[session.type] ?? TYPE_META.strength;
+                      const previewOpen = previewId === session.id;
+                      const openSession = () => router.push("/a/" + token + "/sessions/" + session.id);
                       return (
-                        <button key={session.id}
-                          style={{ background: meta.color + "18", border: "1px solid " + meta.color + "44", borderLeft: "3px solid " + meta.color, borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left" as const, width: "100%", display: "flex", alignItems: "flex-start", gap: 8 }}
-                          onClick={() => router.push("/a/" + token + "/sessions/" + session.id)}>
+                        <div key={session.id} style={{ background: meta.color + "18", border: "1px solid " + meta.color + "44", borderLeft: "3px solid " + meta.color, borderRadius: 8, overflow: "hidden" }}>
+                        <button
+                          style={{ background: "transparent", border: "none", padding: "10px 12px", cursor: "pointer", textAlign: "left" as const, width: "100%", display: "flex", alignItems: "flex-start", gap: 8 }}
+                          onClick={openSession}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: meta.color, textTransform: "uppercase" as const, marginBottom: 2 }}>{meta.label}</div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{session.name}</div>
@@ -444,6 +462,18 @@ export default function AthleteLinkShell({
                             </span>
                           )}
                         </button>
+                        {session.type !== "recovery" && (
+                          <button
+                            style={{ ...st.previewToggle, color: meta.color }}
+                            aria-expanded={previewOpen}
+                            onClick={() => setPreviewId(previewOpen ? null : session.id)}
+                          >
+                            {previewOpen ? "Hide workout" : "View workout"}
+                            <Icon name="chevron-down" size={14} style={{ transform: previewOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+                          </button>
+                        )}
+                        {previewOpen && <WorkoutPreview session={session} color={meta.color} onOpen={openSession} />}
+                        </div>
                       );
                     })}
                   </div>
@@ -620,6 +650,7 @@ export default function AthleteLinkShell({
 }
 
 const st: Record<string, React.CSSProperties> = {
+  previewToggle: { width: "100%", background: "transparent", border: "none", borderTop: "1px solid var(--line)", padding: "7px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   page: { minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: "0 0 40px" },
   pushBanner: {
     display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,

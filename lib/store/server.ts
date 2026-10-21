@@ -60,8 +60,33 @@ export interface PublicStore {
   name: string;
   description: string;
   accountId: string | null;
-  canSell: boolean; // Stripe connected and able to take payments
+  canSell: boolean; // Stripe can take payments AND the seller details below are complete
+  paymentsReady: boolean; // Stripe connected and able to take payments
+  seller: StoreSeller;
   products: PublicProduct[];
+}
+
+/** Who the buyer is dealing with + refund policy (0127). Shown on the store page and receipt. */
+export interface StoreSeller {
+  tradingName: string;
+  email: string;
+  phone: string;
+  address: string;
+  refundPolicy: string;
+}
+
+/** Trading name, contact email and refund policy are required before a store can sell. */
+export function sellerDetailsMissing(seller: StoreSeller): string[] {
+  const missing: string[] = [];
+  if (!seller.tradingName) missing.push("trading name");
+  if (!seller.email) missing.push("contact email");
+  if (!seller.refundPolicy) missing.push("refund policy");
+  return missing;
+}
+
+/** The wording the buyer ticks at checkout - stored on the purchase. */
+export function checkoutConsentText(storeName: string): string {
+  return `I want access to my programme straight away. I understand that once it's delivered to my training app I lose my 14-day right to cancel, and I agree to ${storeName}'s refund policy.`;
 }
 
 export async function getStoreBySlug(slug: string): Promise<PublicStore | null> {
@@ -69,7 +94,7 @@ export async function getStoreBySlug(slug: string): Promise<PublicStore | null> 
   const service = createServiceRoleClient();
   const { data: org } = await service
     .from("organisations")
-    .select("id, name, store_slug, store_name, store_description, stripe_connect_account_id, stripe_connect_charges_enabled")
+    .select("*")
     .ilike("store_slug", slug)
     .maybeSingle();
   if (!org?.store_slug) return null;
@@ -81,7 +106,7 @@ export async function getStoreForOrg(organisationId: string): Promise<PublicStor
   const service = createServiceRoleClient();
   const { data: org } = await service
     .from("organisations")
-    .select("id, name, store_slug, store_name, store_description, stripe_connect_account_id, stripe_connect_charges_enabled")
+    .select("*")
     .eq("id", organisationId)
     .maybeSingle();
   if (!org) return null;
@@ -104,13 +129,23 @@ async function buildStore(service: Service, org: Record<string, any>): Promise<P
   const byProgramme: Record<string, { day_offset: number }[]> = {};
   for (const s of sessions ?? []) (byProgramme[s.programme_id] ??= []).push(s);
 
+  const paymentsReady = !!org.stripe_connect_account_id && !!org.stripe_connect_charges_enabled;
+  const seller: StoreSeller = {
+    tradingName: org.store_trading_name ?? "",
+    email: org.store_contact_email ?? "",
+    phone: org.store_contact_phone ?? "",
+    address: org.store_business_address ?? "",
+    refundPolicy: org.store_refund_policy ?? "",
+  };
   return {
     organisationId: org.id,
     slug: org.store_slug ?? "",
     name: org.store_name || org.name || "Programmes",
     description: org.store_description ?? "",
     accountId: org.stripe_connect_account_id ?? null,
-    canSell: !!org.stripe_connect_account_id && !!org.stripe_connect_charges_enabled,
+    canSell: paymentsReady && sellerDetailsMissing(seller).length === 0,
+    paymentsReady,
+    seller,
     products: (products ?? []).map((p) => ({
       id: p.id,
       title: p.title,
@@ -124,9 +159,10 @@ async function buildStore(service: Service, org: Record<string, any>): Promise<P
   };
 }
 
+/** Who hears about sales and seat limits: the owner plus coaches with store access (0126). */
 async function orgCoaches(service: Service, organisationId: string): Promise<{ id: string; name: string; email: string | null; role: string }[]> {
-  const { data } = await service.from("coaches").select("id, name, email, role, archived").eq("organisation_id", organisationId);
-  return ((data ?? []) as any[]).filter((c) => !c.archived);
+  const { data } = await service.from("coaches").select("*").eq("organisation_id", organisationId);
+  return ((data ?? []) as any[]).filter((c) => !c.archived && (c.role === "owner" || c.can_manage_store === true));
 }
 
 /**
@@ -307,7 +343,7 @@ export async function fulfilCheckoutSession(checkout: Stripe.Checkout.Session, a
   const service = createServiceRoleClient();
   if (checkout.payment_status !== "paid") return { status: "pending" };
 
-  const { data: org } = await service.from("organisations").select("id, name, store_name").eq("stripe_connect_account_id", accountId).maybeSingle();
+  const { data: org } = await service.from("organisations").select("*").eq("stripe_connect_account_id", accountId).maybeSingle();
   if (!org) return { status: "failed", reason: "Unknown store" };
 
   const { data: purchase } = await service.from("programme_purchases").select("*").eq("stripe_checkout_session_id", checkout.id).maybeSingle();
@@ -408,10 +444,17 @@ export async function fulfilCheckoutSession(checkout: Stripe.Checkout.Session, a
   const storeName = org.store_name || org.name || "VIS BUILD";
 
   if (email) {
+    // The receipt doubles as the written confirmation UK law requires:
+    // what was bought, who from, the consent they gave, and the refund policy.
+    const sellerName = org.store_trading_name || storeName;
+    const sellerLines = [sellerName, org.store_business_address, org.store_contact_email, org.store_contact_phone].filter(Boolean) as string[];
+    const consent = purchase.terms_text as string | null;
+    const policy = String(org.store_refund_policy ?? "").trim();
     await sendEmail({
       to: [email],
       subject: `You're in: ${programmeTitle}`,
       fromName: storeName,
+      replyTo: org.store_contact_email || null,
       html: simpleEmailHtml({
         brand: storeName,
         heading: `Thanks for buying ${programmeTitle}`,
@@ -420,9 +463,25 @@ export async function fulfilCheckoutSession(checkout: Stripe.Checkout.Session, a
           "Bookmark the link or add it to your home screen: it's your personal login, so don't share it.",
         ],
         button: { label: "Open my training app", url: appUrl },
-        footer: `Paid ${fmtPrice(purchase.amount_pence, purchase.currency)}. Questions? Just reply to this email.`,
+        footer: [
+          `<b>Receipt:</b> ${escapeHtml(programmeTitle)}, paid ${fmtPrice(purchase.amount_pence, purchase.currency)}.`,
+          consent ? `<b>You agreed:</b> ${escapeHtml(consent)}` : "",
+          policy ? `<b>Refund policy:</b><br>${escapeHtml(policy).replace(/\n/g, "<br>")}` : "",
+          `<b>Sold by:</b> ${sellerLines.map(escapeHtml).join(", ")}`,
+          "Questions? Just reply to this email.",
+        ]
+          .filter(Boolean)
+          .join("<br><br>"),
       }),
-      text: `Thanks for buying ${programmeTitle}. Open your training app and press Start when you're ready: ${appUrl}`,
+      text: [
+        `Thanks for buying ${programmeTitle}. Open your training app and press Start when you're ready: ${appUrl}`,
+        `Receipt: ${programmeTitle}, paid ${fmtPrice(purchase.amount_pence, purchase.currency)}.`,
+        consent ? `You agreed: ${consent}` : "",
+        policy ? `Refund policy:\n${policy}` : "",
+        `Sold by: ${sellerLines.join(", ")}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     });
   }
 

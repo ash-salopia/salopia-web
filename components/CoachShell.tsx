@@ -40,6 +40,7 @@ export default function CoachShell({
   orgName,
   branding = DEFAULT_BRANDING,
   billingBanner = null,
+  canManageStore = true,
   children,
 }: {
   coachName: string;
@@ -47,6 +48,8 @@ export default function CoachShell({
   orgName: string;
   branding?: ResolvedBranding;
   billingBanner?: BillingBanner;
+  /** Owner, or a coach given Online Store access (0126). */
+  canManageStore?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -75,7 +78,9 @@ export default function CoachShell({
     getOrgSettings().then((s) => setChallengesEnabled(s.challenges_enabled !== false)).catch(() => {});
   }, []);
 
-  const navItems = NAV_ITEMS.filter((item) => item.href !== "/challenges" || challengesEnabled);
+  const navItems = NAV_ITEMS.filter(
+    (item) => (item.href !== "/challenges" || challengesEnabled) && (item.href !== "/shop" || canManageStore)
+  );
 
   // Closing on navigation means the drawer never lingers open over the
   // next page — matches how a mobile nav drawer is expected to behave

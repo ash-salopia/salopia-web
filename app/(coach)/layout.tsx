@@ -62,6 +62,7 @@ export default async function CoachLayout({
       orgName={org?.name ?? ""}
       branding={branding}
       billingBanner={billingBanner}
+      canManageStore={coach.role === "owner" || coach.can_manage_store === true}
     >
       {children}
     </CoachShell>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAIRequest } from "@/lib/ai/usage-guard";
 
 // Receives an audio file from the client (recorded via MediaRecorder),
 // forwards it to OpenAI Whisper, and returns the transcript as text.
@@ -7,6 +8,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(
   req: NextRequest
 ): Promise<NextResponse<{ transcript: string } | { error: string }>> {
+  // Verified login + daily cap - see lib/ai/usage-guard.ts.
+  const guard = await guardAIRequest("voice-transcribe", req);
+  if (!guard.ok) return guard.response;
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "OPENAI_API_KEY not set" }, { status: 500 });
@@ -22,6 +27,10 @@ export async function POST(
 
   if (!audioFile || audioFile.size === 0) {
     return NextResponse.json({ error: "No audio received" }, { status: 400 });
+  }
+  // Whisper rejects files over 25MB anyway; cap below that.
+  if (audioFile.size > 24 * 1024 * 1024) {
+    return NextResponse.json({ error: "Recording is too long - try a shorter one" }, { status: 413 });
   }
 
   // Forward to OpenAI Whisper

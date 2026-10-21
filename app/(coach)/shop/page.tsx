@@ -10,6 +10,8 @@ import {
   saveStoreProduct,
   deleteStoreProduct,
   listPurchases,
+  DEFAULT_REFUND_POLICY,
+  type StoreSettingsForm,
   type StoreProductRow,
   type PurchaseRow,
 } from "@/lib/data/store";
@@ -36,7 +38,16 @@ export default function ShopPage() {
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof getStoreSettings>> | null>(null);
-  const [form, setForm] = useState({ store_slug: "", store_name: "", store_description: "" });
+  const [form, setForm] = useState<StoreSettingsForm>({
+    store_slug: "",
+    store_name: "",
+    store_description: "",
+    store_trading_name: "",
+    store_contact_email: "",
+    store_contact_phone: "",
+    store_business_address: "",
+    store_refund_policy: "",
+  });
   const [savingStore, setSavingStore] = useState(false);
   const [storeMsg, setStoreMsg] = useState("");
   const [products, setProducts] = useState<StoreProductRow[]>([]);
@@ -48,15 +59,25 @@ export default function ShopPage() {
 
   const load = useCallback(async () => {
     try {
-      const [st, prods, progs, sales, cs] = await Promise.all([
-        getStoreSettings(),
+      const st = await getStoreSettings();
+      setSettings(st);
+      if (!st.canManage) return;
+      const [prods, progs, sales, cs] = await Promise.all([
         listStoreProducts(),
         listProgrammes(),
         listPurchases(),
         fetch("/api/store/connect", { cache: "no-store" }).then((r) => r.json()),
       ]);
-      setSettings(st);
-      setForm({ store_slug: st.store_slug ?? "", store_name: st.store_name ?? st.orgName, store_description: st.store_description });
+      setForm({
+        store_slug: st.store_slug ?? "",
+        store_name: st.store_name ?? st.orgName,
+        store_description: st.store_description,
+        store_trading_name: st.store_trading_name,
+        store_contact_email: st.store_contact_email,
+        store_contact_phone: st.store_contact_phone,
+        store_business_address: st.store_business_address,
+        store_refund_policy: st.store_refund_policy,
+      });
       setProducts(prods);
       setProgrammes(progs);
       setPurchases(sales);
@@ -96,7 +117,7 @@ export default function ShopPage() {
     setStoreMsg("");
     try {
       await saveStoreSettings(form);
-      setSettings((s) => (s ? { ...s, store_slug: form.store_slug.trim().toLowerCase(), store_name: form.store_name, store_description: form.store_description } : s));
+      setSettings((s) => (s ? { ...s, ...form, store_slug: form.store_slug.trim().toLowerCase() } : s));
       setStoreMsg("Saved");
     } catch (e) {
       setStoreMsg(e instanceof Error ? e.message : "Couldn't save");
@@ -149,9 +170,28 @@ export default function ShopPage() {
 
   if (loading) return <div style={s.page}><div style={s.muted}>Loading…</div></div>;
 
+  if (settings && !settings.canManage) {
+    return (
+      <div style={s.page}>
+        <h1 style={s.title}>Online Store</h1>
+        <section style={s.card}>
+          <div style={s.cardTitle}>You don&apos;t have access to the store</div>
+          <div style={s.text}>Sales and store listings are visible to the account owner. Ask them to switch on store access for you in Settings → Team.</div>
+        </section>
+      </div>
+    );
+  }
+
   const seats = settings ? { used: settings.athletesUsed, limit: settings.seat_limit } : null;
   const seatPct = seats?.limit ? seats.used / seats.limit : 0;
   const isOwner = settings?.isOwner ?? false;
+  const missingDetails = settings
+    ? [
+        !settings.store_trading_name.trim() && "trading name",
+        !settings.store_contact_email.trim() && "contact email",
+        !settings.store_refund_policy.trim() && "refund policy",
+      ].filter(Boolean) as string[]
+    : [];
   const connectedFromStripe = searchParams.get("connect") === "done";
 
   return (
@@ -159,6 +199,9 @@ export default function ShopPage() {
       <h1 style={s.title}>Online Store</h1>
       <p style={s.lead}>Sell programmes online. Buyers pay you directly through Stripe, the programme lands in their training app, and they start it when they&apos;re ready.</p>
       {error && <div style={s.error}>{error}</div>}
+      {settings && missingDetails.length > 0 && (
+        <div style={s.warn}>Your store can&apos;t take payments yet - add your {missingDetails.join(", ")} under &quot;2 · Your store page&quot; and press Save.</div>
+      )}
 
       {seats?.limit != null && (
         <div style={{ ...s.seatBar, borderColor: seatPct >= 1 ? "#E5484D" : seatPct >= 0.9 ? "#F59E0B" : "var(--line)" }}>
@@ -216,25 +259,59 @@ export default function ShopPage() {
         <div style={s.cardTitle}>2 · Your store page</div>
         <label style={s.label}>
           Store name
-          <input style={s.input} value={form.store_name} onChange={(e) => setForm({ ...form, store_name: e.target.value })} disabled={!isOwner} />
+          <input style={s.input} value={form.store_name} onChange={(e) => setForm({ ...form, store_name: e.target.value })} />
         </label>
         <label style={s.label}>
           Store address
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={s.muted}>{typeof window !== "undefined" ? window.location.host : ""}/store/</span>
-            <input style={{ ...s.input, flex: 1 }} value={form.store_slug} placeholder="your-name" onChange={(e) => setForm({ ...form, store_slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} disabled={!isOwner} />
+            <input style={{ ...s.input, flex: 1 }} value={form.store_slug} placeholder="your-name" onChange={(e) => setForm({ ...form, store_slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} />
           </div>
         </label>
         <label style={s.label}>
           About (shown at the top of your store)
-          <textarea style={{ ...s.input, minHeight: 70, fontFamily: "inherit", resize: "vertical" }} value={form.store_description} onChange={(e) => setForm({ ...form, store_description: e.target.value })} disabled={!isOwner} />
+          <textarea style={{ ...s.input, minHeight: 70, fontFamily: "inherit", resize: "vertical" }} value={form.store_description} onChange={(e) => setForm({ ...form, store_description: e.target.value })} />
         </label>
+
+        <div style={s.subHead}>Seller details</div>
+        <div style={s.muted}>
+          Shown on your store page and in every buyer&apos;s receipt. UK law requires buyers to know who they&apos;re buying from and how to contact you.
+          Your store can&apos;t take payments until the trading name, contact email and refund policy are filled in.
+        </div>
+        <div style={s.twoCol}>
+          <label style={s.label}>
+            Trading name *
+            <input style={s.input} value={form.store_trading_name} onChange={(e) => setForm({ ...form, store_trading_name: e.target.value })} placeholder="e.g. Jane Smith Coaching Ltd" maxLength={120} />
+          </label>
+          <label style={s.label}>
+            Contact email *
+            <input style={s.input} type="email" value={form.store_contact_email} onChange={(e) => setForm({ ...form, store_contact_email: e.target.value })} placeholder="hello@yourname.co.uk" />
+          </label>
+          <label style={s.label}>
+            Phone (optional)
+            <input style={s.input} value={form.store_contact_phone} onChange={(e) => setForm({ ...form, store_contact_phone: e.target.value })} maxLength={40} />
+          </label>
+          <label style={s.label}>
+            Business address
+            <input style={s.input} value={form.store_business_address} onChange={(e) => setForm({ ...form, store_business_address: e.target.value })} placeholder="Town and postcode, or a business address" maxLength={400} />
+          </label>
+        </div>
+        <label style={s.label}>
+          <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+            Refund policy *
+            {!form.store_refund_policy.trim() && (
+              <button type="button" style={s.linkBtn} onClick={() => setForm({ ...form, store_refund_policy: DEFAULT_REFUND_POLICY })}>
+                Use our suggested policy
+              </button>
+            )}
+          </span>
+          <textarea style={{ ...s.input, minHeight: 140, fontFamily: "inherit", resize: "vertical" }} value={form.store_refund_policy} onChange={(e) => setForm({ ...form, store_refund_policy: e.target.value })} maxLength={4000} placeholder="When can buyers get a refund, and how do they ask?" />
+        </label>
+
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {isOwner && (
-            <button style={s.primary} disabled={savingStore} onClick={saveStore}>
-              {savingStore ? "Saving…" : "Save"}
-            </button>
-          )}
+          <button style={s.primary} disabled={savingStore} onClick={saveStore}>
+            {savingStore ? "Saving…" : "Save"}
+          </button>
           {storeMsg && <span style={{ fontSize: 13, color: storeMsg === "Saved" ? "#1baf7a" : "#FF6B6B" }}>{storeMsg}</span>}
           {storeUrl && (
             <>
@@ -361,6 +438,10 @@ export default function ShopPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
+  subHead: { fontSize: 13, fontWeight: 800, color: "var(--text)", marginTop: 8, paddingTop: 12, borderTop: "1px solid var(--line)" },
+  twoCol: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 },
+  linkBtn: { background: "none", border: "none", padding: 0, color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" },
+  warn: { background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.4)", color: "#F59E0B", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 600, marginBottom: 14 },
   page: { maxWidth: 820, display: "flex", flexDirection: "column", gap: 16 },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, margin: 0 },
   lead: { fontSize: 14, color: "var(--mute)", margin: 0, lineHeight: 1.5 },
