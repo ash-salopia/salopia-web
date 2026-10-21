@@ -46,9 +46,24 @@ export async function GET() {
     }
     return NextResponse.json({ connected: true, chargesEnabled, detailsSubmitted, requirementsDue: acct.requirements?.currently_due?.length ?? 0 });
   } catch (e) {
+    if (staleTestAccount(e)) {
+      await service.from("organisations").update({ stripe_connect_account_id: null, stripe_connect_charges_enabled: false, stripe_connect_details_submitted: false }).eq("id", org.id);
+      return NextResponse.json({ connected: false, chargesEnabled: false, detailsSubmitted: false });
+    }
     console.error("[store/connect] retrieve failed", e);
     return NextResponse.json({ connected: true, chargesEnabled: org.stripe_connect_charges_enabled, detailsSubmitted: org.stripe_connect_details_submitted });
   }
+}
+
+// A sandbox account id left over from testing (local dev shares the live
+// database) can't be found with a live key. On the live key only, treat it
+// as not connected so the coach can connect their real account. Never on a
+// test key, so local dev can't overwrite a real live connection.
+function staleTestAccount(e: unknown) {
+  return (
+    !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") &&
+    (e as { code?: string } | null)?.code === "resource_missing"
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -76,6 +91,14 @@ export async function POST(req: NextRequest) {
     }
 
     let accountId = org.stripe_connect_account_id as string | null;
+    if (accountId) {
+      try {
+        await stripe.accounts.retrieve(accountId);
+      } catch (e) {
+        if (!staleTestAccount(e)) throw e;
+        accountId = null;
+      }
+    }
     if (!accountId) {
       // Stripe now requires new connected accounts to have Stripe (not the
       // platform) liable for losses - "Managed Risk". That rules out the
