@@ -6,5 +6,5 @@ export const LEGAL = {
   address: "11 Whinberry Drive, Shrewsbury, SY5 8QL",
   companyNumber: "", // e.g. "Registered in England & Wales no. 12345678" - leave empty if a sole trader
   email: "support@visbuild.co.uk",
-  updated: "16 October 2026",
+  updated: "21 October 2026",
 };

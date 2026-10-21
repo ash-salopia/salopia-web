@@ -60,6 +60,19 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
+    heading: "Selling programmes (Online Store)",
+    body: [
+      "If you use the Online Store to sell programmes:",
+      [
+        "You are the seller. The contract for each sale is between you and your buyer - we provide the software and are not a party to it.",
+        "Payments are taken by Stripe straight into your own Stripe account, under Stripe's own terms, which you accept when you connect. We don't currently take a fee; we'll give at least 30 days' notice before that changes.",
+        "You must give accurate seller details and a refund policy, and you're responsible for meeting consumer law (including the UK Consumer Contracts Regulations), handling refunds and complaints, and for the tax due on your sales.",
+        "Buyers become athletes on your account and use a seat. You're responsible for the programmes you sell being accurate, safe and suitable for the people buying them.",
+        "We may suspend a store that breaks these terms or the law, or that Stripe tells us to stop.",
+      ],
+    ],
+  },
+  {
     heading: "Coaching responsibility and AI features",
     body: [
       "VIS BUILD is a tool to support your coaching - it isn't medical, physiotherapy or safeguarding advice. You remain responsible for the programmes you set and the decisions you make about your athletes. Calculated values (such as 1RM estimates, training loads and norm-based test ratings) and anything produced by AI features may be wrong: check them before relying on them.",
