@@ -579,6 +579,50 @@ export function CoachVerdict({ value, onChange, loading }: { value: Verdict; onC
   );
 }
 
+// One editable paragraph of the Coach's Summary (the overview, or the
+// themes from notes). Same pattern as the verdict boxes: plain text so
+// Print and Email carry it, a pencil to edit, left off print when empty.
+export function EditableParagraph({ label, value, onChange, loading, placeholder }: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  loading?: boolean;
+  placeholder: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div data-no-print={!value && !editing ? "true" : undefined} style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        {label ? <div style={v.cardLabel}>{label}</div> : <span />}
+        {!editing && value && (
+          <button data-no-print="true" style={v.editBtn} onClick={() => setEditing(true)} aria-label={`Edit ${label ?? "summary"}`}>
+            ✎ Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <textarea
+          autoFocus
+          value={value}
+          placeholder={placeholder}
+          rows={4}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+          style={v.verdictInput}
+        />
+      ) : loading && !value ? (
+        <div data-no-print="true" style={{ ...v.verdictText, color: "var(--mute)" }}>Drafting…</div>
+      ) : value ? (
+        <div style={{ ...v.verdictText, fontSize: 14 }}>{value}</div>
+      ) : (
+        <div data-no-print="true" style={{ ...v.verdictText, color: "var(--mute)", fontStyle: "italic", cursor: "pointer" }} onClick={() => setEditing(true)}>
+          {placeholder}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Goal progress ────────────────────────────────────────────────────────────
 
 const GOAL_STATUS: Record<GoalProgress["status"], { label: string; colour: string }> = {

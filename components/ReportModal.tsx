@@ -5,7 +5,6 @@ import type { ReportData } from "@/lib/data/reports";
 import type { ReportOptions } from "@/components/ReportRangeModal";
 import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
-import { AiShimmer, Typewriter } from "@/components/AiText";
 import MultiTrendLineChart from "@/components/reports/MultiTrendLineChart";
 import { ACWR_BAND_LABEL, MONOTONY_HIGH } from "@/lib/training-load";
 import { rtpMeta } from "@/lib/rtp";
@@ -28,6 +27,7 @@ function fmtRangeDate(iso: string): string {
 import {
   CompetitionStrip,
   CoachVerdict,
+  EditableParagraph,
   GoalProgressList,
   ReadinessPanel,
   AdherenceList,
@@ -236,6 +236,17 @@ export default function ReportModal({
   useEffect(() => {
     if (aiSummary?.verdict && !verdictEdited) setVerdict(aiSummary.verdict);
   }, [aiSummary, verdictEdited]);
+  // The overview + themes paragraphs of the Coach's Summary: AI-drafted
+  // (when "Draft with AI" is on), then the coach's edits win.
+  const [overview, setOverview] = useState("");
+  const [themes, setThemes] = useState("");
+  const [summaryEdited, setSummaryEdited] = useState(false);
+  useEffect(() => {
+    if (aiSummary && !summaryEdited) {
+      setOverview(aiSummary.summary ?? "");
+      setThemes(aiSummary.themes ?? "");
+    }
+  }, [aiSummary, summaryEdited]);
 
   // 0084 — which exercise/modality groups to actually chart in the
   // Cardio/Hyrox Metrics sections, live in the report view (not a
@@ -550,39 +561,39 @@ ${fonts}
             </div>
           )}
 
-          {options.coachVerdict !== false && !dismissed.has("coach-verdict") && (
+          {/* Coach's Summary: one section - an overview paragraph, the three
+              verdict boxes, and any themes from notes. AI writes the first
+              draft when "Draft with AI" is on; everything is editable. */}
+          {(options.coachVerdict !== false || options.aiSummary) && !dismissed.has("coach-verdict") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("coach-verdict")} />
-              <div style={styles.sectionTitle}>Coach&apos;s Verdict</div>
-              <CoachVerdict
-                value={verdict}
+              <div style={styles.sectionTitle}>Coach&apos;s Summary</div>
+              <EditableParagraph
+                value={overview}
                 loading={aiLoading}
-                onChange={(next) => {
-                  setVerdict(next);
-                  setVerdictEdited(true);
-                }}
+                placeholder="Click to add an overview of this block…"
+                onChange={(t) => { setOverview(t); setSummaryEdited(true); }}
               />
-            </div>
-          )}
-
-          {options.aiSummary && !dismissed.has("ai-summary") && (
-            <div style={{ ...styles.aiBox, position: "relative" }}>
-              <DismissBtn onClick={() => dismiss("ai-summary")} />
-              <div style={styles.aiLabel}>✨ AI Summary</div>
-              {aiLoading ? (
-                <AiShimmer lines={3} />
-              ) : aiSummary ? (
-                <>
-                  <p style={styles.aiText}><Typewriter text={aiSummary.summary} /></p>
-                  {aiSummary.themes && (
-                    <>
-                      <div style={styles.aiSubLabel}>Recurring themes from notes</div>
-                      <p style={{ ...styles.aiText, marginBottom: 0 }}>{aiSummary.themes}</p>
-                    </>
-                  )}
-                </>
-              ) : (
-                <div style={styles.aiLoading}>Summary unavailable.</div>
+              {options.coachVerdict !== false && (
+                <CoachVerdict
+                  value={verdict}
+                  loading={aiLoading}
+                  onChange={(next) => {
+                    setVerdict(next);
+                    setVerdictEdited(true);
+                  }}
+                />
+              )}
+              {(themes || aiLoading) && (
+                <div style={{ marginTop: 10 }}>
+                  <EditableParagraph
+                    label="From the session notes"
+                    value={themes}
+                    loading={aiLoading}
+                    placeholder="Click to add themes from the notes…"
+                    onChange={(t) => { setThemes(t); setSummaryEdited(true); }}
+                  />
+                </div>
               )}
             </div>
           )}
@@ -1235,15 +1246,15 @@ ${fonts}
             (options.ttl && hasStrength) ||
             (options.e1rm && hasE1rm)) && (
             <div style={{ marginBottom: SECTION_GAP }}>
-              <div style={styles.detailHead}>
-                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Full detail</div>
-                <button data-no-print="true" style={styles.detailToggle} onClick={() => setDetailOpen((o) => !o)}>
-                  {detailOpen ? "Hide tables ▲" : "Show per-exercise tables ▼"}
-                </button>
-              </div>
-              {!detailOpen && (
-                <div data-no-print="true" style={styles.detailHint}>
-                  Session-by-session numbers for every exercise. Expand to include them when printing.
+              {/* The tick box never prints; the "Full detail" heading and
+                  tables only appear on the report when it's ticked. */}
+              <label data-no-print="true" style={styles.detailTick}>
+                <input type="checkbox" checked={detailOpen} onChange={(e) => setDetailOpen(e.target.checked)} />
+                Include full detail - session-by-session tables for every exercise
+              </label>
+              {detailOpen && (
+                <div style={styles.detailHead}>
+                  <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Full detail</div>
                 </div>
               )}
               {detailOpen && (
@@ -1634,9 +1645,8 @@ const styles: Record<string, React.CSSProperties> = {
   printMenuFoot: { fontSize: 11, color: "var(--mute)", padding: "6px 10px 4px", borderTop: "1px solid var(--line)", marginTop: 4 },
   visualHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4, paddingRight: 28 },
   visualSub: { fontSize: 12, color: "var(--mute)", marginBottom: 12 },
-  detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: "1px solid var(--line)", paddingTop: 18 },
-  detailToggle: { background: "var(--panel2)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
-  detailHint: { fontSize: 12, color: "var(--mute)", marginTop: 6 },
+  detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  detailTick: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--mute)", cursor: "pointer", borderTop: "1px solid var(--line)", paddingTop: 14, marginBottom: 10 },
   overlay: {
     position: "fixed",
     inset: 0,
@@ -1715,17 +1725,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   closeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 18, cursor: "pointer" },
   emptyNote: { color: "var(--mute)", fontSize: 14, padding: "20px 0" },
-  aiBox: {
-    background: "var(--accent-dim)",
-    border: "1px solid var(--accent)",
-    borderRadius: 12,
-    padding: "14px 16px",
-    marginBottom: SECTION_GAP,
-  },
-  aiLabel: { fontSize: 12, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
-  aiSubLabel: { fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 10, marginBottom: 4 },
-  aiText: { fontSize: 13, color: "var(--text)", lineHeight: 1.5, margin: "0 0 4px" },
-  aiLoading: { fontSize: 13, color: "var(--mute)", fontStyle: "italic" },
   sectionTitle: {
     fontFamily: "'Barlow Condensed', sans-serif",
     fontSize: 18,

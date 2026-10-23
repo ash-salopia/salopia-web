@@ -172,7 +172,7 @@ export const METRIC_FIELDS: { key: "ttl" | "e1rm"; label: string; hint: string }
 ];
 
 export const VISUAL_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
-  { key: "coachVerdict", label: "Coach's verdict", hint: "What went well, what to work on, focus for next block - drafted by AI when the AI summary is on, editable on the report" },
+  { key: "coachVerdict", label: "Coach's summary", hint: "Overview plus what went well, what to work on and focus for next block - editable on the report" },
   { key: "goalProgress", label: "Goal progress", hint: "Each goal's current vs target, with on track / behind" },
   { key: "competitions", label: "Competition countdown", hint: "Days to the athlete's next competitions" },
   { key: "headlineCards", label: "Headline numbers", hint: "Sessions, completion, PBs, RPE and tonnage at the top - with change vs the previous period" },
@@ -187,7 +187,7 @@ export const VISUAL_FIELDS: { key: keyof ReportOptions; label: string; hint: str
 ];
 
 export const COMPONENT_FIELDS: { key: keyof ReportOptions; label: string; hint: string }[] = [
-  { key: "aiSummary", label: "AI summary", hint: "Short AI overview + recurring themes from notes, at the top" },
+  { key: "aiSummary", label: "Draft the summary with AI", hint: "AI writes a first draft of the Coach's summary (overview, the three boxes, themes from notes) - you edit it on the report" },
   { key: "highlights", label: "Highlights", hint: "Top 3 progressed exercises, 3 to review - per metric selected (on screen, the progress bars show these instead when they're on)" },
   { key: "loadProgression", label: "Progression table", hint: "First / latest / Δ / % change per exercise" },
   { key: "sparkline", label: "Sparklines", hint: "Small mini-trend chart per exercise row" },

@@ -668,6 +668,9 @@ export interface TestReportRatedRow {
   population: TestBenchmark | null;
   eliteRag: RagStatus | null;
   popRag: RagStatus | null;
+  // Shown in place of a rating when a row is deliberately left unrated
+  // (IMTP kg once N/kg is available - see buildTestReportView).
+  unratedNote?: string;
 }
 
 export interface TestReportAsymRow {
@@ -780,6 +783,18 @@ export function buildTestReportView(
       };
     })
     .filter(Boolean) as TestReportRatedRow[];
+
+  // Absolute IMTP (kg) ignores body size, so a light athlete pulling a lot
+  // reads as merely "Good". Once there's an N/kg value, that row carries
+  // the rating and the kg row is shown as a number only (the original
+  // engine's "kg ratings are indicative, only without bodyweight" rule).
+  if (ratedRows.some((r) => isImtpRel(r.metric))) {
+    for (const r of ratedRows) {
+      if (!isImtpKg(r.metric)) continue;
+      r.elite = r.population = r.eliteRag = r.popRag = null;
+      r.unratedNote = "See N/kg";
+    }
+  }
 
   const asymmetryRows: TestReportAsymRow[] = visibleMetrics
     .filter((m) => m.screening_only)

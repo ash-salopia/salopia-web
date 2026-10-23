@@ -392,7 +392,7 @@ export default function GroupTestGridPage() {
                     {cols.map((c) => {
                       const k = cellKey(s.id, c.metric.id, c.side);
                       const trials = values[k] ?? EMPTY_TRIALS;
-                      const rag = ragForCell(trials, c.metric, benchmarksByMetric[c.metric.id] ?? [], a ?? null, age);
+                      const rag = ragForCell(trials, c.metric, benchmarksByMetric[c.metric.id] ?? [], a ?? null, age, parseFloat(bw[s.id] ?? "") > 0);
                       return (
                         <Cell
                           key={c.key}
@@ -439,9 +439,12 @@ function ragForCell(
   metric: TestMetric,
   benchmarks: TestBenchmark[],
   athlete: GroupTestAthlete | null,
-  age: number | null
+  age: number | null,
+  hasBodyweight: boolean
 ): string | null {
   if (metric.screening_only || !athlete) return null;
+  // With a bodyweight, IMTP is rated on N/kg in the report, not raw kg.
+  if (hasBodyweight && metric.name.toLowerCase().includes("imtp") && metric.unit.toLowerCase() === "kg") return null;
   const idx = bestTrialIdx(trials, metric.better_direction);
   if (idx < 0) return null;
   const best = parseFloat(trials[idx]);

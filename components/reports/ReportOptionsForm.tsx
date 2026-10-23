@@ -250,7 +250,7 @@ export default function ReportOptionsForm({
 
       {options.aiSummary && (
         <>
-          <div style={s.sectionLabel}>Context for AI summary</div>
+          <div style={s.sectionLabel}>Context for the AI draft</div>
           <div style={{ marginBottom: 16 }}>
             <div style={{ ...s.fieldLabel, marginBottom: 6 }}>
               Anything the AI should factor in - e.g. &quot;returning from hamstring injury&quot;, so a jump in leg
