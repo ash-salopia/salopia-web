@@ -37,6 +37,8 @@ export default function ShopPage() {
   const [error, setError] = useState("");
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
+  const [connectLink, setConnectLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof getStoreSettings>> | null>(null);
   const [form, setForm] = useState<StoreSettingsForm>({
     store_slug: "",
@@ -92,6 +94,14 @@ export default function ShopPage() {
   useEffect(() => {
     load();
   }, [load]);
+  // Stripe opens in its own tab, so pick up the new status when the coach
+  // comes back to this one.
+  useEffect(() => {
+    if (!connectLink) return;
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [connectLink, load]);
 
   const progById = useMemo(() => Object.fromEntries(programmes.map((p) => [p.id, p])), [programmes]);
   const prodById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
@@ -99,16 +109,33 @@ export default function ShopPage() {
   const revenue = purchases.filter((p) => p.status === "paid").reduce((n, p) => n + p.amount_pence, 0);
 
   const startConnect = async (action?: "dashboard") => {
+    // Open the tab during the click itself - browsers block tabs opened
+    // after an await. Then point it at Stripe once the link is ready.
+    const tab = window.open("", "_blank");
     setConnectBusy(true);
     setError("");
+    setLinkCopied(false);
     try {
       const res = await fetch("/api/store/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
       const json = await res.json();
       if (!res.ok || !json.url) throw new Error(json.error || "Couldn't open Stripe.");
-      window.location.href = json.url;
+      if (tab) tab.location.href = json.url;
+      if (action !== "dashboard") setConnectLink(json.url);
+      else if (!tab) window.location.href = json.url;
     } catch (e) {
+      tab?.close();
       setError(e instanceof Error ? e.message : "Couldn't open Stripe.");
+    } finally {
       setConnectBusy(false);
+    }
+  };
+
+  const copyConnectLink = async () => {
+    try {
+      await navigator.clipboard.writeText(connectLink);
+      setLinkCopied(true);
+    } catch {
+      window.prompt("Copy this link:", connectLink);
     }
   };
 
@@ -250,6 +277,14 @@ export default function ShopPage() {
                 Open Stripe dashboard ↗
               </button>
             )}
+          </div>
+        )}
+        {connectLink && !connect?.chargesEnabled && (
+          <div style={s.linkBox}>
+            <div style={s.muted}>Stripe opened in a new tab. To use a different browser, copy this link - it works once and expires after a few minutes (press the button again for a fresh one).</div>
+            <div>
+              <button style={s.ghost} onClick={copyConnectLink}>{linkCopied ? "Copied ✓" : "Copy link"}</button>
+            </div>
           </div>
         )}
       </section>
@@ -453,6 +488,7 @@ const s: Record<string, React.CSSProperties> = {
   cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
   cardTitle: { fontSize: 16, fontWeight: 800, color: "var(--text)" },
   text: { fontSize: 14, color: "var(--text)", lineHeight: 1.5 },
+  linkBox: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" },
   muted: { fontSize: 12, color: "var(--mute)", lineHeight: 1.45 },
   label: { display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--mute)" },
   input: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "9px 11px", fontSize: 14 },
