@@ -647,6 +647,7 @@ export interface TestSession {
   test_battery_id: string | null;
   date: string; // YYYY-MM-DD
   bodyweight_kg: number | null;
+  age_years?: number | null; // 0128 — typed age, only used when the athlete has no DOB
   notes: string;
   created_at: string;
   results?: TestResult[];

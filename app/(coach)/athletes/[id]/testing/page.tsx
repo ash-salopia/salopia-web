@@ -6,20 +6,11 @@ import { createClient } from "@/lib/supabase-browser";
 import {
   listTestBatteries, listTestMetrics, listTestSessions, listBenchmarksForMetric,
   createTestSession, updateTestSession, saveTrials, deleteTestSession,
+  ageInYears, sessionAge,
 } from "@/lib/data/testing";
 import TestReportModal from "@/components/TestReportModal";
 import type { Athlete, TestBattery, TestMetric, TestBenchmark, TestSession, TestResult } from "@/types";
 import { todayISO } from "@/lib/date-utils";
-
-function calcAgeAtDate(dob: string | null, testDate: string): number | null {
-  if (!dob) return null;
-  const d = new Date(dob + "T00:00:00Z");
-  const t = new Date(testDate + "T00:00:00Z");
-  let age = t.getFullYear() - d.getFullYear();
-  const m = t.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age--;
-  return age;
-}
 
 function fmtDate(iso: string) {
   return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -127,7 +118,7 @@ export default function AthleteTestingPage() {
     setLogBatteryId(session.test_battery_id);
     setLogDate(session.date);
     setLogBodyweight(session.bodyweight_kg != null ? String(session.bodyweight_kg) : "");
-    setLogAge("");
+    setLogAge(session.age_years != null ? String(session.age_years) : "");
     setLogNotes(session.notes ?? "");
 
     const battery = batteries.find((b) => b.id === session.test_battery_id);
@@ -147,12 +138,17 @@ export default function AthleteTestingPage() {
     setSaving(true);
     setError("");
     try {
+      // Only stored when there's no DOB - with a DOB, age is always
+      // worked out from it (see sessionAge).
+      const typedAge = parseInt(logAge, 10);
+      const ageYears = !athlete?.date_of_birth && typedAge >= 3 && typedAge <= 100 ? typedAge : null;
       let sessionId: string;
       if (editSessionId) {
         await updateTestSession(editSessionId, {
           testBatteryId: logBatteryId,
           date: logDate,
           bodyweightKg: logBodyweight ? parseFloat(logBodyweight) : null,
+          ageYears,
           notes: logNotes,
         });
         sessionId = editSessionId;
@@ -162,6 +158,7 @@ export default function AthleteTestingPage() {
           testBatteryId: logBatteryId,
           date: logDate,
           bodyweightKg: logBodyweight ? parseFloat(logBodyweight) : null,
+          ageYears,
           notes: logNotes,
         });
         sessionId = session.id;
@@ -277,8 +274,8 @@ export default function AthleteTestingPage() {
                     {session.bodyweight_kg && (
                       <div style={s.sessionMeta}>⚖️ {session.bodyweight_kg}kg bodyweight</div>
                     )}
-                    {athlete?.date_of_birth && (
-                      <div style={s.sessionMeta}>🎂 Age at test: {calcAgeAtDate(athlete.date_of_birth, session.date)}</div>
+                    {sessionAge(athlete?.date_of_birth ?? null, session) != null && (
+                      <div style={s.sessionMeta}>🎂 Age at test: {sessionAge(athlete?.date_of_birth ?? null, session)}</div>
                     )}
                     {session.notes && <div style={s.sessionMeta}>{session.notes}</div>}
                   </div>
@@ -350,21 +347,30 @@ export default function AthleteTestingPage() {
             </div>
 
             <div style={s.field}>
-              <label style={s.label}>Age at test date - auto from DOB, or enter manually</label>
-              <input
-                type="number"
-                step="1"
-                min="5"
-                max="100"
-                placeholder={athlete?.date_of_birth ? String(calcAgeAtDate(athlete.date_of_birth, logDate) ?? "") : "e.g. 14"}
-                style={s.input}
-                value={logAge}
-                onChange={(e) => setLogAge(e.target.value)}
-              />
-              {athlete?.date_of_birth && !logAge && (
-                <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 3 }}>
-                  Auto-calculated: age {calcAgeAtDate(athlete.date_of_birth, logDate)} from DOB {athlete.date_of_birth}
-                </div>
+              <label style={s.label}>Age at test date</label>
+              {athlete?.date_of_birth ? (
+                <>
+                  <input style={{ ...s.input, opacity: 0.75 }} value={ageInYears(athlete.date_of_birth, logDate) ?? ""} readOnly />
+                  <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 3 }}>
+                    From their date of birth ({fmtDate(athlete.date_of_birth)}) on the profile.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="number"
+                    step="1"
+                    min="3"
+                    max="100"
+                    placeholder="e.g. 14"
+                    style={s.input}
+                    value={logAge}
+                    onChange={(e) => setLogAge(e.target.value)}
+                  />
+                  <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 3 }}>
+                    No date of birth on their profile - add one there and this fills in automatically.
+                  </div>
+                </>
               )}
             </div>
 

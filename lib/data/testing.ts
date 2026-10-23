@@ -173,7 +173,7 @@ export async function latestTestValues(
 
 export async function createTestSession(params: {
   athleteId: string; testBatteryId: string | null; date: string;
-  bodyweightKg: number | null; notes?: string;
+  bodyweightKg: number | null; ageYears?: number | null; notes?: string;
 }): Promise<TestSession> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -183,6 +183,7 @@ export async function createTestSession(params: {
       test_battery_id: params.testBatteryId,
       date: params.date,
       bodyweight_kg: params.bodyweightKg,
+      age_years: params.ageYears ?? null,
       notes: params.notes ?? "",
     })
     .select()
@@ -193,7 +194,7 @@ export async function createTestSession(params: {
 
 export async function updateTestSession(id: string, params: {
   testBatteryId: string | null; date: string;
-  bodyweightKg: number | null; notes?: string;
+  bodyweightKg: number | null; ageYears?: number | null; notes?: string;
 }): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase
@@ -202,6 +203,7 @@ export async function updateTestSession(id: string, params: {
       test_battery_id: params.testBatteryId,
       date: params.date,
       bodyweight_kg: params.bodyweightKg,
+      age_years: params.ageYears ?? null,
       notes: params.notes ?? "",
     })
     .eq("id", id);
@@ -524,6 +526,16 @@ export function ageInYears(dateOfBirth: string | null, onDate: string): number |
   return age;
 }
 
+// Age to rate a test session against norms: from the profile DOB when
+// there is one (so correcting a DOB later fixes old sessions too),
+// otherwise the age the coach typed in for that session (0128).
+export function sessionAge(
+  dateOfBirth: string | null,
+  session: { date: string; age_years?: number | null }
+): number | null {
+  return ageInYears(dateOfBirth, session.date) ?? session.age_years ?? null;
+}
+
 // Picks the most specific matching benchmark for an athlete: prefers a
 // benchmark with a matching sex AND age band over a looser one, but falls
 // back to "applies to everyone" benchmarks when athlete sex/DOB is missing.
@@ -692,7 +704,7 @@ export function buildTestReportView(
 ): TestReportView {
   const latestSession = sessions[0] ?? null;
   const priors = sessions.slice(1); // everything before the latest, newest-first
-  const athleteAge = latestSession ? ageInYears(athlete.date_of_birth, latestSession.date) : null;
+  const athleteAge = latestSession ? sessionAge(athlete.date_of_birth, latestSession) : null;
   const hasBodyweight = latestSession?.bodyweight_kg != null;
 
   // The single comparison session (for "previous"/"first"/"session" and

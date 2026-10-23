@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   getGroupTestSession, addAthletesToGroupTestSession, removeGroupTestAthlete,
   updateGroupTestSession, listBenchmarksForMetric,
-  ageInYears, matchBothBenchmarks, ragStatus, RAG_COLOR,
+  sessionAge, matchBothBenchmarks, ragStatus, RAG_COLOR,
   type GroupTestSessionDetail, type GroupTestAthlete,
 } from "@/lib/data/testing";
 import { listAthletes } from "@/lib/data/athletes";
@@ -70,6 +70,7 @@ export default function GroupTestGridPage() {
   const valuesRef = useRef(values);
   useEffect(() => { valuesRef.current = values; }, [values]);
   const [bw, setBw] = useState<Record<string, string>>({});
+  const [ages, setAges] = useState<Record<string, string>>({});
   const [cellStatus, setCellStatus] = useState<Record<string, CellStatus>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -96,8 +97,10 @@ export default function GroupTestGridPage() {
 
       const initVals: Record<string, string[]> = {};
       const initBw: Record<string, string> = {};
+      const initAges: Record<string, string> = {};
       for (const s of d.sessions) {
         initBw[s.id] = s.bodyweight_kg != null ? String(s.bodyweight_kg) : "";
+        initAges[s.id] = s.age_years != null ? String(s.age_years) : "";
         for (const r of s.results ?? []) {
           const k = cellKey(s.id, r.test_metric_id, (r.side ?? null) as Side);
           (initVals[k] ??= []);
@@ -110,6 +113,7 @@ export default function GroupTestGridPage() {
       }
       setValues(initVals);
       setBw(initBw);
+      setAges(initAges);
 
       const metrics = d.battery?.metrics ?? [];
       const entries = await Promise.all(
@@ -232,6 +236,17 @@ export default function GroupTestGridPage() {
 
   const onBwBlur = useCallback((sessionId: string) => flushKey(`grouptest:bw:${sessionId}`), [flushKey]);
 
+  // Only for athletes with no DOB on their profile - with one, the age
+  // column is calculated and read-only (see sessionAge).
+  const onAgeChange = useCallback((sessionId: string, val: string) => {
+    setAges((prev) => ({ ...prev, [sessionId]: val }));
+    const n = parseInt(val, 10);
+    if (val !== "" && !(n >= 3 && n <= 100)) return;
+    scheduleSave(`grouptest:age:${sessionId}`, { kind: "age", testSessionId: sessionId, ageYears: val === "" ? null : n });
+  }, [scheduleSave]);
+
+  const onAgeBlur = useCallback((sessionId: string) => flushKey(`grouptest:age:${sessionId}`), [flushKey]);
+
   // ── Session meta ───────────────────────────────────────────────────────────
   const saveName = async () => {
     if (!detail || name === detail.groupSession.name) return;
@@ -326,6 +341,7 @@ export default function GroupTestGridPage() {
               <tr>
                 <th style={{ ...st.th, ...st.cornerName, width: NAME_W, minWidth: NAME_W, maxWidth: NAME_W }}>Athlete</th>
                 <th style={{ ...st.th, ...st.bwHead }}>BW (kg)</th>
+                <th style={{ ...st.th, ...st.bwHead }} title="Worked out from date of birth where the profile has one">Age</th>
                 {cols.map((c) => (
                   <th key={c.key} style={{ ...st.th, ...st.colHead }}>
                     <div style={st.colHeadName}>{c.label}</div>
@@ -337,7 +353,10 @@ export default function GroupTestGridPage() {
             <tbody>
               {sessions.map((s) => {
                 const a = athleteById.get(s.athlete_id);
-                const age = a ? ageInYears(a.date_of_birth, groupSession.date) : null;
+                const typedAge = parseInt(ages[s.id] ?? "", 10);
+                const age = a?.date_of_birth
+                  ? sessionAge(a.date_of_birth, { date: groupSession.date })
+                  : typedAge >= 3 && typedAge <= 100 ? typedAge : null;
                 return (
                   <tr key={s.id}>
                     <td style={{ ...st.td, ...st.nameCell, width: NAME_W, minWidth: NAME_W, maxWidth: NAME_W, padding: isMobile ? "6px 4px" : "6px 8px" }}>
@@ -354,6 +373,21 @@ export default function GroupTestGridPage() {
                         onChange={(e) => onBwChange(s.id, e.target.value)}
                         onBlur={() => onBwBlur(s.id)}
                       />
+                    </td>
+                    <td style={{ ...st.td, ...st.bwCell }}>
+                      {a?.date_of_birth ? (
+                        <div style={st.ageAuto} title="From their date of birth">{age ?? "—"}</div>
+                      ) : (
+                        <input
+                          style={st.bwInput}
+                          inputMode="numeric"
+                          placeholder="—"
+                          title="No date of birth on their profile - type their age"
+                          value={ages[s.id] ?? ""}
+                          onChange={(e) => onAgeChange(s.id, e.target.value)}
+                          onBlur={() => onAgeBlur(s.id)}
+                        />
+                      )}
                     </td>
                     {cols.map((c) => {
                       const k = cellKey(s.id, c.metric.id, c.side);
@@ -573,6 +607,7 @@ const st: Record<string, React.CSSProperties> = {
   athleteNameMobile: { whiteSpace: "normal", overflow: "visible", textOverflow: "clip", lineHeight: 1.15, fontSize: 11, wordBreak: "break-word" },
   removeBtn: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, cursor: "pointer", flexShrink: 0 },
   bwCell: { padding: 4, width: 64, minWidth: 64, maxWidth: 64 },
+  ageAuto: { textAlign: "center", fontSize: 12, color: "var(--mute)", padding: "5px 4px" },
   bwInput: { width: "100%", boxSizing: "border-box", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "5px 4px", fontSize: 12, textAlign: "center" },
 
   cell: { padding: 3, verticalAlign: "top" },

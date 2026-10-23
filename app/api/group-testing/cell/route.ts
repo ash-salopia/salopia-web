@@ -40,6 +40,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (kind === "age") {
+      const raw = body.ageYears;
+      const value = raw === null || raw === "" || raw === undefined ? null : Math.round(Number(raw));
+      if (value !== null && (!isFinite(value) || value < 3 || value > 100)) {
+        return NextResponse.json({ error: "Age must be between 3 and 100" }, { status: 400 });
+      }
+      const { error } = await supabase
+        .from("test_sessions")
+        .update({ age_years: value })
+        .eq("id", testSessionId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
     if (kind === "trials") {
       const { testMetricId, side } = body;
       const sideVal: "left" | "right" | null = side === "left" || side === "right" ? side : null;
