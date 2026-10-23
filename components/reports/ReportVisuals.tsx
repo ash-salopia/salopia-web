@@ -152,7 +152,25 @@ function MedalIcon() {
   );
 }
 
-export function PBWall({ pbs, max = 12 }: { pbs: ReportPB[]; max?: number }) {
+// Red ✕ that takes one exercise out of the whole report (see
+// lib/report-hide.ts). Never printed.
+export function HideExerciseBtn({ name, onHide }: { name: string; onHide?: (name: string) => void }) {
+  if (!onHide) return null;
+  return (
+    <button
+      type="button"
+      data-no-print="true"
+      title={`Remove ${name} from this report`}
+      aria-label={`Remove ${name} from this report`}
+      onClick={() => onHide(name)}
+      style={v.hideBtn}
+    >
+      ✕
+    </button>
+  );
+}
+
+export function PBWall({ pbs, max = 12, onHide }: { pbs: ReportPB[]; max?: number; onHide?: (name: string) => void }) {
   const cards = groupPBs(pbs);
   const shown = cards.slice(0, max);
   return (
@@ -160,7 +178,10 @@ export function PBWall({ pbs, max = 12 }: { pbs: ReportPB[]; max?: number }) {
       <div style={v.pbGrid}>
         {shown.map(({ pb, count }, i) => (
           <div key={`${pb.exercise}-${pb.kind}-${i}`} style={v.pbCard}>
-            <div style={v.pbExercise}>{pb.exercise}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "flex-start" }}>
+              <div style={v.pbExercise}>{pb.exercise}</div>
+              <HideExerciseBtn name={pb.exercise} onHide={onHide} />
+            </div>
             <div style={v.pbValue}>{pbValueText(pb)}</div>
             <div style={v.pbMeta}>
               <MedalIcon />
@@ -184,7 +205,7 @@ export interface ProgressRow {
   latest: number;
 }
 
-export function ProgressBars({ rows, unit, decimals = 0 }: { rows: ProgressRow[]; unit: string; decimals?: number }) {
+export function ProgressBars({ rows, unit, decimals = 0, onHide }: { rows: ProgressRow[]; unit: string; decimals?: number; onHide?: (name: string) => void }) {
   const sorted = [...rows].sort((a, b) => b.pct - a.pct);
   const maxAbs = Math.max(5, ...sorted.map((r) => Math.abs(r.pct)));
   const hasNeg = sorted.some((r) => r.pct < 0);
@@ -204,6 +225,7 @@ export function ProgressBars({ rows, unit, decimals = 0 }: { rows: ProgressRow[]
             <div style={v.barTop}>
               <div style={v.barName}>
                 <span style={{ minWidth: 0 }}>{r.name}</span>
+                <HideExerciseBtn name={r.name} onHide={onHide} />
                 {i < 3 && r.pct > 0 && <span style={{ ...v.tag, color: GOOD, borderColor: GOOD }}>Top</span>}
                 {slow && (
                   <span style={{ ...v.tag, color: WARN, borderColor: WARN }}>{r.pct > 0 ? "Slowest" : "Review"}</span>
@@ -272,7 +294,7 @@ function MiniChart({ points, colour }: { points: { date: string; value: number }
   );
 }
 
-export function SmallMultiples({ series, unit, decimals = 0 }: { series: TrendSeries[]; unit: string; decimals?: number }) {
+export function SmallMultiples({ series, unit, decimals = 0, onHide }: { series: TrendSeries[]; unit: string; decimals?: number; onHide?: (name: string) => void }) {
   return (
     <div style={v.smGrid}>
       {series.map((s) => {
@@ -283,7 +305,10 @@ export function SmallMultiples({ series, unit, decimals = 0 }: { series: TrendSe
           <div key={s.name} style={v.smCard}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
               <div style={v.smName}>{s.name}</div>
-              {s.pct != null && <div style={{ fontSize: 12, fontWeight: 700, color: colour, whiteSpace: "nowrap" }}>{fmtPct(s.pct)}</div>}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {s.pct != null && <div style={{ fontSize: 12, fontWeight: 700, color: colour, whiteSpace: "nowrap" }}>{fmtPct(s.pct)}</div>}
+                <HideExerciseBtn name={s.name} onHide={onHide} />
+              </div>
             </div>
             <div style={v.smValue}>
               {latest.toFixed(decimals)}
@@ -579,50 +604,6 @@ export function CoachVerdict({ value, onChange, loading }: { value: Verdict; onC
   );
 }
 
-// One editable paragraph of the Coach's Summary (the overview, or the
-// themes from notes). Same pattern as the verdict boxes: plain text so
-// Print and Email carry it, a pencil to edit, left off print when empty.
-export function EditableParagraph({ label, value, onChange, loading, placeholder }: {
-  label?: string;
-  value: string;
-  onChange: (v: string) => void;
-  loading?: boolean;
-  placeholder: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  return (
-    <div data-no-print={!value && !editing ? "true" : undefined} style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        {label ? <div style={v.cardLabel}>{label}</div> : <span />}
-        {!editing && value && (
-          <button data-no-print="true" style={v.editBtn} onClick={() => setEditing(true)} aria-label={`Edit ${label ?? "summary"}`}>
-            ✎ Edit
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <textarea
-          autoFocus
-          value={value}
-          placeholder={placeholder}
-          rows={4}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={() => setEditing(false)}
-          style={v.verdictInput}
-        />
-      ) : loading && !value ? (
-        <div data-no-print="true" style={{ ...v.verdictText, color: "var(--mute)" }}>Drafting…</div>
-      ) : value ? (
-        <div style={{ ...v.verdictText, fontSize: 14 }}>{value}</div>
-      ) : (
-        <div data-no-print="true" style={{ ...v.verdictText, color: "var(--mute)", fontStyle: "italic", cursor: "pointer" }} onClick={() => setEditing(true)}>
-          {placeholder}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Goal progress ────────────────────────────────────────────────────────────
 
 const GOAL_STATUS: Record<GoalProgress["status"], { label: string; colour: string }> = {
@@ -778,7 +759,7 @@ export function ReadinessPanel({ readiness }: { readiness: ReadinessSummary }) {
 
 // ── Skipped & swapped ────────────────────────────────────────────────────────
 
-export function AdherenceList({ rows, max = 8 }: { rows: AdherenceRow[]; max?: number }) {
+export function AdherenceList({ rows, max = 8, onHide }: { rows: AdherenceRow[]; max?: number; onHide?: (name: string) => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {rows.slice(0, max).map((r) => {
@@ -788,7 +769,10 @@ export function AdherenceList({ rows, max = 8 }: { rows: AdherenceRow[]; max?: n
         return (
           <div key={r.exercise} style={v.adhRow}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{r.exercise}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", display: "flex", gap: 6, alignItems: "center" }}>
+                {r.exercise}
+                <HideExerciseBtn name={r.exercise} onHide={onHide} />
+              </div>
               <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 2 }}>
                 {r.skipped > 0 && `Skipped ${r.skipped} of ${r.programmed}`}
                 {r.skipped > 0 && r.swapped.length > 0 && " · "}
@@ -927,6 +911,7 @@ const v: Record<string, React.CSSProperties> = {
   meterFill: { height: "100%", borderRadius: 3 },
   delta: { fontSize: 11, color: "var(--mute)", marginTop: 8, fontWeight: 600 },
   pbGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 },
+  hideBtn: { background: "transparent", border: "1px solid #E5484D55", color: "#E5484D", borderRadius: 999, width: 18, height: 18, fontSize: 10, lineHeight: "16px", padding: 0, cursor: "pointer", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" },
   pbCard: { background: "var(--panel)", border: "1px solid var(--line)", borderTop: `2px solid ${GOLD}`, borderRadius: 12, padding: "12px 14px", breakInside: "avoid", minWidth: 0 },
   pbExercise: { fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.05em", lineHeight: 1.35 },
   pbValue: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--text)", lineHeight: 1.1, marginTop: 6 },

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReportData } from "@/lib/data/reports";
+import { hideExercises } from "@/lib/report-hide";
 import type { ReportOptions } from "@/components/ReportRangeModal";
 import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
@@ -28,7 +29,7 @@ function fmtRangeDate(iso: string): string {
 import {
   CompetitionStrip,
   CoachVerdict,
-  EditableParagraph,
+  HideExerciseBtn,
   GoalProgressList,
   ReadinessPanel,
   AdherenceList,
@@ -162,7 +163,7 @@ function GroupFilterRow({
 }
 
 export default function ReportModal({
-  data,
+  data: rawData,
   athleteName,
   athleteGroup,
   options,
@@ -192,6 +193,18 @@ export default function ReportModal({
   onShared?: () => void;
   onClose: () => void;
 }) {
+  // Exercises the coach has taken out of this report with the red ✕
+  // (injured, not relevant, not a fair picture). Removed from every
+  // per-exercise section; restorable from the bar at the top.
+  const [hiddenExercises, setHiddenExercises] = useState<Set<string>>(() => new Set());
+  const hideExercise = (name: string) => setHiddenExercises((prev) => new Set(prev).add(name));
+  const restoreExercise = (name: string) =>
+    setHiddenExercises((prev) => {
+      const next = new Set(prev);
+      next.delete(name);
+      return next;
+    });
+  const data = useMemo(() => hideExercises(rawData, hiddenExercises), [rawData, hiddenExercises]);
   const {
     exMap,
     exerciseSummaries,
@@ -237,17 +250,7 @@ export default function ReportModal({
   useEffect(() => {
     if (aiSummary?.verdict && !verdictEdited) setVerdict(aiSummary.verdict);
   }, [aiSummary, verdictEdited]);
-  // The overview + themes paragraphs of the Coach's Summary: AI-drafted
-  // (when "Draft with AI" is on), then the coach's edits win.
-  const [overview, setOverview] = useState("");
-  const [themes, setThemes] = useState("");
-  const [summaryEdited, setSummaryEdited] = useState(false);
-  useEffect(() => {
-    if (aiSummary && !summaryEdited) {
-      setOverview(aiSummary.summary ?? "");
-      setThemes(aiSummary.themes ?? "");
-    }
-  }, [aiSummary, summaryEdited]);
+
 
   // 0084 — which exercise/modality groups to actually chart in the
   // Cardio/Hyrox Metrics sections, live in the report view (not a
@@ -537,6 +540,17 @@ ${fonts}
         </div>
 
         <div id="report-content" style={{ padding: 20 }}>
+          {hiddenExercises.size > 0 && (
+            <div data-no-print="true" style={styles.hiddenBar}>
+              <span>Removed from this report:</span>
+              {[...hiddenExercises].map((n) => (
+                <button key={n} style={styles.hiddenChip} onClick={() => restoreExercise(n)} title="Put back">
+                  {n} ↺
+                </button>
+              ))}
+              <button style={styles.hiddenRestoreAll} onClick={() => setHiddenExercises(new Set())}>Restore all</button>
+            </div>
+          )}
           {!hasStrength && !hasE1rm && !hasHyrox && !hasCardio && !hasPowerSpeed && !hasRpe && !notes.length && (
             <div style={styles.emptyNote}>
               No logged data found in this range. Log weights in strength sessions to generate a
@@ -563,40 +577,21 @@ ${fonts}
             </div>
           )}
 
-          {/* Coach's Summary: one section - an overview paragraph, the three
-              verdict boxes, and any themes from notes. AI writes the first
-              draft when "Draft with AI" is on; everything is editable. */}
+          {/* Coach's Summary: the three Good / Better / How boxes - AI
+              drafts them (with the figures behind each point) when "Draft
+              with AI" is on; every box is editable. */}
           {(options.coachVerdict !== false || options.aiSummary) && !dismissed.has("coach-verdict") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("coach-verdict")} />
               <div data-section-title="true" style={styles.sectionTitle}>Coach&apos;s Summary</div>
-              <EditableParagraph
-                value={overview}
+              <CoachVerdict
+                value={verdict}
                 loading={aiLoading}
-                placeholder="Click to add an overview of this block…"
-                onChange={(t) => { setOverview(t); setSummaryEdited(true); }}
+                onChange={(next) => {
+                  setVerdict(next);
+                  setVerdictEdited(true);
+                }}
               />
-              {options.coachVerdict !== false && (
-                <CoachVerdict
-                  value={verdict}
-                  loading={aiLoading}
-                  onChange={(next) => {
-                    setVerdict(next);
-                    setVerdictEdited(true);
-                  }}
-                />
-              )}
-              {(themes || aiLoading) && (
-                <div style={{ marginTop: 10 }}>
-                  <EditableParagraph
-                    label="From the session notes"
-                    value={themes}
-                    loading={aiLoading}
-                    placeholder="Click to add themes from the notes…"
-                    onChange={(t) => { setThemes(t); setSummaryEdited(true); }}
-                  />
-                </div>
-              )}
             </div>
           )}
 
@@ -612,7 +607,7 @@ ${fonts}
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("pb-wall")} />
               <div data-section-title="true" style={styles.sectionTitle}>Personal Bests</div>
-              <PBWall pbs={visual.pbs} />
+              <PBWall pbs={visual.pbs} onHide={hideExercise} />
             </div>
           )}
 
@@ -626,7 +621,7 @@ ${fonts}
               <div style={styles.visualSub}>
                 {useE1rm ? "Estimated 1RM" : "Total training load"}, first session in range → latest
               </div>
-              <ProgressBars rows={progressRows} unit={visualUnit} decimals={visualDecimals} />
+              <ProgressBars rows={progressRows} unit={visualUnit} decimals={visualDecimals} onHide={hideExercise} />
             </div>
           )}
 
@@ -640,7 +635,7 @@ ${fonts}
               <div style={styles.visualSub}>
                 Weekly {useE1rm ? "best estimated 1RM" : "training load"} per exercise, each on its own scale
               </div>
-              <SmallMultiples series={trendSeries} unit={visualUnit} decimals={visualDecimals} />
+              <SmallMultiples series={trendSeries} unit={visualUnit} decimals={visualDecimals} onHide={hideExercise} />
             </div>
           )}
 
@@ -689,7 +684,7 @@ ${fonts}
               <DismissBtn onClick={() => dismiss("adherence")} />
               <div data-section-title="true" style={styles.sectionTitle}>Skipped &amp; Swapped</div>
               <div style={styles.visualSub}>Programmed exercises in sessions they trained - % is how often each was done as written</div>
-              <AdherenceList rows={visual.adherence} />
+              <AdherenceList rows={visual.adherence} onHide={hideExercise} />
             </div>
           )}
 
@@ -710,7 +705,7 @@ ${fonts}
                         {topProgressed.length === 0 && <div style={styles.highlightEmpty}>Not enough data yet.</div>}
                         {topProgressed.map((e) => (
                           <div key={e.name} style={styles.highlightRow}>
-                            <span>{e.name}</span>
+                            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{e.name}<HideExerciseBtn name={e.name} onHide={hideExercise} /></span>
                             <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
                           </div>
                         ))}
@@ -720,7 +715,7 @@ ${fonts}
                         {toReview.length === 0 && <div style={styles.highlightEmpty}>Not enough data yet.</div>}
                         {toReview.map((e) => (
                           <div key={e.name} style={styles.highlightRow}>
-                            <span>{e.name}</span>
+                            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{e.name}<HideExerciseBtn name={e.name} onHide={hideExercise} /></span>
                             <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
                           </div>
                         ))}
@@ -739,7 +734,7 @@ ${fonts}
                         )}
                         {strength.topProgressed.map((e) => (
                           <div key={e.name} style={styles.highlightRow}>
-                            <span>{e.name}</span>
+                            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{e.name}<HideExerciseBtn name={e.name} onHide={hideExercise} /></span>
                             <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
                           </div>
                         ))}
@@ -751,7 +746,7 @@ ${fonts}
                         )}
                         {strength.toReview.map((e) => (
                           <div key={e.name} style={styles.highlightRow}>
-                            <span>{e.name}</span>
+                            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{e.name}<HideExerciseBtn name={e.name} onHide={hideExercise} /></span>
                             <span style={{ color: pctColor(e.overallPct), fontWeight: 700 }}>{fmtPct(e.overallPct)}</span>
                           </div>
                         ))}
@@ -1010,6 +1005,7 @@ ${fonts}
                 <div key={ex.name} style={{ marginBottom: 16 }}>
                   <div style={styles.metricSubheading}>
                     {ex.name}
+                    <HideExerciseBtn name={ex.name} onHide={hideExercise} />
                     {ex.overallPct != null && (
                       <span style={{ color: ex.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
                         ({ex.overallPct >= 0 ? "+" : ""}{ex.overallPct.toFixed(1)}%)
@@ -1035,6 +1031,7 @@ ${fonts}
                 <div key={ex.name} style={{ marginBottom: 16 }}>
                   <div style={styles.metricSubheading}>
                     {ex.name}
+                    <HideExerciseBtn name={ex.name} onHide={hideExercise} />
                     {ex.overallPct != null && (
                       <span style={{ color: ex.overallPct >= 0 ? "#1baf7a" : "#c2548a", marginLeft: 6 }}>
                         ({ex.overallPct >= 0 ? "+" : ""}{ex.overallPct.toFixed(1)}%)
@@ -1289,7 +1286,7 @@ ${fonts}
                         const delta = last.ttl - first.ttl;
                         return (
                           <tr key={e.name} style={styles.tr}>
-                            <td style={styles.td}>{e.name}</td>
+                            <td style={styles.td}>{e.name} <HideExerciseBtn name={e.name} onHide={hideExercise} /></td>
                             <td style={styles.td}>{e.entries.length}</td>
                             <td style={styles.td}>{first.ttl.toFixed(0)} kg</td>
                             <td style={styles.td}>{last.ttl.toFixed(0)} kg</td>
@@ -1350,6 +1347,7 @@ ${fonts}
                           <tr key={e.name} style={styles.tr}>
                             <td style={styles.td}>
                               {e.name}
+                              <HideExerciseBtn name={e.name} onHide={hideExercise} />
                               {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
                             </td>
                             <td style={styles.td}>{e.entries.length}</td>
@@ -1416,6 +1414,7 @@ ${fonts}
                         <div key={exName} style={{ marginBottom: 22 }}>
                           <div style={styles.exTitle}>
                             {exName}
+                            <HideExerciseBtn name={exName} onHide={hideExercise} />
                             {last.eachSide && <span style={styles.eachSideTag}>(logged per hand, tonnage ×2)</span>}
                           </div>
                           <div style={{ overflowX: "auto" }}>
@@ -1461,7 +1460,7 @@ ${fonts}
                     })
                   : Object.entries(weeklyExMap).map(([exName, weeks]) => (
                       <div key={exName} style={{ marginBottom: 22 }}>
-                        <div style={styles.exTitle}>{exName}</div>
+                        <div style={styles.exTitle}>{exName} <HideExerciseBtn name={exName} onHide={hideExercise} /></div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={styles.table}>
                             <thead>
@@ -1529,6 +1528,7 @@ ${fonts}
                         <div key={exName} style={{ marginBottom: 22 }}>
                           <div style={styles.exTitle}>
                             {exName}
+                            <HideExerciseBtn name={exName} onHide={hideExercise} />
                             {last.eachSide && <span style={styles.eachSideTag}>(logged per hand)</span>}
                             {ref?.source === "manual" && <span style={styles.manualTag}>manual</span>}
                           </div>
@@ -1578,7 +1578,7 @@ ${fonts}
                     })
                   : Object.entries(strength.weeklyExMap).map(([exName, weeks]) => (
                       <div key={exName} style={{ marginBottom: 22 }}>
-                        <div style={styles.exTitle}>{exName}</div>
+                        <div style={styles.exTitle}>{exName} <HideExerciseBtn name={exName} onHide={hideExercise} /></div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={styles.table}>
                             <thead>
@@ -1648,6 +1648,9 @@ const styles: Record<string, React.CSSProperties> = {
   visualHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4, paddingRight: 28 },
   visualSub: { fontSize: 12, color: "var(--mute)", marginBottom: 12 },
   detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  hiddenBar: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12, color: "var(--mute)", background: "var(--panel)", border: "1px dashed var(--line)", borderRadius: 10, padding: "8px 10px", marginBottom: 16 },
+  hiddenChip: { background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, cursor: "pointer" },
+  hiddenRestoreAll: { background: "none", border: "none", color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "3px 4px" },
   detailTick: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--mute)", cursor: "pointer", borderTop: "1px solid var(--line)", paddingTop: 14, marginBottom: 10 },
   overlay: {
     position: "fixed",
