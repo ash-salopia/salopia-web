@@ -16,6 +16,7 @@ import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { brandHeaderHtml, reportThemeColours, REPORT_CREDIT_TEXT } from "@/lib/report-branding";
 import { daySpan, buildProgressRows, buildTrendSeries } from "@/lib/report-visuals";
 import EmailReportDialog from "@/components/reports/EmailReportDialog";
+import { PRINT_FLOW_CSS, tagPrintSections } from "@/lib/print-flow";
 
 export type ReportStyle = "white" | "colour";
 
@@ -353,6 +354,7 @@ export default function ReportModal({
     // states which mode was active in plain text.
     const clone = el.cloneNode(true) as HTMLElement;
     clone.querySelectorAll('[data-no-print="true"]').forEach((n) => n.remove());
+    tagPrintSections(clone);
 
     const esc = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -385,7 +387,7 @@ ${fonts}
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
   }
   table { width: 100%; border-collapse: collapse; }
-  tr { page-break-inside: avoid; }
+  ${PRINT_FLOW_CSS}
   #vb-report > div {
     background: #fff; border: 1px solid var(--line); border-radius: 16px;
     padding: 20px 22px; margin-bottom: 16px !important; box-shadow: 0 1px 3px rgba(16, 24, 40, .05);
@@ -427,7 +429,7 @@ ${fonts}
     font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
   }
   table { width: 100%; border-collapse: collapse; }
-  tr { page-break-inside: avoid; }
+  ${PRINT_FLOW_CSS}
   @page { margin: 16mm; }
   @media (max-width: 600px) { body { padding: 14px; } }
 </style>
@@ -556,7 +558,7 @@ ${fonts}
           {visual && options.competitions !== false && visual.competitions.length > 0 && !dismissed.has("competitions") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("competitions")} />
-              <div style={styles.sectionTitle}>Coming Up</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Coming Up</div>
               <CompetitionStrip competitions={visual.competitions} />
             </div>
           )}
@@ -567,7 +569,7 @@ ${fonts}
           {(options.coachVerdict !== false || options.aiSummary) && !dismissed.has("coach-verdict") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("coach-verdict")} />
-              <div style={styles.sectionTitle}>Coach&apos;s Summary</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Coach&apos;s Summary</div>
               <EditableParagraph
                 value={overview}
                 loading={aiLoading}
@@ -601,7 +603,7 @@ ${fonts}
           {visual && options.goalProgress !== false && visual.goals.length > 0 && !dismissed.has("goal-progress") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("goal-progress")} />
-              <div style={styles.sectionTitle}>Goal Progress</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Goal Progress</div>
               <GoalProgressList goals={visual.goals} />
             </div>
           )}
@@ -609,7 +611,7 @@ ${fonts}
           {visual && options.pbWall !== false && visual.pbs.length > 0 && !dismissed.has("pb-wall") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("pb-wall")} />
-              <div style={styles.sectionTitle}>Personal Bests</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Personal Bests</div>
               <PBWall pbs={visual.pbs} />
             </div>
           )}
@@ -618,7 +620,7 @@ ${fonts}
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("progress-bars")} />
               <div style={styles.visualHead}>
-                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Strength Progress</div>
+                <div data-section-title="true" style={{ ...styles.sectionTitle, marginBottom: 0 }}>Strength Progress</div>
                 {metricToggle}
               </div>
               <div style={styles.visualSub}>
@@ -632,7 +634,7 @@ ${fonts}
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("small-multiples")} />
               <div style={styles.visualHead}>
-                <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Exercise Trends</div>
+                <div data-section-title="true" style={{ ...styles.sectionTitle, marginBottom: 0 }}>Exercise Trends</div>
                 {!showProgressBars && metricToggle}
               </div>
               <div style={styles.visualSub}>
@@ -645,7 +647,7 @@ ${fonts}
           {visual && options.benchmarks !== false && visual.benchmarks.length > 0 && !dismissed.has("benchmarks") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("benchmarks")} />
-              <div style={styles.sectionTitle}>Benchmark Workouts</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Benchmark Workouts</div>
               <div style={styles.visualSub}>The same workout done more than once - first attempt against the latest</div>
               <BenchmarkTables groups={visual.benchmarks} />
             </div>
@@ -654,7 +656,7 @@ ${fonts}
           {visual && options.hrZones !== false && visual.hrZones && !dismissed.has("hr-zones") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("hr-zones")} />
-              <div style={styles.sectionTitle}>Heart-Rate Zones</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Heart-Rate Zones</div>
               <div style={styles.visualSub}>Cardio and hybrid sessions combined</div>
               <HrZoneChart split={visual.hrZones} />
             </div>
@@ -663,7 +665,7 @@ ${fonts}
           {visual && options.consistency !== false && visual.days.length > 0 && !dismissed.has("consistency") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("consistency")} />
-              <div style={styles.sectionTitle}>Consistency</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Consistency</div>
               <ConsistencyCalendar days={visual.days} />
               {visual.weekly.length > 1 && (
                 <div style={{ marginTop: 18 }}>
@@ -677,7 +679,7 @@ ${fonts}
           {visual && options.readiness !== false && visual.readiness && !dismissed.has("readiness") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("readiness")} />
-              <div style={styles.sectionTitle}>Readiness vs Training</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Readiness vs Training</div>
               <ReadinessPanel readiness={visual.readiness} />
             </div>
           )}
@@ -685,7 +687,7 @@ ${fonts}
           {visual && options.adherence !== false && visual.adherence.length > 0 && !dismissed.has("adherence") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("adherence")} />
-              <div style={styles.sectionTitle}>Skipped &amp; Swapped</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Skipped &amp; Swapped</div>
               <div style={styles.visualSub}>Programmed exercises in sessions they trained - % is how often each was done as written</div>
               <AdherenceList rows={visual.adherence} />
             </div>
@@ -698,7 +700,7 @@ ${fonts}
               (options.e1rm && (strength.topProgressed.length > 0 || strength.toReview.length > 0))) && (
               <div style={{ marginBottom: 24, position: "relative" }}>
                 <DismissBtn onClick={() => dismiss("highlights")} />
-                <div style={styles.sectionTitle}>Highlights</div>
+                <div data-section-title="true" style={styles.sectionTitle}>Highlights</div>
                 {options.ttl && (topProgressed.length > 0 || toReview.length > 0) && (
                   <div style={{ marginBottom: options.e1rm ? 14 : 0 }}>
                     {options.e1rm && <div style={styles.metricSubheading}>Total Training Load</div>}
@@ -763,7 +765,7 @@ ${fonts}
           {options.sessionCompletion && !dismissed.has("sessions-completion") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("sessions-completion")} />
-              <div style={styles.sectionTitle}>Sessions Logged & Completion</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Sessions Logged & Completion</div>
               <div style={styles.hyroxList}>
                 {(["strength", "power_speed", "cardio", "hyrox"] as const)
                   .map((t) => sessionTypeStats[t])
@@ -791,7 +793,7 @@ ${fonts}
           {options.squadComparison && squadComparison && squadComparison.length > 0 && !dismissed.has("squad-comparison") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("squad-comparison")} />
-              <div style={styles.sectionTitle}>Squad Comparison</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Squad Comparison</div>
               <div style={styles.hyroxList}>
                 {squadComparison.map((c) => (
                   <div key={c.metric} style={styles.hyroxRow}>
@@ -812,7 +814,7 @@ ${fonts}
           {options.radar && !dismissed.has("radar") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("radar")} />
-              <div style={styles.sectionTitle}>Radar Snapshot</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Radar Snapshot</div>
               {options.ttl && hasStrength && (
                 <div style={{ marginBottom: options.e1rm ? 16 : 0 }}>
                   {options.e1rm && <div style={styles.metricSubheading}>Total Training Load</div>}
@@ -851,7 +853,7 @@ ${fonts}
           {options.lineChart && !dismissed.has("line-chart") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("line-chart")} />
-              <div style={styles.sectionTitle}>Trend Over Time</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Trend Over Time</div>
               {options.ttl && hasStrength && ttlLineSeries.length > 0 && (
                 <div style={{ marginBottom: options.e1rm ? 16 : 0 }}>
                   {options.e1rm && <div style={styles.metricSubheading}>Total Training Load</div>}
@@ -870,7 +872,7 @@ ${fonts}
           {options.hyroxSessionsList && hasHyrox && !dismissed.has("hyrox-sessions-list") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("hyrox-sessions-list")} />
-              <div style={styles.sectionTitle}>Hybrid Sessions</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Hybrid Sessions</div>
               <div style={styles.hyroxList}>
                 {hyroxSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -885,7 +887,7 @@ ${fonts}
           {options.cardioSessionsList && hasCardio && !dismissed.has("cardio-sessions-list") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("cardio-sessions-list")} />
-              <div style={styles.sectionTitle}>Cardio Sessions</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Cardio Sessions</div>
               <div style={styles.hyroxList}>
                 {cardioSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -911,7 +913,7 @@ ${fonts}
             if (!visible.length) return null;
             return (
               <div style={{ marginTop: 24 }}>
-                <div style={styles.sectionTitle}>Cardio Metrics</div>
+                <div data-section-title="true" style={styles.sectionTitle}>Cardio Metrics</div>
                 {allGroups.length > 1 && (
                   <GroupFilterRow allGroups={allGroups} hidden={hiddenCardioGroups} onChange={setHiddenCardioGroups} />
                 )}
@@ -951,7 +953,7 @@ ${fonts}
             if (!visible.length) return null;
             return (
               <div style={{ marginTop: 24 }}>
-                <div style={styles.sectionTitle}>Hybrid Metrics</div>
+                <div data-section-title="true" style={styles.sectionTitle}>Hybrid Metrics</div>
                 {allGroups.length > 1 && (
                   <GroupFilterRow allGroups={allGroups} hidden={hiddenHyroxGroups} onChange={setHiddenHyroxGroups} />
                 )}
@@ -987,7 +989,7 @@ ${fonts}
           {options.powerSpeedTrend && hasPowerSpeed && !dismissed.has("powerspeed-sessions-list") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("powerspeed-sessions-list")} />
-              <div style={styles.sectionTitle}>Power / Speed Sessions</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Power / Speed Sessions</div>
               <div style={styles.hyroxList}>
                 {powerSpeedSessions.map((s) => (
                   <div key={s.id} style={styles.hyroxRow}>
@@ -1002,7 +1004,7 @@ ${fonts}
           {options.powerSpeedTrend && powerSpeedSummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("powerspeed-trends") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("powerspeed-trends")} />
-              <div style={styles.sectionTitle}>Power / Speed Trends</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Power / Speed Trends</div>
               {/* single-entry summaries have nothing to chart - MultiTrendLineChart returns null below 2 points, leaving a label with no chart under it */}
               {powerSpeedSummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
                 <div key={ex.name} style={{ marginBottom: 16 }}>
@@ -1028,7 +1030,7 @@ ${fonts}
           {options.barSpeedTrend && velocitySummaries.some((ex) => ex.entries.length >= 2) && !dismissed.has("barspeed-trends") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("barspeed-trends")} />
-              <div style={styles.sectionTitle}>Velocity Based Training</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Velocity Based Training</div>
               {velocitySummaries.filter((ex) => ex.entries.length >= 2).map((ex) => (
                 <div key={ex.name} style={{ marginBottom: 16 }}>
                   <div style={styles.metricSubheading}>
@@ -1080,7 +1082,7 @@ ${fonts}
           {options.sessionRpe && !dismissed.has("session-rpe") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("session-rpe")} />
-              <div style={{ ...styles.sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <div data-section-title="true" style={{ ...styles.sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span>Session RPE</span>
                 {avgRpe != null && (
                   <span style={{ fontSize: 12, fontWeight: 700, color: rpeColor(avgRpe) }}>
@@ -1115,7 +1117,7 @@ ${fonts}
           {options.trainingLoadTrend && !dismissed.has("training-load") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("training-load")} />
-              <div style={styles.sectionTitle}>Training Load (sRPE)</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Training Load (sRPE)</div>
               {!hasTrainingLoad ? (
                 <div style={styles.highlightEmpty}>
                   No training load to show — needs a session with both RPE logged and a clear duration (Fixed Workout and
@@ -1146,7 +1148,7 @@ ${fonts}
           {options.loadMonitoring && loadMonitoring && loadMonitoringSettings && !dismissed.has("load-monitoring") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("load-monitoring")} />
-              <div style={styles.sectionTitle}>Training Load &amp; Availability</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Training Load &amp; Availability</div>
 
               {loadMonitoringSettings.rtp_status && athleteRtp && athleteRtp.status && athleteRtp.status !== "available" && (
                 <div style={{ ...styles.highlightEmpty, borderLeft: `3px solid ${rtpMeta(athleteRtp.status).color}` }}>
@@ -1221,7 +1223,7 @@ ${fonts}
           {options.athleteNotes && !dismissed.has("athlete-notes") && (
             <div style={{ marginBottom: SECTION_GAP, position: "relative" }}>
               <DismissBtn onClick={() => dismiss("athlete-notes")} />
-              <div style={styles.sectionTitle}>Athlete Notes</div>
+              <div data-section-title="true" style={styles.sectionTitle}>Athlete Notes</div>
               {notes.length === 0 ? (
                 <div style={styles.highlightEmpty}>No notes logged in this range.</div>
               ) : (
@@ -1254,7 +1256,7 @@ ${fonts}
               </label>
               {detailOpen && (
                 <div style={styles.detailHead}>
-                  <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>Full detail</div>
+                  <div data-section-title="true" style={{ ...styles.sectionTitle, marginBottom: 0 }}>Full detail</div>
                 </div>
               )}
               {detailOpen && (
@@ -1262,7 +1264,7 @@ ${fonts}
             {options.loadProgression && options.ttl && hasStrength && !dismissed.has("load-progression-ttl") && (
               <div style={{ marginBottom: 24, position: "relative" }}>
                 <DismissBtn onClick={() => dismiss("load-progression-ttl")} />
-                <div style={styles.sectionTitle}>Load Progression{options.e1rm ? " - TTL" : ""}</div>
+                <div data-section-title="true" style={styles.sectionTitle}>Load Progression{options.e1rm ? " - TTL" : ""}</div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={styles.table}>
                     <thead>
@@ -1320,7 +1322,7 @@ ${fonts}
             {options.loadProgression && options.e1rm && hasE1rm && !dismissed.has("load-progression-e1rm") && (
               <div style={{ marginBottom: 24, position: "relative" }}>
                 <DismissBtn onClick={() => dismiss("load-progression-e1rm")} />
-                <div style={styles.sectionTitle}>Load Progression - e1RM</div>
+                <div data-section-title="true" style={styles.sectionTitle}>Load Progression - e1RM</div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={styles.table}>
                     <thead>
@@ -1383,7 +1385,7 @@ ${fonts}
               <div style={{ position: "relative" }}>
                 <DismissBtn onClick={() => dismiss("ttl-detail")} />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                  <div data-section-title="true" style={{ ...styles.sectionTitle, marginBottom: 0 }}>
                     Strength - Total Training Load
                     <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
                       ({detailMode === "all" ? "all sessions" : "weekly avg"})
@@ -1495,7 +1497,7 @@ ${fonts}
               <div style={{ position: "relative" }}>
                 <DismissBtn onClick={() => dismiss("e1rm-detail")} />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, marginTop: options.ttl ? 24 : 0 }}>
-                  <div style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                  <div data-section-title="true" style={{ ...styles.sectionTitle, marginBottom: 0 }}>
                     Strength - Estimated 1RM
                     <span style={{ fontSize: 11, color: "var(--mute)", textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
                       ({detailMode === "all" ? "all sessions" : "weekly peak"})

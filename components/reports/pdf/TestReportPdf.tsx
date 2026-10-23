@@ -70,7 +70,10 @@ export default function TestReportPdf({
           <Text style={s.emptyNote}>No rated test results logged yet.</Text>
         ) : (
           <>
-            <View style={s.tHeadRow}>
+            {/* Wrapped in one View so the header row can repeat ("fixed")
+                on every page the table runs onto - and only those. */}
+            <View>
+            <View style={s.tHeadRow} fixed minPresenceAhead={30}>
               <Text style={[s.tCell, s.tHead, s.colTest]}>Test</Text>
               {compare ? (
                 <>
@@ -107,6 +110,7 @@ export default function TestReportPdf({
                 </View>
               );
             })}
+            </View>
 
             {asymmetryRows.map(({ metric, left, right, pct, status, prevAsym }) => (
               <View key={metric.id} style={s.asymBlock} wrap={false}>
@@ -119,7 +123,7 @@ export default function TestReportPdf({
               </View>
             ))}
 
-            <Text style={[s.sectionHeader, { backgroundColor: accent }]}>Test Explanations &amp; Personalised Commentary</Text>
+            <Text style={[s.sectionHeader, { backgroundColor: accent }]} minPresenceAhead={90}>Test Explanations &amp; Personalised Commentary</Text>
             {ratedRows.map(({ metric, eliteRag, popRag }) => {
               const rag = ratingScope === "population" ? popRag : eliteRag;
               const commentary = rag === "excellent" ? metric.commentary_excellent

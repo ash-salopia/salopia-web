@@ -9,6 +9,7 @@
 // All rendering is client-side (window.print() / @react-pdf/renderer),
 // consistent with every other report in the app — the gate is UI only.
 
+import { PRINT_FLOW_CSS } from "@/lib/print-flow";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -383,7 +384,7 @@ function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchm
     const w = window.open("", "_blank", "width=1100,height=1200");
     if (!w) return;
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${groupSession.name} — Squad Testing Summary</title>
-<style>*{box-sizing:border-box}body{margin:0}@page{size:landscape;margin:12mm}table{border-collapse:collapse}</style>
+<style>*{box-sizing:border-box}body{margin:0}@page{size:landscape;margin:12mm}table{border-collapse:collapse}${PRINT_FLOW_CSS}</style>
 </head><body>${el.innerHTML}</body></html>`);
     w.document.close();
     w.onload = () => { w.focus(); w.print(); };
@@ -582,7 +583,7 @@ function BatchPrint({ athletes, historyFor, metrics, benchmarksByMetric, brandin
   return (
     <div style={st.batchOverlay}>
       <style>{`@media screen { .batch-print-close { position: fixed; top: 12px; right: 12px; z-index: 10; } }
-      @media print { .batch-print-close { display: none !important; } }`}</style>
+      @media print { .batch-print-close { display: none !important; } ${PRINT_FLOW_CSS} }`}</style>
       <button className="batch-print-close" style={st.btn} onClick={onClose}>Close</button>
       {athletes.map((a, i) => {
           const view = buildTestReportView(a, historyFor(a.id), metrics, benchmarksByMetric, compareTo);

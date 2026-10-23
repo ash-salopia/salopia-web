@@ -1,5 +1,6 @@
 "use client";
 
+import { PRINT_FLOW_CSS, tagPrintSections } from "@/lib/print-flow";
 import { useState } from "react";
 import { buildTestReportView, testResultsToCSV, downloadCSV, RATING_SCOPE_LABEL, type CompareBasis, type RatingScope } from "@/lib/data/testing";
 import TestReportBody from "@/components/reports/TestReportBody";
@@ -55,9 +56,11 @@ function printReport(title: string) {
   const w = window.open("", "_blank", "width=900,height=1200");
   if (!w) return;
   const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const clone = el.cloneNode(true) as HTMLElement;
+  tagPrintSections(clone);
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<style>*{box-sizing:border-box}body{margin:0}@page{margin:14mm}tr{page-break-inside:avoid}</style>
-</head><body>${el.innerHTML}</body></html>`);
+<style>*{box-sizing:border-box}body{margin:0}@page{margin:14mm}${PRINT_FLOW_CSS}</style>
+</head><body>${clone.innerHTML}</body></html>`);
   w.document.close();
   w.onload = () => { w.focus(); w.print(); };
 }

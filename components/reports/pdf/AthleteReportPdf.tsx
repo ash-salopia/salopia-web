@@ -213,7 +213,8 @@ function Table({
 }) {
   return (
     <View>
-      <View style={s.tableHeadRow}>
+      {/* Repeats on each page the table runs onto; never left alone at a page foot. */}
+      <View style={s.tableHeadRow} fixed minPresenceAhead={30}>
         {headers.map((h, i) => (
           <Text key={h} style={[s.th, { flex: widths[i] }]}>{h}</Text>
         ))}
