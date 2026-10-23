@@ -135,6 +135,13 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
           </div>
         </div>
 
+        {mode === "full" && (!athlete.sex || view.athleteAge === null) && (
+          <div style={s.ratingWarn} className="no-print">
+            Ratings show N/A because {athlete.name}&apos;s profile has no {[!athlete.sex && "sex", view.athleteAge === null && "date of birth"].filter(Boolean).join(" or ")}.
+            The norms are set by sex and age, so add {!athlete.sex && view.athleteAge === null ? "them" : "it"} on their profile (or type an age on the test) to get ratings.
+          </div>
+        )}
+
         {mode === "csv" ? (
           <div style={s.csvPane}>
             <div style={{ fontSize: 40 }}>📄</div>
@@ -169,6 +176,7 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
 }
 
 const s: Record<string, React.CSSProperties> = {
+  ratingWarn: { margin: "10px 20px 0", background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.4)", color: "#F59E0B", borderRadius: 8, padding: "8px 12px", fontSize: 13, lineHeight: 1.45 },
   overlay: { position: "fixed", inset: 0, background: "rgba(6,9,12,.75)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 200, overflowY: "auto", padding: "0 0 40px" },
   modal: { background: "var(--panel)", width: "100%", maxWidth: 720, borderRadius: "0 0 16px 16px", boxShadow: "0 8px 40px rgba(0,0,0,.6)" },
   header: { background: "var(--ink)", padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 2 },

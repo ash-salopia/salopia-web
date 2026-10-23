@@ -516,6 +516,30 @@ export function bestTrialAnySide(results: TestResult[], metric: TestMetric): num
   return metric.better_direction === "lower" ? Math.min(...values) : Math.max(...values);
 }
 
+// IMTP is logged as absolute peak force in kg. With a bodyweight on the
+// session, relative force is kg x g / bodyweight (N/kg). Reports show
+// both rows: the kg result, and N/kg worked out from it - or, if no kg
+// was logged, an N/kg value the coach entered directly.
+export const GRAVITY = 9.81;
+const isImtpKg = (m: TestMetric) => m.name.toLowerCase().includes("imtp") && m.unit.toLowerCase() === "kg";
+const isImtpRel = (m: TestMetric) => m.name.toLowerCase().includes("imtp") && m.unit.toLowerCase() === "n/kg";
+
+export function imtpRelative(kg: number | null, bodyweightKg: number | null): number | null {
+  if (kg === null || !bodyweightKg || bodyweightKg <= 0) return null;
+  return Math.round((kg * GRAVITY / bodyweightKg) * 10) / 10;
+}
+
+// A session's best value for a metric, deriving IMTP N/kg from the kg
+// trials + bodyweight when they're there (see above).
+export function sessionMetricValue(session: TestSession, metric: TestMetric, metrics: TestMetric[]): number | null {
+  if (isImtpRel(metric)) {
+    const kgMetric = metrics.find(isImtpKg);
+    const derived = kgMetric ? imtpRelative(bestTrialAnySide(session.results ?? [], kgMetric), session.bodyweight_kg) : null;
+    if (derived !== null) return derived;
+  }
+  return bestTrialAnySide(session.results ?? [], metric);
+}
+
 export function ageInYears(dateOfBirth: string | null, onDate: string): number | null {
   if (!dateOfBirth) return null;
   const dob = new Date(dateOfBirth + "T00:00:00Z");
@@ -719,12 +743,12 @@ export function buildTestReportView(
   const compareValue = (metric: TestMetric): number | null => {
     if (compareTo.kind === "best") {
       const vals = priors
-        .map((s) => bestTrialAnySide(s.results ?? [], metric))
+        .map((s) => sessionMetricValue(s, metric, metrics))
         .filter((v): v is number => v !== null);
       if (!vals.length) return null;
       return metric.better_direction === "lower" ? Math.min(...vals) : Math.max(...vals);
     }
-    return compareSession ? bestTrialAnySide(compareSession.results ?? [], metric) : null;
+    return compareSession ? sessionMetricValue(compareSession, metric, metrics) : null;
   };
 
   const fmtShort = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -737,23 +761,15 @@ export function buildTestReportView(
       : { label: `vs previous test${compareSession ? ` (${fmtTestDate(compareSession.date)})` : ""}`, shortLabel: "Prev" };
   }
 
-  // IMTP absolute (kg) vs relative (N/kg): show whichever the recorded
-  // bodyweight makes meaningful, never both — same rule as the modal.
-  const visibleMetrics = sortByMetricGroup(
-    metrics.filter((m) => {
-      const isImtpAbs = m.name.toLowerCase().includes("imtp") && m.unit === "kg";
-      const isImtpRel = m.name.toLowerCase().includes("imtp") && m.unit === "N/kg";
-      if (isImtpAbs && hasBodyweight) return false;
-      if (isImtpRel && !hasBodyweight) return false;
-      return true;
-    }),
-    (m) => m.name
-  );
+  // IMTP shows both rows: absolute kg, and N/kg (worked out from kg +
+  // bodyweight - see sessionMetricValue). Without a bodyweight there's no
+  // N/kg value, so that row simply drops out.
+  const visibleMetrics = sortByMetricGroup(metrics, (m) => m.name);
 
   const ratedRows: TestReportRatedRow[] = visibleMetrics
     .filter((m) => !m.screening_only)
     .map((metric) => {
-      const latest = latestSession ? bestTrialAnySide(latestSession.results ?? [], metric) : null;
+      const latest = latestSession ? sessionMetricValue(latestSession, metric, metrics) : null;
       if (latest === null) return null;
       const prev = compareValue(metric);
       const { elite, population } = matchBothBenchmarks(benchmarksByMetric[metric.id] ?? [], athlete.sex, athleteAge);
