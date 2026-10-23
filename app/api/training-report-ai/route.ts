@@ -12,20 +12,20 @@ import type { Session, SessionExercise } from "@/types";
 
 const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks - only the data sections the coach actually selected for this report, plus optionally the coach's own context for this report. Only discuss what's actually present in the sections below; never reference a metric or session type that isn't included, even if you'd normally expect it. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
 
-SUMMARY:
-<2-3 sentences on the overall training trend across the range, covering only the sections provided below - standout progress, and anything worth watching. Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it. If session RPE and/or training load (sRPE) data is included, read it alongside whatever load/metric trend is also included rather than in isolation: rising load with stable or falling RPE reads as adapting well; rising RPE alongside flat or falling load is worth flagging as possible fatigue or overreaching; RPE isn't logged for recovery sessions and shouldn't be discussed as if it should be. If cardio and/or hybrid metric trends are included, comment on the genuinely notable movement (e.g. pace improving, distance climbing, HR drifting for the same effort) rather than restating every number. If only one section is included, write the summary about that section alone — don't apologise for or mention the absence of sections that weren't selected.>
+Write three short boxes for the coach's report - "Good" (went well), "Better" (work on) and "How" (next focus). The coach edits them before sending, but draft them ready to send.
 
-THEMES:
-<1-2 sentences naming any recurring theme(s) across the athlete's own notes below (e.g. a body part mentioned repeatedly, energy, sleep, motivation). If athlete notes were not included below, or there are fewer than 2 notes, or no clear repeated theme, just say "No recurring themes noted." Do not invent a theme that isn't actually repeated.>
+Always back each point with the actual numbers from the data below: kg, reps, % change, sessions completed out of assigned, PBs, RPE, pace or distance - e.g. "Back squat estimated max up from 80kg to 92.5kg (+15.6%)" or "Completed 10 of 14 sessions (71%)". Use the exact figures given; never invent or round them into something not in the data. Mention at most 2-3 figures per box so it stays readable.
+
+Interpreting the data: Direct coaching tone, not a school report. If e1RM (estimated 1-rep-max) data is included: when the 1RM mode is Rolling, read week-to-week e1RM movement as genuine strength trend. When the mode is Fixed, e1RM values are distance from a fixed reference max the coach set manually — describe movement as "how close to their reference max", never as week-to-week strength change, since a session's e1RM naturally varies below a fixed target without that being a real strength change. Never misattribute one mode's meaning to the other. If the coach has given context for this report (e.g. returning from injury, a taper, illness), use it to correctly interpret the numbers — a jump in an exercise's load is "recovery" or "return to baseline" rather than plain "progress" if the context says the athlete was coming back from a layoff affecting that area, and a plateau or dip reads differently during a deliberate taper than it would otherwise. Weave this in naturally where it actually changes the interpretation of a metric — don't just restate the coach's note back verbatim, and don't force it in if none of the numbers are actually related to it. If session RPE and/or training load (sRPE) data is included, read it alongside whatever load/metric trend is also included rather than in isolation: rising load with stable or falling RPE reads as adapting well; rising RPE alongside flat or falling load is worth flagging as possible fatigue or overreaching; RPE isn't logged for recovery sessions and shouldn't be discussed as if it should be. If cardio and/or hybrid metric trends are included, comment on the genuinely notable movement (e.g. pace improving, distance climbing, HR drifting for the same effort) rather than restating every number. If only one section is included, write the summary about that section alone — don't apologise for or mention the absence of sections that weren't selected. If the athlete's own notes repeat a theme (a body part, energy, sleep), fold it into the relevant box rather than listing it separately.
 
 WENT_WELL:
-<1-2 short sentences, written for the athlete (and possibly their parent) to read: the most genuine positive from the data - a specific lift, a benchmark, consistency. Plain English, no jargon like "e1RM" or "sRPE". Use their first name, third person.>
+<1-3 short sentences, written for the athlete (and possibly their parent) to read: the most genuine positives from the data - specific lifts, benchmarks, consistency - each with its numbers. Plain English, no jargon like "e1RM" or "sRPE" (say "estimated max" or "session effort"). Use their first name, third person.>
 
 WORK_ON:
-<1-2 short sentences, same audience and tone: the one most useful thing to improve, grounded in the data (e.g. a lift that has stalled, missed sessions, RPE creeping up). Constructive, never critical of the athlete as a person. If nothing stands out, suggest keeping the current consistency.>
+<1-2 short sentences, same audience and tone: the one or two most useful things to improve, with the numbers that show it (e.g. a lift that has dipped from X to Y, sessions missed, effort creeping up). Constructive, never critical of the athlete as a person. If nothing stands out, suggest keeping the current consistency.>
 
 NEXT_FOCUS:
-<1 short sentence: what the next block should focus on, following from the above. If the coach context mentions an event, taper or injury, align with it.>`;
+<1-2 short sentences: what the next block should focus on and how, following from the above - a concrete target where the data supports one (e.g. "aim for 3 sessions a week"). If the coach context mentions an event, taper or injury, align with it.>`;
 
 export async function POST(req: NextRequest) {
   // Verified login + daily cap - see lib/ai/usage-guard.ts.
@@ -108,6 +108,18 @@ export async function POST(req: NextRequest) {
         return `${e.name}: ${e.entries.length} sessions, TTL ${first.ttl.toFixed(0)}kg -> ${last.ttl.toFixed(0)}kg (${pct}), max weight ${first.maxWeight}kg -> ${last.maxWeight}kg`;
       }).join("\n")
     : "";
+  // Consistency - sessions the coach assigned vs completed, per type, so
+  // the boxes can quote real figures ("10 of 14 sessions").
+  const typeLabel: Record<string, string> = { strength: "Strength", power_speed: "Power/speed", cardio: "Cardio", hyrox: "Hybrid" };
+  const consistencyLines = Object.values(report.sessionTypeStats ?? {})
+    .filter((t) => t.loggedCount > 0 || t.prescribedCount > 0)
+    .map((t) => `${typeLabel[t.type] ?? t.type}: ${t.loggedCount} sessions logged${t.prescribedCount ? `, ${t.completedCount} of ${t.prescribedCount} assigned sessions completed (${t.completionPct ?? 0}%)` : ""}`)
+    .join("\n");
+  const consistencyBlock = consistencyLines || report.completionPct !== null ? `
+
+CONSISTENCY:
+${consistencyLines}${report.completionPct !== null ? `${consistencyLines ? "\n" : ""}Prescribed sets completed: ${report.completedSets} of ${report.totalSets} (${report.completionPct}%)` : ""}` : "";
+
   const ttlBlock = includeTtl ? `
 
 TOTAL TRAINING LOAD (TTL) BY EXERCISE:
@@ -266,8 +278,8 @@ ${e1rmLines || "No e1RM data available in this range."}`;
   // with a ticked option but zero logged data behind it.
   if (!exerciseLines && !e1rmBlock && !notesLines && !rpeBlock && !trainingLoadBlock && !loadMonitoringBlock && !cardioBlock && !hyroxBlock && !powerSpeedBlock && !barSpeedBlock) {
     return NextResponse.json({
-      summary: "No logged training data in this range yet.",
-      themes: "No recurring themes noted.",
+      summary: "",
+      themes: "",
     });
   }
 
@@ -276,12 +288,12 @@ ${e1rmLines || "No e1RM data available in this range."}`;
 COACH CONTEXT FOR THIS REPORT:
 ${coachContext}` : "";
 
-  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
+  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${consistencyBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
 
   // The prompt string IS the full report data (computeReport-derived
   // lines for every selected section). Any change to a logged set, note,
   // RPE, or the selected options changes the prompt → busts the cache.
-  const hash = fingerprintReportInput({ v: 3, model: AI_MODEL.report, prompt });
+  const hash = fingerprintReportInput({ v: 4, model: AI_MODEL.report, prompt });
   const cached = await getCachedReport(supabase, { athleteId, reportType: "training_load", hash });
   if (cached && typeof (cached as any).summary === "string") {
     return NextResponse.json(cached, { headers: { "x-cache": "hit" } });
@@ -292,10 +304,12 @@ ${coachContext}` : "";
 
   // Each heading's text runs up to the next heading (or the end).
   const section = (name: string) =>
-    r.text.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?:\\n\\s*(?:SUMMARY|THEMES|WENT_WELL|WORK_ON|NEXT_FOCUS):|$)`, "i"))?.[1]?.trim() || "";
+    r.text.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?:\\n\\s*(?:WENT_WELL|WORK_ON|NEXT_FOCUS):|$)`, "i"))?.[1]?.trim() || "";
   const out = {
-    summary: section("SUMMARY") || r.text.trim() || "Summary unavailable.",
-    themes: section("THEMES") || "No recurring themes noted.",
+    // The report now shows only the three boxes; overview/themes are no
+    // longer drafted (kept as empty fields for older callers).
+    summary: "",
+    themes: "",
     // Coach's verdict draft - the coach edits it on the report itself.
     verdict: {
       wentWell: section("WENT_WELL"),

@@ -132,7 +132,7 @@ export default function TestReportBody({
           </table>
 
           {full && asymmetryRows.map(({ metric, left, right, pct, status, prevAsym }) => (
-            <div key={metric.id} style={s.asymBlock}>
+            <div key={metric.id} style={s.asymBlock} data-keep="true">
               <div style={s.asymTitle}>{metric.name} — Asymmetry Screening</div>
               <div style={s.asymGrid}>
                 <div style={s.asymCell}><div style={s.asymCellLabel}>Left</div><div style={s.asymCellValue}>{left}{metric.unit}</div></div>
@@ -150,7 +150,7 @@ export default function TestReportBody({
 
           {full && (
             <>
-              <div style={{ ...s.sectionHeader, background: accent }}>Test Explanations &amp; Personalised Commentary</div>
+              <div data-section-title="true" style={{ ...s.sectionHeader, background: accent }}>Test Explanations &amp; Personalised Commentary</div>
               {ratedRows.map((row) => {
                 const { metric } = row;
                 const rag = scopeRag(row) as RagStatus | null;
@@ -161,7 +161,7 @@ export default function TestReportBody({
                   : "";
                 if (!metric.what_it_measures && !commentary) return null;
                 return (
-                  <div key={metric.id} style={s.explainBlock}>
+                  <div key={metric.id} style={s.explainBlock} data-keep="true">
                     <div style={{ ...s.explainName, color: accent, background: `${accent}18` }}>{metric.name.toUpperCase()}</div>
                     {metric.what_it_measures && (
                       <div style={s.explainRow}><span style={{ ...s.explainLabel, color: accent }}>WHAT IT MEASURES</span><span>{metric.what_it_measures}</span></div>

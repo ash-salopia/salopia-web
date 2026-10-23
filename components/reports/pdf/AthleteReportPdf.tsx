@@ -213,7 +213,8 @@ function Table({
 }) {
   return (
     <View>
-      <View style={s.tableHeadRow}>
+      {/* Repeats on each page the table runs onto; never left alone at a page foot. */}
+      <View style={s.tableHeadRow} fixed minPresenceAhead={30}>
         {headers.map((h, i) => (
           <Text key={h} style={[s.th, { flex: widths[i] }]}>{h}</Text>
         ))}
@@ -417,19 +418,11 @@ export default function AthleteReportPdf({
           </View>
         )}
 
-        {/* Coach's Summary - overview, verdict boxes, themes from notes
-            (matches the on-screen report's single section). */}
-        {(options.coachVerdict !== false || options.aiSummary) && (aiSummary?.summary || aiSummary?.themes || (verdict && (verdict.wentWell || verdict.workOn || verdict.nextFocus))) && (
+        {/* Coach's Summary - the three Good / Better / How boxes. */}
+        {(options.coachVerdict !== false || options.aiSummary) && verdict && (verdict.wentWell || verdict.workOn || verdict.nextFocus) && (
           <View wrap={false}>
             <Text style={titleStyle} minPresenceAhead={90}>COACH&apos;S SUMMARY</Text>
-            {aiSummary?.summary ? <Text style={[s.aiText, { marginBottom: 8 }]}>{aiSummary.summary}</Text> : null}
-            {options.coachVerdict !== false && verdict && (verdict.wentWell || verdict.workOn || verdict.nextFocus) ? <PdfVerdict verdict={verdict} /> : null}
-            {aiSummary?.themes ? (
-              <>
-                <Text style={[s.aiLabel, { marginTop: 8 }]}>FROM THE SESSION NOTES</Text>
-                <Text style={[s.aiText, { marginBottom: 0 }]}>{aiSummary.themes}</Text>
-              </>
-            ) : null}
+            <PdfVerdict verdict={verdict} />
           </View>
         )}
 
