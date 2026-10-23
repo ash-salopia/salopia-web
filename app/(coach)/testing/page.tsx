@@ -8,6 +8,7 @@ import {
 } from "@/lib/data/testing";
 import type { TestBattery, TestMetric, TestBenchmark } from "@/types";
 import GroupTestingTab from "@/components/GroupTestingTab";
+import Link from "next/link";
 
 export default function TestingManagePage() {
   const [batteries, setBatteries] = useState<TestBattery[]>([]);
@@ -44,6 +45,7 @@ export default function TestingManagePage() {
           <h1 style={s.title}>🧪 Testing</h1>
           <p style={s.subtitle}>Run a squad-wide testing session, or manage test batteries, metrics, and benchmark norms. Individual reports are generated from each athlete's page.</p>
         </div>
+        <Link href="/testing/import" style={s.importBtn}>⬆ Import results (CSV / PDF)</Link>
       </div>
 
       {error && <div style={s.errorBox}>{error}</div>}
@@ -412,7 +414,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const s: any = {
   page: { maxWidth: 980 },
-  headRow: { marginBottom: 16 },
+  headRow: { marginBottom: 16, display: "flex", gap: 12, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" },
+  importBtn: { background: "var(--accent)", color: "#0a1420", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: 0 },
   subtitle: { fontSize: 13, color: "var(--mute)", marginTop: 4, maxWidth: 600 },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 },
