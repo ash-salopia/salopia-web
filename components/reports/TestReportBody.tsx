@@ -107,7 +107,7 @@ export default function TestReportBody({
               </tr>
             </thead>
             <tbody>
-              {ratedRows.map(({ metric, latest, prev, eliteRag, popRag }) => {
+              {ratedRows.map(({ metric, latest, prev, eliteRag, popRag, unratedNote }) => {
                 const lower = metric.better_direction === "lower";
                 const delta = prev !== null ? latest - prev : null;
                 const improved = delta !== null ? (lower ? delta < 0 : delta > 0) : null;
@@ -123,8 +123,8 @@ export default function TestReportBody({
                           </td>
                         </>
                       : <td style={s.td}>{latest}{metric.unit}</td>}
-                    {full && showElite && <td style={s.td}>{eliteRag ? <RagBadge rag={eliteRag} /> : <span style={s.na}>N/A</span>}</td>}
-                    {full && showPop && <td style={s.td}>{popRag ? <RagBadge rag={popRag} /> : <span style={s.na}>N/A</span>}</td>}
+                    {full && showElite && <td style={s.td}>{eliteRag ? <RagBadge rag={eliteRag} /> : <span style={s.na}>{unratedNote ?? "N/A"}</span>}</td>}
+                    {full && showPop && <td style={s.td}>{popRag ? <RagBadge rag={popRag} /> : <span style={s.na}>{unratedNote ?? "N/A"}</span>}</td>}
                   </tr>
                 );
               })}

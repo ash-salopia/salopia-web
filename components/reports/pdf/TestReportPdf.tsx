@@ -84,7 +84,7 @@ export default function TestReportPdf({
               {showElite && <Text style={[s.tCell, s.tHead, s.colNum]}>{ratingScope === "elite" ? "Rating" : "Elite"}</Text>}
               {showPop && <Text style={[s.tCell, s.tHead, s.colNum]}>{ratingScope === "population" ? "Rating" : "Pop."}</Text>}
             </View>
-            {ratedRows.map(({ metric, latest, prev, eliteRag, popRag }) => {
+            {ratedRows.map(({ metric, latest, prev, eliteRag, popRag, unratedNote }) => {
               const lower = metric.better_direction === "lower";
               const delta = prev !== null ? latest - prev : null;
               const improved = delta !== null ? (lower ? delta < 0 : delta > 0) : null;
@@ -102,8 +102,8 @@ export default function TestReportPdf({
                   ) : (
                     <Text style={[s.tCell, s.colNum]}>{latest}{metric.unit}</Text>
                   )}
-                  {showElite && <View style={[s.tCell, s.colNum]}>{eliteRag ? <RagBadge rag={eliteRag} /> : <Text style={s.na}>N/A</Text>}</View>}
-                  {showPop && <View style={[s.tCell, s.colNum]}>{popRag ? <RagBadge rag={popRag} /> : <Text style={s.na}>N/A</Text>}</View>}
+                  {showElite && <View style={[s.tCell, s.colNum]}>{eliteRag ? <RagBadge rag={eliteRag} /> : <Text style={s.na}>{unratedNote ?? "N/A"}</Text>}</View>}
+                  {showPop && <View style={[s.tCell, s.colNum]}>{popRag ? <RagBadge rag={popRag} /> : <Text style={s.na}>{unratedNote ?? "N/A"}</Text>}</View>}
                 </View>
               );
             })}
