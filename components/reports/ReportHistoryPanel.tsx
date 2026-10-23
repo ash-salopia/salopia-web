@@ -129,7 +129,7 @@ export default function ReportHistoryPanel({ athleteId, athleteName, options }: 
         <div style={h.body}>
           <div style={h.muted}>
             On the due date you&apos;ll get an email and notification with {firstName}&apos;s report already built using the options ticked
-            below - check the Coach&apos;s Verdict, then send in one click.
+            below - check the Coach&apos;s Summary, then send in one click.
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <label style={h.field}>

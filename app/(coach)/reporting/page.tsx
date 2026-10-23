@@ -933,7 +933,7 @@ export default function ReportingPage() {
                   onChange={(e) => setIncludeBulkAi(e.target.checked)}
                   style={{ accentColor: "var(--accent)" }}
                 />
-                Include AI summary &amp; coach&apos;s verdict ({targetIds.length || 0} extra AI call{targetIds.length === 1 ? "" : "s"})
+                Draft each Coach&apos;s summary with AI ({targetIds.length || 0} extra AI call{targetIds.length === 1 ? "" : "s"})
               </label>
               <div style={{ display: "flex", gap: 6, margin: "10px 0 4px" }}>
                 {([
@@ -956,7 +956,7 @@ export default function ReportingPage() {
                   </button>
                 ))}
               </div>
-              {!options.aiSummary && <div style={s.hint}>Turn on "AI summary" under Metrics first.</div>}
+              {!options.aiSummary && <div style={s.hint}>Turn on "Draft the summary with AI" under Metrics first.</div>}
               <div style={s.actionRow}>
                 <button
                   style={{ ...s.ghostActionBtn, opacity: targetIds.length && !previewLoading ? 1 : 0.5 }}

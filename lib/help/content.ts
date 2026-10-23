@@ -1558,7 +1558,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         type: "steps",
         items: [
           "**Reporting** → **Athlete Reports**. Pick athletes or groups and a **Date range**.",
-          "In **Metrics**, choose what to include: **Total Training Load (TTL)**, **Estimated 1RM (e1RM)**, and display parts like **AI summary**, **Highlights**, **Progression table**, **Sparklines**, **Line chart over time**.",
+          "In **Metrics**, choose what to include: **Total Training Load (TTL)**, **Estimated 1RM (e1RM)**, and display parts like **Draft the summary with AI**, **Highlights**, **Progression table**, **Sparklines**, **Line chart over time**.",
           "Turn on scope sections as needed: **Power/Speed**, **VBT (bar speed)**, **Cardio / Hybrid metric trends**, **Training load (sRPE)**, **Session RPE**, **Athlete notes**.",
           "If the athlete is in a squad, tick **Compare to squad** and pick the comparison metrics.",
           "Click **Generate report** (or use Preview / ZIP — see the next article).",
@@ -1670,7 +1670,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "steps", items: [
         "**👁 Preview / print 1 report** opens the first selected athlete's report in a new tab to check the layout.",
         "**📦 Download reports (N) as ZIP** builds a PDF for every selected athlete and zips them.",
-        "**Include AI summary** adds the written summary — one extra AI generation per athlete. Leave it off for a quick numbers-only export.",
+        "**Draft each Coach's summary with AI** adds the written summary — one extra AI generation per athlete. Leave it off for a quick numbers-only export.",
       ] },
       { type: "note", text: "Charts are disabled in the bulk PDF export to keep it fast and small. Use a single on-screen report if you need the charts." },
     ],
@@ -1678,13 +1678,13 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     id: "ai-summary",
     category: "reporting",
-    title: "The AI summary on reports",
-    summary: "An optional written summary of the numbers. Re-running with no new data is free.",
-    keywords: ["ai", "summary", "written report", "cost", "tokens"],
+    title: "The Coach's summary on reports",
+    summary: "An overview plus what went well, what to work on and focus for next block - AI can draft it, you edit it.",
+    keywords: ["ai", "summary", "coach's summary", "verdict", "written report", "cost", "tokens"],
     body: [
-      { type: "p", text: "When **AI summary** is ticked, the report includes a short written interpretation of the athlete's data for that range. It's optional — untick it and the report is all tables and charts." },
-      { type: "p", text: "If you re-open, re-print or re-export a report and nothing has changed underneath, the summary is served from a cache — no new generation. Log new sets and the next run refreshes it." },
-      { type: "p", text: "Add a **Context for AI summary** note (goals, injuries, what block they're in) to steer it. Treat the output as a first draft, not gospel — you know the athlete." },
+      { type: "p", text: "The **Coach's summary** sits near the top of the report: a short overview, then three boxes - **What went well**, **What to work on** and **Focus for next block** - and any themes from the session notes. Press **✎ Edit** (or click an empty box) to write or change any part. Empty parts are left off the printed and emailed report." },
+      { type: "p", text: "Tick **Draft the summary with AI** and AI writes a first draft from the athlete's data for that range. Your edits always win - a late AI reply never overwrites them. Treat the draft as a starting point, not gospel - you know the athlete." },
+      { type: "p", text: "If you re-open, re-print or re-export a report and nothing has changed underneath, the draft is served from a cache - no new generation. Add a **Context for the AI draft** note (goals, injuries, what block they're in) to steer it." },
     ],
   },
   {

@@ -552,7 +552,7 @@ export default function AthleteDetailPage() {
         })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
           .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes, verdict: json.verdict }))
-          .catch(() => setAiReportSummary({ summary: "Couldn't generate an AI summary right now.", themes: "" }))
+          .catch(() => setAiReportSummary({ summary: "", themes: "" })) // coach writes it instead
           .finally(() => setAiReportLoading(false));
       }
     } catch (e) {
