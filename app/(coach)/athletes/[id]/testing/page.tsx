@@ -235,12 +235,15 @@ export default function AthleteTestingPage() {
           <h1 style={s.title}>🧪 Testing</h1>
           {athlete && <div style={s.subtitle}>{athlete.name}</div>}
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {sessions.length > 0 && (
             <button style={s.ghostBtn} onClick={() => setShowReport(true)}>
               📄 View Report
             </button>
           )}
+          <button style={s.ghostBtn} onClick={() => router.push(`/testing/import?athlete=${athleteId}`)}>
+            ⬆ Import
+          </button>
           <button style={s.primaryBtn} onClick={openLogModal}>
             + Log Session
           </button>
