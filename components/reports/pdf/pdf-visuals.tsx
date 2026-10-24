@@ -281,6 +281,7 @@ export function PdfTrendGrid({ series, unit, decimals = 0 }: { series: TrendSeri
             <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold", marginVertical: 2 }}>
               {vals[vals.length - 1].toFixed(decimals)}
               <Text style={{ fontSize: 7, color: P.mute }}> {unit}</Text>
+              {vals.length > 1 && <Text style={{ fontSize: 7, color: P.mute }}>  from {vals[0].toFixed(decimals)}</Text>}
             </Text>
             <Mini points={sr.points} colour={colour} />
             <View style={[s.row, { justifyContent: "space-between", marginTop: 2 }]}>
