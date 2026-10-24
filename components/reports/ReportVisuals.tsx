@@ -604,6 +604,102 @@ export function CoachVerdict({ value, onChange, loading }: { value: Verdict; onC
   );
 }
 
+// "Ask AI to change this" under the Coach's Summary - the coach types a
+// change ("drop the back squat, add something on sprint times"), the AI
+// redrafts the boxes from the report data, and nothing replaces the
+// boxes until the coach accepts. Capped per report so a long session of
+// tweaking can't run up the AI bill (~1p an edit).
+export const VERDICT_AI_EDIT_LIMIT = 10;
+
+export function VerdictAiEdit({
+  request,
+  onAccept,
+  used,
+}: {
+  request: (instruction: string) => Promise<Verdict>;
+  onAccept: (v: Verdict) => void;
+  used: number;
+}) {
+  const [instruction, setInstruction] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<Verdict | null>(null);
+  const left = VERDICT_AI_EDIT_LIMIT - used;
+
+  const run = async () => {
+    if (!instruction.trim() || busy || left <= 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setProposal(await request(instruction.trim()));
+    } catch {
+      setError("Couldn't redraft just now - try again, or edit the boxes by hand.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div data-no-print="true" style={{ marginTop: 10 }}>
+      {proposal ? (
+        <div style={{ border: "1px dashed var(--accent)", borderRadius: 12, padding: 10 }}>
+          <div style={{ ...v.cardLabel, color: "var(--accent)", marginBottom: 8 }}>Suggested change</div>
+          <div style={v.verdictGrid}>
+            {VERDICT_FIELDS.map((f) => (
+              <div key={f.key} style={{ ...v.verdictCard, borderTop: `2px solid ${f.colour}` }}>
+                <div style={{ ...v.cardLabel, color: f.colour }}>{f.label}</div>
+                <div style={v.verdictText}>{proposal[f.key] || <span style={{ color: "var(--mute)" }}>(empty)</span>}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button
+              style={{ ...v.editBtn, background: "var(--accent)", color: "var(--ink)", borderColor: "var(--accent)", padding: "6px 12px", fontSize: 12 }}
+              onClick={() => {
+                onAccept(proposal);
+                setProposal(null);
+                setInstruction("");
+              }}
+            >
+              Use this
+            </button>
+            <button style={{ ...v.editBtn, padding: "6px 12px", fontSize: 12 }} onClick={() => setProposal(null)}>
+              Discard
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <textarea
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value.slice(0, 500))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                run();
+              }
+            }}
+            placeholder="Ask AI to change this - e.g. remove the back squat, add more on sprint times"
+            rows={2}
+            disabled={busy || left <= 0}
+            style={{ ...v.verdictInput, marginTop: 0, flex: "1 1 240px", borderColor: "var(--line)" }}
+          />
+          <button
+            onClick={run}
+            disabled={busy || !instruction.trim() || left <= 0}
+            style={{ ...v.editBtn, padding: "8px 14px", fontSize: 12, color: "var(--text)", opacity: busy || !instruction.trim() || left <= 0 ? 0.5 : 1 }}
+          >
+            {busy ? "Redrafting…" : "✦ Redraft"}
+          </button>
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: error ? "var(--bad, #e5484d)" : "var(--mute)", marginTop: 6 }}>
+        {error ?? (left <= 0 ? `AI edit limit reached for this report - edit the boxes by hand.` : `${left} AI edit${left === 1 ? "" : "s"} left on this report.`)}
+      </div>
+    </div>
+  );
+}
+
 // ── Goal progress ────────────────────────────────────────────────────────────
 
 const GOAL_STATUS: Record<GoalProgress["status"], { label: string; colour: string }> = {
