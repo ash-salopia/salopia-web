@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { reportAiBody } from "@/lib/report-ai-request";
 import type { ReportData } from "@/lib/data/reports";
 import { hideExercises } from "@/lib/report-hide";
 import type { ReportOptions } from "@/components/ReportRangeModal";
@@ -29,6 +30,7 @@ function fmtRangeDate(iso: string): string {
 import {
   CompetitionStrip,
   CoachVerdict,
+  VerdictAiEdit,
   HideExerciseBtn,
   GoalProgressList,
   ReadinessPanel,
@@ -250,6 +252,26 @@ export default function ReportModal({
   useEffect(() => {
     if (aiSummary?.verdict && !verdictEdited) setVerdict(aiSummary.verdict);
   }, [aiSummary, verdictEdited]);
+  // "Ask AI to change this" - redrafts from the same report data the
+  // first draft used, with the boxes as they stand now.
+  const [aiEditsUsed, setAiEditsUsed] = useState(0);
+  const requestVerdictEdit = async (instruction: string): Promise<Verdict> => {
+    if (!athleteId) throw new Error("No athlete");
+    setAiEditsUsed((n) => n + 1);
+    const res = await fetch("/api/training-report-ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        ...reportAiBody(athleteId, rawData.rangeStart, rawData.rangeEnd, options),
+        edit: { instruction, current: verdict, removed: [...hiddenExercises] },
+      }),
+    });
+    if (!res.ok) throw new Error("AI request failed");
+    const json = await res.json();
+    if (!json.verdict) throw new Error("AI request failed");
+    return json.verdict as Verdict;
+  };
 
 
   // 0084 — which exercise/modality groups to actually chart in the
@@ -592,6 +614,16 @@ ${fonts}
                   setVerdictEdited(true);
                 }}
               />
+              {athleteId && !aiLoading && (
+                <VerdictAiEdit
+                  request={requestVerdictEdit}
+                  used={aiEditsUsed}
+                  onAccept={(next) => {
+                    setVerdict(next);
+                    setVerdictEdited(true);
+                  }}
+                />
+              )}
             </div>
           )}
 

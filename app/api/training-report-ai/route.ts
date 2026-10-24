@@ -27,6 +27,14 @@ WORK_ON:
 NEXT_FOCUS:
 <1-2 short sentences: what the next block should focus on and how, following from the above - a concrete target where the data supports one (e.g. "aim for 3 sessions a week"). If the coach context mentions an event, taper or injury, align with it.>`;
 
+// "Ask AI to change this" on the Coach's Summary: same data and rules as
+// the first draft, plus the boxes as they stand and the coach's request.
+const EDIT_SYSTEM = `${SYSTEM}
+
+You are now REVISING boxes the coach already has. Apply the coach's change request exactly, and leave everything it doesn't touch as it is (keep the coach's own wording). When the request asks for detail on something, use the real figures for it from the data above; if the data has nothing on it, leave that box unchanged rather than inventing. Never mention an exercise listed as removed from the report. Return all three boxes in the format above, even ones that didn't change.`;
+
+type VerdictBoxes = { wentWell: string; workOn: string; nextFocus: string };
+
 export async function POST(req: NextRequest) {
   // Verified login + daily cap - see lib/ai/usage-guard.ts.
   const guard = await guardAIRequest("training-report-ai", req);
@@ -51,6 +59,7 @@ export async function POST(req: NextRequest) {
   let cardioMetricKeys: MetricKey[];
   let hyroxMetricKeys: MetricKey[];
   let coachContext: string;
+  let edit: { instruction: string; current: VerdictBoxes; removed: string[] } | null = null;
   try {
     const body = await req.json();
     athleteId = body.athleteId;
@@ -72,6 +81,17 @@ export async function POST(req: NextRequest) {
     cardioMetricKeys = Array.isArray(body.cardioMetricKeys) ? body.cardioMetricKeys.filter((k: unknown) => METRIC_ORDER.includes(k as MetricKey)) : [...METRIC_ORDER];
     hyroxMetricKeys = Array.isArray(body.hyroxMetricKeys) ? body.hyroxMetricKeys.filter((k: unknown) => METRIC_ORDER.includes(k as MetricKey)) : [...METRIC_ORDER];
     coachContext = typeof body.coachContext === "string" ? body.coachContext.trim().slice(0, 500) : "";
+    if (body.edit && typeof body.edit.instruction === "string" && body.edit.instruction.trim()) {
+      const cur = body.edit.current ?? {};
+      const box = (x: unknown) => (typeof x === "string" ? x.slice(0, 1500) : "");
+      edit = {
+        instruction: body.edit.instruction.trim().slice(0, 500),
+        current: { wentWell: box(cur.wentWell), workOn: box(cur.workOn), nextFocus: box(cur.nextFocus) },
+        removed: Array.isArray(body.edit.removed)
+          ? body.edit.removed.filter((x: unknown): x is string => typeof x === "string").slice(0, 50).map((x: string) => x.slice(0, 100))
+          : [],
+      };
+    }
     if (!athleteId) throw new Error();
   } catch {
     return NextResponse.json({ error: "athleteId required" }, { status: 400 });
@@ -290,6 +310,40 @@ ${coachContext}` : "";
 
   const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${consistencyBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
 
+  // Each heading's text runs up to the next heading (or the end).
+  const sectionOf = (text: string, name: string) =>
+    text.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?:\\n\\s*(?:WENT_WELL|WORK_ON|NEXT_FOCUS):|$)`, "i"))?.[1]?.trim() || "";
+
+  // Edits are one-off (the coach's request + their current wording), so
+  // never cached.
+  if (edit) {
+    const editPrompt = `${prompt}${edit.removed.length ? `
+
+REMOVED FROM THIS REPORT BY THE COACH (do not mention): ${edit.removed.join(", ")}` : ""}
+
+CURRENT BOXES:
+WENT_WELL:
+${edit.current.wentWell || "(empty)"}
+
+WORK_ON:
+${edit.current.workOn || "(empty)"}
+
+NEXT_FOCUS:
+${edit.current.nextFocus || "(empty)"}
+
+COACH'S CHANGE REQUEST:
+${edit.instruction}`;
+    const r = await callClaude({ model: AI_MODEL.report, system: EDIT_SYSTEM, maxTokens: 700, prompt: editPrompt });
+    if (!r.ok || !r.text.trim()) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
+    return NextResponse.json({
+      verdict: {
+        wentWell: sectionOf(r.text, "WENT_WELL"),
+        workOn: sectionOf(r.text, "WORK_ON"),
+        nextFocus: sectionOf(r.text, "NEXT_FOCUS"),
+      },
+    });
+  }
+
   // The prompt string IS the full report data (computeReport-derived
   // lines for every selected section). Any change to a logged set, note,
   // RPE, or the selected options changes the prompt → busts the cache.
@@ -302,9 +356,7 @@ ${coachContext}` : "";
   const r = await callClaude({ model: AI_MODEL.report, system: SYSTEM, maxTokens: 700, prompt });
   if (!r.ok) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
 
-  // Each heading's text runs up to the next heading (or the end).
-  const section = (name: string) =>
-    r.text.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?:\\n\\s*(?:WENT_WELL|WORK_ON|NEXT_FOCUS):|$)`, "i"))?.[1]?.trim() || "";
+  const section = (name: string) => sectionOf(r.text, name);
   const out = {
     // The report now shows only the three boxes; overview/themes are no
     // longer drafted (kept as empty fields for older callers).

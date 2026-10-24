@@ -1,5 +1,6 @@
 "use client";
 import { reorderSessionsOnDay, copySessionToDates, reactToSessionNote, acknowledgeSessionNote } from "@/lib/data/sessions";
+import { reportAiBody } from "@/lib/report-ai-request";
 import { exerciseDose } from "@/lib/exercise-dose";
 import dynamic from "next/dynamic";
 
@@ -531,24 +532,7 @@ export default function AthleteDetailPage() {
         fetch("/api/training-report-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            athleteId,
-            rangeStart: start,
-            rangeEnd: end,
-            includeTtl: options.ttl,
-            includeE1rm: options.e1rm,
-            includeNotes: options.athleteNotes,
-            includeRpe: options.sessionRpe,
-            includeTrainingLoad: options.trainingLoadTrend,
-            includeLoadMonitoring: options.loadMonitoring,
-            includeCardio: options.cardioMetricsTrend,
-            includeHyrox: options.hyroxMetricsTrend,
-            includePowerSpeed: options.powerSpeedTrend,
-            includeBarSpeed: options.barSpeedTrend,
-            cardioMetricKeys: options.cardioMetricKeys,
-            hyroxMetricKeys: options.hyroxMetricKeys,
-            coachContext: options.coachContext,
-          }),
+          body: JSON.stringify(reportAiBody(athleteId, start, end, options)),
         })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI request failed"))))
           .then((json) => setAiReportSummary({ summary: json.summary, themes: json.themes, verdict: json.verdict }))

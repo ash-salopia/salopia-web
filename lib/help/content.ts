@@ -1680,11 +1680,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
     category: "reporting",
     title: "The Coach's summary on reports",
     summary: "Three boxes - what went well, what to work on, focus for next block - AI can draft them, you edit them.",
-    keywords: ["ai", "summary", "coach's summary", "verdict", "written report", "cost", "tokens"],
+    keywords: ["ai", "summary", "coach's summary", "verdict", "written report", "cost", "tokens", "redraft", "ask ai", "change summary"],
     body: [
       { type: "p", text: "The **Coach's summary** sits near the top of the report as three boxes - **What went well**, **What to work on** and **Focus for next block**. Press **✎ Edit** (or click an empty box) to write or change any of them. Empty boxes are left off the printed and emailed report." },
       { type: "p", text: "Tick **Draft the summary with AI** and AI drafts the boxes from the athlete's data for that range, quoting the figures behind each point (kg, % change, sessions completed) and folding in any repeated theme from the notes. Your edits always win - a late AI reply never overwrites them. Treat the draft as a starting point, not gospel - you know the athlete." },
       { type: "p", text: "If you re-open, re-print or re-export a report and nothing has changed underneath, the draft is served from a cache - no new generation. Add a **Context for the AI draft** note (goals, injuries, what block they're in) to steer it." },
+      { type: "p", text: "To change the boxes with AI, type what you want in **Ask AI to change this** under the summary - e.g. \"remove the back squat, add more on sprint times\" - and press **✦ Redraft**. AI rewrites the boxes from the report's data (using real figures, never invented ones) and shows the result as a suggestion: **Use this** swaps it in, **Discard** keeps what you had. Anything you've removed with the red ✕ stays out. Each redraft costs about 1p, and there are 10 per report." },
     ],
   },
   {
