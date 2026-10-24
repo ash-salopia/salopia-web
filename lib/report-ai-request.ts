@@ -21,6 +21,8 @@ export function reportAiBody(athleteId: string, rangeStart: string | null, range
     includeBarSpeed: options.barSpeedTrend,
     cardioMetricKeys: options.cardioMetricKeys,
     hyroxMetricKeys: options.hyroxMetricKeys,
+    includeCompounds: options.compounds !== false,
+    includeAccessories: options.accessories !== false,
     coachContext: options.coachContext,
   };
 }

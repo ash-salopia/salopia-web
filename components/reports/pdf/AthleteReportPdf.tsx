@@ -15,6 +15,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { hideExercises, outOfScopeExercises } from "@/lib/report-hide";
 import { Document, Page, View, Text, StyleSheet, Svg, Polyline, Polygon, Line as SvgLine, Circle } from "@react-pdf/renderer";
 import type { ReportData } from "@/lib/data/reports";
 import type { ReportOptions } from "@/lib/report-options";
@@ -301,7 +302,7 @@ function Highlight({ title, items }: { title: string; items: { name: string; ove
 // ── Main document ────────────────────────────────────────────────────────
 
 export default function AthleteReportPdf({
-  data,
+  data: rawData,
   athleteName,
   athleteGroup,
   options,
@@ -326,6 +327,8 @@ export default function AthleteReportPdf({
   exerciseSelection?: string[];
   powerSpeedSelection?: string[];
 }) {
+  // Compound lifts / Accessories options - same filter as the on-screen report.
+  const data = hideExercises(rawData, outOfScopeExercises(rawData, options));
   const {
     exMap, exerciseSummaries, weeklyExMap, topProgressed, toReview, notes,
     hyroxSessions, cardioSessions = [], powerSpeedSessions = [], powerSpeedSummaries = [], velocitySummaries = [], velocityOneRMSummaries = [], cardioMetricSummaries = [], rpeEntries = [], rpeWeekly = [],

@@ -1558,7 +1558,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
         type: "steps",
         items: [
           "**Reporting** → **Athlete Reports**. Pick athletes or groups and a **Date range**.",
-          "In **Metrics**, choose what to include: **Total Training Load (TTL)**, **Estimated 1RM (e1RM)**, and display parts like **Draft the summary with AI**, **Highlights**, **Progression table**, **Sparklines**, **Line chart over time**.",
+          "Under **Strength**, tap the pills to choose what the report covers: **Estimated 1RM**, **Total training load**, **Compound lifts** (squats, deadlifts, presses, rows, pull-ups, Olympic lifts) and **Accessories** (everything else). Estimated 1RM, Total training load and Compound lifts are on by default. Anything you turn off is left out of the report and the Coach's summary - e.g. turn off Total training load and the summary only talks about estimated maxes on the compound lifts.",
+          "Then choose display parts like **Draft the summary with AI**, **Highlights**, **Progression table**, **Sparklines**, **Line chart over time**.",
           "Turn on scope sections as needed: **Power/Speed**, **VBT (bar speed)**, **Cardio / Hybrid metric trends**, **Training load (sRPE)**, **Session RPE**, **Athlete notes**.",
           "If the athlete is in a squad, tick **Compare to squad** and pick the comparison metrics.",
           "Click **Generate report** (or use Preview / ZIP — see the next article).",

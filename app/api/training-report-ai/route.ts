@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAIRequest } from "@/lib/ai/usage-guard";
+import { exerciseInScope } from "@/lib/exercise-class";
 import { createClient } from "@/lib/supabase-server";
 import { computeReport } from "@/lib/report-calc";
 import { computeLoadMonitoring } from "@/lib/training-load";
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
   let cardioMetricKeys: MetricKey[];
   let hyroxMetricKeys: MetricKey[];
   let coachContext: string;
+  let exerciseScope = { compounds: true, accessories: true };
   let edit: { instruction: string; current: VerdictBoxes; removed: string[] } | null = null;
   try {
     const body = await req.json();
@@ -80,6 +82,8 @@ export async function POST(req: NextRequest) {
     includeBarSpeed = !!body.includeBarSpeed;
     cardioMetricKeys = Array.isArray(body.cardioMetricKeys) ? body.cardioMetricKeys.filter((k: unknown) => METRIC_ORDER.includes(k as MetricKey)) : [...METRIC_ORDER];
     hyroxMetricKeys = Array.isArray(body.hyroxMetricKeys) ? body.hyroxMetricKeys.filter((k: unknown) => METRIC_ORDER.includes(k as MetricKey)) : [...METRIC_ORDER];
+    // Compound lifts / Accessories options - missing (older callers) = both on.
+    exerciseScope = { compounds: body.includeCompounds !== false, accessories: body.includeAccessories !== false };
     coachContext = typeof body.coachContext === "string" ? body.coachContext.trim().slice(0, 500) : "";
     if (body.edit && typeof body.edit.instruction === "string" && body.edit.instruction.trim()) {
       const cur = body.edit.current ?? {};
@@ -119,6 +123,15 @@ export async function POST(req: NextRequest) {
   const athleteName = (data?.[0] as any)?.athletes?.name ?? "the athlete";
 
   const report = computeReport(allSessions);
+  // Strength exercises the coach left out with Compound lifts / Accessories.
+  const inScope = (name: string) => exerciseInScope(name, exerciseScope);
+  report.exerciseSummaries = report.exerciseSummaries.filter((e) => inScope(e.name));
+  report.velocitySummaries = report.velocitySummaries.filter((v) => inScope(v.name));
+  const scopeNote = exerciseScope.compounds && exerciseScope.accessories
+    ? ""
+    : `
+
+EXERCISES IN THIS REPORT: ${exerciseScope.compounds ? "compound lifts only (squat, deadlift, press, row, pull-up, Olympic lifts) - accessory exercises are deliberately left out, so don't mention or assume anything about them" : exerciseScope.accessories ? "accessory exercises only - the main compound lifts are deliberately left out, so don't mention them" : "no strength exercises"}.`;
 
   const exerciseLines = includeTtl && report.exerciseSummaries.length
     ? report.exerciseSummaries.map((e) => {
@@ -280,7 +293,7 @@ ${lines}`;
     }
 
     const strength = computeStrengthReport(allSessions, oneRmFormula);
-    const e1rmLines = strength.exerciseSummaries.map((e) => {
+    const e1rmLines = strength.exerciseSummaries.filter((e) => inScope(e.name)).map((e) => {
       const first = e.entries[0];
       const last = e.entries[e.entries.length - 1];
       const pct = e.overallPct != null ? `${e.overallPct >= 0 ? "+" : ""}${e.overallPct.toFixed(1)}%` : "n/a (single session)";
@@ -308,7 +321,7 @@ ${e1rmLines || "No e1RM data available in this range."}`;
 COACH CONTEXT FOR THIS REPORT:
 ${coachContext}` : "";
 
-  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${consistencyBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
+  const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${scopeNote}${consistencyBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
 
   // Each heading's text runs up to the next heading (or the end).
   const sectionOf = (text: string, name: string) =>

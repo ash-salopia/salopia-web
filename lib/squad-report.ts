@@ -34,6 +34,7 @@
 // a coach-chosen exercise name picked interactively after the squad
 // report has already loaded - see availableExercises().
 import type { ReportData } from "@/lib/data/reports";
+import { isCompoundLift } from "@/lib/exercise-class";
 import { METRIC_META, LOWER_IS_BETTER_METRICS, type MetricKey } from "@/lib/cardio-metrics";
 
 const TOP_N = 5;
@@ -378,21 +379,6 @@ export function chunkExercises(exercises: string[], limitTo8: boolean): string[]
   const chunks: string[][] = [];
   for (let i = 0; i < list.length; i += 8) chunks.push(list.slice(i, i + 8));
   return chunks;
-}
-
-// Compound-lift keyword heuristic, used only to bias exercise-trend
-// auto-selection below - deliberately simple substring matching rather
-// than a maintained exercise database, since exercise names are coach
-// free text. A best-effort bias, not a guarantee of correctness for
-// unusual naming.
-const COMPOUND_KEYWORDS = [
-  "squat", "deadlift", "bench", "overhead press", "shoulder press", "military press", "push press", "ohp",
-  "row", "pull up", "pull-up", "pullup", "chin up", "chin-up", "chinup",
-  "clean", "snatch", "jerk", "hip thrust", "lunge",
-];
-function isCompoundLift(name: string): boolean {
-  const lower = name.toLowerCase();
-  return COMPOUND_KEYWORDS.some((k) => lower.includes(k));
 }
 
 // Full ordered exercise list to trend-chart for one athlete in the

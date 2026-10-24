@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { reportAiBody } from "@/lib/report-ai-request";
 import type { ReportData } from "@/lib/data/reports";
-import { hideExercises } from "@/lib/report-hide";
+import { hideExercises, outOfScopeExercises } from "@/lib/report-hide";
 import type { ReportOptions } from "@/components/ReportRangeModal";
 import { FORMULAS } from "@/lib/one-rm";
 import Sparkline from "@/components/reports/Sparkline";
@@ -206,7 +206,12 @@ export default function ReportModal({
       next.delete(name);
       return next;
     });
-  const data = useMemo(() => hideExercises(rawData, hiddenExercises), [rawData, hiddenExercises]);
+  // Plus the strength exercises the Compound lifts / Accessories options
+  // leave out (lib/exercise-class.ts).
+  const data = useMemo(
+    () => hideExercises(rawData, new Set([...outOfScopeExercises(rawData, options), ...hiddenExercises])),
+    [rawData, hiddenExercises, options]
+  );
   const {
     exMap,
     exerciseSummaries,
