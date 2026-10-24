@@ -24,6 +24,11 @@ export interface ReportOptions {
   hrZones: boolean; // % of logged cardio/hybrid time in each HR zone
   ttl: boolean; // Total Training Load (tonnage)
   e1rm: boolean; // Estimated 1RM (strength)
+  // Which strength exercises the report (and its AI summary) covers -
+  // split by name with lib/exercise-class.ts. Older presets have neither
+  // set; they merge over the defaults below.
+  compounds: boolean; // squat, deadlift, bench, press, row, pull-up, Olympic lifts...
+  accessories: boolean; // everything else
   // Per-metric display components - apply to whichever metric(s) above are ticked.
   loadProgression: boolean; // progression table: first/latest/delta/% change per exercise
   highlights: boolean; // top 3 progressed / 3 to review, ranked independently per metric
@@ -89,7 +94,9 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   benchmarks: true,
   hrZones: true,
   ttl: true,
-  e1rm: false,
+  e1rm: true,
+  compounds: true,
+  accessories: false,
   loadProgression: true,
   highlights: true, // on screen, the progress bars stand in for this when they're on
   sparkline: false,
@@ -149,6 +156,8 @@ export const FIELD_SESSION_TYPES: Partial<Record<keyof ReportOptions, ReportSess
   hrZones: ["cardio", "hyrox"],
   ttl: ["strength"],
   e1rm: ["strength"],
+  compounds: ["strength"],
+  accessories: ["strength"],
   loadProgression: ["strength"],
   highlights: ["strength"],
   sparkline: ["strength"],

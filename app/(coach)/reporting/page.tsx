@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { reportAiBody } from "@/lib/report-ai-request";
 import { todayISO, resolveDateRange, type ReportRangeMode } from "@/lib/date-utils";
 import { DEFAULT_REPORT_OPTIONS, type ReportOptions } from "@/lib/report-options";
 import { generateReport } from "@/lib/data/reports";
@@ -135,24 +136,7 @@ async function fetchAiSummary(
   const res = await fetch("/api/training-report-ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      athleteId,
-      rangeStart,
-      rangeEnd,
-      includeTtl: options.ttl,
-      includeE1rm: options.e1rm,
-      includeNotes: options.athleteNotes,
-      includeRpe: options.sessionRpe,
-      includeTrainingLoad: options.trainingLoadTrend,
-      includeLoadMonitoring: options.loadMonitoring,
-      includeCardio: options.cardioMetricsTrend,
-      includeHyrox: options.hyroxMetricsTrend,
-      includePowerSpeed: options.powerSpeedTrend,
-      includeBarSpeed: options.barSpeedTrend,
-      cardioMetricKeys: options.cardioMetricKeys,
-      hyroxMetricKeys: options.hyroxMetricKeys,
-      coachContext: options.coachContext,
-    }),
+    body: JSON.stringify(reportAiBody(athleteId, rangeStart, rangeEnd, options)),
   });
   if (!res.ok) return null;
   return res.json();

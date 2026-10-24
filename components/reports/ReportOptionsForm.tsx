@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  METRIC_FIELDS, COMPONENT_FIELDS, SCOPE_FIELDS, VISUAL_FIELDS, FIELD_SESSION_TYPES, SESSION_TYPE_META,
+  COMPONENT_FIELDS, SCOPE_FIELDS, VISUAL_FIELDS, FIELD_SESSION_TYPES, SESSION_TYPE_META,
   DEFAULT_REPORT_OPTIONS, type ReportOptions, type ReportSessionType,
 } from "@/lib/report-options";
 import { METRIC_ORDER, METRIC_META } from "@/lib/cardio-metrics";
@@ -22,6 +22,20 @@ import { getAthleteGroups, type Group } from "@/lib/data/groups";
 import type { SquadComparisonMetric } from "@/lib/squad-comparison";
 
 const SESSION_TYPE_ORDER: ReportSessionType[] = ["strength", "power_speed", "cardio", "hyrox"];
+
+const STRENGTH_PILLS: { key: "e1rm" | "ttl" | "compounds" | "accessories"; label: string; hint: string }[] = [
+  { key: "e1rm", label: "Estimated 1RM", hint: "Strength progression, independent of volume" },
+  { key: "ttl", label: "Total training load", hint: "Total tonnage - sets × reps × weight" },
+  { key: "compounds", label: "Compound lifts", hint: "Squats, deadlifts, presses, rows, pull-ups, Olympic lifts" },
+  { key: "accessories", label: "Accessories", hint: "Every other strength exercise" },
+];
+
+const pillStyle = (on: boolean): React.CSSProperties => ({
+  background: on ? "var(--accent-dim)" : "var(--ink)",
+  border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+  color: on ? "var(--accent)" : "var(--mute)",
+  borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+});
 
 const SQUAD_COMPARISON_METRICS: { key: SquadComparisonMetric; label: string }[] = [
   { key: "ttl", label: "Total Training Load" },
@@ -98,6 +112,11 @@ export default function ReportOptionsForm({
       onChange({ ...options, ...patch });
     } else {
       next.add(t);
+      // Re-opening Strength after closing it (which cleared its fields)
+      // comes back with the default focus rather than nothing ticked.
+      if (t === "strength" && !options.ttl && !options.e1rm && !options.compounds && !options.accessories) {
+        onChange({ ...options, ttl: true, e1rm: true, compounds: true });
+      }
     }
     setActiveTypes(next);
   };
@@ -122,7 +141,6 @@ export default function ReportOptionsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId, squadComparisonEnabled]);
 
-  const visibleMetricFields = METRIC_FIELDS.filter((f) => showField(f.key));
   const visibleComponentFields = COMPONENT_FIELDS.filter((f) => showField(f.key));
   const visibleScopeFields = SCOPE_FIELDS.filter((f) => showField(f.key));
   // Drawn by both the on-screen report and the PDF export.
@@ -139,20 +157,40 @@ export default function ReportOptionsForm({
               key={t}
               type="button"
               onClick={() => toggleType(t)}
-              style={{
-                background: on ? "var(--accent-dim)" : "var(--ink)",
-                border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
-                color: on ? "var(--accent)" : "var(--mute)",
-                borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-              }}
+              style={pillStyle(on)}
             >
               {SESSION_TYPE_META[t].label}
             </button>
           );
         })}
       </div>
+      <div style={{ ...s.pillHint, marginTop: -10 }}>Tap to add a session type to the report, or tap again to leave it out.</div>
       {activeTypes.size === 0 && (
         <div style={{ ...s.warnText, marginBottom: 16 }}>Pick at least one session type above to see its report options.</div>
+      )}
+
+      {activeTypes.has("strength") && (
+        <>
+          <div style={s.sectionLabel}>Strength</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+            {STRENGTH_PILLS.map((p) => {
+              const on = !!options[p.key];
+              return (
+                <button key={p.key} type="button" onClick={() => set(p.key, !on)} title={p.hint} style={pillStyle(on)}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ ...s.pillHint, marginTop: -10 }}>
+            Tap to leave out of the report - the Coach&apos;s summary then only talks about what&apos;s on. Compound lifts are squats,
+            deadlifts, presses, rows, pull-ups and Olympic lifts; everything else counts as an accessory.
+          </div>
+          {!hasMetric && <div style={{ ...s.warnText, marginTop: -8, marginBottom: 16 }}>Turn on Estimated 1RM or Total training load to generate a report.</div>}
+          {hasMetric && !options.compounds && !options.accessories && (
+            <div style={{ ...s.warnText, marginTop: -8, marginBottom: 16 }}>Turn on Compound lifts or Accessories - with both off there are no exercises to report on.</div>
+          )}
+        </>
       )}
 
       {visibleVisualFields.length > 0 && (
@@ -194,29 +232,6 @@ export default function ReportOptionsForm({
             </span>
           </label>
         </div>
-      )}
-
-      {visibleMetricFields.length > 0 && (
-        <>
-          <div style={s.sectionLabel}>Metrics to include</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
-            {visibleMetricFields.map((f) => (
-              <label key={f.key} style={s.checkOption}>
-                <input
-                  type="checkbox"
-                  checked={options[f.key]}
-                  onChange={(e) => set(f.key, e.target.checked)}
-                  style={{ accentColor: "var(--accent)", marginTop: 2, flexShrink: 0 }}
-                />
-                <span>
-                  <span style={{ fontWeight: 600, color: "var(--text)", display: "block" }}>{f.label}</span>
-                  <span style={{ fontSize: 11, color: "var(--mute)" }}>{f.hint}</span>
-                </span>
-              </label>
-            ))}
-            {!hasMetric && activeTypes.has("strength") && <div style={s.warnText}>Select at least one metric to generate a report.</div>}
-          </div>
-        </>
       )}
 
       {visibleComponentFields.length > 0 && (
@@ -525,6 +540,7 @@ export default function ReportOptionsForm({
 const s: Record<string, React.CSSProperties> = {
   fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4 },
   warnText: { fontSize: 11, color: "#ff7d7d", padding: "4px 2px" },
+  pillHint: { fontSize: 11, color: "var(--mute)", marginBottom: 16, lineHeight: 1.4 },
   sectionLabel: { fontSize: 12, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 },
   checkOption: { display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 2px", cursor: "pointer" },
   input: {

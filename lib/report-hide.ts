@@ -1,4 +1,5 @@
 import type { ReportData } from "@/lib/data/reports";
+import { exerciseInScope } from "@/lib/exercise-class";
 
 // Coach-removed exercises on a training report (the red ✕ on each
 // exercise - e.g. not relevant, injured, not a true representation).
@@ -55,4 +56,23 @@ export function hideExercises(data: ReportData, hidden: Set<string>): ReportData
       adherence: data.visual.adherence.filter((a) => !hidden.has(a.exercise)),
     },
   };
+}
+
+// Strength exercises left out by the report's Compound lifts /
+// Accessories options. Only strength exercise names (tonnage, e1RM, bar
+// speed, strength PBs) - power/speed drills and cardio aren't compound
+// or accessory, so e.g. the adherence list keeps its sprint rows.
+export function outOfScopeExercises(data: ReportData, opts: { compounds?: boolean; accessories?: boolean }): Set<string> {
+  const out = new Set<string>();
+  if (opts.compounds !== false && opts.accessories !== false) return out;
+  const names = [
+    ...Object.keys(data.exMap ?? {}),
+    ...Object.keys(data.strength?.exMap ?? {}),
+    ...Object.keys(data.velocityExMap ?? {}),
+    ...Object.keys(data.velocityOneRMExMap ?? {}),
+    ...Object.keys(data.oneRmReference ?? {}),
+    ...(data.visual?.pbs ?? []).map((p) => p.exercise), // weight / bodyweight PBs - all strength
+  ];
+  for (const n of names) if (!exerciseInScope(n, opts)) out.add(n);
+  return out;
 }
