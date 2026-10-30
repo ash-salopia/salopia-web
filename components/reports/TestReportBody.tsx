@@ -9,7 +9,7 @@
 // Derivation lives in lib/data/testing.ts's buildTestReportView — this
 // file only lays the numbers out.
 
-import { RAG_COLOR, RAG_LABEL, type TestReportView, type RatingScope } from "@/lib/data/testing";
+import { RAG_COLOR, RAG_LABEL, RAG_ORDER, ragCommentary, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
@@ -37,7 +37,7 @@ export default function TestReportBody({
   athleteName, athleteGroup, athleteSex, view, mode = "full", ratingScope = "both",
   branding = DEFAULT_BRANDING, pageBreak = false,
 }: TestReportBodyProps) {
-  const { athleteAge, latestSession, ratedRows, asymmetryRows, compare } = view;
+  const { athleteAge, latestSession, ratedRows, asymmetryRows, compare, sources = [] } = view;
   const accent = branding.primaryColor || "#1f6fd6";
   const full = mode === "full";
   const showElite = ratingScope !== "population";
@@ -73,7 +73,7 @@ export default function TestReportBody({
       {full && (
         <div style={s.legendBar}>
           <span style={{ ...s.legendLabel, color: accent }}>RATING KEY</span>
-          {(["excellent", "good", "average", "needs_work"] as RagStatus[]).map((r) => (
+          {RAG_ORDER.map((r) => (
             <span key={r} style={{ ...s.legendBadge, background: RAG_COLOR[r] }}>{RAG_LABEL[r].toUpperCase()}</span>
           ))}
           {ratingScope === "both" && <span style={s.legendNote}>Same colour scale for Elite and Population ratings.</span>}
@@ -107,13 +107,16 @@ export default function TestReportBody({
               </tr>
             </thead>
             <tbody>
-              {ratedRows.map(({ metric, latest, prev, eliteRag, popRag, unratedNote }) => {
+              {ratedRows.map(({ metric, latest, prev, eliteRag, popRag, unratedNote, zone, sparse }) => {
                 const lower = metric.better_direction === "lower";
                 const delta = prev !== null ? latest - prev : null;
                 const improved = delta !== null ? (lower ? delta < 0 : delta > 0) : null;
                 return (
                   <tr key={metric.id} style={s.tr}>
-                    <td style={{ ...s.td, textAlign: "left", fontWeight: 700 }}>{metric.name}</td>
+                    <td style={{ ...s.td, textAlign: "left", fontWeight: 700 }}>
+                      {metric.name}
+                      {full && sparse && <span style={s.sparseMark} title="Limited research data for this age group">*</span>}
+                    </td>
                     {compare
                       ? <>
                           <td style={{ ...s.td, color: "#6b7684" }}>{prev === null ? "—" : `${prev}${metric.unit}`}</td>
@@ -123,13 +126,28 @@ export default function TestReportBody({
                           </td>
                         </>
                       : <td style={s.td}>{latest}{metric.unit}</td>}
-                    {full && showElite && <td style={s.td}>{eliteRag ? <RagBadge rag={eliteRag} /> : <span style={s.na}>{unratedNote ?? "N/A"}</span>}</td>}
-                    {full && showPop && <td style={s.td}>{popRag ? <RagBadge rag={popRag} /> : <span style={s.na}>{unratedNote ?? "N/A"}</span>}</td>}
+                    {full && zone ? (
+                      // DSI: one zone badge across the rating columns.
+                      <td style={s.td} colSpan={(showElite ? 1 : 0) + (showPop ? 1 : 0)}>
+                        <span style={{ ...s.ragBadge, background: zone.colour }}>{zone.label.toUpperCase()}</span>
+                      </td>
+                    ) : (
+                      <>
+                        {full && showElite && <td style={s.td}>{eliteRag ? <RagBadge rag={eliteRag} /> : <span style={s.na}>{unratedNote ?? "N/A"}</span>}</td>}
+                        {full && showPop && <td style={s.td}>{popRag ? <RagBadge rag={popRag} /> : <span style={s.na}>{unratedNote ?? "N/A"}</span>}</td>}
+                      </>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          {full && ratedRows.some((r) => r.sparse) && (
+            <div style={s.sparseNote}>
+              * Limited research data for this age group - the rating is estimated from the nearest available studies, so
+              treat it as a guide.
+            </div>
+          )}
 
           {full && asymmetryRows.map(({ metric, left, right, pct, status, prevAsym }) => (
             <div key={metric.id} style={s.asymBlock} data-keep="true">
@@ -154,11 +172,8 @@ export default function TestReportBody({
               {ratedRows.map((row) => {
                 const { metric } = row;
                 const rag = scopeRag(row) as RagStatus | null;
-                const commentary = rag === "excellent" ? metric.commentary_excellent
-                  : rag === "good" ? metric.commentary_good
-                  : rag === "average" ? metric.commentary_average
-                  : rag === "needs_work" ? metric.commentary_needs_work
-                  : "";
+                const commentary = row.zone ? row.zone.commentary : ragCommentary(metric, rag);
+                const tint = row.zone ? row.zone.colour : rag ? RAG_COLOR[rag] : null;
                 if (!metric.what_it_measures && !commentary) return null;
                 return (
                   <div key={metric.id} style={s.explainBlock} data-keep="true">
@@ -170,7 +185,7 @@ export default function TestReportBody({
                       <div style={s.explainRow}><span style={{ ...s.explainLabel, color: accent }}>WHY IT MATTERS</span><span>{metric.why_it_matters}</span></div>
                     )}
                     {commentary && (
-                      <div style={{ ...s.explainRow, background: rag ? RAG_COLOR[rag] + "18" : "transparent" }}>
+                      <div style={{ ...s.explainRow, background: tint ? tint + "18" : "transparent" }}>
                         <span style={{ ...s.explainLabel, color: accent }}>YOUR RESULT</span><span>{commentary}</span>
                       </div>
                     )}
@@ -182,6 +197,12 @@ export default function TestReportBody({
                 {showPop && "Population ratings compare against general school-age children of the same age and sex. "}
                 All benchmarks are indicative and should be interpreted alongside physical maturity, training age, and
                 sport context.
+                {sources.length > 0 && (
+                  <>
+                    <br />
+                    <b>Sources:</b> {sources.join("; ")}.
+                  </>
+                )}
               </div>
             </>
           )}
@@ -235,6 +256,8 @@ const s: Record<string, React.CSSProperties> = {
   tr: { borderBottom: "1px solid #d8dde3", pageBreakInside: "avoid" },
   td: { padding: "8px 6px", textAlign: "center" },
   na: { fontSize: 10, color: "#6b7684" },
+  sparseMark: { color: "#6b7684", marginLeft: 2 },
+  sparseNote: { fontSize: 10, color: "#6b7684", marginTop: -10, marginBottom: 14 },
   ragBadge: { fontSize: 9, fontWeight: 700, color: "#fff", padding: "3px 8px", borderRadius: 5, whiteSpace: "nowrap" },
   asymBlock: { background: "#f7f8fa", border: "1px solid #d8dde3", borderRadius: 10, padding: 14, marginBottom: 14 },
   asymTitle: { fontSize: 13, fontWeight: 700, marginBottom: 8 },

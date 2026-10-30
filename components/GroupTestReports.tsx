@@ -459,7 +459,7 @@ function SquadSummaryModal({ groupSession, athletes, historyFor, metrics, benchm
                         {ratedMetrics.map((m) => {
                           const row = ratedRow(a.id, m.id);
                           const rag = scopeRag(row);
-                          const color = rag ? RAG_COLOR[rag] : null;
+                          const color = row?.zone ? row.zone.colour : rag ? RAG_COLOR[rag] : null;
                           const nowCell = (
                             <td key={`${m.id}-now`} style={{ ...st.sTd, background: color ? color + "22" : "transparent", fontWeight: color ? 700 : 400 }}>
                               {row ? row.latest : "—"}
