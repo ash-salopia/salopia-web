@@ -8,7 +8,7 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
 import CreditFooter from "@/components/reports/pdf/pdf-credit-footer";
-import { RAG_COLOR, RAG_LABEL, type TestReportView, type RatingScope } from "@/lib/data/testing";
+import { RAG_COLOR, RAG_LABEL, RAG_ORDER, ragCommentary, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 
@@ -30,7 +30,7 @@ export interface TestReportPdfProps {
 export default function TestReportPdf({
   athleteName, athleteGroup, athleteSex, view, ratingScope = "both", branding = DEFAULT_BRANDING,
 }: TestReportPdfProps) {
-  const { athleteAge, latestSession, ratedRows, asymmetryRows, compare } = view;
+  const { athleteAge, latestSession, ratedRows, asymmetryRows, compare, sources = [] } = view;
   const accent = branding.primaryColor || "#1f6fd6";
   const showElite = ratingScope !== "population";
   const showPop = ratingScope !== "elite";
@@ -53,12 +53,12 @@ export default function TestReportPdf({
 
         <View style={s.legendBar}>
           <Text style={[s.legendLabel, { color: accent }]}>RATING KEY</Text>
-          {(["excellent", "good", "average", "needs_work"] as RagStatus[]).map((r) => (
+          {RAG_ORDER.map((r) => (
             <Text key={r} style={[s.legendBadge, { backgroundColor: RAG_COLOR[r] }]}>{RAG_LABEL[r].toUpperCase()}</Text>
           ))}
         </View>
 
-        {compare && <Text style={s.compareNote}>{compare.shortLabel} = {compare.label.replace(/^vs /, "")}. Now = this test. Δ = change (green = improvement).</Text>}
+        {compare && <Text style={s.compareNote}>{compare.shortLabel} = {compare.label.replace(/^vs /, "")}. Now = this test. Change in green = improvement.</Text>}
 
         <Text style={[s.disclaimer, { borderLeftColor: accent }]}>
           These results represent a snapshot on a single testing day. Physical performance can be influenced by fatigue,
@@ -79,7 +79,7 @@ export default function TestReportPdf({
                 <>
                   <Text style={[s.tCell, s.tHead, s.colNum]}>{compare.shortLabel}</Text>
                   <Text style={[s.tCell, s.tHead, s.colNum]}>Now</Text>
-                  <Text style={[s.tCell, s.tHead, s.colNum]}>{"Δ"}</Text>
+                  <Text style={[s.tCell, s.tHead, s.colNum]}>Change</Text>
                 </>
               ) : (
                 <Text style={[s.tCell, s.tHead, s.colNum]}>Result</Text>
@@ -87,30 +87,44 @@ export default function TestReportPdf({
               {showElite && <Text style={[s.tCell, s.tHead, s.colNum]}>{ratingScope === "elite" ? "Rating" : "Elite"}</Text>}
               {showPop && <Text style={[s.tCell, s.tHead, s.colNum]}>{ratingScope === "population" ? "Rating" : "Pop."}</Text>}
             </View>
-            {ratedRows.map(({ metric, latest, prev, eliteRag, popRag, unratedNote }) => {
+            {ratedRows.map(({ metric, latest, prev, eliteRag, popRag, unratedNote, zone, sparse }) => {
               const lower = metric.better_direction === "lower";
               const delta = prev !== null ? latest - prev : null;
               const improved = delta !== null ? (lower ? delta < 0 : delta > 0) : null;
               return (
                 <View key={metric.id} style={s.tRow} wrap={false}>
-                  <Text style={[s.tCell, s.colTest, s.bold]}>{metric.name}</Text>
+                  <Text style={[s.tCell, s.colTest, s.bold]}>{metric.name}{sparse ? " *" : ""}</Text>
                   {compare ? (
                     <>
                       <Text style={[s.tCell, s.colNum, { color: "#6b7684" }]}>{prev === null ? "—" : `${prev}${metric.unit}`}</Text>
                       <Text style={[s.tCell, s.colNum, s.bold]}>{latest}{metric.unit}</Text>
                       <Text style={[s.tCell, s.colNum, { color: delta === null || delta === 0 ? "#6b7684" : improved ? "#2E9E5B" : "#E53935" }]}>
-                        {delta === null ? "—" : delta === 0 ? "0" : `${improved ? "▲" : "▼"}${Math.abs(delta).toFixed(2)}`}
+                        {delta === null ? "—" : delta === 0 ? "0" : `${delta > 0 ? "+" : "-"}${Math.abs(delta).toFixed(2)}`}
                       </Text>
                     </>
                   ) : (
                     <Text style={[s.tCell, s.colNum]}>{latest}{metric.unit}</Text>
                   )}
-                  {showElite && <View style={[s.tCell, s.colNum]}>{eliteRag ? <RagBadge rag={eliteRag} /> : <Text style={s.na}>{unratedNote ?? "N/A"}</Text>}</View>}
-                  {showPop && <View style={[s.tCell, s.colNum]}>{popRag ? <RagBadge rag={popRag} /> : <Text style={s.na}>{unratedNote ?? "N/A"}</Text>}</View>}
+                  {zone ? (
+                    // DSI: one zone badge across the rating columns.
+                    <View style={[s.tCell, { width: 62 * ((showElite ? 1 : 0) + (showPop ? 1 : 0)) }]}>
+                      <Text style={[s.ragBadge, { backgroundColor: zone.colour }]}>{zone.label.toUpperCase()}</Text>
+                    </View>
+                  ) : (
+                    <>
+                      {showElite && <View style={[s.tCell, s.colNum]}>{eliteRag ? <RagBadge rag={eliteRag} /> : <Text style={s.na}>{unratedNote ?? "N/A"}</Text>}</View>}
+                      {showPop && <View style={[s.tCell, s.colNum]}>{popRag ? <RagBadge rag={popRag} /> : <Text style={s.na}>{unratedNote ?? "N/A"}</Text>}</View>}
+                    </>
+                  )}
                 </View>
               );
             })}
             </View>
+            {ratedRows.some((r) => r.sparse) && (
+              <Text style={s.sparseNote}>
+                * Limited research data for this age group - the rating is estimated from the nearest available studies, so treat it as a guide.
+              </Text>
+            )}
 
             {asymmetryRows.map(({ metric, left, right, pct, status, prevAsym }) => (
               <View key={metric.id} style={s.asymBlock} wrap={false}>
@@ -124,13 +138,9 @@ export default function TestReportPdf({
             ))}
 
             <Text style={[s.sectionHeader, { backgroundColor: accent }]} minPresenceAhead={90}>Test Explanations &amp; Personalised Commentary</Text>
-            {ratedRows.map(({ metric, eliteRag, popRag }) => {
+            {ratedRows.map(({ metric, eliteRag, popRag, zone }) => {
               const rag = ratingScope === "population" ? popRag : eliteRag;
-              const commentary = rag === "excellent" ? metric.commentary_excellent
-                : rag === "good" ? metric.commentary_good
-                : rag === "average" ? metric.commentary_average
-                : rag === "needs_work" ? metric.commentary_needs_work
-                : "";
+              const commentary = zone ? zone.commentary : ragCommentary(metric, rag);
               if (!metric.what_it_measures && !commentary) return null;
               return (
                 <View key={metric.id} style={s.explainBlock} wrap={false}>
@@ -146,6 +156,7 @@ export default function TestReportPdf({
               {showPop ? "Population ratings compare against general school-age children of the same age and sex. " : ""}
               All benchmarks are indicative and should be interpreted alongside physical maturity, training age, and
               sport context.
+              {sources.length > 0 ? `\nSources: ${sources.join("; ")}.` : ""}
             </Text>
           </>
         )}
@@ -189,6 +200,7 @@ const s = StyleSheet.create({
   colNum: { width: 62, textAlign: "center" },
   bold: { fontFamily: "Helvetica-Bold" },
   na: { fontSize: 7, color: "#6b7684", textAlign: "center" },
+  sparseNote: { fontSize: 7, color: "#6b7684", marginTop: 4 },
   ragBadge: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: "#fff", paddingVertical: 2, paddingHorizontal: 4, borderRadius: 3, textAlign: "center" },
   asymBlock: { backgroundColor: "#f7f8fa", border: "1 solid #d8dde3", borderRadius: 6, padding: 8, marginTop: 10 },
   asymTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", marginBottom: 3 },
