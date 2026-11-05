@@ -534,6 +534,7 @@ export function imtpRelative(kg: number | null, bodyweightKg: number | null): nu
 // peak force, both in kg from the force plate, so bodyweight cancels out.
 // Zoned rather than rated - there's no published normative database.
 // Zones: Suchomel et al. (2015); Balsalobre-Fernandez et al. (2019).
+export const isSingleLeg = (m: TestMetric) => /single[\s-]*leg|\bsl\b/i.test(m.name);
 export const isDsi = (m: TestMetric) => /\bdsi\b|dynamic strength index/i.test(m.name);
 export const isCmjForce = (m: TestMetric) =>
   /\bcmj\b|countermovement/i.test(m.name) && /force/i.test(m.name) && m.unit.toLowerCase() === "kg";
@@ -581,6 +582,12 @@ export function sessionMetricValue(session: TestSession, metric: TestMetric, met
     if (derived !== null) return derived;
   }
   return bestTrialAnySide(results, metric);
+}
+
+// A result with its unit: "1.91s", "31cm", but "22 reps" / "8.4 level"
+// for word units.
+export function formatTestValue(value: number, unit: string): string {
+  return /^[a-z]{3,}$/i.test(unit) && !/^n\/kg$/i.test(unit) ? `${value} ${unit}` : `${value}${unit}`;
 }
 
 export function ageInYears(dateOfBirth: string | null, onDate: string): number | null {
@@ -869,8 +876,10 @@ export function buildTestReportView(
     }
   }
 
+  // Asymmetry screen: screening-only tests, plus Single Leg CMJ, which is
+  // rated on the better leg since 0130 but keeps its left/right screen.
   const asymmetryRows: TestReportAsymRow[] = visibleMetrics
-    .filter((m) => m.screening_only)
+    .filter((m) => m.screening_only || (m.is_bilateral && isSingleLeg(m)))
     .map((metric) => {
       if (!latestSession) return null;
       const left = bestTrial(latestSession.results ?? [], metric, "left");
@@ -889,8 +898,14 @@ export function buildTestReportView(
 
   const priorSessions = priors.map((s) => ({ id: s.id, date: s.date }));
 
+  // Each norm's sources string lists several studies ("A (2010); B (2021)"),
+  // and neighbouring norms share most of them - list each study once.
   const sources = Array.from(new Set(
-    ratedRows.flatMap((r) => [r.elite?.sources, r.population?.sources]).filter((x): x is string => !!x)
+    ratedRows
+      .flatMap((r) => [r.elite?.sources, r.population?.sources])
+      .filter((x): x is string => !!x)
+      .flatMap((x) => x.split(";").map((part) => part.trim()))
+      .filter(Boolean)
   ));
   if (ratedRows.some((r) => r.zone)) sources.push("DSI zones: Suchomel et al. (2015); Balsalobre-Fernandez et al. (2019)");
 

@@ -9,7 +9,7 @@
 // Derivation lives in lib/data/testing.ts's buildTestReportView — this
 // file only lays the numbers out.
 
-import { RAG_COLOR, RAG_LABEL, RAG_ORDER, ragCommentary, type TestReportView, type RatingScope } from "@/lib/data/testing";
+import { RAG_COLOR, RAG_LABEL, RAG_ORDER, ragCommentary, formatTestValue, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import type { ResolvedBranding } from "@/types/branding";
 import { DEFAULT_BRANDING } from "@/types/branding";
@@ -119,13 +119,13 @@ export default function TestReportBody({
                     </td>
                     {compare
                       ? <>
-                          <td style={{ ...s.td, color: "#6b7684" }}>{prev === null ? "—" : `${prev}${metric.unit}`}</td>
-                          <td style={{ ...s.td, fontWeight: 700 }}>{latest}{metric.unit}</td>
+                          <td style={{ ...s.td, color: "#6b7684" }}>{prev === null ? "—" : formatTestValue(prev, metric.unit)}</td>
+                          <td style={{ ...s.td, fontWeight: 700 }}>{formatTestValue(latest, metric.unit)}</td>
                           <td style={{ ...s.td, color: delta === null || delta === 0 ? "#6b7684" : improved ? "#2E9E5B" : "#E53935", fontWeight: 600 }}>
                             {delta === null ? "—" : delta === 0 ? "0" : `${improved ? "▲" : "▼"}${Math.abs(delta).toFixed(2)}`}
                           </td>
                         </>
-                      : <td style={s.td}>{latest}{metric.unit}</td>}
+                      : <td style={s.td}>{formatTestValue(latest, metric.unit)}</td>}
                     {full && zone ? (
                       // DSI: one zone badge across the rating columns.
                       <td style={s.td} colSpan={(showElite ? 1 : 0) + (showPop ? 1 : 0)}>
@@ -153,15 +153,18 @@ export default function TestReportBody({
             <div key={metric.id} style={s.asymBlock} data-keep="true">
               <div style={s.asymTitle}>{metric.name} — Asymmetry Screening</div>
               <div style={s.asymGrid}>
-                <div style={s.asymCell}><div style={s.asymCellLabel}>Left</div><div style={s.asymCellValue}>{left}{metric.unit}</div></div>
-                <div style={s.asymCell}><div style={s.asymCellLabel}>Right</div><div style={s.asymCellValue}>{right}{metric.unit}</div></div>
+                <div style={s.asymCell}><div style={s.asymCellLabel}>Left</div><div style={s.asymCellValue}>{formatTestValue(left, metric.unit)}</div></div>
+                <div style={s.asymCell}><div style={s.asymCellLabel}>Right</div><div style={s.asymCellValue}>{formatTestValue(right, metric.unit)}</div></div>
               </div>
               <div style={{ ...s.asymSummary, color: ASYM_COLOR[status] }}>
                 Asymmetry index: <b>{pct.toFixed(1)}%</b>
                 {prevAsym && ` (was ${prevAsym.pct.toFixed(1)}%)`} — {status === "normal" ? "Normal range" : status === "monitor" ? "Monitor" : "Clinical concern"}
               </div>
               <div style={s.asymNote}>
-                Shown for asymmetry screening only — no published youth norms exist for this test. Benchmarks: &lt;10% normal, 10–15% monitor, &gt;15% clinical concern (Donskov et al. 2021).
+                {metric.screening_only
+                  ? "Shown for asymmetry screening only — no published youth norms exist for this test. "
+                  : "Rated on the better leg in the table above. "}
+                Asymmetry benchmarks: &lt;10% normal, 10–15% monitor, &gt;15% clinical concern (Donskov et al. 2021).
               </div>
             </div>
           ))}

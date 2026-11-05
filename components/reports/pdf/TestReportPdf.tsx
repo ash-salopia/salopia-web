@@ -8,7 +8,7 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import BrandHeader from "@/components/reports/pdf/pdf-brand-header";
 import CreditFooter from "@/components/reports/pdf/pdf-credit-footer";
-import { RAG_COLOR, RAG_LABEL, RAG_ORDER, ragCommentary, type TestReportView, type RatingScope } from "@/lib/data/testing";
+import { RAG_COLOR, RAG_LABEL, RAG_ORDER, ragCommentary, formatTestValue, type TestReportView, type RatingScope } from "@/lib/data/testing";
 import type { RagStatus } from "@/types";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 
@@ -96,14 +96,14 @@ export default function TestReportPdf({
                   <Text style={[s.tCell, s.colTest, s.bold]}>{metric.name}{sparse ? " *" : ""}</Text>
                   {compare ? (
                     <>
-                      <Text style={[s.tCell, s.colNum, { color: "#6b7684" }]}>{prev === null ? "—" : `${prev}${metric.unit}`}</Text>
-                      <Text style={[s.tCell, s.colNum, s.bold]}>{latest}{metric.unit}</Text>
+                      <Text style={[s.tCell, s.colNum, { color: "#6b7684" }]}>{prev === null ? "—" : formatTestValue(prev, metric.unit)}</Text>
+                      <Text style={[s.tCell, s.colNum, s.bold]}>{formatTestValue(latest, metric.unit)}</Text>
                       <Text style={[s.tCell, s.colNum, { color: delta === null || delta === 0 ? "#6b7684" : improved ? "#2E9E5B" : "#E53935" }]}>
                         {delta === null ? "—" : delta === 0 ? "0" : `${delta > 0 ? "+" : "-"}${Math.abs(delta).toFixed(2)}`}
                       </Text>
                     </>
                   ) : (
-                    <Text style={[s.tCell, s.colNum]}>{latest}{metric.unit}</Text>
+                    <Text style={[s.tCell, s.colNum]}>{formatTestValue(latest, metric.unit)}</Text>
                   )}
                   {zone ? (
                     // DSI: one zone badge across the rating columns.
@@ -129,11 +129,11 @@ export default function TestReportPdf({
             {asymmetryRows.map(({ metric, left, right, pct, status, prevAsym }) => (
               <View key={metric.id} style={s.asymBlock} wrap={false}>
                 <Text style={s.asymTitle}>{metric.name} — Asymmetry Screening</Text>
-                <Text style={s.asymLine}>Left {left}{metric.unit}   ·   Right {right}{metric.unit}</Text>
+                <Text style={s.asymLine}>Left {formatTestValue(left, metric.unit)}   ·   Right {formatTestValue(right, metric.unit)}</Text>
                 <Text style={[s.asymLine, s.bold, { color: ASYM_COLOR[status] }]}>
                   Asymmetry index: {pct.toFixed(1)}%{prevAsym ? ` (was ${prevAsym.pct.toFixed(1)}%)` : ""} — {status === "normal" ? "Normal range" : status === "monitor" ? "Monitor" : "Clinical concern"}
                 </Text>
-                <Text style={s.asymNote}>Screening only — no published youth norms. &lt;10% normal, 10–15% monitor, &gt;15% concern (Donskov et al. 2021).</Text>
+                <Text style={s.asymNote}>{metric.screening_only ? "Screening only — no published youth norms." : "Rated on the better leg in the table above."} Asymmetry: &lt;10% normal, 10–15% monitor, &gt;15% concern (Donskov et al. 2021).</Text>
               </View>
             ))}
 
