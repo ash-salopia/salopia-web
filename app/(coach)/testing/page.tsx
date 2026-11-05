@@ -332,7 +332,7 @@ function BenchmarkList({ metricId, benchmarks, onReload }: {
   const [form, setForm] = useState({
     benchmark_type: "general_population" as "elite_youth" | "general_population",
     sex: "" as "" | "male" | "female",
-    age_min: "", age_max: "", average_threshold: "", good_threshold: "", excellent_threshold: "",
+    age_min: "", age_max: "", average_threshold: "", good_threshold: "", excellent_threshold: "", elite_threshold: "",
   });
 
   const handleAdd = async () => {
@@ -346,8 +346,9 @@ function BenchmarkList({ metricId, benchmarks, onReload }: {
       average_threshold: parseFloat(form.average_threshold),
       good_threshold: parseFloat(form.good_threshold),
       excellent_threshold: parseFloat(form.excellent_threshold),
+      ...(form.elite_threshold ? { elite_threshold: parseFloat(form.elite_threshold) } : {}),
     });
-    setForm({ benchmark_type: "general_population", sex: "", age_min: "", age_max: "", average_threshold: "", good_threshold: "", excellent_threshold: "" });
+    setForm({ benchmark_type: "general_population", sex: "", age_min: "", age_max: "", average_threshold: "", good_threshold: "", excellent_threshold: "", elite_threshold: "" });
     setAdding(false);
     onReload();
   };
@@ -360,7 +361,11 @@ function BenchmarkList({ metricId, benchmarks, onReload }: {
           <div key={b.id} style={s.benchmarkRow}>
             <span style={s.benchTypeTag(b.benchmark_type)}>{b.benchmark_type === "elite_youth" ? "Elite Youth" : "General Pop."}</span>
             <span style={s.benchMeta}>{b.sex ?? "any sex"} · {b.age_min ?? "any"}–{b.age_max ?? "any"} yrs</span>
-            <span style={s.benchThresholds}>Avg {b.average_threshold} · Good {b.good_threshold} · Excellent {b.excellent_threshold}</span>
+            <span style={s.benchThresholds}>
+              Avg {b.average_threshold} · Good {b.good_threshold} · Excellent {b.excellent_threshold}
+              {b.elite_threshold != null ? ` · Elite ${b.elite_threshold}` : ""}
+              {b.quality === "sparse" ? " · limited data" : ""}
+            </span>
             <button style={s.smallGhost} onClick={async () => { await deleteBenchmark(b.id); onReload(); }}>✕</button>
           </div>
         ))}
@@ -390,11 +395,12 @@ function BenchmarkList({ metricId, benchmarks, onReload }: {
               </div>
             </Field>
           </div>
-          <div style={s.fieldLabel}>4-tier thresholds - a result worse than Average is rated Needs Work automatically</div>
-          <div style={s.row3}>
+          <div style={s.fieldLabel}>Thresholds - a result worse than Average is rated Needs Work automatically. Elite is optional; leave it blank and Excellent is the top rating.</div>
+          <div style={s.row4}>
             <Field label="Average"><input value={form.average_threshold} onChange={(e) => setForm((p) => ({ ...p, average_threshold: e.target.value }))} style={s.input} /></Field>
             <Field label="Good"><input value={form.good_threshold} onChange={(e) => setForm((p) => ({ ...p, good_threshold: e.target.value }))} style={s.input} /></Field>
             <Field label="Excellent"><input value={form.excellent_threshold} onChange={(e) => setForm((p) => ({ ...p, excellent_threshold: e.target.value }))} style={s.input} /></Field>
+            <Field label="Elite (optional)"><input value={form.elite_threshold} onChange={(e) => setForm((p) => ({ ...p, elite_threshold: e.target.value }))} style={s.input} /></Field>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button style={s.smallGhost} onClick={() => setAdding(false)}>Cancel</button>
@@ -446,6 +452,7 @@ const s: any = {
   metricUnitTag: { fontSize: 11, color: "var(--mute)", marginLeft: "auto" },
   checkboxRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text)" },
   row3: { display: "flex", gap: 10 },
+  row4: { display: "flex", gap: 10, flexWrap: "wrap" },
   primaryBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start" },
   benchmarkRow: { display: "flex", alignItems: "center", gap: 10, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 12px", fontSize: 12 },
   benchTypeTag: (type: string) => ({

@@ -121,6 +121,7 @@ export async function upsertBenchmark(benchmark: {
   id?: string; test_metric_id: string; benchmark_type: "elite_youth" | "general_population";
   sex: "male" | "female" | null; age_min: number | null; age_max: number | null;
   average_threshold: number; good_threshold: number; excellent_threshold: number;
+  elite_threshold?: number | null; // 0130 - optional fifth tier
 }): Promise<void> {
   const supabase = createClient();
   if (benchmark.id) {
@@ -474,7 +475,7 @@ export function metricGroup(name: string): MetricGroup {
   const key = name.toLowerCase();
   if (key.includes("jump") || key.includes("cmj") || key.includes("reactive strength") || key.includes("rsi")) return "Jumps & RSI";
   if (key.includes("sprint") || key.includes("agility") || key.includes("change of direction") || key.includes("505")) return "Sprint & Agility";
-  if (key.includes("imtp") || key.includes("force") || key.includes("grip")) return "Strength";
+  if (key.includes("imtp") || key.includes("force") || key.includes("grip") || key.includes("dsi") || key.includes("dynamic strength")) return "Strength";
   if (key.includes("plank") || key.includes("hold") || key.includes("core")) return "Core";
   if (
     key.includes("ftp") || key.includes("cooper") || key.includes("yo-yo") || key.includes("yoyo") ||
@@ -529,15 +530,64 @@ export function imtpRelative(kg: number | null, bodyweightKg: number | null): nu
   return Math.round((kg * GRAVITY / bodyweightKg) * 10) / 10;
 }
 
+// DSI (Dynamic Strength Index, 0130) = CMJ peak propulsive force / IMTP
+// peak force, both in kg from the force plate, so bodyweight cancels out.
+// Zoned rather than rated - there's no published normative database.
+// Zones: Suchomel et al. (2015); Balsalobre-Fernandez et al. (2019).
+export const isSingleLeg = (m: TestMetric) => /single[\s-]*leg|\bsl\b/i.test(m.name);
+export const isDsi = (m: TestMetric) => /\bdsi\b|dynamic strength index/i.test(m.name);
+export const isCmjForce = (m: TestMetric) =>
+  /\bcmj\b|countermovement/i.test(m.name) && /force/i.test(m.name) && m.unit.toLowerCase() === "kg";
+
+export function dsiRatio(cmjForceKg: number | null, imtpKg: number | null): number | null {
+  if (cmjForceKg === null || imtpKg === null || imtpKg <= 0) return null;
+  return Math.round((cmjForceKg / imtpKg) * 100) / 100;
+}
+
+export interface DsiZone {
+  label: "Strength Focus" | "Balanced" | "Power Focus";
+  colour: string;
+  commentary: string;
+}
+
+export function dsiZone(dsi: number): DsiZone {
+  if (dsi < 0.6) return {
+    label: "Strength Focus", colour: "#DC2626",
+    commentary: "Maximum strength is the limiter - the strength base is well ahead of what the athlete can express in the jump. Prioritise maximum strength work, then convert it with power training.",
+  };
+  if (dsi <= 0.8) return {
+    label: "Balanced", colour: "#16A34A",
+    commentary: "Strength and power are developing in proportion. Continue the current balance of strength and power work.",
+  };
+  return {
+    label: "Power Focus", colour: "#2563EB",
+    commentary: "Dynamic output is near or beyond what the strength base predicts. Power and plyometric work have done their job - building maximum strength will raise the ceiling for further power gains.",
+  };
+}
+
 // A session's best value for a metric, deriving IMTP N/kg from the kg
-// trials + bodyweight when they're there (see above).
+// trials + bodyweight, and DSI from CMJ peak force + IMTP kg, when
+// they're there (see above). Otherwise whatever the coach entered.
 export function sessionMetricValue(session: TestSession, metric: TestMetric, metrics: TestMetric[]): number | null {
+  const results = session.results ?? [];
   if (isImtpRel(metric)) {
     const kgMetric = metrics.find(isImtpKg);
-    const derived = kgMetric ? imtpRelative(bestTrialAnySide(session.results ?? [], kgMetric), session.bodyweight_kg) : null;
+    const derived = kgMetric ? imtpRelative(bestTrialAnySide(results, kgMetric), session.bodyweight_kg) : null;
     if (derived !== null) return derived;
   }
-  return bestTrialAnySide(session.results ?? [], metric);
+  if (isDsi(metric)) {
+    const cmj = metrics.find(isCmjForce);
+    const imtp = metrics.find(isImtpKg);
+    const derived = cmj && imtp ? dsiRatio(bestTrialAnySide(results, cmj), bestTrialAnySide(results, imtp)) : null;
+    if (derived !== null) return derived;
+  }
+  return bestTrialAnySide(results, metric);
+}
+
+// A result with its unit: "1.91s", "31cm", but "22 reps" / "8.4 level"
+// for word units.
+export function formatTestValue(value: number, unit: string): string {
+  return /^[a-z]{3,}$/i.test(unit) && !/^n\/kg$/i.test(unit) ? `${value} ${unit}` : `${value}${unit}`;
 }
 
 export function ageInYears(dateOfBirth: string | null, onDate: string): number | null {
@@ -609,30 +659,33 @@ export function matchBothBenchmarks(
   };
 }
 
-// 4-tier rating, matching the original tool exactly: a result worse than
-// average_threshold is "needs_work" by elimination — there's no separate
-// stored threshold for it. The same function and thresholds are used for
-// both elite_youth and general_population benchmark rows; only the
+// 5-tier rating (report engine v2): a result worse than average_threshold
+// is "needs_work" by elimination. Elite only exists where the norm has an
+// elite_threshold (0130); without one the top tier is Excellent, as
+// before. The same function and thresholds are used for both
+// elite_youth and general_population benchmark rows; only the
 // thresholds differ, never the comparison logic.
 export function ragStatus(value: number, metric: TestMetric, benchmark: TestBenchmark): RagStatus {
   const { excellent_threshold, good_threshold, average_threshold } = benchmark;
+  const elite = benchmark.elite_threshold ?? null;
   if (metric.better_direction === "lower") {
+    if (elite !== null && value <= elite) return "elite";
     if (value <= excellent_threshold) return "excellent";
     if (value <= good_threshold) return "good";
     if (value <= average_threshold) return "average";
     return "needs_work";
   }
+  if (elite !== null && value >= elite) return "elite";
   if (value >= excellent_threshold) return "excellent";
   if (value >= good_threshold) return "good";
   if (value >= average_threshold) return "average";
   return "needs_work";
 }
 
-// Same colour scale for both Elite and Population ratings — ported directly
-// from the original tool's brand colours. There is no 5th "Exceptional"
-// tier; it was tested and removed for causing parent confusion, and
-// collapses into "excellent" (same colour) here too.
+// Same colour scale for both Elite and Population ratings. Elite (purple)
+// matches the report engine v2.
 export const RAG_COLOR: Record<RagStatus, string> = {
+  elite:       "#7C3AED",
   excellent:   "#2E9E5B",
   good:        "#57B87A",
   average:     "#FB8C00",
@@ -640,8 +693,21 @@ export const RAG_COLOR: Record<RagStatus, string> = {
 };
 
 export const RAG_LABEL: Record<RagStatus, string> = {
-  excellent: "Excellent", good: "Good", average: "Average", needs_work: "Needs Work",
+  elite: "Elite", excellent: "Excellent", good: "Good", average: "Average", needs_work: "Needs Work",
 };
+
+export const RAG_ORDER: RagStatus[] = ["elite", "excellent", "good", "average", "needs_work"];
+
+// The stock commentary line for a rating. Elite falls back to the
+// Excellent line for metrics without Elite commentary.
+export function ragCommentary(metric: TestMetric, rag: RagStatus | null): string {
+  if (rag === "elite") return metric.commentary_elite || metric.commentary_excellent;
+  if (rag === "excellent") return metric.commentary_excellent;
+  if (rag === "good") return metric.commentary_good;
+  if (rag === "average") return metric.commentary_average;
+  if (rag === "needs_work") return metric.commentary_needs_work;
+  return "";
+}
 
 // Single Leg CMJ-style left/right asymmetry index — a property of the PAIR
 // of results, not either leg individually. <10% normal, 10-15% monitor,
@@ -671,6 +737,11 @@ export interface TestReportRatedRow {
   // Shown in place of a rating when a row is deliberately left unrated
   // (IMTP kg once N/kg is available - see buildTestReportView).
   unratedNote?: string;
+  // DSI rows are zoned, not rated - one badge across both rating columns.
+  zone?: DsiZone;
+  // The matched norm is flagged "sparse" (estimated / extrapolated) in
+  // the report engine - the report marks the rating as a guide.
+  sparse?: boolean;
 }
 
 export interface TestReportAsymRow {
@@ -716,6 +787,9 @@ export interface TestReportView {
   // Sessions before the latest, newest-first — for a "compare to a
   // specific date" picker.
   priorSessions: { id: string; date: string }[];
+  // Research behind the norms used on this report (0130), for the
+  // report's references.
+  sources: string[];
 }
 
 function fmtTestDate(iso: string): string {
@@ -775,11 +849,17 @@ export function buildTestReportView(
       const latest = latestSession ? sessionMetricValue(latestSession, metric, metrics) : null;
       if (latest === null) return null;
       const prev = compareValue(metric);
+      if (isDsi(metric)) {
+        return { metric, latest, prev, elite: null, population: null, eliteRag: null, popRag: null, zone: dsiZone(latest) };
+      }
       const { elite, population } = matchBothBenchmarks(benchmarksByMetric[metric.id] ?? [], athlete.sex, athleteAge);
       return {
         metric, latest, prev, elite, population,
         eliteRag: elite ? ragStatus(latest, metric, elite) : null,
         popRag: population ? ragStatus(latest, metric, population) : null,
+        sparse: elite?.quality === "sparse" || population?.quality === "sparse",
+        // CMJ peak force has no norms - it's there for DSI.
+        unratedNote: isCmjForce(metric) && !elite && !population ? "Used for DSI" : undefined,
       };
     })
     .filter(Boolean) as TestReportRatedRow[];
@@ -796,8 +876,10 @@ export function buildTestReportView(
     }
   }
 
+  // Asymmetry screen: screening-only tests, plus Single Leg CMJ, which is
+  // rated on the better leg since 0130 but keeps its left/right screen.
   const asymmetryRows: TestReportAsymRow[] = visibleMetrics
-    .filter((m) => m.screening_only)
+    .filter((m) => m.screening_only || (m.is_bilateral && isSingleLeg(m)))
     .map((metric) => {
       if (!latestSession) return null;
       const left = bestTrial(latestSession.results ?? [], metric, "left");
@@ -816,7 +898,18 @@ export function buildTestReportView(
 
   const priorSessions = priors.map((s) => ({ id: s.id, date: s.date }));
 
-  return { athleteAge, latestSession, hasBodyweight, visibleMetrics, ratedRows, asymmetryRows, compare, priorSessions };
+  // Each norm's sources string lists several studies ("A (2010); B (2021)"),
+  // and neighbouring norms share most of them - list each study once.
+  const sources = Array.from(new Set(
+    ratedRows
+      .flatMap((r) => [r.elite?.sources, r.population?.sources])
+      .filter((x): x is string => !!x)
+      .flatMap((x) => x.split(";").map((part) => part.trim()))
+      .filter(Boolean)
+  ));
+  if (ratedRows.some((r) => r.zone)) sources.push("DSI zones: Suchomel et al. (2015); Balsalobre-Fernandez et al. (2019)");
+
+  return { athleteAge, latestSession, hasBodyweight, visibleMetrics, ratedRows, asymmetryRows, compare, priorSessions, sources };
 }
 
 // ── CSV export ────────────────────────────────────────────────────────────────

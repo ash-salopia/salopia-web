@@ -612,6 +612,7 @@ export interface TestMetric {
   screening_only: boolean; // e.g. Single Leg CMJ — never rated, asymmetry screen only
   what_it_measures: string;
   why_it_matters: string;
+  commentary_elite?: string; // 0130 - only the tests with an Elite tier have one
   commentary_excellent: string;
   commentary_good: string;
   commentary_average: string;
@@ -633,11 +634,16 @@ export interface TestBenchmark {
   sex: "male" | "female" | null;
   age_min: number | null;
   age_max: number | null;
-  // 4-tier model: a result worse than average_threshold is "needs_work" by
-  // elimination — there is no separate needs_work_threshold to set.
+  // A result worse than average_threshold is "needs_work" by elimination
+  // - there is no separate needs_work_threshold to set.
   average_threshold: number;
   good_threshold: number;
   excellent_threshold: number;
+  // 0130 - fifth tier above Excellent. null = this norm has no Elite tier
+  // (only sprint, CMJ, RSI and IMTP N/kg have one so far).
+  elite_threshold?: number | null;
+  quality?: "strong" | "moderate" | "sparse" | null; // research behind the norm
+  sources?: string | null;
   created_at: string;
 }
 
@@ -687,9 +693,9 @@ export interface Report {
 
 // RAG status derived from comparing a value against a TestBenchmark.
 // Not a database type — computed client-side / server-side at read time.
-// 4-tier (not 3) — matches the original tool's "Exceptional collapses into
-// Excellent" decision: there is no 5th tier, both scales share these 4.
-export type RagStatus = "excellent" | "good" | "average" | "needs_work";
+// 5 tiers since 0130 (report engine v2, Oct 2026): Elite sits above
+// Excellent where a norm has an elite_threshold; otherwise 4.
+export type RagStatus = "elite" | "excellent" | "good" | "average" | "needs_work";
 
 // ------------------------------------------------------------
 // Recovery presets & end-of-session feedback (0046)
