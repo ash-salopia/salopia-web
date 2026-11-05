@@ -310,17 +310,19 @@ export function SmallMultiples({ series, unit, decimals = 0, onHide }: { series:
                 <HideExerciseBtn name={s.name} onHide={onHide} />
               </div>
             </div>
+            {/* Start -> latest, so the progress reads without numbers on every point. */}
             <div style={v.smValue}>
               {latest.toFixed(decimals)}
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--mute)" }}> {unit}</span>
+              {vals.length > 1 && (
+                <span style={{ fontFamily: "inherit", fontSize: 11, fontWeight: 600, color: "var(--mute)", marginLeft: 6 }}>
+                  from {vals[0].toFixed(decimals)}
+                </span>
+              )}
             </div>
             <MiniChart points={s.points} colour={colour} />
             <div style={v.smAxis}>
               <span>{shortDate(s.points[0].date)}</span>
-              <span>
-                {Math.min(...vals).toFixed(decimals)}–{Math.max(...vals).toFixed(decimals)}
-                {unit}
-              </span>
               <span>{shortDate(s.points[s.points.length - 1].date)}</span>
             </div>
           </div>

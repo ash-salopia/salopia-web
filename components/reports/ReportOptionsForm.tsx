@@ -115,7 +115,7 @@ export default function ReportOptionsForm({
       // Re-opening Strength after closing it (which cleared its fields)
       // comes back with the default focus rather than nothing ticked.
       if (t === "strength" && !options.ttl && !options.e1rm && !options.compounds && !options.accessories) {
-        onChange({ ...options, ttl: true, e1rm: true, compounds: true });
+        onChange({ ...options, ttl: true, e1rm: true, compounds: true, accessories: true });
       }
     }
     setActiveTypes(next);

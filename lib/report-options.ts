@@ -96,7 +96,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   ttl: true,
   e1rm: true,
   compounds: true,
-  accessories: false,
+  accessories: true,
   loadProgression: true,
   highlights: true, // on screen, the progress bars stand in for this when they're on
   sparkline: false,
@@ -106,7 +106,7 @@ export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
   coachContext: "",
   athleteNotes: false,
   sessionRpe: true,
-  sessionRpeShowAll: true, // preserves existing behaviour (full per-session list) until a coach opts into the narrower view
+  sessionRpeShowAll: false, // graph + average only; tick "List every session" for the per-session list
   powerSpeedTrend: false,
   barSpeedTrend: false,
   cardioMetricsTrend: false,

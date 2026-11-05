@@ -13,7 +13,7 @@ import type { Session, SessionExercise } from "@/types";
 
 const SYSTEM = `You are a strength and conditioning coaching assistant. You are given a training load report covering several weeks - only the data sections the coach actually selected for this report, plus optionally the coach's own context for this report. Only discuss what's actually present in the sections below; never reference a metric or session type that isn't included, even if you'd normally expect it. Respond in exactly this format, plain text only, no markdown, no bullets, no long dashes:
 
-Write three short boxes for the coach's report - "Good" (went well), "Better" (work on) and "How" (next focus). The coach edits them before sending, but draft them ready to send.
+Write three short boxes for the coach's report - what went well, what to work on, and the focus for the next block. The coach edits them before sending, but draft them ready to send. Start each box with its heading exactly as written in the format at the end - WENT_WELL:, WORK_ON:, NEXT_FOCUS: - on its own line, never renamed or translated (not "Good:", "Better:" or "How:").
 
 Always back each point with the actual numbers from the data below: kg, reps, % change, sessions completed out of assigned, PBs, RPE, pace or distance - e.g. "Back squat estimated max up from 80kg to 92.5kg (+15.6%)" or "Completed 10 of 14 sessions (71%)". Use the exact figures given; never invent or round them into something not in the data. Mention at most 2-3 figures per box so it stays readable.
 
@@ -33,6 +33,12 @@ NEXT_FOCUS:
 const EDIT_SYSTEM = `${SYSTEM}
 
 You are now REVISING boxes the coach already has. Apply the coach's change request exactly, and leave everything it doesn't touch as it is (keep the coach's own wording). When the request asks for detail on something, use the real figures for it from the data above; if the data has nothing on it, leave that box unchanged rather than inventing. Never mention an exercise listed as removed from the report. Return all three boxes in the format above, even ones that didn't change.`;
+
+const HEADING_ALIASES = {
+  WENT_WELL: ["WENT_WELL", "WENT WELL", "WHAT WENT WELL", "GOOD"],
+  WORK_ON: ["WORK_ON", "WORK ON", "WHAT TO WORK ON", "BETTER"],
+  NEXT_FOCUS: ["NEXT_FOCUS", "NEXT FOCUS", "FOCUS FOR NEXT BLOCK", "HOW"],
+};
 
 type VerdictBoxes = { wentWell: string; workOn: string; nextFocus: string };
 
@@ -323,9 +329,19 @@ ${coachContext}` : "";
 
   const prompt = `Training load report for ${athleteName}, ${rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "all time"}.${coachContextBlock}${scopeNote}${consistencyBlock}${ttlBlock}${e1rmBlock}${rpeBlock}${trainingLoadBlock}${loadMonitoringBlock}${cardioBlock}${hyroxBlock}${powerSpeedBlock}${barSpeedBlock}${notesBlock}`;
 
-  // Each heading's text runs up to the next heading (or the end).
-  const sectionOf = (text: string, name: string) =>
-    text.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?:\\n\\s*(?:WENT_WELL|WORK_ON|NEXT_FOCUS):|$)`, "i"))?.[1]?.trim() || "";
+  // Each heading's text runs up to the next heading (or the end). The
+  // model occasionally renames a heading (it called them Good / Better /
+  // How after the prompt described the boxes that way - a blank box on
+  // the report), so each box accepts its aliases, with or without
+  // markdown around them.
+  const sectionOf = (text: string, name: keyof typeof HEADING_ALIASES) => {
+    const all = Object.values(HEADING_ALIASES).flat().join("|");
+    const re = new RegExp(
+      `(?:^|\\n)[\\s*#]*(?:${HEADING_ALIASES[name].join("|")})[\\s*]*:[\\s*]*([\\s\\S]*?)(?=\\n[\\s*#]*(?:${all})[\\s*]*:|$)`,
+      "i"
+    );
+    return text.match(re)?.[1]?.trim() || "";
+  };
 
   // Edits are one-off (the coach's request + their current wording), so
   // never cached.
@@ -360,7 +376,7 @@ ${edit.instruction}`;
   // The prompt string IS the full report data (computeReport-derived
   // lines for every selected section). Any change to a logged set, note,
   // RPE, or the selected options changes the prompt → busts the cache.
-  const hash = fingerprintReportInput({ v: 4, model: AI_MODEL.report, prompt });
+  const hash = fingerprintReportInput({ v: 5, model: AI_MODEL.report, prompt });
   const cached = await getCachedReport(supabase, { athleteId, reportType: "training_load", hash });
   if (cached && typeof (cached as any).summary === "string") {
     return NextResponse.json(cached, { headers: { "x-cache": "hit" } });
@@ -369,7 +385,7 @@ ${edit.instruction}`;
   const r = await callClaude({ model: AI_MODEL.report, system: SYSTEM, maxTokens: 700, prompt });
   if (!r.ok) return NextResponse.json({ error: "AI request failed" }, { status: 500 });
 
-  const section = (name: string) => sectionOf(r.text, name);
+  const section = (name: keyof typeof HEADING_ALIASES) => sectionOf(r.text, name);
   const out = {
     // The report now shows only the three boxes; overview/themes are no
     // longer drafted (kept as empty fields for older callers).
@@ -383,7 +399,9 @@ ${edit.instruction}`;
     },
   };
 
-  if (r.text.trim()) {
+  // Only cache a complete draft - a reply with a missing box should be
+  // retried next time, not served from the cache forever.
+  if (out.verdict.wentWell && out.verdict.workOn && out.verdict.nextFocus) {
     await putCachedReport(supabase, {
       athleteId, reportType: "training_load", hash, model: AI_MODEL.report,
       content: out, rangeStart, rangeEnd,
