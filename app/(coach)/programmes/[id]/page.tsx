@@ -17,11 +17,11 @@ import {
   updateProgrammeSession,
 } from "@/lib/data/programmes";
 import { listLibrary } from "@/lib/data/library";
-import { getOrgSettings } from "@/lib/data/settings";
-import type { OneRMFormula } from "@/lib/one-rm";
+import { getOrgSettings, updateOrgSettings } from "@/lib/data/settings";
+import { defaultScheme, type RepScheme } from "@/lib/rep-charts";
 import WeekGrid from "@/components/programme/WeekGrid";
 import ProgrammeSessionEditor from "@/components/programme/ProgrammeSessionEditor";
-import { AddTemplateModal, CopyModal, ProgressionModal, type AddPlan } from "@/components/programme/BuilderModals";
+import { AddTemplateModal, CopyModal, ModifyModal, type AddPlan } from "@/components/programme/BuilderModals";
 import {
   blankSessionDraft, copySessionDraft, dayOf, draftFromTemplateDef, offsetFor, planCopyToWeeks, programmeWeekCount,
   sortOrderFor, weekOf, type SessionDraft,
@@ -54,7 +54,9 @@ export default function ProgrammeDetailPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
-  const [formula, setFormula] = useState<OneRMFormula>("lander");
+  // Reps -> %1RM chart for Modify prescription and the editor's "match the
+  // load" prompt: the coach's last choice, else their 1RM formula.
+  const [scheme, setScheme] = useState<RepScheme>({ key: "lander" });
   // Builder tools (0132).
   const [addAt, setAddAt] = useState<{ week: number; day: number } | "toolbar" | null>(null);
   const [copyFrom, setCopyFrom] = useState<{ sessions: ProgrammeSession[]; weeks: Set<number>; allowDay: boolean; title: string } | null>(null);
@@ -90,7 +92,7 @@ export default function ProgrammeDetailPage() {
       setTemplates(t);
       setSelectedSessionIds(new Set());
       listLibrary().then(setLibrary).catch(() => {});
-      getOrgSettings().then((st) => setFormula(st.one_rm_formula)).catch(() => {});
+      getOrgSettings().then((st) => setScheme(defaultScheme(st, st.one_rm_formula))).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load programme");
     } finally {
@@ -425,10 +427,15 @@ export default function ProgrammeDetailPage() {
               <button style={styles.stepBtn} onClick={() => setWeeks(weeks + 1)} aria-label="Add a week">+</button>
             </div>
             <button style={styles.smallBtn} onClick={() => setAddAt("toolbar")}>+ Add from template</button>
+            {(programme.sessions ?? []).length > 0 && (
+              <button style={styles.smallBtn} onClick={() => setSelectedSessionIds(new Set((programme.sessions ?? []).map((s) => s.id)))}>
+                Select all weeks
+              </button>
+            )}
           </div>
         </div>
         <p style={styles.hint}>
-          Click a session to edit it · tick sessions to copy, delete or progress them · drag to move (hold Alt / Option to copy) · + adds to that day.
+          Click a session to edit it · tick sessions (or Select all weeks) to copy, delete or modify them · drag to move (hold Alt / Option to copy) · + adds to that day.
         </p>
 
         {selectedSessions.length > 0 && (
@@ -437,12 +444,15 @@ export default function ProgrammeDetailPage() {
             <button style={styles.smallBtn} onClick={() => setCopyFrom({ sessions: selectedSessions, weeks: new Set(selectedSessions.map((s) => weekOf(s.day_offset))), allowDay: true, title: `Copy ${selectedSessions.length} session${selectedSessions.length === 1 ? "" : "s"}` })}>
               Copy to weeks…
             </button>
-            <button style={styles.smallBtn} onClick={() => setProgressionOpen(true)}>Progression…</button>
+            <button style={styles.smallBtn} onClick={() => setProgressionOpen(true)}>Modify prescription…</button>
             <button style={styles.smallBtn} onClick={handleOpenBulkLoad}>Load onto athlete</button>
             <button style={{ ...styles.smallBtn, color: "#FF6B6B", background: "transparent", border: "1px solid var(--line)" }} onClick={() => removeSessions(selectedSessions.map((s) => s.id), `${selectedSessions.length} session${selectedSessions.length === 1 ? "" : "s"}`)}>
               Delete
             </button>
-            <button style={styles.linkBtn} onClick={() => setSelectedSessionIds(new Set())}>Clear</button>
+            {selectedSessions.length < (programme.sessions ?? []).length && (
+              <button style={styles.smallBtn} onClick={() => setSelectedSessionIds(new Set((programme.sessions ?? []).map((s) => s.id)))}>Select all</button>
+            )}
+            <button style={styles.clearBtn} onClick={() => setSelectedSessionIds(new Set())}>✕ Clear selection</button>
           </div>
         )}
         {busy && <div style={styles.hint}>Saving…</div>}
@@ -642,7 +652,16 @@ export default function ProgrammeDetailPage() {
         />
       )}
       {progressionOpen && (
-        <ProgressionModal sessions={selectedSessions} formula={formula} onClose={() => setProgressionOpen(false)} onApply={handleApplyProgression} />
+        <ModifyModal
+          sessions={selectedSessions}
+          initialScheme={scheme}
+          onSaveScheme={(next) => {
+            setScheme(next);
+            updateOrgSettings({ rep_scheme: next.key, ...(next.key === "custom" ? { rep_chart: next.chart ?? null } : {}) }).catch(() => {});
+          }}
+          onClose={() => setProgressionOpen(false)}
+          onApply={handleApplyProgression}
+        />
       )}
       {activeSession && (
         <div style={styles.drawerBackdrop} onClick={() => setActiveSessionId(null)}>
@@ -651,7 +670,7 @@ export default function ProgrammeDetailPage() {
               key={activeSession.id}
               session={activeSession}
               library={library}
-              formula={formula}
+              scheme={scheme}
               onChange={(patch) => editSession(activeSession.id, patch)}
               onClose={() => setActiveSessionId(null)}
               onDuplicate={async () => {
@@ -718,7 +737,7 @@ const styles: Record<string, React.CSSProperties> = {
   weeksBox: { display: "flex", alignItems: "center", gap: 8, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "3px 6px" },
   stepBtn: { background: "transparent", border: "none", color: "var(--text)", fontSize: 16, fontWeight: 700, cursor: "pointer", padding: "0 6px" },
   actionBar: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--accent-dim)", border: "1px solid var(--accent)", borderRadius: 10, padding: "8px 10px", marginBottom: 10, position: "sticky", top: 8, zIndex: 5 },
-  linkBtn: { background: "none", border: "none", color: "var(--mute)", fontSize: 12, cursor: "pointer", marginLeft: "auto" },
+  clearBtn: { marginLeft: "auto", background: "var(--panel)", border: "1px solid var(--text)", color: "var(--text)", borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
   drawerBackdrop: { position: "fixed", inset: 0, background: "rgba(6,9,12,.45)", zIndex: 65, display: "flex", justifyContent: "flex-end" },
   drawer: { width: "min(640px, 100%)", height: "100%", overflowY: "auto", background: "var(--bg)", borderLeft: "1px solid var(--line)", padding: 14, boxSizing: "border-box" },
 };

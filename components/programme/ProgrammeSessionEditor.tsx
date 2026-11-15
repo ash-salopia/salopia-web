@@ -6,7 +6,7 @@ import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import SessionDefView from "@/components/SessionDefView";
 import { toPrescription } from "@/lib/prescription";
 import { DAYS, dayOf, matchLoadToReps, weekOf } from "@/lib/programme-builder";
-import type { OneRMFormula } from "@/lib/one-rm";
+import type { RepScheme } from "@/lib/rep-charts";
 import type { LibraryEntry, PrescribedExercise, ProgrammeSession, Session, SessionExercise, SetLog } from "@/types";
 
 // Edits one session inside a programme (0132). Same exercise cards
@@ -38,7 +38,7 @@ function asSessionExercise(ex: PrescribedExercise, sessionId: string, i: number)
 export default function ProgrammeSessionEditor({
   session,
   library,
-  formula = "lander",
+  scheme = { key: "lander" },
   onChange,
   onClose,
   onDuplicate,
@@ -47,7 +47,7 @@ export default function ProgrammeSessionEditor({
 }: {
   session: ProgrammeSession;
   library: LibraryEntry[];
-  formula?: OneRMFormula; // org's 1RM formula, for "match load to reps"
+  scheme?: RepScheme; // reps -> %1RM chart, for "match the load" (see lib/rep-charts.ts)
   onChange: (patch: Partial<ProgrammeSession>) => void;
   onClose: () => void;
   onDuplicate: () => void;
@@ -91,7 +91,7 @@ export default function ProgrammeSessionEditor({
     .map(([id, before]) => {
       const now = exercises.find((e) => e.id === id);
       if (!now || !now.reps) return null;
-      const patch = matchLoadToReps(before, now.reps, formula);
+      const patch = matchLoadToReps(before, now.reps, scheme);
       if (!Object.keys(patch).length || loadText(patch) === loadText(now)) return null;
       return { id, name: now.name || "Exercise", fromReps: before.reps, toReps: now.reps, from: loadText(before), to: loadText(patch), patch };
     })
