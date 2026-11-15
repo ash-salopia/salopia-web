@@ -1091,7 +1091,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**+ Add from template** - pick a template, choose the days for each of its sessions (e.g. Lower on Mon, Upper on Thu) and which weeks (e.g. weeks 1-8, or every 2 weeks). The **+** in any day adds a template or a blank session to just that day.",
         "Click any session to edit it - exercises, sets, reps, load, %1RM, RIR, rest, tempo, notes. Each week's sessions are separate, so week 3 can differ from week 2.",
         "Drag a session to another day to move it; hold **Alt / Option** while dragging to copy it.",
-        "Tick sessions (or a whole week with its tick box, or every Monday by clicking **Mon**) to **Copy to weeks…**, **Delete**, **Load onto athlete** or apply a **Progression…**.",
+        "Tick sessions (or a whole week with its tick box, or every Monday by clicking **Mon**) to **Copy to weeks…**, **Delete**, **Load onto athlete** or apply a **Progression…**. In **Copy**, pick several days to copy onto each - e.g. Monday's session onto Wed, Fri and Sun, in this week and any others. A session's own panel has **Copy to days / weeks…** too.",
         "The **⧉** next to a week copies that whole week to other weeks - and can add new weeks at the end.",
       ] },
       { type: "p", text: "**Progression…** works on the ticked sessions: pick the exercises, then a rule - e.g. load +2.5kg every week, reps -1 every 2 weeks, %1RM +2.5, RPE or RIR - with an optional deload every 3rd-6th week (load / %1RM drop 10%). The earliest ticked week is the starting point, and you see every change before applying it. **Pyramid / wave sets** sets the ticked exercises to a per-set %1RM scheme (e.g. 8-6-4-2 at 75-90%)." },

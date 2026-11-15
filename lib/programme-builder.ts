@@ -89,25 +89,30 @@ export function blankSessionDraft(dayOffset: number, sortOrder: number, name = "
 export const sortOrderFor = (dayOffset: number, indexInDay: number) => dayOffset * 100 + indexInDay;
 
 /**
- * Copy sessions to other weeks, keeping each one's weekday (or moving
- * them all to `toDay`). Sessions already in a target week are copied
- * anyway - "copy" never overwrites.
+ * Copy sessions to other weeks and/or days. With no days given each copy
+ * keeps its own weekday; with days, every session is copied onto each of
+ * them (e.g. Monday's strength onto Wed, Fri and Sun). A copy that would
+ * land exactly where its original already is gets skipped, so the source
+ * week can be ticked as a target. Copies never overwrite.
  */
 export function planCopyToWeeks(
   sessions: ProgrammeSession[],
   targetWeeks: number[],
   existing: ProgrammeSession[],
-  toDay?: number | null
+  toDays: number[] = []
 ): SessionDraft[] {
   const perDay = new Map<number, number>();
   for (const s of existing) perDay.set(s.day_offset, (perDay.get(s.day_offset) ?? 0) + 1);
   const out: SessionDraft[] = [];
   for (const w of targetWeeks) {
     for (const s of [...sessions].sort((a, b) => a.day_offset - b.day_offset || a.sort_order - b.sort_order)) {
-      const off = offsetFor(w, toDay ?? dayOf(s.day_offset));
-      const idx = perDay.get(off) ?? 0;
-      perDay.set(off, idx + 1);
-      out.push(copySessionDraft(s, off, sortOrderFor(off, idx)));
+      for (const day of toDays.length ? toDays : [dayOf(s.day_offset)]) {
+        const off = offsetFor(w, day);
+        if (off === s.day_offset) continue;
+        const idx = perDay.get(off) ?? 0;
+        perDay.set(off, idx + 1);
+        out.push(copySessionDraft(s, off, sortOrderFor(off, idx)));
+      }
     }
   }
   return out;

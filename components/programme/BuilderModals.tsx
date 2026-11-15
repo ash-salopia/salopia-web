@@ -210,11 +210,14 @@ export function CopyModal({
   sourceWeeks: Set<number>;
   allowDay: boolean;
   onClose: () => void;
-  onCopy: (targetWeeks: number[], toDay: number | null, extendTo: number | null) => void;
+  onCopy: (targetWeeks: number[], toDays: number[], extendTo: number | null) => void;
 }) {
   const later = Array.from({ length: weeks }, (_, i) => i).filter((w) => w > Math.max(...Array.from(sourceWeeks)));
-  const [targets, setTargets] = useState<Set<number>>(new Set(later));
-  const [toDay, setToDay] = useState<number | null>(null);
+  // Copying sessions (not a whole week) usually starts with other days in
+  // the same week, so that week is ticked too - a copy never lands on top
+  // of its own original.
+  const [targets, setTargets] = useState<Set<number>>(new Set(allowDay ? [...Array.from(sourceWeeks), ...later] : later));
+  const [toDays, setToDays] = useState<Set<number>>(new Set());
   const [extra, setExtra] = useState(0);
   const total = weeks + extra;
   const extraWeeks = Array.from({ length: extra }, (_, i) => weeks + i);
@@ -232,17 +235,33 @@ export function CopyModal({
       </div>
       {allowDay && (
         <>
-          <div style={m.label}>Day</div>
-          <div style={{ ...m.chips, marginBottom: 12 }}>
-            <Chip on={toDay === null} onClick={() => setToDay(null)}>Same day</Chip>
-            {DAYS.map((d, i) => <Chip key={d} on={toDay === i} onClick={() => setToDay(i)}>{d}</Chip>)}
+          <div style={m.label}>Days</div>
+          <div style={{ ...m.chips, marginBottom: 4 }}>
+            <Chip on={toDays.size === 0} onClick={() => setToDays(new Set())}>Same day</Chip>
+            {DAYS.map((d, i) => (
+              <Chip
+                key={d}
+                on={toDays.has(i)}
+                onClick={() =>
+                  setToDays((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(i)) next.delete(i);
+                    else next.add(i);
+                    return next;
+                  })
+                }
+              >
+                {d}
+              </Chip>
+            ))}
           </div>
+          <div style={{ ...m.small, marginBottom: 12 }}>Pick several days to copy onto each of them, e.g. Wed, Fri and Sun.</div>
         </>
       )}
       <div style={m.footer}>
         <button style={m.ghost} onClick={onClose}>Cancel</button>
-        <button style={{ ...m.primary, opacity: chosen.length ? 1 : 0.5 }} disabled={!chosen.length} onClick={() => onCopy(chosen, toDay, extra ? total : null)}>
-          Copy to {chosen.length} week{chosen.length === 1 ? "" : "s"}
+        <button style={{ ...m.primary, opacity: chosen.length ? 1 : 0.5 }} disabled={!chosen.length} onClick={() => onCopy(chosen, Array.from(toDays).sort(), extra ? total : null)}>
+          Copy{toDays.size ? ` to ${Array.from(toDays).sort().map((d) => DAYS[d]).join(", ")}` : ""} in {chosen.length} week{chosen.length === 1 ? "" : "s"}
         </button>
       </div>
     </Modal>

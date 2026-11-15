@@ -194,13 +194,17 @@ export default function ProgrammeDetailPage() {
     }
   };
 
-  const handleCopy = async (targetWeeks: number[], toDay: number | null, extendTo: number | null) => {
+  const handleCopy = async (targetWeeks: number[], toDays: number[], extendTo: number | null) => {
     if (!copyFrom) return;
     const source = copyFrom.sessions;
     setCopyFrom(null);
     if (extendTo && extendTo > weeks) await setWeeks(extendTo);
-    const drafts = planCopyToWeeks(source, targetWeeks, sessionsNow(), toDay);
-    await addDrafts(drafts, `Copied ${source.length} session${source.length === 1 ? "" : "s"} to ${targetWeeks.length} week${targetWeeks.length === 1 ? "" : "s"}`);
+    const drafts = planCopyToWeeks(source, targetWeeks, sessionsNow(), toDays);
+    if (!drafts.length) {
+      showFlash("Nothing to copy - those sessions are already on the days picked.");
+      return;
+    }
+    await addDrafts(drafts, `Added ${drafts.length} cop${drafts.length === 1 ? "y" : "ies"}`);
   };
 
   const removeSessions = async (ids: string[], label: string) => {
@@ -648,6 +652,10 @@ export default function ProgrammeDetailPage() {
               onDuplicate={async () => {
                 const [added] = await addDrafts([copySessionDraft(activeSession, activeSession.day_offset, 0)], "Duplicated");
                 if (added) setActiveSessionId(added.id);
+              }}
+              onCopyTo={() => {
+                setCopyFrom({ sessions: [activeSession], weeks: new Set([weekOf(activeSession.day_offset)]), allowDay: true, title: `Copy "${activeSession.name}"` });
+                setActiveSessionId(null);
               }}
               onDelete={() => removeSessions([activeSession.id], `"${activeSession.name}"`)}
             />
