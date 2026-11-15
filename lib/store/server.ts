@@ -1,6 +1,7 @@
 import "server-only";
 import type Stripe from "stripe";
 import type { MatchableProduct } from "@/lib/store/match";
+import { toExerciseRow } from "@/lib/prescription";
 import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
@@ -311,26 +312,7 @@ export async function loadProgrammeOntoCalendar(service: Service, athleteId: str
     const exercises = (ps.exercises ?? []) as PrescribedExercise[];
     if (exercises.length) {
       const { error: exErr } = await service.from("session_exercises").insert(
-        exercises.map((e, i) => ({
-          session_id: session.id,
-          name: e.name,
-          order: e.order ?? "",
-          sets: e.sets ?? 3,
-          reps: e.reps ?? "",
-          time: e.time ?? "",
-          rest: e.rest ?? "",
-          target_load: e.target_load ?? "",
-          tempo: e.tempo ?? "2-0-2",
-          each_side: e.each_side ?? false,
-          notes: e.notes ?? "",
-          video_url: e.video_url ?? "",
-          rpe: e.rpe ?? null,
-          percent_1rm: e.percent_1rm ?? null,
-          use_percent_1rm: e.use_percent_1rm ?? false,
-          set_percents: e.set_percents ?? [],
-          sort_order: i,
-          log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
-        }))
+        exercises.map((e, i) => toExerciseRow(e as unknown as Record<string, unknown>, session.id, i))
       );
       if (exErr) throw exErr;
     }

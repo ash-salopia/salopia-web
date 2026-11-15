@@ -1,3 +1,4 @@
+import { toExerciseRow } from "@/lib/prescription";
 import { createClient } from "@/lib/supabase-browser";
 import { todayISO, addDaysISO } from "@/lib/date-utils";
 import type { Session, SessionExercise, SessionType, SetLog } from "@/types";
@@ -864,30 +865,7 @@ export async function copySessionToDates(
     // Copy exercises
     const exercises = source.exercises ?? [];
     if (exercises.length) {
-      const exRows = exercises.map((e, i) => ({
-        session_id: newSession.id,
-        name: e.name,
-        order: e.order ?? "",
-        sets: e.sets ?? 3,
-        reps: e.reps ?? "",
-        time: e.time ?? "",
-        rest: e.rest ?? "",
-        target_load: e.target_load ?? "",
-        tempo: e.tempo ?? "2-0-2",
-        each_side: e.each_side ?? false,
-        notes: e.notes ?? "",
-        video_url: e.video_url ?? "",
-        sort_order: i,
-        distance: (e as any).distance ?? null,
-        contacts: (e as any).contacts ?? null,
-        intensity_label: (e as any).intensity_label ?? null,
-        completion_only: e.completion_only ?? false,
-        track_velocity: e.track_velocity ?? false,
-        target_velocity: e.target_velocity ?? "",
-        track_pause: e.track_pause ?? false,
-        target_pause: e.target_pause ?? "",
-        log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
-      }));
+      const exRows = exercises.map((e, i) => toExerciseRow(e as unknown as Record<string, unknown>, newSession.id, i));
       const { error: exErr } = await supabase.from("session_exercises").insert(exRows);
       if (exErr) throw exErr;
     }

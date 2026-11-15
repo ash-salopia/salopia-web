@@ -1,3 +1,4 @@
+import { toExerciseRow, toPrescription } from "@/lib/prescription";
 import { createClient } from "@/lib/supabase-browser";
 import { getMyOrganisationId } from "@/lib/data/athletes";
 import { addDaysISO, daysBetween } from "@/lib/date-utils";
@@ -39,24 +40,32 @@ export async function getProgramme(id: string): Promise<Programme | null> {
   };
 }
 
-export async function createProgramme(): Promise<Programme> {
+export async function createProgramme(opts: { name?: string; weeks?: number } = {}): Promise<Programme> {
   const supabase = createClient();
   const organisation_id = await getMyOrganisationId();
-  const { data, error } = await supabase
+  const row = { organisation_id, name: opts.name?.trim() || "New Programme", description: "" };
+  let { data, error } = await supabase
     .from("programmes")
-    .insert({ organisation_id, name: "New Programme", description: "" })
+    .insert({ ...row, ...(opts.weeks ? { weeks: opts.weeks } : {}) })
     .select()
     .single();
+  // 0132 not run yet - create it without a set length.
+  if (error && opts.weeks && /weeks/.test(error.message)) {
+    ({ data, error } = await supabase.from("programmes").insert(row).select().single());
+  }
   if (error) throw error;
   return { ...data, sessions: [], assigned_to: [] };
 }
 
 export async function updateProgramme(
   id: string,
-  patch: Partial<Pick<Programme, "name" | "description">>
+  patch: Partial<Pick<Programme, "name" | "description" | "weeks">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("programmes").update(patch).eq("id", id);
+  if (error && "weeks" in patch && /weeks/.test(error.message)) {
+    throw new Error("Changing the number of weeks needs the latest database update (0132) - ask your admin to run it.");
+  }
   if (error) throw error;
 }
 
@@ -152,20 +161,7 @@ export async function createProgrammeFromSessions(sessions: Session[], name: str
     programme_id: programme.id,
     name: s.name,
     type: s.type,
-    exercises: (s.exercises ?? []).map((e): PrescribedExercise => ({
-      id: crypto.randomUUID(),
-      name: e.name,
-      order: e.order,
-      sets: e.sets,
-      reps: e.reps,
-      time: e.time,
-      rest: e.rest,
-      target_load: e.target_load,
-      tempo: e.tempo,
-      each_side: e.each_side,
-      notes: e.notes,
-      video_url: e.video_url,
-    })),
+    exercises: (s.exercises ?? []).map((e) => toPrescription(e as unknown as Record<string, unknown>)),
     hyrox_type: s.hyrox_type,
     hyrox_config: s.hyrox_config,
     cardio_type: s.cardio_type,
@@ -205,11 +201,18 @@ export async function createProgrammeFromSessions(sessions: Session[], name: str
 export function scheduleProgrammeSessions(
   sessions: ProgrammeSession[],
   startDate: string,
-  spacingDays?: number
+  spacingDays?: number,
+  // Week-grid programmes (0132): day_offset 0 is Monday of week 1, so
+  // startDate is that Monday and every session keeps its own weekday -
+  // even when week 1 starts later than Monday.
+  fromWeekStart = false
 ): { session: ProgrammeSession; date: string }[] {
-  const ordered = [...sessions].sort((a, b) => a.day_offset - b.day_offset);
+  const ordered = [...sessions].sort((a, b) => a.day_offset - b.day_offset || a.sort_order - b.sort_order);
   if (spacingDays != null) {
     return ordered.map((session, i) => ({ session, date: addDaysISO(startDate, i * spacingDays) }));
+  }
+  if (fromWeekStart) {
+    return ordered.map((session) => ({ session, date: addDaysISO(startDate, session.day_offset) }));
   }
   const minOffset = ordered.length ? ordered[0].day_offset : 0;
   return ordered.map((session) => ({
@@ -238,10 +241,49 @@ export async function addProgrammeSession(programmeId: string, sortOrder: number
 
 export async function updateProgrammeSession(
   id: string,
-  patch: Partial<Pick<ProgrammeSession, "name" | "type" | "exercises" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config">>
+  patch: Partial<Pick<ProgrammeSession, "name" | "type" | "exercises" | "hyrox_type" | "hyrox_config" | "cardio_type" | "cardio_config" | "recovery_category" | "recovery_format" | "recovery_config" | "notes" | "day_offset" | "sort_order">>
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("programme_sessions").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+// ── Programme builder (0132) - bulk writes for the week grid ──────────────
+
+/** Inserts many sessions at once (adding a template across weeks, copying weeks). */
+export async function insertProgrammeSessions(
+  programmeId: string,
+  drafts: Omit<ProgrammeSession, "id" | "programme_id">[]
+): Promise<ProgrammeSession[]> {
+  if (!drafts.length) return [];
+  const supabase = createClient();
+  const out: ProgrammeSession[] = [];
+  // Chunked so a 52-week copy stays well under request size limits.
+  for (let i = 0; i < drafts.length; i += 200) {
+    const { data, error } = await supabase
+      .from("programme_sessions")
+      .insert(drafts.slice(i, i + 200).map((d) => ({ ...d, programme_id: programmeId })))
+      .select();
+    if (error) throw error;
+    out.push(...((data ?? []) as ProgrammeSession[]));
+  }
+  return out;
+}
+
+/** Saves whole sessions back (progression rules, bulk edits). */
+export async function saveProgrammeSessions(sessions: ProgrammeSession[]): Promise<void> {
+  if (!sessions.length) return;
+  const supabase = createClient();
+  for (let i = 0; i < sessions.length; i += 200) {
+    const { error } = await supabase.from("programme_sessions").upsert(sessions.slice(i, i + 200), { onConflict: "id" });
+    if (error) throw error;
+  }
+}
+
+export async function deleteProgrammeSessions(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const supabase = createClient();
+  const { error } = await supabase.from("programme_sessions").delete().in("id", ids);
   if (error) throw error;
 }
 
@@ -364,26 +406,7 @@ export async function loadProgrammeSessionForAthlete(
 
   const exercises = (programmeSession.exercises ?? []) as PrescribedExercise[];
   if (exercises.length) {
-    const exerciseRows = exercises.map((e, i) => ({
-      session_id: session.id,
-      name: e.name,
-      order: e.order ?? "",
-      sets: e.sets ?? 3,
-      reps: e.reps ?? "",
-      time: e.time ?? "",
-      rest: e.rest ?? "",
-      target_load: e.target_load ?? "",
-      tempo: e.tempo ?? "2-0-2",
-      each_side: e.each_side ?? false,
-      notes: e.notes ?? "",
-      video_url: e.video_url ?? "",
-      rpe: e.rpe ?? null,
-      percent_1rm: e.percent_1rm ?? null,
-      use_percent_1rm: e.use_percent_1rm ?? false,
-      set_percents: e.set_percents ?? [],
-      sort_order: i,
-      log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
-    }));
+    const exerciseRows = exercises.map((e, i) => toExerciseRow(e as unknown as Record<string, unknown>, session.id, i));
     const { error: exErr } = await supabase.from("session_exercises").insert(exerciseRows);
     if (exErr) throw exErr;
   }

@@ -1076,12 +1076,26 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "A multi-session training block you can assign to athletes.",
     keywords: ["programme", "program", "block", "mesocycle", "multi session"],
     body: [
-      { type: "p", text: "A programme is an ordered set of sessions — a training block. Build one by either:" },
+      { type: "p", text: "A programme is a training block laid out week by week. Build one from **Programmes → + Build New Programme** (name it and pick how many weeks), or save one from an athlete's calendar (**Manage → Save as programme**) or a template (**Add to Programme Library**)." },
+    ],
+  },
+  {
+    id: "programme-builder",
+    category: "programmes",
+    title: "Build a programme week by week",
+    summary: "A Mon-Sun grid per week: add templates on chosen days, copy weeks, edit sessions, apply progressions.",
+    keywords: ["build programme", "programme builder", "weeks", "copy week", "progression", "pyramid", "deload", "periodisation", "days"],
+    body: [
       { type: "steps", items: [
-        "Athlete page → **Manage** → **Save as programme** (saves every session on that athlete's calendar within a date range), or",
-        "Templates page → open a template → **Add to Programme Library**.",
+        "**Programmes → + Build New Programme** - give it a name and a length in weeks.",
+        "**+ Add from template** - pick a template, choose the days for each of its sessions (e.g. Lower on Mon, Upper on Thu) and which weeks (e.g. weeks 1-8, or every 2 weeks). The **+** in any day adds a template or a blank session to just that day.",
+        "Click any session to edit it - exercises, sets, reps, load, %1RM, RIR, rest, tempo, notes. Each week's sessions are separate, so week 3 can differ from week 2.",
+        "Drag a session to another day to move it; hold **Alt / Option** while dragging to copy it.",
+        "Tick sessions (or a whole week with its tick box, or every Monday by clicking **Mon**) to **Copy to weeks…**, **Delete**, **Load onto athlete** or apply a **Progression…**.",
+        "The **⧉** next to a week copies that whole week to other weeks - and can add new weeks at the end.",
       ] },
-      { type: "p", text: "The **Programmes** page is for browsing, renaming and assigning. Open a programme to add sessions from templates or remove sessions." },
+      { type: "p", text: "**Progression…** works on the ticked sessions: pick the exercises, then a rule - e.g. load +2.5kg every week, reps -1 every 2 weeks, %1RM +2.5, RPE or RIR - with an optional deload every 3rd-6th week (load / %1RM drop 10%). The earliest ticked week is the starting point, and you see every change before applying it. **Pyramid / wave sets** sets the ticked exercises to a per-set %1RM scheme (e.g. 8-6-4-2 at 75-90%)." },
+      { type: "p", text: "Loading onto an athlete: pick the Monday of week 1 and every session lands on its own weekday. Power/Speed and recovery sessions can be moved and copied in the builder; edit their contents on the athlete's calendar once loaded." },
     ],
   },
   {

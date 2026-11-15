@@ -559,6 +559,7 @@ export interface Programme {
   name: string;
   description: string;
   created_at: string;
+  weeks?: number | null; // 0132 — set length for the week-grid builder; null = older programme, length derived from its sessions
   sessions?: ProgrammeSession[];
   assigned_to?: string[]; // athlete ids, derived from programme_assignments
 }

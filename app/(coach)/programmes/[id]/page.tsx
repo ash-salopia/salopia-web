@@ -1,26 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   getProgramme,
   updateProgramme,
   deleteProgramme,
   deleteProgrammeSession,
-  restoreProgrammeSession,
-  addTemplateDefsToProgramme,
   assignProgrammeToAthlete,
   unassignProgrammeFromAthlete,
   loadProgrammeSessionForAthlete,
   scheduleProgrammeSessions,
+  insertProgrammeSessions,
+  saveProgrammeSessions,
+  deleteProgrammeSessions,
+  updateProgrammeSession,
 } from "@/lib/data/programmes";
+import { listLibrary } from "@/lib/data/library";
+import WeekGrid from "@/components/programme/WeekGrid";
+import ProgrammeSessionEditor from "@/components/programme/ProgrammeSessionEditor";
+import { AddTemplateModal, CopyModal, ProgressionModal, type AddPlan } from "@/components/programme/BuilderModals";
+import {
+  blankSessionDraft, copySessionDraft, dayOf, draftFromTemplateDef, offsetFor, planCopyToWeeks, programmeWeekCount,
+  sortOrderFor, weekOf, type SessionDraft,
+} from "@/lib/programme-builder";
 import { listTemplates } from "@/lib/data/templates";
 import { listAthletes } from "@/lib/data/athletes";
 import { todayISO } from "@/lib/date-utils";
-import SessionDefView from "@/components/SessionDefView";
 import { usePendingUndo } from "@/lib/use-pending-undo";
 import UndoBanner from "@/components/UndoBanner";
-import type { Programme, ProgrammeSession, Athlete, Template } from "@/types";
+import type { Programme, ProgrammeSession, Athlete, Template, LibraryEntry } from "@/types";
 
 function formatScheduleDate(iso: string): string {
   return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", {
@@ -42,8 +51,14 @@ export default function ProgrammeDetailPage() {
   const undo = usePendingUndo();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
-  const [addFromTemplateOpen, setAddFromTemplateOpen] = useState(false);
-  const [templateSearch, setTemplateSearch] = useState("");
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  // Builder tools (0132).
+  const [addAt, setAddAt] = useState<{ week: number; day: number } | "toolbar" | null>(null);
+  const [copyFrom, setCopyFrom] = useState<{ sessions: ProgrammeSession[]; weeks: Set<number>; allowDay: boolean; title: string } | null>(null);
+  const [progressionOpen, setProgressionOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Edits save shortly after the coach stops typing, per session.
+  const pendingSaves = useRef(new Map<string, { patch: Partial<ProgrammeSession>; timer: ReturnType<typeof setTimeout> }>());
 
   // Bulk "Load onto athlete" flow - pick an athlete/start date/spacing for
   // whichever sessions are checked in the list, preview the resulting
@@ -70,8 +85,8 @@ export default function ProgrammeDetailPage() {
       setProgramme(p);
       setAthletes(a);
       setTemplates(t);
-      if (p?.sessions?.length && !activeSessionId) setActiveSessionId(p.sessions[0].id);
-      setSelectedSessionIds(new Set((p?.sessions ?? []).map((s) => s.id)));
+      setSelectedSessionIds(new Set());
+      listLibrary().then(setLibrary).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load programme");
     } finally {
@@ -107,47 +122,147 @@ export default function ProgrammeDetailPage() {
     }
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm("Remove this session from the programme?")) return;
-    const snapshot = programme?.sessions?.find((s) => s.id === sessionId) ?? null;
+  // ── Builder (0132) ──────────────────────────────────────────────────────
+  const sessionsNow = () => programme?.sessions ?? [];
+  const weeks = programmeWeekCount(programme?.weeks, programme?.sessions ?? []);
+
+  const setWeeks = async (next: number) => {
+    if (!programme || next < 1 || next > 104) return;
+    const dropping = sessionsNow().filter((s) => weekOf(s.day_offset) >= next);
+    if (dropping.length && !confirm(`Remove week${weeks - next === 1 ? "" : "s"} ${next + 1}${weeks - next > 1 ? `-${weeks}` : ""} and the ${dropping.length} session${dropping.length === 1 ? "" : "s"} in ${weeks - next === 1 ? "it" : "them"}?`)) return;
     try {
-      await deleteProgrammeSession(sessionId);
-      setProgramme((prev) =>
-        prev ? { ...prev, sessions: prev.sessions?.filter((s) => s.id !== sessionId) } : prev
-      );
-      setSelectedSessionIds((prev) => {
-        const next = new Set(prev);
-        next.delete(sessionId);
-        return next;
-      });
-      if (activeSessionId === sessionId) setActiveSessionId(programme?.sessions?.[0]?.id ?? null);
+      if (dropping.length) await deleteProgrammeSessions(dropping.map((s) => s.id));
+      await updateProgramme(programmeId, { weeks: next });
+      setProgramme((prev) => prev ? { ...prev, weeks: next, sessions: (prev.sessions ?? []).filter((s) => weekOf(s.day_offset) < next) } : prev);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not remove session");
+      setError(e instanceof Error ? e.message : "Could not change the number of weeks");
+    }
+  };
+
+  // Adds drafts, numbering them after whatever is already on each day.
+  const addDrafts = async (drafts: SessionDraft[], msg?: string) => {
+    if (!drafts.length) return [] as ProgrammeSession[];
+    setBusy(true);
+    setError("");
+    try {
+      const perDay = new Map<number, number>();
+      for (const s of sessionsNow()) perDay.set(s.day_offset, (perDay.get(s.day_offset) ?? 0) + 1);
+      const numbered = drafts.map((d) => {
+        const idx = perDay.get(d.day_offset) ?? 0;
+        perDay.set(d.day_offset, idx + 1);
+        return { ...d, sort_order: sortOrderFor(d.day_offset, idx) };
+      });
+      const added = await insertProgrammeSessions(programmeId, numbered);
+      setProgramme((prev) => (prev ? { ...prev, sessions: [...(prev.sessions ?? []), ...added] } : prev));
+      if (msg) showFlash(msg);
+      return added;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add sessions");
+      return [] as ProgrammeSession[];
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAddPlan = async (plan: AddPlan[]) => {
+    setAddAt(null);
+    await addDrafts(plan.map((p) => draftFromTemplateDef(p.def, offsetFor(p.week, p.day), 0)), `Added ${plan.length} session${plan.length === 1 ? "" : "s"}`);
+  };
+
+  const handleBlank = async (week: number, day: number) => {
+    setAddAt(null);
+    const [added] = await addDrafts([blankSessionDraft(offsetFor(week, day), 0)]);
+    if (added) setActiveSessionId(added.id);
+  };
+
+  const handleDrop = async (id: string, week: number, day: number, copy: boolean) => {
+    const s = sessionsNow().find((x) => x.id === id);
+    if (!s) return;
+    const off = offsetFor(week, day);
+    if (copy) {
+      await addDrafts([copySessionDraft(s, off, 0)], `Copied "${s.name}" to week ${week + 1} ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][day]}`);
       return;
     }
-
-    if (!snapshot) return;
-    undo.push(`Removed "${snapshot.name || "session"}"`, async () => {
-      const restored = await restoreProgrammeSession(snapshot);
-      setProgramme((prev) =>
-        prev ? { ...prev, sessions: [...(prev.sessions ?? []), restored].sort((a, b) => a.sort_order - b.sort_order) } : prev
-      );
-    });
-  };
-
-  const handleAddFromTemplate = async (template: Template) => {
-    if (!programme) return;
+    if (s.day_offset === off) return;
+    const idx = sessionsNow().filter((x) => x.day_offset === off).length;
+    const patch = { day_offset: off, sort_order: sortOrderFor(off, idx) };
+    setProgramme((prev) => prev ? { ...prev, sessions: (prev.sessions ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) } : prev);
     try {
-      const added = await addTemplateDefsToProgramme(programmeId, template, programme.sessions?.length ?? 0);
-      setProgramme((prev) => (prev ? { ...prev, sessions: [...(prev.sessions ?? []), ...added] } : prev));
-      setSelectedSessionIds((prev) => new Set([...prev, ...added.map((s) => s.id)]));
-      if (added.length) setActiveSessionId(added[0].id);
-      setAddFromTemplateOpen(false);
-      showFlash(`Added ${added.length} session${added.length === 1 ? "" : "s"} from "${template.name}"`);
+      await updateProgrammeSession(id, patch);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add from template");
+      setError(e instanceof Error ? e.message : "Could not move the session");
     }
   };
+
+  const handleCopy = async (targetWeeks: number[], toDay: number | null, extendTo: number | null) => {
+    if (!copyFrom) return;
+    const source = copyFrom.sessions;
+    setCopyFrom(null);
+    if (extendTo && extendTo > weeks) await setWeeks(extendTo);
+    const drafts = planCopyToWeeks(source, targetWeeks, sessionsNow(), toDay);
+    await addDrafts(drafts, `Copied ${source.length} session${source.length === 1 ? "" : "s"} to ${targetWeeks.length} week${targetWeeks.length === 1 ? "" : "s"}`);
+  };
+
+  const removeSessions = async (ids: string[], label: string) => {
+    if (!ids.length || !confirm(`Delete ${label}? This can't be undone.`)) return;
+    try {
+      await deleteProgrammeSessions(ids);
+      const gone = new Set(ids);
+      setProgramme((prev) => (prev ? { ...prev, sessions: (prev.sessions ?? []).filter((s) => !gone.has(s.id)) } : prev));
+      setSelectedSessionIds((prev) => new Set(Array.from(prev).filter((id) => !gone.has(id))));
+      if (activeSessionId && gone.has(activeSessionId)) setActiveSessionId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete");
+    }
+  };
+
+  const handleWeekAction = (week: number, action: "copy" | "clear") => {
+    const inWeek = sessionsNow().filter((s) => weekOf(s.day_offset) === week);
+    if (action === "clear") removeSessions(inWeek.map((s) => s.id), `all ${inWeek.length} session${inWeek.length === 1 ? "" : "s"} in week ${week + 1}`);
+    else setCopyFrom({ sessions: inWeek, weeks: new Set([week]), allowDay: false, title: `Copy week ${week + 1}` });
+  };
+
+  const handleApplyProgression = async (updated: ProgrammeSession[]) => {
+    setProgressionOpen(false);
+    setBusy(true);
+    try {
+      await saveProgrammeSessions(updated);
+      const byId = new Map(updated.map((u) => [u.id, u]));
+      setProgramme((prev) => (prev ? { ...prev, sessions: (prev.sessions ?? []).map((s) => byId.get(s.id) ?? s) } : prev));
+      showFlash(`Updated ${updated.length} session${updated.length === 1 ? "" : "s"}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not apply the progression");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const editSession = (id: string, patch: Partial<ProgrammeSession>) => {
+    setProgramme((prev) => (prev ? { ...prev, sessions: (prev.sessions ?? []).map((s) => (s.id === id ? { ...s, ...patch } : s)) } : prev));
+    const pending = pendingSaves.current.get(id);
+    if (pending) clearTimeout(pending.timer);
+    const merged = { ...(pending?.patch ?? {}), ...patch };
+    const timer = setTimeout(async () => {
+      pendingSaves.current.delete(id);
+      try {
+        await updateProgrammeSession(id, merged);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save the session");
+      }
+    }, 600);
+    pendingSaves.current.set(id, { patch: merged, timer });
+  };
+
+  // Save anything still waiting when leaving the page.
+  useEffect(() => {
+    const pending = pendingSaves.current;
+    return () => {
+      pending.forEach(({ patch, timer }, id) => {
+        clearTimeout(timer);
+        updateProgrammeSession(id, patch).catch(() => {});
+      });
+    };
+  }, []);
 
   const handleDeleteProgramme = async () => {
     if (!confirm(`Delete programme "${programme?.name}"? This can't be undone.`)) return;
@@ -168,11 +283,6 @@ export default function ProgrammeDetailPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not unassign");
     }
-  };
-
-  const toggleSelectAll = () => {
-    const allIds = (programme?.sessions ?? []).map((s) => s.id);
-    setSelectedSessionIds((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
   };
 
   const toggleSessionSelected = (sessionId: string) => {
@@ -222,7 +332,8 @@ export default function ProgrammeDetailPage() {
   const bulkScheduled = scheduleProgrammeSessions(
     bulkBaseSessions,
     bulkStartDate,
-    bulkUseCustomSpacing ? bulkSpacingDays : undefined
+    bulkUseCustomSpacing ? bulkSpacingDays : undefined,
+    programme?.weeks != null
   ).filter((row) => !bulkRemovedIds.has(row.session.id));
 
   const handleGenerateBulkLoad = async () => {
@@ -257,9 +368,8 @@ export default function ProgrammeDetailPage() {
 
   const assignedAthletes = athletes.filter((a) => programme.assigned_to?.includes(a.id));
   const activeSession = programme.sessions?.find((s) => s.id === activeSessionId) ?? null;
-  const filteredTemplates = templates.filter((t) =>
-    t.name.toLowerCase().includes(templateSearch.trim().toLowerCase())
-  );
+  const selectedSessions = (programme.sessions ?? []).filter((s) => selectedSessionIds.has(s.id));
+  const weekStart = programme.weeks != null;
 
   return (
     <div style={styles.page}>
@@ -298,71 +408,58 @@ export default function ProgrammeDetailPage() {
       </div>
 
       <div style={styles.section}>
-        <div style={styles.sectionTitle}>Sessions</div>
-        <div style={styles.layout}>
-          <div style={styles.sessionListCol}>
-            {(programme.sessions ?? []).length > 0 && (
-              <label style={styles.selectAllRow}>
-                <input
-                  type="checkbox"
-                  checked={selectedSessionIds.size === (programme.sessions ?? []).length}
-                  onChange={toggleSelectAll}
-                  style={styles.checkbox}
-                />
-                Select all
-              </label>
-            )}
-            {(programme.sessions ?? []).map((s) => (
-              <div
-                key={s.id}
-                style={{ ...styles.sessionRow, ...(s.id === activeSessionId ? styles.sessionRowActive : {}) }}
-                onClick={() => setActiveSessionId(s.id)}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedSessionIds.has(s.id)}
-                  onChange={() => toggleSessionSelected(s.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  style={styles.checkbox}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={styles.sessionName}>{s.name}</div>
-                  <div style={styles.sessionMeta}>{s.type}</div>
-                </div>
-                <button
-                  style={styles.smallDeleteBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteSession(s.id);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            {!(programme.sessions ?? []).length && (
-              <div style={styles.emptySmall}>No sessions yet.</div>
-            )}
-            <button style={styles.addBtn} onClick={() => { setAddFromTemplateOpen(true); setTemplateSearch(""); }}>
-              + Add from template
-            </button>
-          </div>
-
-          {activeSession && (
-            <div style={styles.editorCol}>
-              <div style={styles.editorToolbar}>
-                <button
-                  style={{ ...styles.smallBtn, opacity: selectedSessionIds.size ? 1 : 0.5 }}
-                  disabled={!selectedSessionIds.size}
-                  onClick={handleOpenBulkLoad}
-                >
-                  Load onto athlete{selectedSessionIds.size ? ` (${selectedSessionIds.size})` : ""}
-                </button>
-              </div>
-              <SessionDefView key={activeSession.id} def={activeSession} />
+        <div style={styles.sectionHeadRow}>
+          <div style={styles.sectionTitle}>Programme</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={styles.weeksBox}>
+              <button style={styles.stepBtn} onClick={() => setWeeks(weeks - 1)} disabled={weeks <= 1} aria-label="Remove a week">−</button>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{weeks} week{weeks === 1 ? "" : "s"}</span>
+              <button style={styles.stepBtn} onClick={() => setWeeks(weeks + 1)} aria-label="Add a week">+</button>
             </div>
-          )}
+            <button style={styles.smallBtn} onClick={() => setAddAt("toolbar")}>+ Add from template</button>
+          </div>
         </div>
+        <p style={styles.hint}>
+          Click a session to edit it · tick sessions to copy, delete or progress them · drag to move (hold Alt / Option to copy) · + adds to that day.
+        </p>
+
+        {selectedSessions.length > 0 && (
+          <div style={styles.actionBar}>
+            <span style={{ fontWeight: 800, fontSize: 13 }}>{selectedSessions.length} selected</span>
+            <button style={styles.smallBtn} onClick={() => setCopyFrom({ sessions: selectedSessions, weeks: new Set(selectedSessions.map((s) => weekOf(s.day_offset))), allowDay: true, title: `Copy ${selectedSessions.length} session${selectedSessions.length === 1 ? "" : "s"}` })}>
+              Copy to weeks…
+            </button>
+            <button style={styles.smallBtn} onClick={() => setProgressionOpen(true)}>Progression…</button>
+            <button style={styles.smallBtn} onClick={handleOpenBulkLoad}>Load onto athlete</button>
+            <button style={{ ...styles.smallBtn, color: "#FF6B6B", background: "transparent", border: "1px solid var(--line)" }} onClick={() => removeSessions(selectedSessions.map((s) => s.id), `${selectedSessions.length} session${selectedSessions.length === 1 ? "" : "s"}`)}>
+              Delete
+            </button>
+            <button style={styles.linkBtn} onClick={() => setSelectedSessionIds(new Set())}>Clear</button>
+          </div>
+        )}
+        {busy && <div style={styles.hint}>Saving…</div>}
+
+        <WeekGrid
+          weeks={weeks}
+          sessions={programme.sessions ?? []}
+          selected={selectedSessionIds}
+          activeId={activeSessionId}
+          onToggle={toggleSessionSelected}
+          onSelectMany={(ids, on) =>
+            setSelectedSessionIds((prev) => {
+              const next = new Set(prev);
+              for (const id of ids) {
+                if (on) next.add(id);
+                else next.delete(id);
+              }
+              return next;
+            })
+          }
+          onOpen={setActiveSessionId}
+          onAddAt={(week, day) => setAddAt({ week, day })}
+          onDrop={handleDrop}
+          onWeekAction={handleWeekAction}
+        />
       </div>
 
       <div style={styles.section}>
@@ -435,9 +532,9 @@ export default function ProgrammeDetailPage() {
                   style={styles.modalInput}
                 />
                 <p style={styles.hint}>
-                  Sessions load with the exact day pattern they were saved with (including rest
-                  days) - the first one lands on the start date above. You can switch to fixed
-                  spacing instead on the next step.
+                  {weekStart
+                    ? `Pick the Monday of week 1 - every session lands on its own weekday from there.${bulkStartDate && dayOf(Math.round((Date.parse(bulkStartDate + "T12:00:00Z") / 86400000) + 3)) !== 0 ? " (That date isn't a Monday, so sessions shift to match it.)" : ""}`
+                    : "Sessions load with the exact day pattern they were saved with (including rest days) - the first one lands on the start date above. You can switch to fixed spacing instead on the next step."}
                 </p>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button style={{ ...styles.ghostBtn, flex: 1 }} onClick={() => setBulkLoadOpen(false)}>
@@ -516,33 +613,44 @@ export default function ProgrammeDetailPage() {
         </div>
       )}
 
-      {addFromTemplateOpen && (
-        <div style={styles.overlay} onClick={() => setAddFromTemplateOpen(false)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalTitle}>Add from template</div>
-            <input
-              autoFocus
-              value={templateSearch}
-              onChange={(e) => setTemplateSearch(e.target.value)}
-              placeholder="Search templates…"
-              style={styles.modalInput}
+      {addAt && (
+        <AddTemplateModal
+          templates={templates}
+          weeks={weeks}
+          at={addAt === "toolbar" ? null : addAt}
+          onClose={() => setAddAt(null)}
+          onAdd={handleAddPlan}
+          onBlank={handleBlank}
+        />
+      )}
+      {copyFrom && (
+        <CopyModal
+          title={copyFrom.title}
+          weeks={weeks}
+          sourceWeeks={copyFrom.weeks}
+          allowDay={copyFrom.allowDay}
+          onClose={() => setCopyFrom(null)}
+          onCopy={handleCopy}
+        />
+      )}
+      {progressionOpen && (
+        <ProgressionModal sessions={selectedSessions} onClose={() => setProgressionOpen(false)} onApply={handleApplyProgression} />
+      )}
+      {activeSession && (
+        <div style={styles.drawerBackdrop} onClick={() => setActiveSessionId(null)}>
+          <div style={styles.drawer} onClick={(e) => e.stopPropagation()}>
+            <ProgrammeSessionEditor
+              key={activeSession.id}
+              session={activeSession}
+              library={library}
+              onChange={(patch) => editSession(activeSession.id, patch)}
+              onClose={() => setActiveSessionId(null)}
+              onDuplicate={async () => {
+                const [added] = await addDrafts([copySessionDraft(activeSession, activeSession.day_offset, 0)], "Duplicated");
+                if (added) setActiveSessionId(added.id);
+              }}
+              onDelete={() => removeSessions([activeSession.id], `"${activeSession.name}"`)}
             />
-            <div style={styles.athletePickList}>
-              {templates.length === 0 ? (
-                <div style={styles.emptySmall}>No templates yet - build one in the Template Library first.</div>
-              ) : filteredTemplates.length === 0 ? (
-                <div style={styles.emptySmall}>No templates match &quot;{templateSearch}&quot;.</div>
-              ) : (
-                filteredTemplates.map((t) => (
-                  <button key={t.id} style={styles.athletePickOption} onClick={() => handleAddFromTemplate(t)}>
-                    {t.name}
-                    <span style={styles.templateOptionMeta}>
-                      {(t.defs ?? []).length} session{(t.defs ?? []).length === 1 ? "" : "s"}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -551,7 +659,7 @@ export default function ProgrammeDetailPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 900 },
+  page: { maxWidth: 1200 },
   backLink: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 13, cursor: "pointer", padding: 0, marginBottom: 16 },
   flashBox: { background: "var(--good-dim)", border: "1px solid var(--good)", color: "var(--good)", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
   errorBox: { background: "#2a0c0c", border: "1px solid #FF6B6B44", color: "#FF6B6B", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 },
@@ -594,4 +702,10 @@ const styles: Record<string, React.CSSProperties> = {
   scheduleRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8 },
   scheduleName: { flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text)" },
   scheduleDate: { fontSize: 12, color: "var(--mute)", flexShrink: 0 },
+  weeksBox: { display: "flex", alignItems: "center", gap: 8, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "3px 6px" },
+  stepBtn: { background: "transparent", border: "none", color: "var(--text)", fontSize: 16, fontWeight: 700, cursor: "pointer", padding: "0 6px" },
+  actionBar: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--accent-dim)", border: "1px solid var(--accent)", borderRadius: 10, padding: "8px 10px", marginBottom: 10, position: "sticky", top: 8, zIndex: 5 },
+  linkBtn: { background: "none", border: "none", color: "var(--mute)", fontSize: 12, cursor: "pointer", marginLeft: "auto" },
+  drawerBackdrop: { position: "fixed", inset: 0, background: "rgba(6,9,12,.45)", zIndex: 65, display: "flex", justifyContent: "flex-end" },
+  drawer: { width: "min(640px, 100%)", height: "100%", overflowY: "auto", background: "var(--bg)", borderLeft: "1px solid var(--line)", padding: 14, boxSizing: "border-box" },
 };
