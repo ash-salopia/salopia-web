@@ -237,7 +237,13 @@ export function progressExercise(base: PrescribedExercise, rule: ProgressionRule
     case "reps": {
       if (!base.reps) return null;
       const reps = shiftReps(base.reps, delta);
-      return rule.matchLoad ? { reps, ...matchLoadToReps(base, reps, rule.scheme) } : { reps };
+      if (!rule.matchLoad) return { reps };
+      const matched = matchLoadToReps(base, reps, rule.scheme);
+      if (Object.keys(matched).length) return { reps, ...matched };
+      // No %1RM or kg to move yet: set %1RM straight from the chart, so
+      // reps and %1RM change in one go. Not for bodyweight / tick-only work.
+      if (base.is_bodyweight || base.completion_only) return { reps };
+      return { reps, ...(percentsFromReps({ ...base, reps }, rule.scheme ?? { key: "multiset" }) ?? {}) };
     }
     case "load": {
       const b = num(base.target_load);

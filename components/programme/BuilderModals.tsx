@@ -404,7 +404,7 @@ export function ModifyModal({
           {field === "reps" && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, width: "100%", cursor: "pointer", marginTop: 4 }}>
               <input type="checkbox" checked={matchLoad} onChange={(e) => setMatchLoad(e.target.checked)} style={{ accentColor: "var(--accent)", marginTop: 2 }} />
-              <span>Adjust the %1RM (or kg) to match the reps, using the chart below. Each athlete&apos;s kg is worked out from their own 1RM when the programme is loaded.</span>
+              <span>Adjust the %1RM (or kg) to match the reps, using the chart below - exercises without a %1RM yet get one from the chart. Each athlete&apos;s kg is worked out from their own 1RM when the programme is loaded.</span>
             </label>
           )}
         </div>
