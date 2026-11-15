@@ -1,3 +1,4 @@
+import type { Level } from "@/lib/store/match";
 import { createClient } from "@/lib/supabase-browser";
 
 // Coach-side data for the Programme Store (0124). Only the owner and
@@ -44,7 +45,16 @@ export interface StoreProductRow {
   active: boolean;
   sort_order: number;
   created_at: string;
+  // Who it's for (0131) - store filters + programme finder.
+  age_min?: number | null;
+  age_max?: number | null;
+  level?: Level | null;
+  equipment?: string[];
+  goals?: string[];
+  tags?: string[];
 }
+
+export type ProductAttributes = Pick<StoreProductRow, "age_min" | "age_max" | "level" | "equipment" | "goals" | "tags">;
 
 export interface PurchaseRow {
   id: string;
@@ -131,7 +141,7 @@ export async function listStoreProducts(): Promise<StoreProductRow[]> {
   return (data ?? []) as StoreProductRow[];
 }
 
-export async function saveStoreProduct(p: { id?: string; programme_id: string; title: string; description: string; price_pence: number; active: boolean }): Promise<StoreProductRow> {
+export async function saveStoreProduct(p: { id?: string; programme_id: string; title: string; description: string; price_pence: number; active: boolean } & ProductAttributes): Promise<StoreProductRow> {
   const { supabase, orgId } = await myOrg();
   if (!p.title.trim()) throw new Error("Give the programme a title.");
   if (!(p.price_pence >= 50)) throw new Error("The price must be at least £0.50.");
@@ -146,12 +156,27 @@ export async function saveStoreProduct(p: { id?: string; programme_id: string; t
     price_pence: Math.round(p.price_pence),
     active: p.active,
     updated_at: new Date().toISOString(),
+    // Only sent when set, so saving still works before 0131 is run.
+    ...attributesRow(p),
   };
   const { data, error } = p.id
     ? await supabase.from("store_products").update(row).eq("id", p.id).select("*").single()
     : await supabase.from("store_products").insert({ ...row, created_by: user?.id ?? null }).select("*").single();
   if (error) throw error;
   return data as StoreProductRow;
+}
+
+function attributesRow(p: ProductAttributes): Partial<ProductAttributes> {
+  const out: Partial<ProductAttributes> = {};
+  const age = (v: number | null | undefined) => (v == null || !isFinite(v) ? null : Math.min(100, Math.max(5, Math.round(v))));
+  if (p.age_min !== undefined) out.age_min = age(p.age_min);
+  if (p.age_max !== undefined) out.age_max = age(p.age_max);
+  if (out.age_min != null && out.age_max != null && out.age_min > out.age_max) throw new Error("The minimum age is higher than the maximum.");
+  if (p.level !== undefined) out.level = p.level;
+  if (p.equipment !== undefined) out.equipment = p.equipment;
+  if (p.goals !== undefined) out.goals = p.goals;
+  if (p.tags !== undefined) out.tags = p.tags;
+  return out;
 }
 
 export async function deleteStoreProduct(id: string): Promise<void> {
