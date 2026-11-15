@@ -1,3 +1,4 @@
+import { toExerciseRow, toPrescription } from "@/lib/prescription";
 import { createClient } from "@/lib/supabase-browser";
 import { getMyOrganisationId } from "@/lib/data/athletes";
 import { addDaysISO, daysBetween } from "@/lib/date-utils";
@@ -152,20 +153,7 @@ export async function createProgrammeFromSessions(sessions: Session[], name: str
     programme_id: programme.id,
     name: s.name,
     type: s.type,
-    exercises: (s.exercises ?? []).map((e): PrescribedExercise => ({
-      id: crypto.randomUUID(),
-      name: e.name,
-      order: e.order,
-      sets: e.sets,
-      reps: e.reps,
-      time: e.time,
-      rest: e.rest,
-      target_load: e.target_load,
-      tempo: e.tempo,
-      each_side: e.each_side,
-      notes: e.notes,
-      video_url: e.video_url,
-    })),
+    exercises: (s.exercises ?? []).map((e) => toPrescription(e as unknown as Record<string, unknown>)),
     hyrox_type: s.hyrox_type,
     hyrox_config: s.hyrox_config,
     cardio_type: s.cardio_type,
@@ -364,26 +352,7 @@ export async function loadProgrammeSessionForAthlete(
 
   const exercises = (programmeSession.exercises ?? []) as PrescribedExercise[];
   if (exercises.length) {
-    const exerciseRows = exercises.map((e, i) => ({
-      session_id: session.id,
-      name: e.name,
-      order: e.order ?? "",
-      sets: e.sets ?? 3,
-      reps: e.reps ?? "",
-      time: e.time ?? "",
-      rest: e.rest ?? "",
-      target_load: e.target_load ?? "",
-      tempo: e.tempo ?? "2-0-2",
-      each_side: e.each_side ?? false,
-      notes: e.notes ?? "",
-      video_url: e.video_url ?? "",
-      rpe: e.rpe ?? null,
-      percent_1rm: e.percent_1rm ?? null,
-      use_percent_1rm: e.use_percent_1rm ?? false,
-      set_percents: e.set_percents ?? [],
-      sort_order: i,
-      log: Array.from({ length: e.sets ?? 3 }, () => ({ weight: "", done: false, reps: "" })),
-    }));
+    const exerciseRows = exercises.map((e, i) => toExerciseRow(e as unknown as Record<string, unknown>, session.id, i));
     const { error: exErr } = await supabase.from("session_exercises").insert(exerciseRows);
     if (exErr) throw exErr;
   }
