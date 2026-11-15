@@ -651,6 +651,7 @@ export default function ProgrammeDetailPage() {
               key={activeSession.id}
               session={activeSession}
               library={library}
+              formula={formula}
               onChange={(patch) => editSession(activeSession.id, patch)}
               onClose={() => setActiveSessionId(null)}
               onDuplicate={async () => {

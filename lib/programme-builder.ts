@@ -159,6 +159,31 @@ export function repsPerSet(reps: string, sets: number): number[] {
   return Array.from({ length: Math.max(1, sets) }, () => top(reps));
 }
 
+/**
+ * The %1RM (or kg) an exercise should have at `newReps` to keep the same
+ * effort as it has now - e.g. 3 reps @ 90% -> 4 reps @ 87.5%. Empty when
+ * there's no load to move (no %1RM and no kg, or reps unreadable).
+ */
+export function matchLoadToReps(ex: PrescribedExercise, newReps: string, formula: OneRMFormula = "lander"): Partial<PrescribedExercise> {
+  if (!ex.reps || !newReps) return {};
+  const sets = ex.sets ?? 3;
+  const from = repsPerSet(ex.reps, sets);
+  const to = repsPerSet(newReps, sets);
+  if (!from.some(Boolean) || !to.some(Boolean)) return {};
+  if (ex.use_percent_1rm && ex.set_percents?.length) {
+    return {
+      set_percents: ex.set_percents.map((p, i) => {
+        const v = num(p);
+        return v === null ? p : fmt(round(scaleForReps(v, from[i] ?? from[0], to[i] ?? to[0], formula), 0.5));
+      }),
+    };
+  }
+  if (!ex.use_percent_1rm && num(ex.target_load) !== null) {
+    return { target_load: fmt(round(scaleForReps(num(ex.target_load)!, from[0], to[0], formula), 0.5)) };
+  }
+  return {};
+}
+
 // Scale an intensity to new reps: value x %(newReps) / %(oldReps).
 export function scaleForReps(value: number, fromReps: number, toReps: number, formula: OneRMFormula = "lander"): number {
   if (!fromReps || !toReps || fromReps === toReps) return value;
@@ -195,20 +220,7 @@ export function progressExercise(base: PrescribedExercise, rule: ProgressionRule
     case "reps": {
       if (!base.reps) return null;
       const reps = shiftReps(base.reps, delta);
-      if (!rule.matchLoad) return { reps };
-      const sets = base.sets ?? 3;
-      const from = repsPerSet(base.reps, sets);
-      const to = repsPerSet(reps, sets);
-      const out: Partial<PrescribedExercise> = { reps };
-      if (base.use_percent_1rm && base.set_percents?.length) {
-        out.set_percents = base.set_percents.map((p, i) => {
-          const v = num(p);
-          return v === null ? p : fmt(round(scaleForReps(v, from[i] ?? from[0], to[i] ?? to[0], rule.formula), 0.5));
-        });
-      } else if (!base.use_percent_1rm && num(base.target_load) !== null) {
-        out.target_load = fmt(round(scaleForReps(num(base.target_load)!, from[0], to[0], rule.formula), 0.5));
-      }
-      return out;
+      return rule.matchLoad ? { reps, ...matchLoadToReps(base, reps, rule.formula) } : { reps };
     }
     case "load": {
       const b = num(base.target_load);

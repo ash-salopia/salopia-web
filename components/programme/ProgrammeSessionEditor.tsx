@@ -5,7 +5,8 @@ import ExerciseCard from "@/components/ExerciseCard";
 import HyroxCardioBuilder from "@/components/HyroxCardioBuilder";
 import SessionDefView from "@/components/SessionDefView";
 import { toPrescription } from "@/lib/prescription";
-import { DAYS, dayOf, weekOf } from "@/lib/programme-builder";
+import { DAYS, dayOf, matchLoadToReps, weekOf } from "@/lib/programme-builder";
+import type { OneRMFormula } from "@/lib/one-rm";
 import type { LibraryEntry, PrescribedExercise, ProgrammeSession, Session, SessionExercise, SetLog } from "@/types";
 
 // Edits one session inside a programme (0132). Same exercise cards
@@ -37,6 +38,7 @@ function asSessionExercise(ex: PrescribedExercise, sessionId: string, i: number)
 export default function ProgrammeSessionEditor({
   session,
   library,
+  formula = "lander",
   onChange,
   onClose,
   onDuplicate,
@@ -45,6 +47,7 @@ export default function ProgrammeSessionEditor({
 }: {
   session: ProgrammeSession;
   library: LibraryEntry[];
+  formula?: OneRMFormula; // org's 1RM formula, for "match load to reps"
   onChange: (patch: Partial<ProgrammeSession>) => void;
   onClose: () => void;
   onDuplicate: () => void;
@@ -55,11 +58,50 @@ export default function ProgrammeSessionEditor({
   const exercises = session.exercises ?? [];
   const setExercises = (next: PrescribedExercise[]) => onChange({ exercises: next });
 
+  // Reps changed by hand on an exercise with a %1RM or kg load: remember
+  // how it was before the edit, so we can offer to move the load to match
+  // (3 reps @ 90% -> 4 reps @ 87.5%). Cleared if the coach sets the load
+  // themselves or puts the reps back.
+  const [repsEdited, setRepsEdited] = useState<Record<string, PrescribedExercise>>({});
+
   const editExercise = (id: string, patch: Partial<SessionExercise>) => {
     // log / session_id / sort_order are card plumbing, not prescription.
     const { log: _l, session_id: _s, sort_order: _o, ...rest } = patch as Record<string, unknown>;
+    const current = exercises.find((e) => e.id === id);
+    if (current) {
+      setRepsEdited((prev) => {
+        const next = { ...prev };
+        if ("set_percents" in rest || "target_load" in rest || "use_percent_1rm" in rest) delete next[id];
+        else if ("reps" in rest) {
+          const before = prev[id] ?? current;
+          if (rest.reps === before.reps) delete next[id];
+          else next[id] = before;
+        }
+        return next;
+      });
+    }
     setExercises(exercises.map((e) => (e.id === id ? ({ ...e, ...rest } as PrescribedExercise) : e)));
   };
+
+  const loadText = (e: Partial<PrescribedExercise>) =>
+    e.set_percents?.length
+      ? `${new Set(e.set_percents).size === 1 ? e.set_percents[0] : e.set_percents.join("/")}%`
+      : e.target_load ? `${e.target_load}kg` : "";
+  const suggestions = Object.entries(repsEdited)
+    .map(([id, before]) => {
+      const now = exercises.find((e) => e.id === id);
+      if (!now || !now.reps) return null;
+      const patch = matchLoadToReps(before, now.reps, formula);
+      if (!Object.keys(patch).length || loadText(patch) === loadText(now)) return null;
+      return { id, name: now.name || "Exercise", fromReps: before.reps, toReps: now.reps, from: loadText(before), to: loadText(patch), patch };
+    })
+    .filter(Boolean) as { id: string; name: string; fromReps: string; toReps: string; from: string; to: string; patch: Partial<PrescribedExercise> }[];
+  const dropSuggestion = (id: string) =>
+    setRepsEdited((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
     if (j < 0 || j >= exercises.length) return;
@@ -101,6 +143,23 @@ export default function ProgrammeSessionEditor({
 
       {editable ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {suggestions.map((sg) => (
+            <div key={sg.id} style={s.suggest}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b>{sg.name}</b>: reps {sg.fromReps} → {sg.toReps}. Match the load? {sg.from} → <b>{sg.to}</b>
+              </div>
+              <button
+                style={s.suggestBtn}
+                onClick={() => {
+                  setExercises(exercises.map((e) => (e.id === sg.id ? { ...e, ...sg.patch } : e)));
+                  dropSuggestion(sg.id);
+                }}
+              >
+                Update
+              </button>
+              <button style={s.ghost} onClick={() => dropSuggestion(sg.id)}>Keep</button>
+            </div>
+          ))}
           {exercises.map((ex, i) => (
             <ExerciseCard
               key={ex.id}
@@ -170,5 +229,7 @@ const s: Record<string, React.CSSProperties> = {
   notes: { width: "100%", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 13, minHeight: 44, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" },
   empty: { color: "var(--mute)", fontSize: 13, padding: "6px 0" },
   addBtn: { flex: 1, background: "transparent", border: "1px dashed var(--line)", color: "var(--mute)", borderRadius: 8, padding: "9px 0", fontSize: 13, cursor: "pointer" },
+  suggest: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13, background: "var(--accent-dim)", border: "1px solid var(--accent)", borderRadius: 10, padding: "8px 10px" },
+  suggestBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" },
   readonlyNote: { fontSize: 12, color: "var(--mute)", background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 },
 };
