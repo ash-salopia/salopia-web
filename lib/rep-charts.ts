@@ -51,8 +51,13 @@ export function percentFor(reps: number, scheme: RepScheme): number {
   return Math.max(30, chart[chart.length - 1] + step * (n - chart.length));
 }
 
-/** The scheme to start with: the coach's last choice, else their 1RM formula. */
-export function defaultScheme(saved: { rep_scheme?: RepSchemeKey | null; rep_chart?: number[] | null } | null, formula: OneRMFormula): RepScheme {
-  const key = saved?.rep_scheme ?? formula;
-  return { key, chart: saved?.rep_chart ?? undefined };
+/**
+ * The scheme to start with: the coach's last choice, else the multi-set
+ * chart. Not the 1RM formula - formulas give a single all-out rep max
+ * (3RM ~ 93%), too heavy to repeat for 3-5 working sets; the multi-set
+ * chart sits ~1-2 reps in reserve below it. Formulas stay the right tool
+ * for estimating an athlete's 1RM from what they logged.
+ */
+export function defaultScheme(saved: { rep_scheme?: RepSchemeKey | null; rep_chart?: number[] | null } | null): RepScheme {
+  return { key: saved?.rep_scheme ?? "multiset", chart: saved?.rep_chart ?? undefined };
 }

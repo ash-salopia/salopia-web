@@ -55,8 +55,8 @@ export default function ProgrammeDetailPage() {
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   // Reps -> %1RM chart for Modify prescription and the editor's "match the
-  // load" prompt: the coach's last choice, else their 1RM formula.
-  const [scheme, setScheme] = useState<RepScheme>({ key: "lander" });
+  // load" prompt: the coach's last choice, else the multi-set chart.
+  const [scheme, setScheme] = useState<RepScheme>({ key: "multiset" });
   // Builder tools (0132).
   const [addAt, setAddAt] = useState<{ week: number; day: number } | "toolbar" | null>(null);
   const [copyFrom, setCopyFrom] = useState<{ sessions: ProgrammeSession[]; weeks: Set<number>; allowDay: boolean; title: string } | null>(null);
@@ -92,7 +92,7 @@ export default function ProgrammeDetailPage() {
       setTemplates(t);
       setSelectedSessionIds(new Set());
       listLibrary().then(setLibrary).catch(() => {});
-      getOrgSettings().then((st) => setScheme(defaultScheme(st, st.one_rm_formula))).catch(() => {});
+      getOrgSettings().then((st) => setScheme(defaultScheme(st))).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load programme");
     } finally {

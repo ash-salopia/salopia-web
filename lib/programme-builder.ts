@@ -164,7 +164,7 @@ export function repsPerSet(reps: string, sets: number): number[] {
  * effort as it has now - e.g. 3 reps @ 90% -> 4 reps @ 87.5%. Empty when
  * there's no load to move (no %1RM and no kg, or reps unreadable).
  */
-export function matchLoadToReps(ex: PrescribedExercise, newReps: string, scheme: RepScheme = { key: "lander" }): Partial<PrescribedExercise> {
+export function matchLoadToReps(ex: PrescribedExercise, newReps: string, scheme: RepScheme = { key: "multiset" }): Partial<PrescribedExercise> {
   if (!ex.reps || !newReps) return {};
   const sets = ex.sets ?? 3;
   const from = repsPerSet(ex.reps, sets);
@@ -185,7 +185,7 @@ export function matchLoadToReps(ex: PrescribedExercise, newReps: string, scheme:
 }
 
 // Scale an intensity to new reps: value x %(newReps) / %(oldReps).
-export function scaleForReps(value: number, fromReps: number, toReps: number, scheme: RepScheme = { key: "lander" }): number {
+export function scaleForReps(value: number, fromReps: number, toReps: number, scheme: RepScheme = { key: "multiset" }): number {
   if (!fromReps || !toReps || fromReps === toReps) return value;
   return (value * percentFor(toReps, scheme)) / percentFor(fromReps, scheme);
 }

@@ -38,7 +38,7 @@ function asSessionExercise(ex: PrescribedExercise, sessionId: string, i: number)
 export default function ProgrammeSessionEditor({
   session,
   library,
-  scheme = { key: "lander" },
+  scheme = { key: "multiset" },
   onChange,
   onClose,
   onDuplicate,
