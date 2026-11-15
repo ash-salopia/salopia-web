@@ -40,6 +40,7 @@ export default function ProgrammeSessionEditor({
   onChange,
   onClose,
   onDuplicate,
+  onCopyTo,
   onDelete,
 }: {
   session: ProgrammeSession;
@@ -47,6 +48,7 @@ export default function ProgrammeSessionEditor({
   onChange: (patch: Partial<ProgrammeSession>) => void;
   onClose: () => void;
   onDuplicate: () => void;
+  onCopyTo: () => void;
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set((session.exercises ?? []).filter((e) => !e.name).map((e) => e.id)));
@@ -84,6 +86,7 @@ export default function ProgrammeSessionEditor({
         <div style={s.where}>Week {weekOf(session.day_offset) + 1} · {DAYS[dayOf(session.day_offset)]}</div>
       </div>
       <div style={s.toolbar}>
+        <button style={s.ghost} onClick={onCopyTo}>Copy to days / weeks…</button>
         <button style={s.ghost} onClick={onDuplicate}>Duplicate</button>
         <button style={{ ...s.ghost, color: "#FF6B6B" }} onClick={onDelete}>Delete</button>
         <button style={{ ...s.ghost, marginLeft: "auto" }} onClick={onClose}>Done</button>
