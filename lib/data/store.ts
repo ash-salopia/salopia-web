@@ -159,9 +159,16 @@ export async function saveStoreProduct(p: { id?: string; programme_id: string; t
     // Only sent when set, so saving still works before 0131 is run.
     ...attributesRow(p),
   };
-  const { data, error } = p.id
-    ? await supabase.from("store_products").update(row).eq("id", p.id).select("*").single()
-    : await supabase.from("store_products").insert({ ...row, created_by: user?.id ?? null }).select("*").single();
+  const write = (r: Record<string, unknown>) =>
+    p.id
+      ? supabase.from("store_products").update(r).eq("id", p.id).select("*").single()
+      : supabase.from("store_products").insert({ ...r, created_by: user?.id ?? null }).select("*").single();
+  let { data, error } = await write(row);
+  // Migration 0131 not run yet - save everything except "Who it's for".
+  if (error && /age_min|age_max|level|equipment|goals|tags/.test(error.message) && /column|schema cache/i.test(error.message)) {
+    const { age_min: _a, age_max: _b, level: _l, equipment: _e, goals: _g, tags: _t, ...base } = row as Record<string, unknown>;
+    ({ data, error } = await write(base));
+  }
   if (error) throw error;
   return data as StoreProductRow;
 }
