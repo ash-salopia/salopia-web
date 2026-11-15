@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listProgrammes, deleteProgramme } from "@/lib/data/programmes";
+import { listProgrammes, deleteProgramme, createProgramme } from "@/lib/data/programmes";
 import type { Programme } from "@/types";
 
 export default function ProgrammesPage() {
@@ -11,6 +11,22 @@ export default function ProgrammesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  // "+ Build New Programme" (0132): name + length, then straight into the builder.
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newWeeks, setNewWeeks] = useState(8);
+  const [creating, setCreating] = useState(false);
+  const handleCreate = async () => {
+    setCreating(true);
+    setError("");
+    try {
+      const p = await createProgramme({ name: newName, weeks: newWeeks });
+      router.push(`/programmes/${p.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the programme");
+      setCreating(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -48,12 +64,31 @@ export default function ProgrammesPage() {
         <div>
           <h1 style={styles.title}>Programme Library</h1>
           <p style={styles.subtitle}>
-            Build sessions in an athlete&apos;s calendar, then use &quot;Save as programme&quot; to
-            add a date range here - or build one from a Template. This page is for browsing,
-            renaming, and assigning saved programmes to athletes.
+            Build a programme week by week from your templates, or save a date range from an athlete&apos;s calendar with
+            &quot;Save as programme&quot;.
           </p>
         </div>
+        <button style={styles.primaryBtn} onClick={() => { setNewOpen(true); setNewName(""); }}>+ Build New Programme</button>
       </div>
+
+      {newOpen && (
+        <div style={styles.overlay} onClick={() => !creating && setNewOpen(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Build a new programme</div>
+            <div style={styles.fieldLabel}>Name</div>
+            <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. 8-Week Off-Season Strength" style={{ ...styles.input, marginBottom: 12 }} onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }} />
+            <div style={styles.fieldLabel}>Length</div>
+            <select value={newWeeks} onChange={(e) => setNewWeeks(Number(e.target.value))} style={{ ...styles.input, marginBottom: 6 }}>
+              {[1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 52].map((n) => <option key={n} value={n}>{n} week{n === 1 ? "" : "s"}</option>)}
+            </select>
+            <div style={{ fontSize: 12, color: "var(--mute)", marginBottom: 14 }}>You can add or remove weeks later.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...styles.ghostBtn, flex: 1 }} onClick={() => setNewOpen(false)} disabled={creating}>Cancel</button>
+              <button style={{ ...styles.primaryBtn, flex: 2 }} onClick={handleCreate} disabled={creating}>{creating ? "Creating…" : "Create and start building"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && <div style={styles.errorBox}>{error}</div>}
 
@@ -70,8 +105,7 @@ export default function ProgrammesPage() {
         <div style={styles.empty}>Loading…</div>
       ) : !programmes.length ? (
         <div style={styles.empty}>
-          No programmes yet. Build sessions for an athlete and use &quot;Save as programme&quot;, or
-          open a Template and use &quot;Add to Programme Library&quot;.
+          No programmes yet. Press &quot;+ Build New Programme&quot; to start one.
         </div>
       ) : !filtered.length ? (
         <div style={styles.empty}>No programmes match &quot;{query}&quot;.</div>
@@ -106,6 +140,12 @@ export default function ProgrammesPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 700 },
+  primaryBtn: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
+  ghostBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 10, padding: "10px 14px", fontSize: 14, cursor: "pointer" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(6,9,12,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 16 },
+  modal: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16, padding: 20, width: "100%", maxWidth: 400 },
+  modalTitle: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 14 },
+  fieldLabel: { fontSize: 11, color: "var(--mute)", marginBottom: 4, fontWeight: 700 },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 },
   title: { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, margin: 0 },
   subtitle: { fontSize: 13, color: "var(--mute)", marginTop: 4, maxWidth: 420 },

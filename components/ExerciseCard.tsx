@@ -49,6 +49,10 @@ interface Props {
   // Best-set / total-load change vs the same exercise last time — the
   // same signals Live Group shows. Computed by the parent from saved
   // data (lib/session-progress.ts); no AI.
+  // Programme / template builder: there's no athlete and nothing to log,
+  // so the per-set boxes only show what's prescribed per set (%1RM, RIR)
+  // - no weight/reps/done logging.
+  prescribeOnly?: boolean;
   progress?: {
     prevDate: string | null;
     prevSets: string | null;
@@ -111,6 +115,7 @@ export default function ExerciseCard({
   onDragLeave,
   onDrop,
   progress,
+  prescribeOnly = false,
 }: Props) {
   const [applyFutureOn, setApplyFutureOn] = useState(false);
   const [eachSideInfoOpen, setEachSideInfoOpen] = useState(false);
@@ -743,6 +748,36 @@ export default function ExerciseCard({
         />
       </div>
 
+      {prescribeOnly ? (
+        (exercise.use_percent_1rm || exercise.use_rir) && (
+          <div style={styles.setGrid}>
+            {log.map((_, i) => (
+              <div key={i} style={styles.setChip}>
+                <div style={styles.setIdx}>{i + 1}</div>
+                {exercise.use_percent_1rm && (
+                  <input
+                    value={exercise.set_percents?.[i] ?? ""}
+                    onChange={(e) => updateSetPercent(i, e.target.value)}
+                    placeholder="%1RM"
+                    inputMode="decimal"
+                    style={styles.setInput}
+                  />
+                )}
+                {exercise.use_rir && (
+                  <input
+                    value={exercise.set_rir?.[i] ?? ""}
+                    onChange={(e) => updateSetRIR(i, e.target.value)}
+                    placeholder="RIR"
+                    title="Target Reps-in-Reserve for this set (0-4)"
+                    inputMode="decimal"
+                    style={styles.setInput}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
       <div style={styles.setGrid}>
         {log.map((set, i) => {
           const target = percentTargets?.[i] ?? null;
@@ -853,6 +888,7 @@ export default function ExerciseCard({
           );
         })}
       </div>
+      )}
       </>
       )}
 
