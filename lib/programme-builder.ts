@@ -139,15 +139,82 @@ export interface ProgressionRule {
   field: ProgressionField;
   change: number; // per step, e.g. +2.5 or -1
   everyWeeks: number; // 1 = every week, 2 = every other week
-  // Deload: every Nth week (counted from the first ticked week) drops
-  // back by deloadPercent of the value (load/%), or one step for others.
+  // Deload: every Nth week (counted from the first ticked week) is eased
+  // off in the way the coach picks (see DELOAD_KINDS), on top of that
+  // week's progressed prescription. No kind = load / %1RM -10%.
   deloadEvery?: number | null;
+  deload?: Deload;
   // Reps rules only: keep the same effort as the reps change by moving the
   // %1RM (or kg) along the coach's 1RM formula - e.g. 3 reps @ 90% -> 4
   // reps @ ~87%. Kg for a %1RM prescription is worked out per athlete
   // when the programme is loaded, from their own 1RM.
   matchLoad?: boolean;
   scheme?: RepScheme; // reps -> %1RM chart (formula, multi-set chart or the coach's own)
+}
+
+// ── Deloads ────────────────────────────────────────────────────────────────
+export type DeloadKind = "load" | "volume" | "sets" | "reps" | "loadSets" | "effort";
+
+export interface Deload {
+  kind: DeloadKind;
+  amount: number; // % for load / volume / loadSets, a count for the rest
+}
+
+export const DELOAD_KINDS: { key: DeloadKind; label: string; amounts: number[]; unit: string; fallback: number; hint: string }[] = [
+  { key: "load", label: "Reduce load / %1RM by", amounts: [5, 10, 15, 20, 25, 30], unit: "%", fallback: 10, hint: "Same sets and reps, lighter." },
+  { key: "volume", label: "Reduce volume by", amounts: [25, 33, 40, 50], unit: "%", fallback: 40, hint: "Fewer sets (rounded, at least 1), same load." },
+  { key: "sets", label: "Reduce sets by", amounts: [1, 2, 3], unit: "sets", fallback: 1, hint: "Same reps and load." },
+  { key: "reps", label: "Reduce reps by", amounts: [1, 2, 3, 4], unit: "reps", fallback: 2, hint: "Same sets and load - more reps in reserve." },
+  { key: "loadSets", label: "Reduce load / %1RM and 1 set by", amounts: [5, 10, 15, 20], unit: "%", fallback: 10, hint: "The classic deload: lighter and less volume." },
+  { key: "effort", label: "Ease effort (RPE -, RIR +) by", amounts: [1, 2], unit: "", fallback: 1, hint: "For exercises prescribed by RPE or RIR." },
+];
+
+export const DEFAULT_DELOAD: Deload = { kind: "load", amount: 10 };
+
+// Per-set lists follow the set count, so a set taken off drops its %/RIR too.
+const trimSets = (ex: PrescribedExercise, sets: number): Partial<PrescribedExercise> => ({
+  sets,
+  ...(ex.set_percents && ex.set_percents.length > sets ? { set_percents: ex.set_percents.slice(0, sets) } : {}),
+  ...(ex.set_rir && ex.set_rir.length > sets ? { set_rir: ex.set_rir.slice(0, sets) } : {}),
+});
+
+function lighten(ex: PrescribedExercise, pct: number): Partial<PrescribedExercise> {
+  const f = 1 - pct / 100;
+  if (ex.set_percents?.length) return { set_percents: ex.set_percents.map((p) => (num(p) === null ? p : fmt(round(num(p)! * f, 0.5)))) };
+  if (ex.percent_1rm != null) return { percent_1rm: round(ex.percent_1rm * f, 0.5) };
+  const kg = num(ex.target_load);
+  if (kg !== null && kg > 0) return { target_load: fmt(round(kg * f, 0.5)) };
+  return {};
+}
+
+/** What a deload week does to one exercise (already progressed for that week). */
+export function deloadExercise(ex: PrescribedExercise, d: Deload): Partial<PrescribedExercise> {
+  const sets = ex.sets && ex.sets > 0 ? ex.sets : 3;
+  switch (d.kind) {
+    case "load": return lighten(ex, d.amount);
+    case "volume": return trimSets(ex, Math.max(1, Math.round(sets * (1 - d.amount / 100))));
+    case "sets": return trimSets(ex, Math.max(1, sets - d.amount));
+    case "reps": return ex.reps ? { reps: shiftReps(ex.reps, -d.amount) } : {};
+    case "loadSets": {
+      const lighter = { ...ex, ...lighten(ex, d.amount) };
+      return { ...lighten(ex, d.amount), ...trimSets(lighter, Math.max(1, sets - 1)) };
+    }
+    case "effort": {
+      const out: Partial<PrescribedExercise> = {};
+      if (ex.rpe != null) out.rpe = Math.max(1, ex.rpe - d.amount);
+      if (ex.set_rir?.length) out.set_rir = ex.set_rir.map((r) => (num(r) === null ? r : fmt(Math.min(6, num(r)! + d.amount))));
+      return out;
+    }
+  }
+}
+
+/** "4 x 5 @ 84%", "3 x 8 @ 60kg", "3 x 10 RPE 7" - for previews. */
+export function describeDose(ex: PrescribedExercise): string {
+  const load = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%`
+    : ex.percent_1rm != null && ex.use_percent_1rm ? ` @ ${ex.percent_1rm}%`
+    : ex.target_load ? ` @ ${ex.target_load}kg` : "";
+  const effort = ex.rpe != null ? ` RPE ${ex.rpe}` : ex.use_rir && ex.set_rir?.length ? ` RIR ${ex.set_rir.join("/")}` : "";
+  return `${ex.sets ?? "-"} x ${ex.reps || "-"}${load}${effort}`;
 }
 
 // Reps per set from a prescription: "10,8,6" -> [10,8,6]; "8-10" -> the
@@ -224,14 +291,13 @@ function shiftReps(reps: string, delta: number): string {
 
 // What a rule does to one exercise, given how many steps to apply.
 // Returns null when the exercise has nothing to change for this field.
-// Deload weeks drop load/%1RM by 10%, take a set off, or ease RPE/RIR by
-// one; reps are left alone.
-export function progressExercise(base: PrescribedExercise, rule: ProgressionRule, steps: number, deload: boolean): Partial<PrescribedExercise> | null {
+// Deload weeks are handled separately (deloadExercise).
+export function progressExercise(base: PrescribedExercise, rule: ProgressionRule, steps: number): Partial<PrescribedExercise> | null {
   const delta = rule.change * steps;
   switch (rule.field) {
     case "sets": {
       const b = base.sets ?? 3;
-      const v = Math.max(1, Math.round(b + delta - (deload ? Math.abs(rule.change) : 0)));
+      const v = Math.max(1, Math.round(b + delta));
       return { sets: v };
     }
     case "reps": {
@@ -248,25 +314,24 @@ export function progressExercise(base: PrescribedExercise, rule: ProgressionRule
     case "load": {
       const b = num(base.target_load);
       if (b === null) return null;
-      // Nearest 0.5 kg, so deload weeks give a loadable number.
-      const v = Math.max(0, round(deload ? (b + delta) * 0.9 : b + delta, 0.5));
+      const v = Math.max(0, round(b + delta, 0.5));
       return { target_load: fmt(v) };
     }
     case "percent": {
       const list = base.set_percents?.length ? base.set_percents : null;
       if (!list && base.percent_1rm == null) return null;
-      const shift = (p: number) => Math.min(120, Math.max(0, round(deload ? (p + delta) * 0.9 : p + delta, 0.5)));
+      const shift = (p: number) => Math.min(120, Math.max(0, round(p + delta, 0.5)));
       if (list) return { use_percent_1rm: true, set_percents: list.map((p) => (num(p) === null ? p : fmt(shift(num(p)!)))) };
       return { percent_1rm: shift(base.percent_1rm!) };
     }
     case "rpe": {
       if (base.rpe == null) return null;
-      return { rpe: Math.min(10, Math.max(1, round(base.rpe + delta - (deload ? 1 : 0), 0.5))) };
+      return { rpe: Math.min(10, Math.max(1, round(base.rpe + delta, 0.5))) };
     }
     case "rir": {
       const list = base.set_rir?.length ? base.set_rir : null;
       if (!list) return null;
-      return { use_rir: true, set_rir: list.map((r) => (num(r) === null ? r : fmt(Math.min(6, Math.max(0, Math.round(num(r)! + delta + (deload ? 1 : 0))))))) };
+      return { use_rir: true, set_rir: list.map((r) => (num(r) === null ? r : fmt(Math.min(6, Math.max(0, Math.round(num(r)! + delta)))))) };
     }
   }
 }
@@ -331,15 +396,17 @@ export function applyProgression(
     const exercises = (s.exercises ?? []).map((ex) => {
       if (!names.has(ex.name.trim().toLowerCase())) return ex;
       const b = base.get(keyOf(s, ex)) ?? ex;
-      const patch = progressExercise(b, rule, steps, deload);
-      if (!patch) return ex;
-      const next = { ...ex, ...patch };
-      const before = describeField(ex, rule.field);
-      const after = describeField(next, rule.field);
+      const patch = progressExercise(b, rule, steps);
+      if (!patch && !deload) return ex;
+      let next = { ...ex, ...(patch ?? {}) };
+      if (deload) next = { ...next, ...deloadExercise(next, rule.deload ?? DEFAULT_DELOAD) };
+      // Deload weeks can change any field, so show the whole dose there.
+      const before = deload ? describeDose(ex) : describeField(ex, rule.field);
+      const after = deload ? describeDose(next) : describeField(next, rule.field);
       if (before !== after || sinceStart === 0) {
         preview.push({ sessionId: s.id, week, exercise: ex.name, before, after: after + (deload ? " (deload)" : "") });
       }
-      if (before !== after) changed = true;
+      if (JSON.stringify(next) !== JSON.stringify(ex)) changed = true;
       return next;
     });
     return changed ? { ...s, exercises } : s;

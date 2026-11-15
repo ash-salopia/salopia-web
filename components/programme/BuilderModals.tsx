@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import {
-  DAYS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, jsDayToGridDay, pctList, percentsFromReps, weekOf,
-  type ProgressionField, type ProgressionRule,
+  DAYS, DELOAD_KINDS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, jsDayToGridDay, pctList, percentsFromReps, weekOf,
+  type DeloadKind, type ProgressionField, type ProgressionRule,
 } from "@/lib/programme-builder";
 import { REP_SCHEMES, chartFor, type RepScheme, type RepSchemeKey } from "@/lib/rep-charts";
 import type { ProgrammeSession, Template, TemplateDef } from "@/types";
@@ -299,6 +299,9 @@ export function ModifyModal({
   const [change, setChange] = useState("2.5");
   const [every, setEvery] = useState(1);
   const [deload, setDeload] = useState(0);
+  const [deloadKind, setDeloadKind] = useState<DeloadKind>("load");
+  const [deloadAmount, setDeloadAmount] = useState(10);
+  const deloadDef = DELOAD_KINDS.find((d) => d.key === deloadKind)!;
   const [pyramid, setPyramid] = useState(PYRAMIDS[0].key);
   const [matchLoad, setMatchLoad] = useState(true);
   const [adjust, setAdjust] = useState("0");
@@ -307,7 +310,7 @@ export function ModifyModal({
   const [chartSaved, setChartSaved] = useState(false);
 
   const weeksSpanned = new Set(strength.map((s) => weekOf(s.day_offset))).size;
-  const rule: ProgressionRule = { field, change: parseFloat(change) || 0, everyWeeks: every, deloadEvery: deload || null, matchLoad: field === "reps" && matchLoad, scheme };
+  const rule: ProgressionRule = { field, change: parseFloat(change) || 0, everyWeeks: every, deloadEvery: deload || null, deload: { kind: deloadKind, amount: deloadAmount }, matchLoad: field === "reps" && matchLoad, scheme };
   const usesChart = mode === "fromReps" || (mode === "progress" && field === "reps" && matchLoad);
 
   const pickScheme = (key: RepSchemeKey) => {
@@ -351,7 +354,7 @@ export function ModifyModal({
     });
     return { updated, preview };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [names, ticked, mode, field, change, every, deload, pyramid, strength, matchLoad, scheme, adjust]);
+  }, [names, ticked, mode, field, change, every, deload, deloadKind, deloadAmount, pyramid, strength, matchLoad, scheme, adjust]);
 
   const changedSessions = result.updated.filter((u) => {
     const orig = strength.find((s) => s.id === u.id);
@@ -400,7 +403,28 @@ export function ModifyModal({
             <option value={0}>no deload</option>
             {[3, 4, 5, 6].map((n) => <option key={n} value={n}>deload every {n}th week</option>)}
           </select>
-          <div style={{ ...m.small, width: "100%" }}>Use a minus number to reduce, e.g. -1 rep every 2 weeks. Deload weeks drop load / %1RM by 10%.</div>
+          {deload > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: "100%" }}>
+              <span style={m.small}>Deload week:</span>
+              <select
+                style={m.select}
+                value={deloadKind}
+                onChange={(e) => {
+                  const k = DELOAD_KINDS.find((d) => d.key === e.target.value)!;
+                  setDeloadKind(k.key);
+                  setDeloadAmount(k.fallback);
+                }}
+                aria-label="Deload type"
+              >
+                {DELOAD_KINDS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+              </select>
+              <select style={m.select} value={deloadAmount} onChange={(e) => setDeloadAmount(Number(e.target.value))} aria-label="Deload amount">
+                {deloadDef.amounts.map((a) => <option key={a} value={a}>{a}{deloadDef.unit === "%" ? "%" : deloadDef.unit ? ` ${a === 1 ? deloadDef.unit.replace(/s$/, "") : deloadDef.unit}` : ""}</option>)}
+              </select>
+              <span style={m.small}>{deloadDef.hint}</span>
+            </div>
+          )}
+          <div style={{ ...m.small, width: "100%" }}>Use a minus number to reduce, e.g. -1 rep every 2 weeks.{deload > 0 ? " The deload is applied on top of that week's progression." : ""}</div>
           {field === "reps" && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, width: "100%", cursor: "pointer", marginTop: 4 }}>
               <input type="checkbox" checked={matchLoad} onChange={(e) => setMatchLoad(e.target.checked)} style={{ accentColor: "var(--accent)", marginTop: 2 }} />
