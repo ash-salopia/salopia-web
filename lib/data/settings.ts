@@ -140,6 +140,10 @@ export type OneRMSource = "rolling" | "fixed";
 
 export interface OrgSettings {
   one_rm_formula: OneRMFormula;
+  // Programme builder: the reps -> %1RM chart last used in "Modify
+  // prescription", and the coach's own chart (12 values, 1-12 reps).
+  rep_scheme?: import("@/lib/rep-charts").RepSchemeKey | null;
+  rep_chart?: number[] | null;
   one_rm_source: OneRMSource;
   weight_unit: WeightUnit;
   checkin_enabled: boolean;

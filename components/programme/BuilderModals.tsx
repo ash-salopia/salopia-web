@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import {
-  DAYS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, jsDayToGridDay, weekOf,
+  DAYS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, jsDayToGridDay, pctList, percentsFromReps, weekOf,
   type ProgressionField, type ProgressionRule,
 } from "@/lib/programme-builder";
-import { FORMULAS, type OneRMFormula } from "@/lib/one-rm";
+import { REP_SCHEMES, chartFor, type RepScheme, type RepSchemeKey } from "@/lib/rep-charts";
 import type { ProgrammeSession, Template, TemplateDef } from "@/types";
 
 // The programme builder's three bulk tools (0132): add a template on
@@ -269,16 +269,18 @@ export function CopyModal({
   );
 }
 
-// ── Progression / pyramids ──────────────────────────────────────────────────
+// ── Modify prescription (progressions, %1RM from reps, pyramids) ────────────
 
-export function ProgressionModal({
+export function ModifyModal({
   sessions,
-  formula = "lander",
+  initialScheme,
+  onSaveScheme,
   onClose,
   onApply,
 }: {
   sessions: ProgrammeSession[];
-  formula?: OneRMFormula; // the org's 1RM formula (Settings), for matching load to reps
+  initialScheme: RepScheme; // reps -> %1RM chart: last used, else the org's 1RM formula
+  onSaveScheme: (scheme: RepScheme) => void; // remembered for next time
   onClose: () => void;
   onApply: (updated: ProgrammeSession[]) => void;
 }) {
@@ -292,39 +294,64 @@ export function ProgressionModal({
     return Array.from(seen.values());
   }, [strength]);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<"progress" | "pyramid">("progress");
+  const [mode, setMode] = useState<"progress" | "fromReps" | "pyramid">("progress");
   const [field, setField] = useState<ProgressionField>("load");
   const [change, setChange] = useState("2.5");
   const [every, setEvery] = useState(1);
   const [deload, setDeload] = useState(0);
   const [pyramid, setPyramid] = useState(PYRAMIDS[0].key);
   const [matchLoad, setMatchLoad] = useState(true);
-  const formulaName = FORMULAS.find((f) => f.id === formula)?.name ?? formula;
+  const [adjust, setAdjust] = useState("0");
+  const [scheme, setScheme] = useState<RepScheme>(initialScheme);
+  const [chartDraft, setChartDraft] = useState<string[]>(() => chartFor(initialScheme).map(String));
+  const [chartSaved, setChartSaved] = useState(false);
 
   const weeksSpanned = new Set(strength.map((s) => weekOf(s.day_offset))).size;
-  const rule: ProgressionRule = { field, change: parseFloat(change) || 0, everyWeeks: every, deloadEvery: deload || null, matchLoad: field === "reps" && matchLoad, formula };
+  const rule: ProgressionRule = { field, change: parseFloat(change) || 0, everyWeeks: every, deloadEvery: deload || null, matchLoad: field === "reps" && matchLoad, scheme };
+  const usesChart = mode === "fromReps" || (mode === "progress" && field === "reps" && matchLoad);
+
+  const pickScheme = (key: RepSchemeKey) => {
+    const next: RepScheme = key === "custom" ? { key, chart: scheme.key === "custom" ? scheme.chart : chartFor(scheme) } : { key };
+    setScheme(next);
+    setChartDraft(chartFor(next).map(String));
+    setChartSaved(false);
+  };
+  const editChart = (i: number, v: string) => {
+    const draft = [...chartDraft];
+    draft[i] = v.replace(/[^0-9.]/g, "");
+    setChartDraft(draft);
+    setScheme({ key: "custom", chart: draft.map((x) => parseFloat(x)) });
+    setChartSaved(false);
+  };
 
   const result = useMemo(() => {
     const chosen = names.filter((n) => ticked.has(n));
-    if (!chosen.length) return { updated: [] as ProgrammeSession[], preview: [] as { week: number; exercise: string; before: string; after: string }[] };
+    const empty = { updated: [] as ProgrammeSession[], preview: [] as { week: number; exercise: string; before: string; after: string }[] };
+    if (!chosen.length) return empty;
     if (mode === "progress") return applyProgression(strength, chosen, rule);
-    const p = PYRAMIDS.find((x) => x.key === pyramid)!;
     const set = new Set(chosen.map((n) => n.toLowerCase()));
+    const p = PYRAMIDS.find((x) => x.key === pyramid)!;
     const preview: { week: number; exercise: string; before: string; after: string }[] = [];
     const updated = strength.map((s) => {
       let changed = false;
       const exercises = (s.exercises ?? []).map((ex) => {
         if (!set.has(ex.name.trim().toLowerCase())) return ex;
+        const next = mode === "pyramid" ? applyPyramid(ex, p) : (() => { const patch = percentsFromReps(ex, scheme, parseFloat(adjust) || 0); return patch ? { ...ex, ...patch } : ex; })();
+        if (next === ex) return ex;
         changed = true;
-        const next = applyPyramid(ex, p);
-        preview.push({ week: weekOf(s.day_offset), exercise: ex.name, before: `${ex.sets} x ${ex.reps}`, after: `${next.reps} @ ${next.set_percents?.join("/")}%` });
+        preview.push({
+          week: weekOf(s.day_offset),
+          exercise: ex.name,
+          before: `${ex.sets} x ${ex.reps}${ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%` : ex.target_load ? ` @ ${ex.target_load}` : ""}`,
+          after: `${next.sets} x ${next.reps} @ ${pctList(next.set_percents ?? [])}%`,
+        });
         return next;
       });
       return changed ? { ...s, exercises } : s;
     });
     return { updated, preview };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [names, ticked, mode, field, change, every, deload, pyramid, strength, matchLoad, formula]);
+  }, [names, ticked, mode, field, change, every, deload, pyramid, strength, matchLoad, scheme, adjust]);
 
   const changedSessions = result.updated.filter((u) => {
     const orig = strength.find((s) => s.id === u.id);
@@ -333,10 +360,10 @@ export function ProgressionModal({
   const unit = PROGRESSION_FIELDS.find((f) => f.key === field)!;
 
   return (
-    <Modal title="Progression" onClose={onClose} wide>
+    <Modal title="Modify prescription" onClose={onClose} wide>
       <div style={m.small}>
-        {strength.length} strength session{strength.length === 1 ? "" : "s"} ticked across {weeksSpanned} week{weeksSpanned === 1 ? "" : "s"}. The earliest
-        week is the starting point.
+        Sets, reps, load and %1RM for the ticked sessions - {strength.length} strength session{strength.length === 1 ? "" : "s"} across {weeksSpanned} week
+        {weeksSpanned === 1 ? "" : "s"}. The earliest week is the starting point.
       </div>
       <div style={{ ...m.label, marginTop: 12 }}>Exercises</div>
       {!names.length ? (
@@ -351,11 +378,12 @@ export function ProgressionModal({
       )}
 
       <div style={{ ...m.chips, margin: "14px 0 10px" }}>
-        <Chip on={mode === "progress"} onClick={() => setMode("progress")}>Week-to-week change</Chip>
+        <Chip on={mode === "progress"} onClick={() => setMode("progress")}>Change week to week</Chip>
+        <Chip on={mode === "fromReps"} onClick={() => setMode("fromReps")}>Set %1RM from reps</Chip>
         <Chip on={mode === "pyramid"} onClick={() => setMode("pyramid")}>Pyramid / wave sets</Chip>
       </div>
 
-      {mode === "progress" ? (
+      {mode === "progress" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <select style={m.select} value={field} onChange={(e) => { const f = e.target.value as ProgressionField; setField(f); setChange(String(PROGRESSION_FIELDS.find((x) => x.key === f)!.step)); }}>
             {PROGRESSION_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
@@ -376,17 +404,55 @@ export function ProgressionModal({
           {field === "reps" && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, width: "100%", cursor: "pointer", marginTop: 4 }}>
               <input type="checkbox" checked={matchLoad} onChange={(e) => setMatchLoad(e.target.checked)} style={{ accentColor: "var(--accent)", marginTop: 2 }} />
-              <span>
-                Adjust the load to match the reps - %1RM (or kg) moves with each rep, using your {formulaName} formula, e.g. 3 reps @ 90% →
-                4 reps @ ~87.5%. Each athlete&apos;s kg is worked out from their own 1RM when the programme is loaded.
-              </span>
+              <span>Adjust the %1RM (or kg) to match the reps, using the chart below. Each athlete&apos;s kg is worked out from their own 1RM when the programme is loaded.</span>
             </label>
           )}
         </div>
-      ) : (
+      )}
+
+      {mode === "fromReps" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>Each set&apos;s %1RM comes from its reps on the chart below, adjusted by</span>
+          <input style={{ ...m.select, width: 64 }} inputMode="decimal" value={adjust} onChange={(e) => setAdjust(e.target.value.replace(/[^0-9.\-]/g, ""))} aria-label="Adjust %" />
+          <span style={m.small}>% (e.g. -5 for a lighter week)</span>
+        </div>
+      )}
+
+      {mode === "pyramid" && (
         <select style={{ ...m.select, width: "100%" }} value={pyramid} onChange={(e) => setPyramid(e.target.value)}>
           {PYRAMIDS.map((p) => <option key={p.key} value={p.key}>{p.label} - {p.percents.join("/")}%</option>)}
         </select>
+      )}
+
+      {usesChart && (
+        <div style={m.chartBox}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={m.label}>Reps → %1RM chart</span>
+            <select style={{ ...m.select, flex: 1, minWidth: 220 }} value={scheme.key} onChange={(e) => pickScheme(e.target.value as RepSchemeKey)}>
+              {REP_SCHEMES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+          </div>
+          <div style={m.chartGrid}>
+            {chartFor(scheme).map((v, i) => (
+              <div key={i} style={m.chartCell}>
+                <div style={m.chartReps}>{i + 1}</div>
+                {scheme.key === "custom" ? (
+                  <input style={m.chartInput} inputMode="decimal" value={chartDraft[i] ?? ""} onChange={(e) => editChart(i, e.target.value)} aria-label={`%1RM for ${i + 1} reps`} />
+                ) : (
+                  <div style={m.chartVal}>{Math.round(v * 10) / 10}%</div>
+                )}
+              </div>
+            ))}
+          </div>
+          {scheme.key === "custom" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <button type="button" style={m.ghost} onClick={() => { onSaveScheme(scheme); setChartSaved(true); }}>Save as my chart</button>
+              {chartSaved && <span style={m.small}>Saved - it&apos;ll be here next time.</span>}
+            </div>
+          ) : (
+            <div style={{ ...m.small, marginTop: 6 }}>Pick &quot;My own chart&quot; to type in your own percentages.</div>
+          )}
+        </div>
       )}
 
       {result.preview.length > 0 && (
@@ -406,13 +472,20 @@ export function ProgressionModal({
       {ticked.size > 0 && mode === "progress" && !changedSessions.length && (
         <div style={{ ...m.small, marginTop: 10 }}>
           Nothing to change - the ticked exercises need a {unit.label.toLowerCase()} in the first week to progress from
-          {field === "percent" ? " (turn on %1RM on the exercise)" : field === "rir" ? " (turn on RIR on the exercise)" : ""}.
+          {field === "percent" ? " (turn on %1RM on the exercise, or use Set %1RM from reps)" : field === "rir" ? " (turn on RIR on the exercise)" : ""}.
         </div>
       )}
 
       <div style={m.footer}>
         <button style={m.ghost} onClick={onClose}>Cancel</button>
-        <button style={{ ...m.primary, opacity: changedSessions.length ? 1 : 0.5 }} disabled={!changedSessions.length} onClick={() => onApply(changedSessions)}>
+        <button
+          style={{ ...m.primary, opacity: changedSessions.length ? 1 : 0.5 }}
+          disabled={!changedSessions.length}
+          onClick={() => {
+            if (usesChart) onSaveScheme(scheme);
+            onApply(changedSessions);
+          }}
+        >
           Apply to {changedSessions.length} session{changedSessions.length === 1 ? "" : "s"}
         </button>
       </div>
@@ -444,5 +517,11 @@ const m: Record<string, React.CSSProperties> = {
   ghost: { background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "9px 14px", fontSize: 13, cursor: "pointer" },
   primary: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 800, cursor: "pointer" },
   preview: { marginTop: 12, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: "6px 10px", maxHeight: 220, overflowY: "auto" },
+  chartBox: { marginTop: 12, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: 10 },
+  chartGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 4, marginTop: 8 },
+  chartCell: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 7, padding: "4px 2px" },
+  chartReps: { fontSize: 10, fontWeight: 800, color: "var(--mute)" },
+  chartVal: { fontSize: 12, fontWeight: 700 },
+  chartInput: { width: "100%", boxSizing: "border-box", textAlign: "center", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "3px 2px", fontSize: 12 },
   previewRow: { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "4px 0", borderBottom: "1px solid var(--line)" },
 };
