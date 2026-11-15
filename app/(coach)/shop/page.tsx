@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { EQUIPMENT, GOALS, LEVELS, TAGS, ageRangeLabel, levelLabel, tagLabel, type Level } from "@/lib/store/match";
 import { useSearchParams } from "next/navigation";
 import { listProgrammes } from "@/lib/data/programmes";
 import {
@@ -14,6 +15,7 @@ import {
   type StoreSettingsForm,
   type StoreProductRow,
   type PurchaseRow,
+  type ProductAttributes,
 } from "@/lib/data/store";
 import type { Programme } from "@/types";
 
@@ -165,6 +167,12 @@ export default function ShopPage() {
         description: editing.description ?? "",
         price_pence: Math.round(parseFloat(editing.price || "0") * 100),
         active: editing.active !== false,
+        age_min: editing.age_min ?? null,
+        age_max: editing.age_max ?? null,
+        level: editing.level ?? null,
+        equipment: editing.equipment ?? [],
+        goals: editing.goals ?? [],
+        tags: editing.tags ?? [],
       });
       setProducts((ps) => (editing.id ? ps.map((p) => (p.id === saved.id ? saved : p)) : [...ps, saved]));
       setEditing(null);
@@ -413,6 +421,7 @@ export default function ShopPage() {
               Price (£)
               <input style={s.input} inputMode="decimal" value={editing.price} onChange={(e) => setEditing({ ...editing, price: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="49.00" />
             </label>
+            <ProductAudience value={editing} onChange={(patch) => setEditing({ ...editing, ...patch })} />
             <div style={{ display: "flex", gap: 8 }}>
               <button style={s.primary} disabled={savingProduct} onClick={saveProduct}>{savingProduct ? "Saving…" : editing.id ? "Save changes" : "Add to store"}</button>
               <button style={s.ghost} onClick={() => setEditing(null)}>Cancel</button>
@@ -425,6 +434,7 @@ export default function ShopPage() {
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 700 }}>{p.title}</div>
               <div style={s.muted}>
+                {audienceSummary(p) && <>{audienceSummary(p)}<br /></>}
                 {progById[p.programme_id]?.name ?? "Programme"} · {(progById[p.programme_id]?.sessions ?? []).length} sessions
                 {weeksOf(progById[p.programme_id]) ? ` · ${weeksOf(progById[p.programme_id])} week${weeksOf(progById[p.programme_id]) === 1 ? "" : "s"}` : ""}
                 {!p.active ? " · hidden" : ""}
@@ -471,6 +481,89 @@ export default function ShopPage() {
     </div>
   );
 }
+
+// "Who it's for" (0131) - powers the store's filters and the "Find your
+// ideal programme" questions. All optional.
+function ProductAudience({ value, onChange }: { value: ProductAttributes; onChange: (patch: ProductAttributes) => void }) {
+  const toggle = (field: "equipment" | "goals" | "tags", key: string) => {
+    const cur = value[field] ?? [];
+    let next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+    // "No equipment" and kit are either/or.
+    if (field === "equipment") next = key === "none" ? (next.includes("none") ? ["none"] : []) : next.filter((k) => k !== "none");
+    onChange({ [field]: next });
+  };
+  const ageInput = (field: "age_min" | "age_max", placeholder: string) => (
+    <input
+      style={{ ...s.input, width: 80 }}
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={value[field] ?? ""}
+      onChange={(e) => {
+        const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
+        onChange({ [field]: Number.isFinite(n) ? n : null });
+      }}
+    />
+  );
+  const chips = (field: "equipment" | "goals" | "tags", list: { key: string; label: string }[]) => (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {list.map((o) => {
+        const on = (value[field] ?? []).includes(o.key);
+        return (
+          <button key={o.key} type="button" onClick={() => toggle(field, o.key)} style={chipStyle(on)}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Who it&apos;s for</div>
+        <div style={s.muted}>Buyers can filter by these and answer a few questions to find the right programme. All optional.</div>
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <label style={s.label}>
+          Ages
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {ageInput("age_min", "From")}
+            <span style={s.muted}>to</span>
+            {ageInput("age_max", "To")}
+          </div>
+        </label>
+        <label style={s.label}>
+          Level
+          <select style={{ ...s.input, minWidth: 150 }} value={value.level ?? ""} onChange={(e) => onChange({ level: (e.target.value || null) as Level | null })}>
+            <option value="">Any level</option>
+            {LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
+          </select>
+        </label>
+      </div>
+      <div style={s.label}>Equipment needed{chips("equipment", EQUIPMENT)}</div>
+      <div style={s.label}>Goals{chips("goals", GOALS)}</div>
+      <div style={s.label}>
+        Suitable for
+        {chips("tags", TAGS)}
+        <span style={{ ...s.muted, fontWeight: 400 }}>e.g. tick Back friendly and buyers who say they have back issues are pointed towards it.</span>
+      </div>
+    </div>
+  );
+}
+
+function audienceSummary(p: ProductAttributes): string {
+  return [
+    ageRangeLabel({ ageMin: p.age_min ?? null, ageMax: p.age_max ?? null }),
+    p.level ? levelLabel(p.level) : null,
+    ...(p.tags ?? []).map(tagLabel),
+  ].filter(Boolean).join(" · ");
+}
+
+const chipStyle = (on: boolean): React.CSSProperties => ({
+  background: on ? "var(--accent-dim)" : "var(--ink)",
+  border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+  color: on ? "var(--accent)" : "var(--mute)",
+  borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+});
 
 const s: Record<string, React.CSSProperties> = {
   subHead: { fontSize: 13, fontWeight: 800, color: "var(--text)", marginTop: 8, paddingTop: 12, borderTop: "1px solid var(--line)" },

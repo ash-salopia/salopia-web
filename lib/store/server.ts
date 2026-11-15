@@ -1,5 +1,6 @@
 import "server-only";
 import type Stripe from "stripe";
+import type { MatchableProduct } from "@/lib/store/match";
 import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
@@ -27,6 +28,13 @@ export function programmeWeeks(sessions: { day_offset: number }[]): number {
   return Math.max(1, Math.ceil((Math.max(...offsets) - Math.min(...offsets) + 1) / 7));
 }
 
+// Average sessions a week across the programme (for "how many days can
+// you train" in the programme finder).
+function perWeek(sessions: { day_offset: number }[]): number | null {
+  const weeks = programmeWeeks(sessions);
+  return weeks > 0 && sessions.length ? Math.round((sessions.length / weeks) * 10) / 10 : null;
+}
+
 export interface SeatStatus {
   used: number;
   limit: number | null; // null = unlimited
@@ -43,7 +51,7 @@ export async function seatStatus(service: Service, organisationId: string): Prom
   return { used, limit, free: limit == null ? null : Math.max(limit - used, 0) };
 }
 
-export interface PublicProduct {
+export interface PublicProduct extends MatchableProduct {
   id: string;
   title: string;
   description: string;
@@ -117,7 +125,7 @@ async function buildStore(service: Service, org: Record<string, any>): Promise<P
   noStore();
   const { data: products } = await service
     .from("store_products")
-    .select("id, title, description, price_pence, currency, programme_id, sort_order")
+    .select("*")
     .eq("organisation_id", org.id)
     .eq("active", true)
     .order("sort_order")
@@ -155,6 +163,14 @@ async function buildStore(service: Service, org: Record<string, any>): Promise<P
       price: fmtPrice(p.price_pence, p.currency),
       weeks: programmeWeeks(byProgramme[p.programme_id] ?? []),
       sessions: (byProgramme[p.programme_id] ?? []).length,
+      // Who it's for (0131) - all optional; missing before the migration.
+      ageMin: p.age_min ?? null,
+      ageMax: p.age_max ?? null,
+      level: p.level ?? null,
+      equipment: p.equipment ?? [],
+      goals: p.goals ?? [],
+      tags: p.tags ?? [],
+      daysPerWeek: perWeek(byProgramme[p.programme_id] ?? []),
     })),
   };
 }
