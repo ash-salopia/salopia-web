@@ -9,6 +9,7 @@
 // existing flow.
 
 import { useEffect, useState } from "react";
+import { equipmentOptions } from "@/lib/equipment";
 import { publishTemplate, unpublishTemplate, updateTemplateDef } from "@/lib/data/templates";
 import { listLibrary } from "@/lib/data/library";
 import type { Template, TemplateDef, ExerciseAlternative, LibraryEntry } from "@/types";
@@ -171,17 +172,19 @@ export default function HomeProgrammePanel({ template, onRefresh }: { template: 
                       <div style={s.exEditor}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={s.fieldLabelSm}>Equipment tag (only needed if you want this swapped out for an alternative)</div>
-                            <input
-                              defaultValue={ex.equipment ?? ""}
-                              placeholder="e.g. Dumbbells — blank = always shown"
+                            <div style={s.fieldLabelSm}>Equipment (only needed if you want this swapped out for an alternative)</div>
+                            <select
+                              value={ex.equipment ?? ""}
                               style={s.input}
-                              onBlur={(e) => {
+                              onChange={(e) => {
                                 const next = [...(def.exercises ?? [])];
                                 next[i] = { ...next[i], equipment: e.target.value };
                                 saveDefExercises(def, next);
                               }}
-                            />
+                            >
+                              <option value="">None - always shown</option>
+                              {equipmentOptions(ex.equipment).map((eq) => <option key={eq} value={eq}>{eq}</option>)}
+                            </select>
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={s.fieldLabelSm}>Video link</div>
@@ -289,18 +292,20 @@ export default function HomeProgrammePanel({ template, onRefresh }: { template: 
                                 )}
                               </div>
                               <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                                <input
-                                  defaultValue={alt.equipment}
-                                  placeholder="Equipment (required to be selectable)"
+                                <select
+                                  value={alt.equipment ?? ""}
                                   style={{ ...s.input, flex: 1.4 }}
-                                  onBlur={(e) => {
+                                  onChange={(e) => {
                                     const next = [...(def.exercises ?? [])];
                                     const alts = [...(next[i].alternatives ?? [])];
                                     alts[ai] = { ...alts[ai], equipment: e.target.value };
                                     next[i] = { ...next[i], alternatives: alts };
                                     saveDefExercises(def, next);
                                   }}
-                                />
+                                >
+                                  <option value="">Equipment (needed to be selectable)…</option>
+                                  {equipmentOptions(alt.equipment).map((eq) => <option key={eq} value={eq}>{eq}</option>)}
+                                </select>
                                 <input
                                   type="number"
                                   min={1}
