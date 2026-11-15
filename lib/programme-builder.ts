@@ -6,6 +6,7 @@
 
 import type { PrescribedExercise, ProgrammeSession, TemplateDef } from "@/types";
 import { toPrescription } from "@/lib/prescription";
+import { percentForReps, type OneRMFormula } from "@/lib/one-rm";
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -141,6 +142,52 @@ export interface ProgressionRule {
   // Deload: every Nth week (counted from the first ticked week) drops
   // back by deloadPercent of the value (load/%), or one step for others.
   deloadEvery?: number | null;
+  // Reps rules only: keep the same effort as the reps change by moving the
+  // %1RM (or kg) along the coach's 1RM formula - e.g. 3 reps @ 90% -> 4
+  // reps @ ~87%. Kg for a %1RM prescription is worked out per athlete
+  // when the programme is loaded, from their own 1RM.
+  matchLoad?: boolean;
+  formula?: OneRMFormula;
+}
+
+// Reps per set from a prescription: "10,8,6" -> [10,8,6]; "8-10" -> the
+// top of the range (the harder end) for every set; "5" -> 5 each.
+export function repsPerSet(reps: string, sets: number): number[] {
+  const parts = reps.split(/[,/]/).map((p) => p.trim()).filter(Boolean);
+  const top = (p: string) => Math.max(...(p.match(/\d+/g) ?? ["0"]).map(Number));
+  if (parts.length > 1) return Array.from({ length: Math.max(sets, parts.length) }, (_, i) => top(parts[Math.min(i, parts.length - 1)]));
+  return Array.from({ length: Math.max(1, sets) }, () => top(reps));
+}
+
+/**
+ * The %1RM (or kg) an exercise should have at `newReps` to keep the same
+ * effort as it has now - e.g. 3 reps @ 90% -> 4 reps @ 87.5%. Empty when
+ * there's no load to move (no %1RM and no kg, or reps unreadable).
+ */
+export function matchLoadToReps(ex: PrescribedExercise, newReps: string, formula: OneRMFormula = "lander"): Partial<PrescribedExercise> {
+  if (!ex.reps || !newReps) return {};
+  const sets = ex.sets ?? 3;
+  const from = repsPerSet(ex.reps, sets);
+  const to = repsPerSet(newReps, sets);
+  if (!from.some(Boolean) || !to.some(Boolean)) return {};
+  if (ex.use_percent_1rm && ex.set_percents?.length) {
+    return {
+      set_percents: ex.set_percents.map((p, i) => {
+        const v = num(p);
+        return v === null ? p : fmt(round(scaleForReps(v, from[i] ?? from[0], to[i] ?? to[0], formula), 0.5));
+      }),
+    };
+  }
+  if (!ex.use_percent_1rm && num(ex.target_load) !== null) {
+    return { target_load: fmt(round(scaleForReps(num(ex.target_load)!, from[0], to[0], formula), 0.5)) };
+  }
+  return {};
+}
+
+// Scale an intensity to new reps: value x %(newReps) / %(oldReps).
+export function scaleForReps(value: number, fromReps: number, toReps: number, formula: OneRMFormula = "lander"): number {
+  if (!fromReps || !toReps || fromReps === toReps) return value;
+  return (value * percentForReps(toReps, formula)) / percentForReps(fromReps, formula);
 }
 
 const num = (s: unknown): number | null => {
@@ -172,7 +219,8 @@ export function progressExercise(base: PrescribedExercise, rule: ProgressionRule
     }
     case "reps": {
       if (!base.reps) return null;
-      return { reps: shiftReps(base.reps, delta) };
+      const reps = shiftReps(base.reps, delta);
+      return rule.matchLoad ? { reps, ...matchLoadToReps(base, reps, rule.formula) } : { reps };
     }
     case "load": {
       const b = num(base.target_load);
@@ -211,7 +259,11 @@ export interface ProgressionPreviewRow {
 export function describeField(ex: PrescribedExercise, field: ProgressionField): string {
   switch (field) {
     case "sets": return `${ex.sets ?? "-"} sets`;
-    case "reps": return ex.reps ? `${ex.reps} reps` : "-";
+    case "reps": {
+      if (!ex.reps) return "-";
+      const pct = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${ex.set_percents.join("/")}%` : ex.target_load ? ` @ ${ex.target_load}kg` : "";
+      return `${ex.reps} reps${pct}`;
+    }
     case "load": return ex.target_load ? `${ex.target_load}kg` : "-";
     case "percent": return ex.set_percents?.length ? `${ex.set_percents.join("/")}%` : ex.percent_1rm != null ? `${ex.percent_1rm}%` : "-";
     case "rpe": return ex.rpe != null ? `RPE ${ex.rpe}` : "-";

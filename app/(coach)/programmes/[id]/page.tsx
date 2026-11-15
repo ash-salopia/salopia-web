@@ -17,6 +17,8 @@ import {
   updateProgrammeSession,
 } from "@/lib/data/programmes";
 import { listLibrary } from "@/lib/data/library";
+import { getOrgSettings } from "@/lib/data/settings";
+import type { OneRMFormula } from "@/lib/one-rm";
 import WeekGrid from "@/components/programme/WeekGrid";
 import ProgrammeSessionEditor from "@/components/programme/ProgrammeSessionEditor";
 import { AddTemplateModal, CopyModal, ProgressionModal, type AddPlan } from "@/components/programme/BuilderModals";
@@ -52,6 +54,7 @@ export default function ProgrammeDetailPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [formula, setFormula] = useState<OneRMFormula>("lander");
   // Builder tools (0132).
   const [addAt, setAddAt] = useState<{ week: number; day: number } | "toolbar" | null>(null);
   const [copyFrom, setCopyFrom] = useState<{ sessions: ProgrammeSession[]; weeks: Set<number>; allowDay: boolean; title: string } | null>(null);
@@ -87,6 +90,7 @@ export default function ProgrammeDetailPage() {
       setTemplates(t);
       setSelectedSessionIds(new Set());
       listLibrary().then(setLibrary).catch(() => {});
+      getOrgSettings().then((st) => setFormula(st.one_rm_formula)).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load programme");
     } finally {
@@ -638,7 +642,7 @@ export default function ProgrammeDetailPage() {
         />
       )}
       {progressionOpen && (
-        <ProgressionModal sessions={selectedSessions} onClose={() => setProgressionOpen(false)} onApply={handleApplyProgression} />
+        <ProgressionModal sessions={selectedSessions} formula={formula} onClose={() => setProgressionOpen(false)} onApply={handleApplyProgression} />
       )}
       {activeSession && (
         <div style={styles.drawerBackdrop} onClick={() => setActiveSessionId(null)}>
@@ -647,6 +651,7 @@ export default function ProgrammeDetailPage() {
               key={activeSession.id}
               session={activeSession}
               library={library}
+              formula={formula}
               onChange={(patch) => editSession(activeSession.id, patch)}
               onClose={() => setActiveSessionId(null)}
               onDuplicate={async () => {

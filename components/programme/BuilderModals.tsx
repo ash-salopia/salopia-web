@@ -5,6 +5,7 @@ import {
   DAYS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, jsDayToGridDay, weekOf,
   type ProgressionField, type ProgressionRule,
 } from "@/lib/programme-builder";
+import { FORMULAS, type OneRMFormula } from "@/lib/one-rm";
 import type { ProgrammeSession, Template, TemplateDef } from "@/types";
 
 // The programme builder's three bulk tools (0132): add a template on
@@ -272,10 +273,12 @@ export function CopyModal({
 
 export function ProgressionModal({
   sessions,
+  formula = "lander",
   onClose,
   onApply,
 }: {
   sessions: ProgrammeSession[];
+  formula?: OneRMFormula; // the org's 1RM formula (Settings), for matching load to reps
   onClose: () => void;
   onApply: (updated: ProgrammeSession[]) => void;
 }) {
@@ -295,9 +298,11 @@ export function ProgressionModal({
   const [every, setEvery] = useState(1);
   const [deload, setDeload] = useState(0);
   const [pyramid, setPyramid] = useState(PYRAMIDS[0].key);
+  const [matchLoad, setMatchLoad] = useState(true);
+  const formulaName = FORMULAS.find((f) => f.id === formula)?.name ?? formula;
 
   const weeksSpanned = new Set(strength.map((s) => weekOf(s.day_offset))).size;
-  const rule: ProgressionRule = { field, change: parseFloat(change) || 0, everyWeeks: every, deloadEvery: deload || null };
+  const rule: ProgressionRule = { field, change: parseFloat(change) || 0, everyWeeks: every, deloadEvery: deload || null, matchLoad: field === "reps" && matchLoad, formula };
 
   const result = useMemo(() => {
     const chosen = names.filter((n) => ticked.has(n));
@@ -319,7 +324,7 @@ export function ProgressionModal({
     });
     return { updated, preview };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [names, ticked, mode, field, change, every, deload, pyramid, strength]);
+  }, [names, ticked, mode, field, change, every, deload, pyramid, strength, matchLoad, formula]);
 
   const changedSessions = result.updated.filter((u) => {
     const orig = strength.find((s) => s.id === u.id);
@@ -368,6 +373,15 @@ export function ProgressionModal({
             {[3, 4, 5, 6].map((n) => <option key={n} value={n}>deload every {n}th week</option>)}
           </select>
           <div style={{ ...m.small, width: "100%" }}>Use a minus number to reduce, e.g. -1 rep every 2 weeks. Deload weeks drop load / %1RM by 10%.</div>
+          {field === "reps" && (
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, width: "100%", cursor: "pointer", marginTop: 4 }}>
+              <input type="checkbox" checked={matchLoad} onChange={(e) => setMatchLoad(e.target.checked)} style={{ accentColor: "var(--accent)", marginTop: 2 }} />
+              <span>
+                Adjust the load to match the reps - %1RM (or kg) moves with each rep, using your {formulaName} formula, e.g. 3 reps @ 90% →
+                4 reps @ ~87.5%. Each athlete&apos;s kg is worked out from their own 1RM when the programme is loaded.
+              </span>
+            </label>
+          )}
         </div>
       ) : (
         <select style={{ ...m.select, width: "100%" }} value={pyramid} onChange={(e) => setPyramid(e.target.value)}>

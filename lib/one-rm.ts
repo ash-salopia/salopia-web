@@ -93,6 +93,23 @@ export function estimateOneRM(
   return Math.round(result * 2) / 2;
 }
 
+// The %1RM a lifter can do for N reps to failure, by the same formula
+// estimateOneRM uses (Lander: 3 reps ≈ 93%, 4 ≈ 90.6%; Epley: 3 ≈ 90.9%,
+// 4 ≈ 88.2%). Unrounded - used to keep a prescription's intensity when
+// its reps change (lib/programme-builder.ts progression).
+export function percentForReps(reps: number, formula: OneRMFormula = "lander"): number {
+  const n = Math.min(Math.max(reps, 1), 15);
+  if (n === 1) return 100;
+  switch (formula) {
+    case "epley": return 100 / (1 + n / 30);
+    case "brzycki": return (100 * (37 - n)) / 36;
+    case "oconner": return 100 / (1 + 0.025 * n);
+    case "lombardi": return 100 / Math.pow(n, 0.1);
+    case "lander":
+    default: return 101.3 - 2.67123 * n;
+  }
+}
+
 // Find the best estimated 1RM from a set of logged sets.
 // Returns the highest 1RM estimate across all completed sets.
 export function bestEstimatedOneRM(
