@@ -91,19 +91,19 @@ export default function WeekGrid({
           const weekIds = idsWhere((s) => weekOf(s.day_offset) === week);
           const expanded = open.has(week);
           return [
-            <div key={`w${week}`} style={g.weekHead}>
+            <div
+              key={`w${week}`}
+              style={g.weekHead}
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded}
+              title={expanded ? "Hide details" : "Show every session's exercises"}
+              onClick={() => toggleWeek(week)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleWeek(week); } }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <button
-                type="button"
-                style={g.caret}
-                onClick={() => toggleWeek(week)}
-                aria-expanded={expanded}
-                aria-label={`${expanded ? "Hide" : "Show"} week ${week + 1} in detail`}
-                title={expanded ? "Hide details" : "Show every session's exercises"}
-              >
-                {expanded ? "▾" : "▸"}
-              </button>
-              <label style={g.weekLabel}>
+              <span style={g.caret} aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+              <label style={g.weekCheck} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} title={`Select week ${week + 1}`}>
                 <input
                   type="checkbox"
                   style={g.check}
@@ -112,11 +112,11 @@ export default function WeekGrid({
                   onChange={(e) => onSelectMany(weekIds, e.target.checked)}
                   aria-label={`Select week ${week + 1}`}
                 />
-                W{week + 1}
               </label>
+              <span style={g.weekLabel}>W{week + 1}</span>
               </div>
               {weekIds.length > 0 && (
-                <div style={{ display: "flex", gap: 2 }}>
+                <div style={{ display: "flex", gap: 2 }} onClick={(e) => e.stopPropagation()}>
                   <button type="button" style={g.weekBtn} title="Copy this week to other weeks" onClick={() => onWeekAction(week, "copy")}>⧉</button>
                   <button type="button" style={g.weekBtn} title="Clear this week" onClick={() => onWeekAction(week, "clear")}>✕</button>
                 </div>
@@ -229,7 +229,7 @@ const g: Record<string, React.CSSProperties> = {
   scroller: { overflowX: "auto", paddingBottom: 4 },
   grid: { display: "grid", gridTemplateColumns: "64px repeat(7, minmax(108px, 1fr))", gap: 4, minWidth: 820 },
   expandAll: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 6, fontSize: 10.5, fontWeight: 700, cursor: "pointer", padding: "3px 4px", alignSelf: "center" },
-  caret: { background: "transparent", border: "none", color: "var(--text)", fontSize: 15, cursor: "pointer", padding: "2px 3px", lineHeight: 1 },
+  caret: { color: "var(--text)", fontSize: 15, padding: "2px 3px", lineHeight: 1 },
   typeLabel: { fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em" },
   exList: { display: "flex", flexDirection: "column", gap: 2, marginTop: 3, paddingTop: 4, borderTop: "1px solid var(--line)" },
   exRow: { display: "flex", flexDirection: "column", fontSize: 11, lineHeight: 1.3, padding: "1px 0" },
@@ -237,8 +237,9 @@ const g: Record<string, React.CSSProperties> = {
   exDose: { color: "var(--mute)", fontSize: 10.5 },
   exEmpty: { color: "var(--mute)", fontSize: 10.5, marginTop: 3 },
   dayHead: { background: "transparent", border: "none", color: "var(--mute)", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 0", cursor: "pointer" },
-  weekHead: { display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, padding: "4px 2px" },
-  weekLabel: { display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 800, color: "var(--text)", cursor: "pointer" },
+  weekHead: { display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, padding: "4px 2px", cursor: "pointer", borderRadius: 8, userSelect: "none" },
+  weekLabel: { fontSize: 12, fontWeight: 800, color: "var(--text)" },
+  weekCheck: { display: "flex", alignItems: "center", padding: 3, cursor: "pointer" },
   weekBtn: { background: "transparent", border: "1px solid var(--line)", color: "var(--mute)", borderRadius: 5, fontSize: 11, padding: "1px 5px", cursor: "pointer" },
   cell: { background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: 4, minHeight: 64, display: "flex", flexDirection: "column", gap: 3 },
   cellOver: { borderColor: "var(--accent)", background: "var(--accent-dim)" },
