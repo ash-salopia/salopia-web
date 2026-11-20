@@ -385,11 +385,13 @@ export function describeField(ex: PrescribedExercise, field: ProgressionField): 
     case "sets": return `${ex.sets ?? "-"} sets`;
     case "reps": {
       if (!ex.reps) return "-";
+      const grouped = setGroups(ex);
+      if (grouped) return grouped;
       const pct = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%` : ex.target_load ? ` @ ${ex.target_load}kg` : "";
       return `${ex.reps} reps${pct}`;
     }
     case "load": return ex.target_load ? `${ex.target_load}kg` : "-";
-    case "percent": return ex.set_percents?.length ? `${pctList(ex.set_percents)}%` : ex.percent_1rm != null ? `${ex.percent_1rm}%` : "-";
+    case "percent": return setGroups(ex) ?? (ex.set_percents?.length && ex.use_percent_1rm ? `${ex.sets} x ${ex.reps} @ ${pctList(ex.set_percents)}%` : ex.percent_1rm != null ? `${ex.percent_1rm}%` : "-");
     case "rpe": return ex.rpe != null ? `RPE ${ex.rpe}` : "-";
     case "rir": return ex.set_rir?.length ? `RIR ${ex.set_rir.join("/")}` : "-";
   }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  DAYS, DELOAD_KINDS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, jsDayToGridDay, pctList, percentsFromReps, weekOf,
+  DAYS, DELOAD_KINDS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, describeDose, jsDayToGridDay, percentsFromReps, weekOf,
   type DeloadKind, type ProgressionField, type ProgressionRule,
 } from "@/lib/programme-builder";
 import { REP_SCHEMES, chartFor, type RepScheme, type RepSchemeKey } from "@/lib/rep-charts";
@@ -355,8 +355,8 @@ export function ModifyModal({
         preview.push({
           week: weekOf(s.day_offset),
           exercise: ex.name,
-          before: `${ex.sets} x ${ex.reps}${ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%` : ex.target_load ? ` @ ${ex.target_load}` : ""}`,
-          after: `${next.sets} x ${next.reps} @ ${pctList(next.set_percents ?? [])}%`,
+          before: describeDose(ex),
+          after: describeDose(next),
         });
         return next;
       });
@@ -432,6 +432,12 @@ export function ModifyModal({
                   {[0, 1, 2.5, 5].map((v) => <option key={v} value={v}>{v ? `+${v}% each week` : "same each week"}</option>)}
                 </select>
               </>
+            )}
+            {method === "dup" && (
+              <select style={m.select} value={mo.deloadWeek ? "y" : "n"} onChange={(e) => setOpt("deloadWeek", e.target.value === "y")} aria-label="DUP waves">
+                <option value="y">3 build weeks + lighter 4th week</option>
+                <option value="n">3-week waves, no lighter week</option>
+              </select>
             )}
             {method === "block" && (
               <>

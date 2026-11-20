@@ -60,7 +60,7 @@ export const METHODS: { key: MethodKey; label: string; blurb: string }[] = [
     key: "dup",
     label: "Daily undulating (DUP)",
     blurb:
-      "Each training day in a week has its own focus: hypertrophy (4 x 10 at 67.5%), strength (5 x 5 at 80%) and power (5 x 3 at 75%, move fast). With two days a week: hypertrophy then strength. Rises each week.",
+      "Each training day in a week has its own focus: hypertrophy (4 x 10 from 67.5%), strength (5 x 5 from 80%) and power (5 x 3 from 75%, move fast). With two days a week: hypertrophy then strength. Builds for 3 weeks then a lighter week, each wave a step higher.",
   },
   {
     key: "double",
@@ -136,15 +136,24 @@ function rxBlock(weekIdx: number, total: number, o: MethodOptions): Rx & { label
 }
 
 const DUP_DAYS = [
-  { name: "hypertrophy", sets: 4, reps: 10, pct: 67.5 },
-  { name: "strength", sets: 5, reps: 5, pct: 80 },
-  { name: "power", sets: 5, reps: 3, pct: 75 },
+  { name: "hypertrophy", sets: 4, reps: 10, pct: 67.5, cap: 75 },
+  { name: "strength", sets: 5, reps: 5, pct: 80, cap: 87.5 },
+  { name: "power", sets: 5, reps: 3, pct: 75, cap: 82.5 },
 ];
 
+// Waves of 3 build weeks + a lighter 4th (when deloadWeek is on); each
+// wave starts one step above the last, so 8 weeks of strength days run
+// 80, 82.5, 85, deload, 82.5, 85, 87.5, deload - never a 5x5 at 95%+.
 function rxDup(weekIdx: number, dayIdx: number, o: MethodOptions): Rx & { label: string } {
   const d = DUP_DAYS[dayIdx % DUP_DAYS.length];
-  const pct = Math.min(100, round(d.pct + weekIdx * o.weeklyIncrease));
-  return { sets: d.sets, reps: String(d.reps), percents: Array(d.sets).fill(pct), label: d.name };
+  const len = o.deloadWeek ? 4 : 3;
+  const wave = Math.floor(weekIdx / len);
+  const w = weekIdx % len;
+  const deload = o.deloadWeek && w === 3;
+  const build = Math.min(d.cap, round(d.pct + (wave + Math.min(w, 2)) * o.weeklyIncrease));
+  const pct = deload ? round(Math.min(d.cap, d.pct + wave * o.weeklyIncrease) * 0.9) : build;
+  const sets = deload ? Math.max(2, d.sets - 2) : d.sets;
+  return { sets, reps: String(d.reps), percents: Array(sets).fill(pct), label: deload ? `${d.name} · deload` : d.name };
 }
 
 // Double progression: where the reps sit in week N, and how many load jumps so far.
