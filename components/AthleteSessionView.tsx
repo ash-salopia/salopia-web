@@ -20,7 +20,7 @@ import SportSessionAthleteView from "@/components/sport/SportSessionAthleteView"
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import { todayISO } from "@/lib/date-utils";
 import type { Session, SessionExercise, SetLog } from "@/types";
-import { repsForSet } from "@/lib/exercise-dose";
+import { repsForSet, setGroups } from "@/lib/exercise-dose";
 
 interface DetectedPB {
   kind: "weight" | "e1rm" | "volume" | "bw_reps" | "bw_time";
@@ -661,17 +661,19 @@ export default function AthleteSessionView({
             ) : (
               <>
                 <div style={styles.prescLine}>
-                  {ex.sets} sets × {ex.time && !ex.reps ? ex.time : ex.reps || "-"}
+                  {/* Per-set schemes (pyramids, 5/3/1) read as runs of sets:
+                      "5 @ 65% · 5 @ 75% · 5+ @ 85%" (lib/exercise-dose.ts). */}
+                  {setGroups(ex) ?? `${ex.sets} sets × ${ex.time && !ex.reps ? ex.time : ex.reps || "-"}`}
                   {ex.each_side ? " each side" : ""}
                   {ex.rest ? ` · rest ${ex.rest}` : ""}
                   {ex.is_bodyweight ? " · bodyweight" : ""}
-                  {ex.target_load ? ` · ${ex.target_load}` : ""}
+                  {ex.target_load && !setGroups(ex) ? ` · ${/^\d+(\.\d+)?$/.test(ex.target_load.trim()) ? `${ex.target_load.trim()}kg` : ex.target_load}` : ""}
                   {/* Tempo is a rep-cadence concept (e.g. 3-1-1-0) - doesn't
                       apply to a timed hold, so it only shows for reps-based
                       exercises, matching the coach builder's same rule. */}
                   {!(ex.time && !ex.reps) && ex.tempo ? ` · tempo ${ex.tempo}` : ""}
-                  {ex.use_percent_1rm && (ex.set_percents ?? []).some((p) => p)
-                    ? ` · ${(ex.set_percents ?? []).filter((p) => p).join("/")}%1RM`
+                  {ex.use_percent_1rm && (ex.set_percents ?? []).some((p) => p) && !setGroups(ex)
+                    ? ` · ${new Set((ex.set_percents ?? []).filter((p) => p)).size === 1 ? (ex.set_percents ?? []).find((p) => p) : (ex.set_percents ?? []).filter((p) => p).join("/")}%1RM`
                     : ""}
                 </div>
                 {ex.notes && <div style={styles.notes}>{ex.notes}</div>}

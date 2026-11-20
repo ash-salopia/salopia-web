@@ -228,6 +228,11 @@ export function CopyModal({
     <Modal title={title} onClose={onClose}>
       <div style={m.label}>Copy to</div>
       <WeekPicker weeks={weeks} value={targets} onChange={setTargets} />
+      {sourceWeeks.size > 1 && (
+        <div style={{ ...m.small, marginTop: 6 }}>
+          Weeks {Array.from(sourceWeeks).sort((a, b) => a - b).map((w) => w + 1).join(", ")} repeat in order - e.g. an A/B fortnight stays A/B.
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
         <span style={m.small}>Also add</span>
         <select style={m.select} value={extra} onChange={(e) => setExtra(Number(e.target.value))}>
@@ -563,12 +568,16 @@ export function ModifyModal({
         <div style={m.preview}>
           {result.preview.slice(0, 40).map((r, i) => (
             <div key={i} style={m.previewRow}>
-              <span style={{ width: 34, color: "var(--mute)" }}>W{r.week + 1}</span>
-              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.exercise}</span>
-              <span style={{ color: "var(--mute)" }}>{r.before}</span>
-              <span>→</span>
-              <span style={{ fontWeight: 700 }}>{r.after}</span>
-              {"note" in r && r.note ? <span style={m.note}>{String(r.note)}</span> : null}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                <span style={{ width: 34, color: "var(--mute)", fontWeight: 700 }}>W{r.week + 1}</span>
+                <span style={{ fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.exercise}</span>
+                {"note" in r && r.note ? <span style={m.note}>{String(r.note)}</span> : null}
+              </div>
+              <div style={{ paddingLeft: 42, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "baseline" }}>
+                <span style={{ color: "var(--mute)" }}>{r.before}</span>
+                <span>→</span>
+                <span style={{ fontWeight: 700 }}>{r.after}</span>
+              </div>
             </div>
           ))}
           {result.preview.length > 40 && <div style={m.small}>…and {result.preview.length - 40} more</div>}
@@ -621,13 +630,13 @@ const m: Record<string, React.CSSProperties> = {
   footer: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 },
   ghost: { background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "9px 14px", fontSize: 13, cursor: "pointer" },
   primary: { background: "var(--accent)", color: "#0a1420", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 800, cursor: "pointer" },
-  preview: { marginTop: 12, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: "6px 10px", maxHeight: 220, overflowY: "auto" },
+  preview: { marginTop: 12, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: "6px 10px", maxHeight: 300, overflowY: "auto" },
   chartBox: { marginTop: 12, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 10, padding: 10 },
   chartGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 4, marginTop: 8 },
   chartCell: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 7, padding: "4px 2px" },
   chartReps: { fontSize: 10, fontWeight: 800, color: "var(--mute)" },
   chartVal: { fontSize: 12, fontWeight: 700 },
   chartInput: { width: "100%", boxSizing: "border-box", textAlign: "center", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "3px 2px", fontSize: 12 },
-  previewRow: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, padding: "4px 0", borderBottom: "1px solid var(--line)" },
+  previewRow: { display: "flex", flexDirection: "column", gap: 2, fontSize: 12, padding: "5px 0", borderBottom: "1px solid var(--line)" },
   note: { fontSize: 10, fontWeight: 800, color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 5, padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.04em" },
 };

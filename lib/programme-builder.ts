@@ -7,6 +7,7 @@
 import type { PrescribedExercise, ProgrammeSession, TemplateDef } from "@/types";
 import { toPrescription } from "@/lib/prescription";
 import { percentFor, type RepScheme } from "@/lib/rep-charts";
+import { setGroups } from "@/lib/exercise-dose";
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -90,7 +91,8 @@ export function blankSessionDraft(dayOffset: number, sortOrder: number, name = "
 export const sortOrderFor = (dayOffset: number, indexInDay: number) => dayOffset * 100 + indexInDay;
 
 /**
- * Copy sessions to other weeks and/or days. With no days given each copy
+ * Copy sessions to other weeks and/or days. Sessions picked from several
+ * weeks repeat as a block in order (see sourceFor). With no days given each copy
  * keeps its own weekday; with days, every session is copied onto each of
  * them (e.g. Monday's strength onto Wed, Fri and Sun). A copy that would
  * land exactly where its original already is gets skipped, so the source
@@ -104,9 +106,17 @@ export function planCopyToWeeks(
 ): SessionDraft[] {
   const perDay = new Map<number, number>();
   for (const s of existing) perDay.set(s.day_offset, (perDay.get(s.day_offset) ?? 0) + 1);
+  // Sessions from several weeks (e.g. an A/B fortnight) repeat as a block,
+  // in order: copying weeks 1-2 into weeks 3-8 gives 3 <- 1, 4 <- 2,
+  // 5 <- 1 ... rather than both weeks' sessions landing in every week.
+  const srcWeeks = sessions.map((s) => weekOf(s.day_offset));
+  const first = Math.min(...srcWeeks);
+  const span = Math.max(...srcWeeks) - first + 1;
+  const sourceFor = (w: number) => first + ((((w - first) % span) + span) % span);
   const out: SessionDraft[] = [];
   for (const w of targetWeeks) {
-    for (const s of [...sessions].sort((a, b) => a.day_offset - b.day_offset || a.sort_order - b.sort_order)) {
+    const from = sourceFor(w);
+    for (const s of [...sessions].filter((x) => weekOf(x.day_offset) === from).sort((a, b) => a.day_offset - b.day_offset || a.sort_order - b.sort_order)) {
       for (const day of toDays.length ? toDays : [dayOf(s.day_offset)]) {
         const off = offsetFor(w, day);
         if (off === s.day_offset) continue;
@@ -204,6 +214,8 @@ export function deloadExercise(ex: PrescribedExercise, d: Deload): Partial<Presc
 
 /** "4 x 5 @ 84%", "3 x 8 @ 60kg", "3 x 10 RPE 7" - for previews. */
 export function describeDose(ex: PrescribedExercise): string {
+  const grouped = setGroups(ex);
+  if (grouped) return grouped + (ex.rpe != null ? ` RPE ${ex.rpe}` : "");
   const load = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%`
     : ex.percent_1rm != null && ex.use_percent_1rm ? ` @ ${ex.percent_1rm}%`
     : ex.target_load ? ` @ ${ex.target_load}kg` : "";
