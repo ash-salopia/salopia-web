@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { listProgrammes, deleteProgramme, createProgramme } from "@/lib/data/programmes";
 import type { Programme } from "@/types";
@@ -16,7 +16,12 @@ export default function ProgrammesPage() {
   const [newName, setNewName] = useState("");
   const [newWeeks, setNewWeeks] = useState(8);
   const [creating, setCreating] = useState(false);
+  // A ref, not just state: Enter pressed twice fires before a re-render,
+  // which used to create the programme twice.
+  const creatingRef = useRef(false);
   const handleCreate = async () => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true);
     setError("");
     try {
@@ -25,6 +30,7 @@ export default function ProgrammesPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create the programme");
       setCreating(false);
+      creatingRef.current = false;
     }
   };
 

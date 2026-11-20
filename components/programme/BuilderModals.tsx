@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  DAYS, DELOAD_KINDS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, describeDose, jsDayToGridDay, percentsFromReps, weekOf,
+  DAYS, DELOAD_KINDS, PROGRESSION_FIELDS, PYRAMIDS, applyProgression, applyPyramid, deloadExercise, describeDose, jsDayToGridDay, percentsFromReps, weekOf,
   type DeloadKind, type ProgressionField, type ProgressionRule,
 } from "@/lib/programme-builder";
 import { REP_SCHEMES, chartFor, type RepScheme, type RepSchemeKey } from "@/lib/rep-charts";
@@ -300,7 +300,7 @@ export function ModifyModal({
     return Array.from(seen.values());
   }, [strength]);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<"progress" | "fromReps" | "pyramid" | "method">("progress");
+  const [mode, setMode] = useState<"progress" | "fromReps" | "pyramid" | "method" | "deload">("progress");
   const [method, setMethod] = useState<MethodKey>("531");
   const [mo, setMo] = useState<MethodOptions>(DEFAULT_METHOD_OPTIONS);
   const setOpt = <K extends keyof MethodOptions>(k: K, v: MethodOptions[K]) => setMo((prev) => ({ ...prev, [k]: v }));
@@ -342,6 +342,24 @@ export function ModifyModal({
     if (!chosen.length) return empty;
     if (mode === "progress") return applyProgression(strength, chosen, rule);
     if (mode === "method") return applyMethod(strength, chosen, method, mo);
+    if (mode === "deload") {
+      // One-off: every ticked session eases off the same way (e.g. make week 8 a deload).
+      const set = new Set(chosen.map((n) => n.toLowerCase()));
+      const preview: { week: number; exercise: string; before: string; after: string }[] = [];
+      const updated = strength.map((s) => {
+        let changed = false;
+        const exercises = (s.exercises ?? []).map((ex) => {
+          if (!set.has(ex.name.trim().toLowerCase())) return ex;
+          const next = { ...ex, ...deloadExercise(ex, { kind: deloadKind, amount: deloadAmount }) };
+          if (JSON.stringify(next) === JSON.stringify(ex)) return ex;
+          changed = true;
+          preview.push({ week: weekOf(s.day_offset), exercise: ex.name, before: describeDose(ex), after: describeDose(next) });
+          return next;
+        });
+        return changed ? { ...s, exercises } : s;
+      });
+      return { updated, preview };
+    }
     const set = new Set(chosen.map((n) => n.toLowerCase()));
     const p = PYRAMIDS.find((x) => x.key === pyramid)!;
     const preview: { week: number; exercise: string; before: string; after: string }[] = [];
@@ -395,7 +413,31 @@ export function ModifyModal({
         <Chip on={mode === "fromReps"} onClick={() => setMode("fromReps")}>Set %1RM from reps</Chip>
         <Chip on={mode === "pyramid"} onClick={() => setMode("pyramid")}>Pyramid / top set / wave</Chip>
         <Chip on={mode === "method"} onClick={() => setMode("method")}>Programme method</Chip>
+        <Chip on={mode === "deload"} onClick={() => setMode("deload")}>Deload / taper these weeks</Chip>
       </div>
+
+      {mode === "deload" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <select
+            style={m.select}
+            value={deloadKind}
+            onChange={(e) => {
+              const k = DELOAD_KINDS.find((d) => d.key === e.target.value)!;
+              setDeloadKind(k.key);
+              setDeloadAmount(k.fallback);
+            }}
+            aria-label="Deload type"
+          >
+            {DELOAD_KINDS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+          </select>
+          <select style={m.select} value={deloadAmount} onChange={(e) => setDeloadAmount(Number(e.target.value))} aria-label="Deload amount">
+            {deloadDef.amounts.map((a) => <option key={a} value={a}>{a}{deloadDef.unit === "%" ? "%" : deloadDef.unit ? ` ${a === 1 ? deloadDef.unit.replace(/s$/, "") : deloadDef.unit}` : ""}</option>)}
+          </select>
+          <div style={{ ...m.small, width: "100%" }}>
+            Applies to every ticked session as it is now - tick just the week(s) to ease off, e.g. week 8 before a test week. {deloadDef.hint}
+          </div>
+        </div>
+      )}
 
       {mode === "method" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
