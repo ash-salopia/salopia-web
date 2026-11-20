@@ -8,6 +8,18 @@ export function timeLabel(time: string): string {
   return /^\d+(\.\d+)?$/.test(t) ? `${t}s` : t;
 }
 
+/**
+ * The reps for one set: a per-set list ("10,8,6", 5/3/1's "5,3,1+") gives
+ * that set's own entry (the last one for any extra sets); anything else is
+ * the same for every set.
+ */
+export function repsForSet(reps: string | undefined, setIndex: number): string {
+  const r = (reps ?? "").trim();
+  if (!r.includes(",")) return r;
+  const parts = r.split(",").map((p) => p.trim()).filter(Boolean);
+  return parts.length ? parts[Math.min(setIndex, parts.length - 1)] : r;
+}
+
 export function exerciseDose(ex: { sets?: number; reps?: string; time?: string; target_load?: string; use_percent_1rm?: boolean; set_percents?: string[] }): string {
   const work = ((ex.reps ?? "").trim() || timeLabel(ex.time ?? ""));
   let out = ex.sets ? (work ? `${ex.sets}×${work}` : `${ex.sets} sets`) : work;

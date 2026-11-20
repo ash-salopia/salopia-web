@@ -20,6 +20,7 @@ import SportSessionAthleteView from "@/components/sport/SportSessionAthleteView"
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import { todayISO } from "@/lib/date-utils";
 import type { Session, SessionExercise, SetLog } from "@/types";
+import { repsForSet } from "@/lib/exercise-dose";
 
 interface DetectedPB {
   kind: "weight" | "e1rm" | "volume" | "bw_reps" | "bw_time";
@@ -772,7 +773,7 @@ export default function AthleteSessionView({
                               if (shouldBeDone !== set.done) patch.done = shouldBeDone;
                               const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
                               if (!timeMode && shouldBeDone && !set.reps.trim() && ex.reps && !isAmrap) {
-                                const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
+                                const lower = repsForSet(ex.reps, i).match(/(\d+)/)?.[1] ?? ""; // this set's own reps in "10,8,6"
                                 if (lower) patch.reps = lower;
                               }
                               handleSetUpdate(ex.id, i, patch);
@@ -804,7 +805,7 @@ export default function AthleteSessionView({
                             value={set.reps}
                             onChange={(e) => handleSetUpdate(ex.id, i, { reps: e.target.value })}
                             onFocus={(e) => e.target.select()}
-                            placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (ex.reps || "reps")}
+                            placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (repsForSet(ex.reps, i) || "reps")}
                             inputMode="numeric"
                             style={styles.setInput}
                           />
@@ -886,7 +887,7 @@ export default function AthleteSessionView({
                             // reps number).
                             const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
                             if (!timeMode && !set.reps.trim() && ex.reps && !isAmrap) {
-                              const lower = ex.reps.match(/(\d+)/)?.[1] ?? "";
+                              const lower = repsForSet(ex.reps, i).match(/(\d+)/)?.[1] ?? ""; // this set's own reps in "10,8,6"
                               if (lower) patch.reps = lower;
                             }
                             handleSetUpdate(ex.id, i, patch);

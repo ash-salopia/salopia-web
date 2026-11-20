@@ -6,6 +6,7 @@ import {
   type DeloadKind, type ProgressionField, type ProgressionRule,
 } from "@/lib/programme-builder";
 import { REP_SCHEMES, chartFor, type RepScheme, type RepSchemeKey } from "@/lib/rep-charts";
+import { DEFAULT_METHOD_OPTIONS, METHODS, applyMethod, blockSplit, type MethodKey, type MethodOptions } from "@/lib/programme-methods";
 import type { ProgrammeSession, Template, TemplateDef } from "@/types";
 
 // The programme builder's three bulk tools (0132): add a template on
@@ -294,7 +295,10 @@ export function ModifyModal({
     return Array.from(seen.values());
   }, [strength]);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<"progress" | "fromReps" | "pyramid">("progress");
+  const [mode, setMode] = useState<"progress" | "fromReps" | "pyramid" | "method">("progress");
+  const [method, setMethod] = useState<MethodKey>("531");
+  const [mo, setMo] = useState<MethodOptions>(DEFAULT_METHOD_OPTIONS);
+  const setOpt = <K extends keyof MethodOptions>(k: K, v: MethodOptions[K]) => setMo((prev) => ({ ...prev, [k]: v }));
   const [field, setField] = useState<ProgressionField>("load");
   const [change, setChange] = useState("2.5");
   const [every, setEvery] = useState(1);
@@ -329,9 +333,10 @@ export function ModifyModal({
 
   const result = useMemo(() => {
     const chosen = names.filter((n) => ticked.has(n));
-    const empty = { updated: [] as ProgrammeSession[], preview: [] as { week: number; exercise: string; before: string; after: string }[] };
+    const empty = { updated: [] as ProgrammeSession[], preview: [] as { week: number; exercise: string; before: string; after: string; note?: string }[] };
     if (!chosen.length) return empty;
     if (mode === "progress") return applyProgression(strength, chosen, rule);
+    if (mode === "method") return applyMethod(strength, chosen, method, mo);
     const set = new Set(chosen.map((n) => n.toLowerCase()));
     const p = PYRAMIDS.find((x) => x.key === pyramid)!;
     const preview: { week: number; exercise: string; before: string; after: string }[] = [];
@@ -354,7 +359,7 @@ export function ModifyModal({
     });
     return { updated, preview };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [names, ticked, mode, field, change, every, deload, deloadKind, deloadAmount, pyramid, strength, matchLoad, scheme, adjust]);
+  }, [names, ticked, mode, method, mo, field, change, every, deload, deloadKind, deloadAmount, pyramid, strength, matchLoad, scheme, adjust]);
 
   const changedSessions = result.updated.filter((u) => {
     const orig = strength.find((s) => s.id === u.id);
@@ -383,8 +388,83 @@ export function ModifyModal({
       <div style={{ ...m.chips, margin: "14px 0 10px" }}>
         <Chip on={mode === "progress"} onClick={() => setMode("progress")}>Change week to week</Chip>
         <Chip on={mode === "fromReps"} onClick={() => setMode("fromReps")}>Set %1RM from reps</Chip>
-        <Chip on={mode === "pyramid"} onClick={() => setMode("pyramid")}>Pyramid / wave sets</Chip>
+        <Chip on={mode === "pyramid"} onClick={() => setMode("pyramid")}>Pyramid / top set / wave</Chip>
+        <Chip on={mode === "method"} onClick={() => setMode("method")}>Programme method</Chip>
       </div>
+
+      {mode === "method" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <select style={{ ...m.select, width: "100%" }} value={method} onChange={(e) => setMethod(e.target.value as MethodKey)} aria-label="Programme method">
+            {METHODS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+          </select>
+          <div style={m.small}>{METHODS.find((x) => x.key === method)!.blurb}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+            {method === "531" && (
+              <>
+                <span style={m.small}>Training max</span>
+                <select style={m.select} value={mo.trainingMax} onChange={(e) => setOpt("trainingMax", Number(e.target.value))} aria-label="Training max">
+                  {[85, 90, 95, 100].map((v) => <option key={v} value={v}>{v}% of 1RM</option>)}
+                </select>
+                <span style={m.small}>then</span>
+                <select style={m.select} value={mo.raisePerCycle} onChange={(e) => setOpt("raisePerCycle", Number(e.target.value))} aria-label="Raise per cycle">
+                  {[0, 2.5, 5].map((v) => <option key={v} value={v}>{v ? `+${v}% each cycle` : "same each cycle"}</option>)}
+                </select>
+                <select style={m.select} value={mo.deloadWeek ? "y" : "n"} onChange={(e) => setOpt("deloadWeek", e.target.value === "y")} aria-label="Deload week">
+                  <option value="y">4-week cycles (week 4 deload)</option>
+                  <option value="n">3-week cycles (no deload)</option>
+                </select>
+                <select style={m.select} value={mo.supplemental} onChange={(e) => setOpt("supplemental", e.target.value as MethodOptions["supplemental"])} aria-label="Supplemental sets">
+                  <option value="none">Main sets only</option>
+                  <option value="fsl">+ First Set Last 5 x 5</option>
+                  <option value="bbb">+ Boring But Big 5 x 10 @ 50%</option>
+                </select>
+              </>
+            )}
+            {(method === "block" || method === "dup") && (
+              <>
+                <span style={m.small}>%1RM</span>
+                <select style={m.select} value={mo.weeklyIncrease} onChange={(e) => setOpt("weeklyIncrease", Number(e.target.value))} aria-label="Weekly increase">
+                  {[0, 1, 2.5, 5].map((v) => <option key={v} value={v}>{v ? `+${v}% each week` : "same each week"}</option>)}
+                </select>
+              </>
+            )}
+            {method === "block" && (
+              <>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input type="checkbox" checked={mo.taper} onChange={(e) => setOpt("taper", e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+                  Taper the final week
+                </label>
+                <span style={m.small}>
+                  {(() => {
+                    const [a, b, c] = blockSplit(weeksSpanned);
+                    return `${weeksSpanned} weeks: ${a} accumulation · ${b} intensification · ${c} realisation`;
+                  })()}
+                </span>
+              </>
+            )}
+            {method === "double" && (
+              <>
+                <span style={m.small}>Reps</span>
+                <select style={m.select} value={`${mo.repLow}-${mo.repHigh}`} onChange={(e) => { const [lo, hi] = e.target.value.split("-").map(Number); setMo((p) => ({ ...p, repLow: lo, repHigh: hi })); }} aria-label="Rep range">
+                  {["3-5", "4-6", "5-8", "6-8", "6-10", "8-10", "8-12", "10-12", "10-15", "12-15", "15-20"].map((r) => <option key={r} value={r}>{r.replace("-", " to ")}</option>)}
+                </select>
+                <select style={m.select} value={mo.repStep} onChange={(e) => setOpt("repStep", Number(e.target.value))} aria-label="Reps per week">
+                  <option value={1}>+1 rep a week</option>
+                  <option value={2}>+2 reps a week</option>
+                </select>
+                <span style={m.small}>then load</span>
+                <select style={m.select} value={mo.loadJump} onChange={(e) => setOpt("loadJump", Number(e.target.value))} aria-label="Load jump">
+                  {[1, 2.5, 5, 10].map((v) => <option key={v} value={v}>+{v} (% or kg)</option>)}
+                </select>
+              </>
+            )}
+          </div>
+          <div style={m.small}>
+            Starts from the earliest ticked week. Uses %1RM - each athlete&apos;s kg comes from their own 1RM when the programme is loaded
+            {method === "double" ? " (kg exercises go up in kg)" : ""}. Bodyweight, tick-only and timed exercises are left alone.
+          </div>
+        </div>
+      )}
 
       {mode === "progress" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -488,6 +568,7 @@ export function ModifyModal({
               <span style={{ color: "var(--mute)" }}>{r.before}</span>
               <span>→</span>
               <span style={{ fontWeight: 700 }}>{r.after}</span>
+              {"note" in r && r.note ? <span style={m.note}>{String(r.note)}</span> : null}
             </div>
           ))}
           {result.preview.length > 40 && <div style={m.small}>…and {result.preview.length - 40} more</div>}
@@ -547,5 +628,6 @@ const m: Record<string, React.CSSProperties> = {
   chartReps: { fontSize: 10, fontWeight: 800, color: "var(--mute)" },
   chartVal: { fontSize: 12, fontWeight: 700 },
   chartInput: { width: "100%", boxSizing: "border-box", textAlign: "center", background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 5, padding: "3px 2px", fontSize: 12 },
-  previewRow: { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "4px 0", borderBottom: "1px solid var(--line)" },
+  previewRow: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, padding: "4px 0", borderBottom: "1px solid var(--line)" },
+  note: { fontSize: 10, fontWeight: 800, color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 5, padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.04em" },
 };

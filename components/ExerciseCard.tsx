@@ -7,6 +7,7 @@ import LibraryEntryForm from "@/components/LibraryEntryForm";
 import RepsTimeField from "@/components/RepsTimeField";
 import { saveLibraryEntry } from "@/lib/data/library";
 import type { SessionExercise, SetLog, LibraryEntry } from "@/types";
+import { repsForSet } from "@/lib/exercise-dose";
 
 interface Props {
   exercise: SessionExercise;
@@ -841,7 +842,7 @@ export default function ExerciseCard({
                 <input
                   value={set.reps}
                   onChange={(e) => updateSet(i, { reps: e.target.value })}
-                  placeholder={exercise.reps || "reps"}
+                  placeholder={repsForSet(exercise.reps, i) || "reps"}
                   inputMode="numeric"
                   style={styles.setInput}
                 />

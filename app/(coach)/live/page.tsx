@@ -25,6 +25,7 @@ import {
   PS_METRIC_META, resolveTrackedMetrics, normalizePSLog, emptyPSSetLog, bestPSValue,
   type PSSetLog, type PSMetricKey,
 } from "@/lib/ps-metrics";
+import { repsForSet } from "@/lib/exercise-dose";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -1054,7 +1055,7 @@ export default function LiveGroupPage() {
                                       // box's own onBlur below fill it in once it's actually left.
                                       const tabbingIntoReps = e.relatedTarget instanceof HTMLElement
                                         && e.relatedTarget.id === `reps-${ex.id}-${si}`;
-                                      const singleRep = singleRepValue(ex.reps);
+                                      const singleRep = singleRepValue(repsForSet(ex.reps, si));
                                       if (willBeDone && !tabbingIntoReps && !set.reps.trim() && singleRep) patch.reps = singleRep;
                                       handleLogChange(activeSess.id, ex.id, si, patch);
                                     }}
@@ -1080,7 +1081,7 @@ export default function LiveGroupPage() {
                                     key={`r-${ex.id}-${si}-${set.reps}`}
                                     defaultValue={set.reps}
                                     type="number"
-                                    placeholder={ex.reps || "-"}
+                                    placeholder={repsForSet(ex.reps, si) || "-"}
                                     inputMode="numeric"
                                     style={s.setInput}
                                     onBlur={(e) => {
@@ -1090,7 +1091,7 @@ export default function LiveGroupPage() {
                                         // prescribed reps when tabbing forward into this box
                                         // (see there) - if it's still empty now that it's
                                         // actually being left, fill it in here instead.
-                                        const singleRep = singleRepValue(ex.reps);
+                                        const singleRep = singleRepValue(repsForSet(ex.reps, si));
                                         if (set.done && !v.trim() && singleRep) {
                                           handleLogChange(activeSess.id, ex.id, si, { reps: singleRep });
                                         }

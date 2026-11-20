@@ -473,6 +473,9 @@ export const PYRAMIDS: PyramidPreset[] = [
   { key: "full", label: "Full pyramid (10-8-6-8-10)", percents: [65, 72.5, 80, 72.5, 65], reps: [10, 8, 6, 8, 10] },
   { key: "wave", label: "Wave (3-2-1 x2)", percents: [80, 85, 90, 82.5, 87.5, 92.5], reps: [3, 2, 1, 3, 2, 1] },
   { key: "reverse", label: "Reverse pyramid (4-6-8)", percents: [85, 80, 75], reps: [4, 6, 8] },
+  { key: "topBackoff", label: "Top set + back-offs (1 x 3, then 3 x 5 at -10%)", percents: [87.5, 77.5, 77.5, 77.5], reps: [3, 5, 5, 5] },
+  { key: "topSingle", label: "Heavy single + back-offs (1 x 1, then 3 x 3 at -10%)", percents: [92.5, 82.5, 82.5, 82.5], reps: [1, 3, 3, 3] },
+  { key: "ramp5", label: "Ramp to a top 5 (Madcow-style 5 x 5)", percents: [52.5, 62.5, 72.5, 80, 85], reps: [5, 5, 5, 5, 5] },
 ];
 
 export function applyPyramid(ex: PrescribedExercise, p: PyramidPreset): PrescribedExercise {
