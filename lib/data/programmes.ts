@@ -411,3 +411,57 @@ export async function loadProgrammeSessionForAthlete(
     if (exErr) throw exErr;
   }
 }
+
+// Loads many programme sessions onto an athlete's calendar in two
+// requests (all sessions, then all their exercises) instead of two per
+// session - a 12-week block is ~50 sessions. If the exercises fail to
+// save, the sessions just created are removed again, so a failed load
+// never leaves an athlete with half a programme.
+export async function loadProgrammeSessionsForAthlete(
+  rows: { session: ProgrammeSession; date: string }[],
+  athleteId: string
+): Promise<number> {
+  if (!rows.length) return 0;
+  const supabase = createClient();
+  const created: string[] = [];
+  try {
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100);
+      const { data, error } = await supabase
+        .from("sessions")
+        .insert(
+          chunk.map(({ session: p, date }) => ({
+            athlete_id: athleteId,
+            name: p.name,
+            date,
+            type: p.type,
+            hyrox_type: p.hyrox_type,
+            hyrox_config: p.hyrox_config,
+            cardio_type: p.cardio_type,
+            cardio_config: p.cardio_config,
+            recovery_category: p.recovery_category,
+            recovery_format: p.recovery_format,
+            recovery_config: p.recovery_config,
+            session_notes: p.notes ?? "",
+            // No source_session_id - see loadProgrammeSessionForAthlete.
+          }))
+        )
+        .select("id");
+      if (error) throw error;
+      const ids = (data ?? []).map((d: { id: string }) => d.id);
+      if (ids.length !== chunk.length) throw new Error("Some sessions didn't save - please try again.");
+      created.push(...ids);
+      const exerciseRows = chunk.flatMap(({ session: p }, j) =>
+        ((p.exercises ?? []) as PrescribedExercise[]).map((e, k) => toExerciseRow(e as unknown as Record<string, unknown>, ids[j], k))
+      );
+      for (let k = 0; k < exerciseRows.length; k += 500) {
+        const { error: exErr } = await supabase.from("session_exercises").insert(exerciseRows.slice(k, k + 500));
+        if (exErr) throw exErr;
+      }
+    }
+    return created.length;
+  } catch (e) {
+    if (created.length) await supabase.from("sessions").delete().in("id", created);
+    throw e;
+  }
+}
