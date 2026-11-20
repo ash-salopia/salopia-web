@@ -20,6 +20,9 @@ export function repsForSet(reps: string | undefined, setIndex: number): string {
   return parts.length ? parts[Math.min(setIndex, parts.length - 1)] : r;
 }
 
+/** "60" -> "60kg"; anything with its own wording ("BW+10", "60kg", "RPE 8") as typed. */
+export const loadLabel = (load: string) => (/^\d+(\.\d+)?$/.test(load.trim()) ? `${load.trim()}kg` : load.trim());
+
 type DoseInput = { sets?: number; reps?: string; time?: string; target_load?: string; use_percent_1rm?: boolean; set_percents?: string[] };
 
 /**
@@ -43,7 +46,7 @@ export function setGroups(ex: DoseInput): string | null {
   }
   const out = runs.map((r) => `${r.n > 1 ? `${r.n}×` : ""}${r.reps || "-"}${r.pct ? ` @ ${r.pct}%` : ""}`).join(" · ");
   const kg = (ex.target_load ?? "").trim();
-  return !pct.length && kg ? `${out} @ ${kg}` : out;
+  return !pct.length && kg ? `${out} @ ${loadLabel(kg)}` : out;
 }
 
 export function exerciseDose(ex: DoseInput): string {
@@ -53,6 +56,6 @@ export function exerciseDose(ex: DoseInput): string {
   let out = ex.sets ? (work ? `${ex.sets}×${work}` : `${ex.sets} sets`) : work;
   const pct = ex.use_percent_1rm ? (ex.set_percents ?? []).filter(Boolean) : [];
   if (pct.length) out += ` @ ${pct[0]}${/%$/.test(pct[0]) ? "" : "%"}${pct.length > 1 && pct.some((p) => p !== pct[0]) ? "+" : ""}`;
-  else if ((ex.target_load ?? "").trim()) out += ` @ ${ex.target_load!.trim()}`;
+  else if ((ex.target_load ?? "").trim()) out += ` @ ${loadLabel(ex.target_load!)}`;
   return out;
 }

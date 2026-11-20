@@ -6,8 +6,9 @@ import ExerciseHistoryModal from "@/components/ExerciseHistoryModal";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
 import RepsTimeField from "@/components/RepsTimeField";
 import { saveLibraryEntry } from "@/lib/data/library";
-import type { SessionExercise, SetLog, LibraryEntry } from "@/types";
-import { repsForSet } from "@/lib/exercise-dose";
+import type { PrescribedExercise, SessionExercise, SetLog, LibraryEntry } from "@/types";
+import { exerciseDose, repsForSet } from "@/lib/exercise-dose";
+import { resizeSets } from "@/lib/programme-builder";
 
 interface Props {
   exercise: SessionExercise;
@@ -226,9 +227,9 @@ export default function ExerciseCard({
   // Same computed summary Live Group's collapsed exercise row already
   // builds (e.g. "3× 8 60kg") - reused for consistency rather than a
   // different format invented just for this card.
-  const prescSummary = [exercise.sets ? `${exercise.sets}×` : "", exercise.time || exercise.reps, exercise.target_load]
-    .filter(Boolean)
-    .join(" ");
+  // %1RM and per-set schemes included ("3×5 @ 75%", "3 @ 87.5% · 3×5 @
+  // 77.5%") - the shared format from lib/exercise-dose.ts.
+  const prescSummary = exerciseDose(exercise);
 
   return (
     <div
@@ -669,7 +670,14 @@ export default function ExerciseCard({
         <Field label="Sets" flex={0.6}>
           <input
             value={exercise.sets}
-            onChange={(e) => onEditPresc({ sets: parseInt(e.target.value) || 0 })}
+            onChange={(e) => {
+              const sets = parseInt(e.target.value) || 0;
+              // Added sets repeat the last set's %1RM / RIR so they aren't left
+              // without a target. Only ever grows the lists - typing "12"
+              // passes through "1", which mustn't trim a pyramid's percents.
+              const longest = Math.max(exercise.set_percents?.length ?? 0, exercise.set_rir?.length ?? 0);
+              onEditPresc(sets > longest && longest > 0 ? (resizeSets(exercise as unknown as PrescribedExercise, sets) as Partial<SessionExercise>) : { sets });
+            }}
             inputMode="numeric"
             style={styles.miniInput}
           />

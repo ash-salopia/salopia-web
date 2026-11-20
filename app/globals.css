@@ -2,6 +2,7 @@
 
 :root {
   --ink: #0f1418;
+  --bg: var(--ink); /* used by full-page and drawer backgrounds; was never defined */
   --panel: #171d23;
   --panel2: #1f272e;
   --line: #2a343d;
