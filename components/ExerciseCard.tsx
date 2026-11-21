@@ -563,7 +563,9 @@ export default function ExerciseCard({
         </label>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", marginTop: 8 }}>
+      {/* Wraps onto a second line in narrow spaces (the programme builder's
+          session drawer, phones) instead of running off the right edge. */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 14, rowGap: 2, position: "relative", marginTop: 8 }}>
         <label style={styles.checkboxRow}>
           <input
             type="checkbox"
