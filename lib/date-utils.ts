@@ -93,6 +93,12 @@ export function dayOfWeekUTC(iso: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
+// Next Monday on or after today - week-grid programmes (0132) start on a
+// Monday, with every session on its own weekday from there.
+export function nextMondayISO(today = todayISO()): string {
+  return addDaysISO(today, (8 - dayOfWeekUTC(today)) % 7);
+}
+
 export interface ProgrammeStatus {
   lastDate: string | null;
   daysLeft: number | null;

@@ -73,6 +73,34 @@ need `0088` + `0089`. `seed-mas-hr-zones-demo.js` needs `0086`.
 Power/Speed sprint/jump sessions, the Session Library grant flow, guided
 multi-block recovery routines. Add these by hand in the demo org if needed.
 
+## `seed-demo-log-past.js` - run before any demo
+
+Sessions scheduled ahead stay unlogged as their dates pass, so after a few
+weeks the dashboard and reports show the whole demo squad as having missed
+a month. This logs every past, still-unlogged session after each athlete's
+last logged one (strength: continuing their own weights, with RPE and the
+odd PB; cardio / hybrid / power & speed: repeating what they logged last
+time), leaving about 1 in 12 as missed so compliance looks real. Covers the
+7 base athletes + Marcus Webb (VBT); re-run the MAS / RTP / RIR scripts for
+those three. Deterministic and only fills empty sessions - safe to re-run.
+
+```bash
+DRY_RUN=1 node scripts/seed-demo-log-past.js   # preview
+node scripts/seed-demo-log-past.js
+```
+
+Note: the MAS / RTP / RIR scripts delete their athlete before rebuilding,
+so a network drop mid-run leaves that athlete missing - just run it again.
+
+## `seed-programming-showcase.js`
+
+Six athletes named after a programming method - Tom Reid (5/3/1), Chloe
+Evans (Block), Daniel Hughes (DUP), Hannah Brooks (5x5), Mia Collins
+(Hypertrophy), Oliver Grant (Youth) - with fixed 1RMs, plus six
+"Showcase - ..." templates to build their programmes from in the builder.
+Re-running deletes and recreates those athletes (their sessions go too)
+and templates; programmes are left alone.
+
 ## `set-demo-programme-status.js`
 
 Standalone — sets one athlete's marker session date so the dashboard

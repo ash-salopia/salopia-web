@@ -14,7 +14,7 @@ Always respond with valid JSON only - no markdown:
   "programmeId": "exact id from the provided list, or null if no match",
   "programmeName": "matched name or what you heard",
   "startDate": "YYYY-MM-DD",
-  "spacingDays": 2,
+  "spacingDays": null,
   "confidence": 0.9,
   "message": "Brief confirmation of what you understood"
 }
@@ -28,11 +28,11 @@ Date parsing rules:
 
 Spacing rules:
 - "every day" / "daily" → 1
-- "every other day" / "alternate days" / default → 2
+- "every other day" / "alternate days" → 2
 - "3 times a week" → 2
 - "twice a week" → 3
 - "weekly" / "once a week" → 7
-- If not mentioned → 2`;
+- If not mentioned → null (keeps the programme's own day pattern)`;
 
 export async function POST(req: NextRequest) {
   // Verified login + daily cap - see lib/ai/usage-guard.ts.
@@ -74,7 +74,7 @@ Instruction: "${instruction}"`;
     programmeId?: string;
     programmeName?: string;
     startDate?: string;
-    spacingDays?: number;
+    spacingDays?: number | null;
     confidence?: number;
     message?: string;
   };
@@ -89,7 +89,7 @@ Instruction: "${instruction}"`;
     programmeId: parsed.programmeId ?? null,
     programmeName: parsed.programmeName ?? "",
     startDate: parsed.startDate ?? today,
-    spacingDays: parsed.spacingDays ?? 2,
+    spacingDays: parsed.spacingDays ?? null,
     confidence: parsed.confidence ?? 0,
     message: parsed.message ?? "",
   });

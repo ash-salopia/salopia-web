@@ -16,10 +16,10 @@ import { useState, useEffect } from "react";
 import {
   listProgrammes,
   assignProgrammeToAthlete,
-  loadProgrammeSessionForAthlete,
+  loadProgrammeSessionsForAthlete,
   scheduleProgrammeSessions,
 } from "@/lib/data/programmes";
-import { todayISO } from "@/lib/date-utils";
+import { dayOfWeekUTC, nextMondayISO, todayISO } from "@/lib/date-utils";
 import type { Programme } from "@/types";
 
 type Phase = "input" | "parsing" | "preview" | "saving";
@@ -59,7 +59,9 @@ function scheduleSessions(
   spacingDays: number | "original"
 ): ScheduledSession[] {
   const sessions = programme.sessions ?? [];
-  return scheduleProgrammeSessions(sessions, startDate, spacingDays === "original" ? undefined : spacingDays).map(
+  // Week-grid programmes (0132): startDate is Monday of week 1 and every
+  // session keeps its own weekday.
+  return scheduleProgrammeSessions(sessions, startDate, spacingDays === "original" ? undefined : spacingDays, programme.weeks != null).map(
     ({ session, date }) => ({ sessionId: session.id, name: session.name, date, sortOrder: session.sort_order })
   );
 }
@@ -94,7 +96,13 @@ export default function AssignProgrammeModal({
 
   useEffect(() => {
     listProgrammes()
-      .then((p) => { setProgrammes(p); if (p.length) setSelectedProgrammeId(p[0].id); })
+      .then((p) => {
+        setProgrammes(p);
+        if (p.length) {
+          setSelectedProgrammeId(p[0].id);
+          if (p[0].weeks != null) setStartDate(nextMondayISO());
+        }
+      })
       .catch(() => setError("Could not load programmes"))
       .finally(() => setLoading(false));
   }, []);
@@ -132,9 +140,11 @@ export default function AssignProgrammeModal({
       if (!(prog.sessions ?? []).length) throw new Error("This programme has no sessions yet");
 
       setSelectedProgramme(prog);
+      // No spacing mentioned = the programme's own day pattern.
+      const spacing: number | "original" = data.spacingDays || "original";
       setStartDate(data.startDate || todayISO());
-      setSpacingDays(data.spacingDays || 2);
-      setScheduledSessions(scheduleSessions(prog, data.startDate || todayISO(), data.spacingDays || 2));
+      setSpacingDays(spacing);
+      setScheduledSessions(scheduleSessions(prog, data.startDate || todayISO(), spacing));
       setPhase("preview");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not parse instruction");
@@ -207,11 +217,13 @@ export default function AssignProgrammeModal({
     try {
       await assignProgrammeToAthlete(selectedProgramme.id, athleteId);
       const sessionsById = new Map((selectedProgramme.sessions ?? []).map((s) => [s.id, s]));
-      for (const scheduled of scheduledSessions) {
-        const session = sessionsById.get(scheduled.sessionId);
-        if (!session) continue;
-        await loadProgrammeSessionForAthlete(session, athleteId, scheduled.date);
-      }
+      await loadProgrammeSessionsForAthlete(
+        scheduledSessions.flatMap((sc) => {
+          const session = sessionsById.get(sc.sessionId);
+          return session ? [{ session, date: sc.date }] : [];
+        }),
+        athleteId
+      );
       onScheduled(scheduledSessions.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not schedule programme");
@@ -269,7 +281,10 @@ export default function AssignProgrammeModal({
                         <div style={s.fieldLabel}>Programme</div>
                         <select
                           value={selectedProgrammeId}
-                          onChange={(e) => setSelectedProgrammeId(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedProgrammeId(e.target.value);
+                            if (programmes.find((p) => p.id === e.target.value)?.weeks != null) setStartDate(nextMondayISO());
+                          }}
                           style={s.select}
                         >
                           {programmes.map((p) => (
@@ -288,6 +303,12 @@ export default function AssignProgrammeModal({
                             onChange={(e) => setStartDate(e.target.value)}
                             style={s.input}
                           />
+                          {programmes.find((p) => p.id === selectedProgrammeId)?.weeks != null && spacingDays === "original" && (
+                            <div style={{ fontSize: 11, color: "var(--mute)", marginTop: 4, lineHeight: 1.4 }}>
+                              Monday of week 1 - sessions keep their weekdays.
+                              {startDate && dayOfWeekUTC(startDate) !== 1 ? " Not a Monday, so they shift to match." : ""}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <div style={s.fieldLabel}>Session spacing</div>

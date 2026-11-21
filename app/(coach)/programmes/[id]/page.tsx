@@ -9,7 +9,7 @@ import {
   deleteProgrammeSession,
   assignProgrammeToAthlete,
   unassignProgrammeFromAthlete,
-  loadProgrammeSessionForAthlete,
+  loadProgrammeSessionsForAthlete,
   scheduleProgrammeSessions,
   insertProgrammeSessions,
   saveProgrammeSessions,
@@ -28,7 +28,7 @@ import {
 } from "@/lib/programme-builder";
 import { listTemplates } from "@/lib/data/templates";
 import { listAthletes } from "@/lib/data/athletes";
-import { todayISO } from "@/lib/date-utils";
+import { dayOfWeekUTC, nextMondayISO, todayISO } from "@/lib/date-utils";
 import { usePendingUndo } from "@/lib/use-pending-undo";
 import UndoBanner from "@/components/UndoBanner";
 import type { Programme, ProgrammeSession, Athlete, Template, LibraryEntry } from "@/types";
@@ -308,7 +308,7 @@ export default function ProgrammeDetailPage() {
     setBulkPhase("pick");
     setBulkAthleteId("");
     setBulkAthleteSearch("");
-    setBulkStartDate(todayISO());
+    setBulkStartDate(programme?.weeks != null ? nextMondayISO() : todayISO());
     setBulkUseCustomSpacing(false);
     setBulkSpacingDays(2);
     setBulkLoadOpen(true);
@@ -352,9 +352,7 @@ export default function ProgrammeDetailPage() {
     setError("");
     try {
       await assignProgrammeToAthlete(programmeId, bulkAthleteId);
-      for (const row of bulkScheduled) {
-        await loadProgrammeSessionForAthlete(row.session, bulkAthleteId, row.date);
-      }
+      await loadProgrammeSessionsForAthlete(bulkScheduled, bulkAthleteId);
       setProgramme((prev) =>
         prev && !prev.assigned_to?.includes(bulkAthleteId)
           ? { ...prev, assigned_to: [...(prev.assigned_to ?? []), bulkAthleteId] }
@@ -551,7 +549,7 @@ export default function ProgrammeDetailPage() {
                 />
                 <p style={styles.hint}>
                   {weekStart
-                    ? `Pick the Monday of week 1 - every session lands on its own weekday from there.${bulkStartDate && dayOf(Math.round((Date.parse(bulkStartDate + "T12:00:00Z") / 86400000) + 3)) !== 0 ? " (That date isn't a Monday, so sessions shift to match it.)" : ""}`
+                    ? `Pick the Monday of week 1 - every session lands on its own weekday from there.${bulkStartDate && dayOfWeekUTC(bulkStartDate) !== 1 ? " (That date isn't a Monday, so sessions shift to match it.)" : ""}`
                     : "Sessions load with the exact day pattern they were saved with (including rest days) - the first one lands on the start date above. You can switch to fixed spacing instead on the next step."}
                 </p>
                 <div style={{ display: "flex", gap: 10 }}>
