@@ -6,7 +6,8 @@
 // hold). Mode defaults to whichever of reps/time already has a value
 // (matches the inference SessionReviewEditor already uses elsewhere),
 // but an explicit toggle click always wins over that inference so a
-// coach can switch to time mode on a fresh, still-empty field.
+// coach can switch to time mode on a fresh, still-empty field. Toggling
+// back restores what was typed before the switch.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
@@ -27,6 +28,9 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
   reps = reps ?? "";
   time = time ?? "";
   const [explicitMode, setExplicitMode] = useState<"reps" | "time" | null>(null);
+  // What was in each mode before switching away, so toggling back puts it
+  // back (12 reps -> time -> reps shows 12 again) rather than an empty box.
+  const [stash, setStash] = useState<{ reps: string; time: string }>({ reps: "", time: "" });
   const mode: "reps" | "time" = explicitMode ?? (time.trim() ? "time" : "reps");
   const value = mode === "time" ? time : reps;
 
@@ -42,9 +46,16 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
   const toggle = () => {
     const next: "reps" | "time" = mode === "time" ? "reps" : "time";
     setExplicitMode(next);
-    // Clear the field being switched away from so a stale value can't
-    // linger unseen under the other mode.
-    onChange(next === "time" ? { reps: "" } : { time: "" });
+    // The saved prescription only ever holds the mode in use (a stale
+    // value under the other mode would confuse the athlete app), but the
+    // value switched away from is kept here and restored on the way back.
+    if (next === "time") {
+      setStash((prev) => ({ ...prev, reps }));
+      onChange({ reps: "", time: time || stash.time });
+    } else {
+      setStash((prev) => ({ ...prev, time }));
+      onChange({ time: "", reps: reps || stash.reps });
+    }
   };
 
   return (
