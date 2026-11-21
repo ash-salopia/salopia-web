@@ -253,7 +253,9 @@ export default function StoreView({
           </>
         )}
 
-        <section style={s.seller}>
+        <p style={s.afterBuy}>After you buy, the programme waits in your training app until you press Start - then every session lands on your calendar.</p>
+
+        <section style={{ ...s.seller, marginTop: 12 }}>
           <div style={s.sellerTitle}>Seller details</div>
           <div style={s.sellerText}>
             {[store.seller.tradingName || store.name, store.seller.address].filter(Boolean).join(" · ")}
@@ -274,8 +276,7 @@ export default function StoreView({
         </section>
 
         <footer style={s.footer}>
-          After you buy, the programme waits in your training app until you press Start - then every session lands on your calendar.
-          <div style={{ marginTop: 8 }}>
+          <div>
             Powered by VIS BUILD ·{" "}
             <a href="/privacy" style={{ color: "var(--mute)" }}>Privacy</a>
           </div>
@@ -339,5 +340,6 @@ const s: Record<string, React.CSSProperties> = {
   ghostSm: { background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 12px", fontSize: 13, cursor: "pointer" },
   linkBtn: { background: "none", border: "none", color: "var(--accent)", fontWeight: 700, cursor: "pointer", fontSize: 14, padding: 0 },
   resultsHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 },
+  afterBuy: { margin: "32px 0 0", fontSize: 13, color: "var(--mute)", textAlign: "center", lineHeight: 1.5 },
   footer: { marginTop: 32, fontSize: 12, color: "var(--mute)", textAlign: "center", lineHeight: 1.5 },
 };
