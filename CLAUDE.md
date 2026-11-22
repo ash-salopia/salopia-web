@@ -13,7 +13,7 @@ seat-based licenses to other coaches.
 
 ## Stack
 
-Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
+Next.js 16 (App Router, built with webpack via `next build --webpack`), React 19, TypeScript, Tailwind CSS, Supabase (Postgres + RLS
 + Auth), Vercel, Node v24, npm 11.
 
 ## Architecture — two separate surfaces
@@ -35,8 +35,9 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
 
 ## Critical gotchas (learned the hard way — don't repeat these)
 
-- **`/api/athlete-link/*` middleware rule**: this whole prefix bypasses the
-  login-redirect check in `middleware.ts` (athletes have no login session).
+- **`/api/athlete-link/*` proxy rule**: this whole prefix bypasses the
+  login-redirect check in `proxy.ts` (Next 16's name for middleware;
+  athletes have no login session).
   API routes under this prefix must NEVER redirect to `/login` — always
   return JSON errors. Any NEW route under this prefix must do its OWN
   security check if it's actually coach-only (see `detect-pb/route.ts` for
@@ -92,12 +93,11 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
 ## Reliability infrastructure (in place as of this session)
 
 - **Error monitoring (Sentry, dormant by default)**: `@sentry/nextjs`
-  installed, `sentry.{client,server,edge}.config.ts` + `instrumentation.ts`
-  wired up (classic pattern — this repo is Next 14/webpack, not
-  Turbopack/Next 15, so `instrumentation-client.ts` doesn't apply yet).
-  `next.config.js` has `experimental.instrumentationHook: true` (required
-  on Next 14 for `instrumentation.ts` to run at all) and is wrapped with
-  `withSentryConfig`. Everything reads one `NEXT_PUBLIC_SENTRY_DSN` env
+  installed: `instrumentation-client.ts` (browser), `sentry.server.config.ts`
+  + `sentry.edge.config.ts` loaded by `instrumentation.ts`, which also
+  exports `onRequestError` for server-render errors. `next.config.js` is
+  wrapped with `withSentryConfig` (webpack build - Turbopack is Next 16's
+  default, so `build`/`dev` pass `--webpack` explicitly). Everything reads one `NEXT_PUBLIC_SENTRY_DSN` env
   var (DSNs are public, not secret) and is a genuine no-op — confirmed via
   `npm run build` — until it's set. `app/error.tsx` (renamed component
   `ErrorBoundary`, not `GlobalError`) and the new `app/global-error.tsx`
@@ -218,30 +218,12 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase (Postgres + RLS
   comparisons (side-by-side, likely on the Reporting tab) — explicitly
   deferred by Ash on 2026-08-14 while building the Reporting tab/Squad
   Report, logged here rather than built then.
-- **Security: Next.js major-version upgrade needed** (found 2026-08-17,
-  deliberately deferred rather than rushed). `npm audit` flags 1
-  critical + 3 high vulnerabilities in `next` (currently pinned at
-  `14.2.15`) — `npm audit fix --dry-run` shows no fix exists within the
-  14.x line; the advisory data requires jumping straight to
-  `next@16.3.1`, skipping 15 entirely. Some of the flagged CVEs are
-  genuinely relevant to this app's shape (authorization bypass in
-  middleware, SSRF, cache poisoning, unauthenticated Server Function
-  endpoint disclosure) — this isn't noise, but a same-session bolt-on
-  fix was rejected on purpose: a 14→16 jump touches App Router
-  internals, middleware, caching, and Server Actions across the whole
-  app (coach dashboard, athlete share-link app, PDF reporting, Stripe
-  billing, the testing system, public Home Programmes), and needs a
-  full regression pass on a branch (ideally against a staging Supabase
-  project) before it ever reaches production — not something to rush
-  at the tail of an unrelated session. Note RLS, not middleware, is
-  this app's actual data-access enforcement layer (see the
-  architecture section above), so the practical exploitability of the
-  middleware-specific CVEs here is likely narrower than their raw
-  severity rating suggests — worth keeping in mind when scoping how
-  urgently to schedule this, but it should still get dedicated time
-  soon, not sit indefinitely. `postcss` (also flagged, high) is a
-  transitive dependency of `next` and resolves itself once `next` is
-  upgraded — no independent action needed. `xlsx` (also flagged, high
+- **Security: Next.js upgraded 14.2.35 → 16.4.6** (2026-11-22, with
+  React 19.3.1, @sentry/nextjs 10.78, @supabase/ssr 0.12) - clears the
+  critical/high `next` + `postcss` advisories found 2026-08-17. Request
+  APIs (`cookies()`, `params`) are async; `middleware.ts` became
+  `proxy.ts`; builds stay on webpack. Remaining `npm audit` items: build-
+  time-only Sentry plugin deps (moderate) and `xlsx` (below). `xlsx` (also flagged, high
   — Prototype Pollution + ReDoS) has **no available npm fix at all**:
   SheetJS stopped publishing security patches to the public npm
   package and moved them to their own CDN instead. Used client-side in

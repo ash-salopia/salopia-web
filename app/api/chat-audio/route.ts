@@ -13,8 +13,8 @@ import { cookies } from "next/headers";
 
 const FILE_SIZE_LIMIT = 10 * 1024 * 1024; // 10 MB - a voice note is short audio, not a real file upload
 
-function getSupabase() {
-  const cookieStore = cookies();
+async function getSupabase() {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -23,7 +23,7 @@ function getSupabase() {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 

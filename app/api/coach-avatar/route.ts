@@ -6,8 +6,8 @@ import { createServiceRoleClient } from "@/lib/supabase-service";
 const FILE_SIZE_LIMIT = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-function getSupabase() {
-  const cookieStore = cookies();
+async function getSupabase() {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -20,7 +20,7 @@ function getSupabase() {
 // project (see app/api/documents/route.ts) — service role + a
 // session-derived id, same pattern as documents.
 export async function POST(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 

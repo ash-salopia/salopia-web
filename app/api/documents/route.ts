@@ -12,8 +12,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.ms-excel",                                                 // .xls
 ]);
 
-function getSupabase() {
-  const cookieStore = cookies();
+async function getSupabase() {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -36,7 +36,7 @@ function getStorageClient() {
 
 // GET /api/documents?athlete_id=xxx — docs one athlete currently has access to
 export async function GET(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   const athleteId = req.nextUrl.searchParams.get("athlete_id");
   if (!athleteId) return NextResponse.json({ error: "athlete_id required" }, { status: 400 });
 
@@ -74,7 +74,7 @@ function parseAthleteIds(raw: { athlete_ids?: unknown; athlete_id?: unknown }): 
 // shared with one or more athletes at once. One document, one file
 // upload, however many recipients — not one copy per athlete.
 export async function POST(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
 // PATCH /api/documents?id=xxx  { athlete_ids: string[] } — replace who
 // has access to a document. Doesn't touch the document/file itself.
 export async function PATCH(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -221,7 +221,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/documents?id=xxx  — delete a document (and its storage file)
 export async function DELETE(req: NextRequest) {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 

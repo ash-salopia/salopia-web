@@ -15,12 +15,14 @@ async function load(slug: string) {
   return getStoreBySlug(slug);
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const store = await load(params.slug);
   return { title: store ? `${store.name} - Programmes` : "Store not found" };
 }
 
-export default async function StorePage({ params }: { params: { slug: string } }) {
+export default async function StorePage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const store = await load(params.slug);
   if (!store) notFound();
   const { data: org } = await createServiceRoleClient()

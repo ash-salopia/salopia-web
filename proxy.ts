@@ -2,7 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isReadOnlyRestricted } from "@/lib/billing/access";
 
-// Runs on every request. Two jobs:
+// Next 16's "proxy" (formerly proxy.ts - same job, renamed, now on
+// the Node.js runtime). Runs on every request. Two jobs:
 // 1. Refresh the Supabase auth session so it doesn't silently expire.
 // 2. Redirect to /login if someone tries to load a coach page while
 //    signed out, and redirect away from /login if already signed in.
@@ -10,11 +11,11 @@ import { isReadOnlyRestricted } from "@/lib/billing/access";
 // RULES OF THUMB when adding new routes:
 // - Any athlete-facing API belongs under /api/athlete-link/ — that whole
 //   prefix bypasses auth automatically (token validation happens inside
-//   each route handler). No middleware change needed.
+//   each route handler). No proxy change needed.
 // - API routes NEVER get redirected to /login. Redirecting an API call
 //   returns HTML to a fetch() that expected JSON, which surfaces as
 //   confusing parse errors client-side. They get a 401 JSON response.
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // These never look at `user` at all (auth callback, the athlete

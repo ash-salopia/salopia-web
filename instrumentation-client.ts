@@ -1,8 +1,6 @@
-// Runs in the browser, auto-loaded by withSentryConfig (next.config.js).
-// This repo is on Next.js 14 (webpack, not Turbopack) — the classic
-// sentry.{client,server,edge}.config.ts + instrumentation.ts pattern is
-// what gets picked up there. The newer instrumentation-client.ts
-// convention only applies to Next 15+/Turbopack setups.
+// Browser-side Sentry setup. Next 15.3+ loads instrumentation-client.ts
+// automatically in the browser (this replaced sentry.client.config.ts on
+// the move to Next 16; it works with both webpack and Turbopack builds).
 //
 // Entirely dormant until NEXT_PUBLIC_SENTRY_DSN is set — Sentry.init()
 // with an empty dsn is a documented no-op (nothing captured, nothing
@@ -22,3 +20,6 @@ Sentry.init({
   // Quieten the SDK's own console output in the browser.
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
 });
+
+// Lets Sentry tie client-side navigations to the errors that follow them.
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
