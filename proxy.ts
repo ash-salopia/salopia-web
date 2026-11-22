@@ -141,6 +141,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except static assets and Next.js internals
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Run on everything except static assets and Next.js internals. The
+  // public/ files a signed-out visitor must be able to fetch are listed
+  // too: the PWA manifest and the push service worker (athletes never
+  // have a login, so redirecting /sw.js to /login stopped their phones
+  // registering for push at all), the logo images emails link to, and
+  // robots.txt.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|logo/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };
