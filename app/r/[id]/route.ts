@@ -34,7 +34,8 @@ const BAR = `<div class="vb-share-bar" style="background:#eef3fb;border:1px soli
 To keep a copy, use your browser&rsquo;s <b>Print</b> option and choose <b>Save as PDF</b>.</div>
 <style>@media print { .vb-share-bar { display: none !important; } }</style>`;
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   noStore(); // a withdrawn or expired link must stop working immediately
   if (!UUID_RE.test(params.id)) return message("Report not found", "Check the link and try again.", 404);
 

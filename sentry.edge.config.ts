@@ -1,4 +1,4 @@
-// Runs in the Edge runtime — middleware.ts, and any route explicitly
+// Runs in the Edge runtime — any route explicitly
 // opted into `export const runtime = "edge"`. Loaded by
 // instrumentation.ts. Same dormant-until-configured behaviour as the
 // other two config files.

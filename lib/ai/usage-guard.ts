@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 
 // Gate for every paid AI route on the coach side. Two jobs:
-//  1. A real login check. middleware.ts only decodes the session cookie
+//  1. A real login check. proxy.ts only decodes the session cookie
 //     locally (getSession, no signature check), which is fine for pages
 //     whose data RLS protects - but these routes spend money without
 //     touching the database, so they verify with getUser() themselves.

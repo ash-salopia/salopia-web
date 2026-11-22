@@ -1,7 +1,7 @@
 // Public marketing/signup landing page - the shareable link for
 // getting new coaches to sign up, since /login itself is a bare
 // email-and-org-name form with no context for a cold visitor. See
-// middleware.ts's skipsAuthCheck for why this route is public.
+// proxy.ts's skipsAuthCheck for why this route is public.
 
 const FEATURES = [
   {

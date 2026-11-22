@@ -2,7 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isReadOnlyRestricted } from "@/lib/billing/access";
 
-// Runs on every request. Two jobs:
+// Next 16's "proxy" (formerly proxy.ts - same job, renamed, now on
+// the Node.js runtime). Runs on every request. Two jobs:
 // 1. Refresh the Supabase auth session so it doesn't silently expire.
 // 2. Redirect to /login if someone tries to load a coach page while
 //    signed out, and redirect away from /login if already signed in.
@@ -10,11 +11,11 @@ import { isReadOnlyRestricted } from "@/lib/billing/access";
 // RULES OF THUMB when adding new routes:
 // - Any athlete-facing API belongs under /api/athlete-link/ — that whole
 //   prefix bypasses auth automatically (token validation happens inside
-//   each route handler). No middleware change needed.
+//   each route handler). No proxy change needed.
 // - API routes NEVER get redirected to /login. Redirecting an API call
 //   returns HTML to a fetch() that expected JSON, which surfaces as
 //   confusing parse errors client-side. They get a 401 JSON response.
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // These never look at `user` at all (auth callback, the athlete
@@ -140,6 +141,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except static assets and Next.js internals
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Run on everything except static assets and Next.js internals. The
+  // public/ files a signed-out visitor must be able to fetch are listed
+  // too: the PWA manifest and the push service worker (athletes never
+  // have a login, so redirecting /sw.js to /login stopped their phones
+  // registering for push at all), the logo images emails link to, and
+  // robots.txt.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|logo/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };

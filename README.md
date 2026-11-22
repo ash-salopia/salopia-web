@@ -36,7 +36,7 @@ salopia-web/
 │   │   └── 0009_live_group.sql
 │   └── tests/
 │       └── rls_permission_tests.sql   # Manual RLS verification checklist
-├── middleware.ts          # Session refresh + route protection
+├── proxy.ts          # Session refresh + route protection
 ├── package.json
 ├── tsconfig.json
 ├── next.config.js

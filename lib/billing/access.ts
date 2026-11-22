@@ -1,5 +1,5 @@
 // Pure, dependency-free so it can be imported from both the Edge
-// runtime (middleware.ts) and normal client/server code without
+// runtime (proxy.ts) and normal client/server code without
 // dragging in the Supabase client itself.
 
 export const GRACE_PERIOD_DAYS = 7;
