@@ -6,6 +6,9 @@ import TeamSettings from "@/components/TeamSettings";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
 import DeletePasswordSettings from "@/components/DeletePasswordSettings";
+import BandsEditor from "@/components/BandsEditor";
+import { bandsFrom } from "@/lib/bands";
+import { resetOrgBandsCache } from "@/lib/use-org-bands";
 
 import { useState, useEffect, useRef } from "react";
 import { getOrgSettings, updateOrgSettings, DEFAULT_SETTINGS } from "@/lib/data/settings";
@@ -207,6 +210,16 @@ export default function SettingsPage() {
       </CollapsibleSection>
 
       {/* ── Units ── */}
+      <CollapsibleSection title="Resistance bands">
+        <BandsEditor
+          bands={bandsFrom(settings)}
+          onChange={(next) => {
+            resetOrgBandsCache();
+            setSettings((prev) => ({ ...prev, bands: next }));
+          }}
+        />
+      </CollapsibleSection>
+
       <CollapsibleSection title="Units">
         <div style={s.card}>
           <div style={s.cardLabel}>Weight unit</div>

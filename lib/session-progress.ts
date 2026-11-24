@@ -4,6 +4,7 @@
 // session summary is grounded in the exact same numbers the coach
 // sees live.
 
+import { loadLabel } from "@/lib/exercise-dose";
 import type { SessionExercise } from "@/types";
 
 export type ProgressionSignal = { direction: "up" | "down" | "same"; label: string };
@@ -47,7 +48,8 @@ export function findPreviousExercise(
 export function formatPrevSets(ex: SessionExercise | null): string | null {
   if (!ex) return null;
   const timeMode = (ex.time ?? "").trim().length > 0;
-  const showWeight = !ex.is_bodyweight;
+  // A band logged on an assisted bodyweight lift ("Red band") still shows.
+  const showWeight = !ex.is_bodyweight || (ex.log ?? []).some((l) => /[a-z]/i.test(l.weight ?? ""));
   const withPause = (s: string, l: { pause?: string }) =>
     ex.track_pause && l.pause?.trim() ? `${s} @${l.pause}s` : s;
   const parts = (ex.log ?? [])
@@ -56,13 +58,13 @@ export function formatPrevSets(ex: SessionExercise | null): string | null {
       // Weighted holds (e.g. anterior hold) log both — show the load too,
       // not just the time.
       if (timeMode) {
-        const w = showWeight && l.weight?.trim() ? `${l.weight}kg` : "";
+        const w = showWeight && l.weight?.trim() ? loadLabel(l.weight) : "";
         if (l.time?.trim()) return w ? `${w}×${l.time}s` : `${l.time}s`;
         return w || null;
       }
       if (!showWeight) return l.reps?.trim() ? withPause(`×${l.reps}`, l) : null;
-      if (l.weight?.trim() && l.reps?.trim()) return withPause(`${l.weight}kg×${l.reps}`, l);
-      if (l.weight?.trim()) return withPause(`${l.weight}kg`, l);
+      if (l.weight?.trim() && l.reps?.trim()) return withPause(`${loadLabel(l.weight)}×${l.reps}`, l);
+      if (l.weight?.trim()) return withPause(loadLabel(l.weight), l);
       // No load entered (not flagged bodyweight, just no weight this set) —
       // same reps-only fallback the bodyweight branch above gets, so a
       // pull-up logged with reps and no weight still shows in "Last:".

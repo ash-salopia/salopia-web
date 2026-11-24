@@ -7,7 +7,7 @@
 import type { PrescribedExercise, ProgrammeSession, TemplateDef } from "@/types";
 import { toPrescription } from "@/lib/prescription";
 import { percentFor, type RepScheme } from "@/lib/rep-charts";
-import { setGroups } from "@/lib/exercise-dose";
+import { loadLabel, setGroups } from "@/lib/exercise-dose";
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -218,7 +218,7 @@ export function describeDose(ex: PrescribedExercise): string {
   if (grouped) return grouped + (ex.rpe != null ? ` RPE ${ex.rpe}` : "");
   const load = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%`
     : ex.percent_1rm != null && ex.use_percent_1rm ? ` @ ${ex.percent_1rm}%`
-    : ex.target_load ? ` @ ${ex.target_load}kg` : "";
+    : ex.target_load ? ` @ ${loadLabel(ex.target_load)}` : "";
   const effort = ex.rpe != null ? ` RPE ${ex.rpe}` : ex.use_rir && ex.set_rir?.length ? ` RIR ${ex.set_rir.join("/")}` : "";
   return `${ex.sets ?? "-"} x ${ex.reps || "-"}${load}${effort}`;
 }
@@ -387,10 +387,10 @@ export function describeField(ex: PrescribedExercise, field: ProgressionField): 
       if (!ex.reps) return "-";
       const grouped = setGroups(ex);
       if (grouped) return grouped;
-      const pct = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%` : ex.target_load ? ` @ ${ex.target_load}kg` : "";
+      const pct = ex.use_percent_1rm && ex.set_percents?.length ? ` @ ${pctList(ex.set_percents)}%` : ex.target_load ? ` @ ${loadLabel(ex.target_load)}` : "";
       return `${ex.reps} reps${pct}`;
     }
-    case "load": return ex.target_load ? `${ex.target_load}kg` : "-";
+    case "load": return ex.target_load ? loadLabel(ex.target_load) : "-";
     case "percent": return setGroups(ex) ?? (ex.set_percents?.length && ex.use_percent_1rm ? `${ex.sets} x ${ex.reps} @ ${pctList(ex.set_percents)}%` : ex.percent_1rm != null ? `${ex.percent_1rm}%` : "-");
     case "rpe": return ex.rpe != null ? `RPE ${ex.rpe}` : "-";
     case "rir": return ex.set_rir?.length ? `RIR ${ex.set_rir.join("/")}` : "-";

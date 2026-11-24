@@ -20,6 +20,9 @@ export function repsForSet(reps: string | undefined, setIndex: number): string {
   return parts.length ? parts[Math.min(setIndex, parts.length - 1)] : r;
 }
 
+/** Holds, planks, carries and hangs are prescribed by time; everything else by reps. */
+export const looksTimed = (name: string) => /\b(plank|hold|iso|isometric|wall sit|carry|hang|bridge hold|l-sit|hollow)\b/i.test(name);
+
 /** "60" -> "60kg"; anything with its own wording ("BW+10", "60kg", "RPE 8") as typed. */
 export const loadLabel = (load: string) => (/^\d+(\.\d+)?$/.test(load.trim()) ? `${load.trim()}kg` : load.trim());
 
