@@ -9,6 +9,8 @@ import { saveLibraryEntry } from "@/lib/data/library";
 import type { PrescribedExercise, SessionExercise, SetLog, LibraryEntry } from "@/types";
 import { exerciseDose, repsForSet } from "@/lib/exercise-dose";
 import { resizeSets } from "@/lib/programme-builder";
+import { useOrgBands } from "@/lib/use-org-bands";
+import { bandLabel, bandOf, type Band } from "@/lib/bands";
 
 interface Props {
   exercise: SessionExercise;
@@ -163,8 +165,10 @@ export default function ExerciseCard({
     const patch: Partial<SessionExercise> = { name: entry.name };
     if (entry.video_url) patch.video_url = entry.video_url;
     if (entry.sets) patch.sets = parseInt(entry.sets, 10) || exercise.sets;
-    if (entry.reps) patch.reps = entry.reps;
-    if (entry.time) patch.time = entry.time;
+    // Reps and time are either/or: a timed library exercise (e.g. a
+    // 30-40s hold) replaces the card's default reps, and vice versa.
+    if (entry.reps) { patch.reps = entry.reps; patch.time = ""; }
+    if (entry.time) { patch.time = entry.time; patch.reps = ""; }
     if (entry.rest) patch.rest = entry.rest;
     if (entry.target_load) patch.target_load = entry.target_load;
     if (entry.tempo) patch.tempo = entry.tempo;
@@ -230,6 +234,7 @@ export default function ExerciseCard({
   // %1RM and per-set schemes included ("3×5 @ 75%", "3 @ 87.5% · 3×5 @
   // 77.5%") - the shared format from lib/exercise-dose.ts.
   const prescSummary = exerciseDose(exercise);
+  const bands = useOrgBands();
 
   return (
     <div
@@ -703,12 +708,21 @@ export default function ExerciseCard({
         </Field>
         {!exercise.is_bodyweight && !exercise.use_percent_1rm && !exercise.use_rir && !exercise.completion_only && (
           <Field label="Load" grow>
-            <input
-              value={exercise.target_load}
-              onChange={(e) => onEditPresc({ target_load: e.target.value })}
-              placeholder="e.g. 60kg"
-              style={styles.miniInput}
-            />
+            <div style={{ display: "flex", gap: 4 }}>
+              <input
+                value={exercise.target_load}
+                onChange={(e) => onEditPresc({ target_load: e.target.value })}
+                placeholder="e.g. 60kg"
+                style={{ ...styles.miniInput, flex: 1, minWidth: 0 }}
+              />
+              <BandPicker bands={bands} value={exercise.target_load} onPick={(v) => onEditPresc({ target_load: v })} />
+            </div>
+          </Field>
+        )}
+        {exercise.is_bodyweight && !exercise.completion_only && (
+          // Assisted bodyweight work (pull-ups, dips): the band is the load.
+          <Field label="Band (assisted)" grow>
+            <BandPicker bands={bands} value={exercise.target_load} onPick={(v) => onEditPresc({ target_load: v })} wide />
           </Field>
         )}
         {exercise.track_velocity && !exercise.completion_only && (
@@ -924,6 +938,33 @@ function Field({
       <div style={styles.fieldLabel}>{label}</div>
       {children}
     </div>
+  );
+}
+
+// A band as the prescribed load ("Red band"), for assisted or banded work.
+// The athlete then picks the band they used per set instead of typing kg.
+function BandPicker({ bands, value, onPick, wide }: { bands: Band[]; value: string; onPick: (v: string) => void; wide?: boolean }) {
+  const current = bandOf(value, bands);
+  return (
+    <select
+      value={current ? bandLabel(current) : ""}
+      onChange={(e) => onPick(e.target.value)}
+      title="Prescribe a resistance band instead of kg"
+      aria-label="Band"
+      style={{
+        ...styles.miniInput,
+        width: wide ? "100%" : 82,
+        flex: wide ? 1 : "0 0 82px",
+        padding: "0 4px",
+        color: current ? "var(--text)" : "var(--mute)",
+        borderLeft: `4px solid ${current?.colour ?? "var(--line)"}`,
+      }}
+    >
+      <option value="">{wide ? "No band" : "Band"}</option>
+      {bands.map((b) => (
+        <option key={b.name} value={bandLabel(b)}>{b.name}{b.range ? ` (${b.range})` : ""}</option>
+      ))}
+    </select>
   );
 }
 

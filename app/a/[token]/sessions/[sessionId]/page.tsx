@@ -3,6 +3,7 @@ import { getAthleteByShareToken, getAthleteSessions, getOrgSettingsForAthlete, g
 import AthleteSessionView from "@/components/AthleteSessionView";
 import { computeZones, DEFAULT_ZONE_MODEL, type ComputedZone } from "@/lib/training-zones";
 import { isAvailable } from "@/lib/rtp";
+import { DEFAULT_BANDS, bandsFrom, type Band } from "@/lib/bands";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +37,14 @@ export default async function AthleteLinkSessionPage({
   let zonesEnabled = true;
   let wellnessCheckIn = false;
   let painCheckIn = false;
+  let bands: Band[] = DEFAULT_BANDS;
   try {
     const [settings, todayCheckIn] = await Promise.all([
       getOrgSettingsForAthlete(athlete.id),
       getTodayCheckIn(athlete.id),
     ]);
     lockUntilCheckin = !!settings.lock_until_checkin;
+    bands = bandsFrom(settings);
     checkedInToday = !!todayCheckIn;
     zonesEnabled = settings.aerobic_zones_enabled !== false;
     // The wellness/pain questions are only asked of athletes who are actually
@@ -73,6 +76,7 @@ export default async function AthleteLinkSessionPage({
       zonesEnabled={zonesEnabled}
       wellnessCheckIn={wellnessCheckIn}
       painCheckIn={painCheckIn}
+      bands={bands}
     />
   );
 }

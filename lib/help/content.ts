@@ -1080,6 +1080,18 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "resistance-bands",
+    category: "programmes",
+    title: "Resistance bands for assisted exercises",
+    summary: "Prescribe a band instead of kg (e.g. Red band for assisted pull-ups) and athletes log which band they used.",
+    keywords: ["band", "bands", "resistance band", "assisted", "pull up", "dip", "red band", "colour", "progression"],
+    body: [
+      { type: "p", text: "Set up your bands once in **Settings \u2192 Resistance bands**: colour, and the help (or resistance) each gives, lightest to heaviest. Every brand grades its colours differently, so edit the defaults to match yours." },
+      { type: "p", text: "In an exercise, pick a band from the **Band** box next to Load (for a bodyweight exercise it's **Band (assisted)**). Exercises with \"band\" or \"assisted\" in the name are treated as banded automatically." },
+      { type: "p", text: "Athletes then choose the band they used for each set instead of typing kg - in the app and in Live group - and \u2713 logs your prescribed band if they don't change it. \"Last time\" shows the band. Bands aren't counted as kg in reports; progress an assisted lift by prescribing a lighter band." },
+    ],
+  },
+  {
     id: "programme-builder",
     category: "programmes",
     title: "Build a programme week by week",

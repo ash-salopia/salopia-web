@@ -9,6 +9,7 @@ import type { LibraryEntry } from "@/types";
 import { MetricToggles, DistanceUnitPills } from "@/components/MetricBoxes";
 import { METRIC_META, EQUIPMENT_ORDER, EQUIPMENT_META, metricsForEquipment, type MetricKey, type EquipmentType, type DistanceUnit } from "@/lib/cardio-metrics";
 import { PS_METRIC_META, PS_METRIC_ORDER, migrateMeasurementType, type PSMetricKey } from "@/lib/ps-metrics";
+import RepsTimeField from "@/components/RepsTimeField";
 
 const MAX_KEY_METRICS = 5;
 
@@ -104,6 +105,7 @@ export default function LibraryEntryForm({
   const [videoUrl, setVideoUrl] = useState(entry?.video_url ?? "");
   const [sets, setSets] = useState(entry?.sets ?? "");
   const [reps, setReps] = useState(entry?.reps ?? "");
+  const [time, setTime] = useState(entry?.time ?? ""); // e.g. "30-40s" for a hold
   const [rest, setRest] = useState(entry?.rest ?? "");
   const [targetLoad, setTargetLoad] = useState(entry?.target_load ?? "");
   const [tempo, setTempo] = useState(entry?.tempo ?? "2-0-2");
@@ -161,6 +163,7 @@ export default function LibraryEntryForm({
       video_url: videoUrl.trim(),
       sets,
       reps,
+      time,
       rest,
       target_load: targetLoad,
       tempo,
@@ -227,7 +230,19 @@ export default function LibraryEntryForm({
         <>
           <div style={{ display: "flex", gap: 8 }}>
             <FieldRow label="Sets"><input value={sets} onChange={(e) => setSets(e.target.value)} style={s.input} /></FieldRow>
-            <FieldRow label="Reps"><input value={reps} onChange={(e) => setReps(e.target.value)} style={s.input} /></FieldRow>
+            <div style={{ flex: 1, marginBottom: 12 }}>
+              {/* # = reps, ⏱ = time (e.g. 3 x 30-40s for a hold) - same switch as the session editor */}
+              <RepsTimeField
+                reps={reps}
+                time={time}
+                onChange={(patch) => {
+                  if (patch.reps !== undefined) setReps(patch.reps);
+                  if (patch.time !== undefined) setTime(patch.time);
+                }}
+                inputStyle={s.input}
+                labelStyle={s.fieldLabel}
+              />
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <FieldRow label="Rest"><input value={rest} onChange={(e) => setRest(e.target.value)} style={s.input} /></FieldRow>

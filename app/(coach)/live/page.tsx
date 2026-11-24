@@ -25,7 +25,9 @@ import {
   PS_METRIC_META, resolveTrackedMetrics, normalizePSLog, emptyPSSetLog, bestPSValue,
   type PSSetLog, type PSMetricKey,
 } from "@/lib/ps-metrics";
-import { repsForSet } from "@/lib/exercise-dose";
+import { repsForSet, looksTimed } from "@/lib/exercise-dose";
+import { useOrgBands } from "@/lib/use-org-bands";
+import { bandLabel, bandOf, isBandExercise } from "@/lib/bands";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -144,6 +146,7 @@ export default function LiveGroupPage() {
   // Starts as "trial" (no limits) until the org's plan loads.
   const [limits, setLimits] = useState<LiveGroupLimits>(() => liveGroupLimits("trial"));
   const control = useLiveControl();
+  const bands = useOrgBands(); // resistance bands, for assisted / banded exercises
   const queue = useLiveQueueStatus();
   const allAthleteIds = useRef<string[]>([]);
 
@@ -577,7 +580,9 @@ export default function LiveGroupPage() {
   // to the fields this quick-edit popup actually has.
   const applyEditLibraryPreset = (entry: LibraryEntry) => {
     setEditDraft((d) => {
-      const timeMode = entry.time ? true : entry.reps ? false : d.mode;
+      // The library's own reps/time, else what the exercise is: a hold or
+      // plank -> time, anything else -> reps (never left on a stale mode).
+      const timeMode = entry.time ? true : entry.reps ? false : looksTimed(entry.name);
       return {
         name: entry.name,
         sets: entry.sets ? entry.sets : d.sets,
@@ -892,7 +897,9 @@ export default function LiveGroupPage() {
                     // needs a Time column, not Reps. Without this,
                     // every exercise showed kg + reps regardless of
                     // how it was actually prescribed.
-                    const showWeight = !ex.is_bodyweight;
+                    // Banded / assisted work logs the band used instead of kg.
+                    const bandMode = isBandExercise(ex, bands);
+                    const showWeight = bandMode || !ex.is_bodyweight;
                     const timeMode = (ex.time ?? "").trim().length > 0;
                     const completionOnly = !!ex.completion_only;
                     const showVelocity = !!ex.track_velocity && !completionOnly;
@@ -964,7 +971,7 @@ export default function LiveGroupPage() {
                                 {(ex.log ?? []).map((set, si) => (
                                   <button key={si}
                                     title={
-                                      showWeight && set.weight ? `${set.weight}kg`
+                                      showWeight && set.weight ? (bandMode ? set.weight : `${set.weight}kg`)
                                       : timeMode && set.time ? `${set.time}s`
                                       : `Set ${si + 1}`
                                     }
@@ -1014,7 +1021,7 @@ export default function LiveGroupPage() {
                           <div style={s.setEditor}>
                             <div style={{ ...s.setHeaderRow, gridTemplateColumns: setGridCols }}>
                               <span style={s.setColLabel}>Set</span>
-                              {!completionOnly && showWeight && <span style={s.setColLabel}>Weight (kg)</span>}
+                              {!completionOnly && showWeight && <span style={s.setColLabel}>{bandMode ? "Band" : "Weight (kg)"}</span>}
                               {!completionOnly && <span style={s.setColLabel}>{timeMode ? "Time (s)" : "Reps"}</span>}
                               {showVelocity && <span style={s.setColLabel}>Speed (m/s)</span>}
                               {showPause && <span style={s.setColLabel}>Pause (s)</span>}
@@ -1033,7 +1040,24 @@ export default function LiveGroupPage() {
                             ) : (
                               <div key={si} style={{ ...s.setRow, gridTemplateColumns: setGridCols }}>
                                 <span style={s.setNum}>{si + 1}</span>
-                                {showWeight && (
+                                {showWeight && bandMode && (
+                                  <select
+                                    value={bandOf(set.weight, bands) ? bandLabel(bandOf(set.weight, bands)!) : ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      const patch: Partial<SetLog> = { weight: v, done: v ? true : set.done };
+                                      const singleRep = singleRepValue(repsForSet(ex.reps, si));
+                                      if (v && !set.reps.trim() && singleRep) patch.reps = singleRep;
+                                      handleLogChange(activeSess.id, ex.id, si, patch);
+                                    }}
+                                    aria-label={`Band for set ${si + 1}`}
+                                    style={{ ...s.setInput, padding: "0 4px", borderLeft: `4px solid ${(bandOf(set.weight, bands) ?? bandOf(ex.target_load, bands))?.colour ?? "var(--line)"}` }}
+                                  >
+                                    <option value="">{bandOf(ex.target_load, bands)?.name ?? "Band"}</option>
+                                    {bands.map((b) => <option key={b.name} value={bandLabel(b)}>{b.name}</option>)}
+                                  </select>
+                                )}
+                                {showWeight && !bandMode && (
                                   <input
                                     key={`w-${ex.id}-${si}-${set.weight}`}
                                     defaultValue={set.weight}
@@ -1455,7 +1479,9 @@ export default function LiveGroupPage() {
                 autoFocus
                 value={editDraft.name}
                 onChange={(e) => { setEditDraft((d) => ({ ...d, name: e.target.value })); setEditNameDropdownOpen(true); }}
-                onFocus={() => setEditNameDropdownOpen(true)}
+                // Only opens on typing (or an empty name) - opening on focus
+                // covered the Sets / Reps-Time row the moment the box opened.
+                onFocus={() => { if (!editDraft.name.trim()) setEditNameDropdownOpen(true); }}
                 onBlur={() => setTimeout(() => setEditNameDropdownOpen(false), 150)}
                 style={s.editInput}
               />
@@ -1671,5 +1697,5 @@ const s: Record<string, React.CSSProperties> = {
   },
   editModeToggle: { display: "flex", gap: 4, background: "var(--ink)", borderRadius: 6, padding: 2 },
   editModeBtn:  { background: "transparent", border: "none", color: "var(--mute)", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
-  editModeBtnActive: { background: "var(--panel)", color: "var(--accent)" },
+  editModeBtnActive: { background: "var(--accent)", color: "#0a1420" },
 };

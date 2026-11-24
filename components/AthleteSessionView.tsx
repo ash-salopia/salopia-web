@@ -1,7 +1,7 @@
 "use client";
 
 import { NoteReactionLine } from "@/components/MessageReactions";
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import Icon from "@/components/ui/Icon";
 import ExerciseSetupNote, { useExerciseSetups } from "@/components/ExerciseSetupNote";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,8 @@ import PowerSpeedAthleteView from "@/components/PowerSpeedAthleteView";
 import SportSessionAthleteView from "@/components/sport/SportSessionAthleteView";
 import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSaves } from "@/lib/save-queue";
 import { todayISO } from "@/lib/date-utils";
+import { DEFAULT_BANDS, bandLabel, bandOf, isBandExercise, type Band } from "@/lib/bands";
+import { guessLoads, lastWeightsByExercise } from "@/lib/quick-loads";
 import type { Session, SessionExercise, SetLog } from "@/types";
 import { repsForSet, setGroups } from "@/lib/exercise-dose";
 
@@ -106,6 +108,7 @@ export default function AthleteSessionView({
   zonesEnabled = true,
   wellnessCheckIn = false,
   painCheckIn = false,
+  bands = DEFAULT_BANDS,
 }: {
   session?: Session;
   allSessions?: Session[];
@@ -118,6 +121,7 @@ export default function AthleteSessionView({
   zonesEnabled?: boolean;
   wellnessCheckIn?: boolean;
   painCheckIn?: boolean;
+  bands?: Band[]; // the coach's resistance bands (lib/bands.ts), for assisted exercises
 }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(initialSession ?? null);
@@ -169,6 +173,8 @@ export default function AthleteSessionView({
   // purely client-side (doesn't change the exercise's is_bodyweight
   // flag or its PB shape).
   const [showLoadFor, setShowLoadFor] = useState<Set<string>>(new Set());
+  // Which kg box is focused ("exerciseId:set"), to show quick-pick loads under it.
+  const [loadFocus, setLoadFocus] = useState<string | null>(null);
   // Rest timer - one active at a time, keyed by end timestamp rather
   // than a decrementing counter so it stays accurate even if the tab
   // is backgrounded for a while.
@@ -210,6 +216,11 @@ export default function AthleteSessionView({
   );
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
   const priorProgress = session ? computePriorProgress(allSessions, session) : new Map();
+  // Last time's kg per exercise, for the quick-pick load buttons.
+  const lastWeights = useMemo(
+    () => (session ? lastWeightsByExercise(allSessions as never, session) : new Map<string, number[]>()),
+    [allSessions, session]
+  );
 
   const handleProgressAnswer = async (exerciseId: string, progress: "yes" | "no") => {
     const exercise = session?.exercises?.find((e) => e.id === exerciseId);
@@ -583,11 +594,11 @@ export default function AthleteSessionView({
           return (
           <div key={ex.id} style={styles.card}>
             <div style={styles.exHeadRow}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 150px", minWidth: 0 }}>
                 {ex.order && <span style={styles.orderBadge}>{ex.order}</span>}
                 <div style={styles.exName}>{ex.name || "Exercise"}</div>
               </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
                 {ex.name.trim() && (
                   <button
                     style={styles.historyBtn}
@@ -703,7 +714,9 @@ export default function AthleteSessionView({
                   // who's progressed past bodyweight before the coach
                   // updates the prescription. Hoisted above the set map
                   // so the column headers can share the same values.
-                  const showWeight = !ex.is_bodyweight || showLoadFor.has(ex.id);
+                  // Assisted / banded work logs which band was used instead of kg.
+                  const bandMode = isBandExercise(ex, bands);
+                  const showWeight = bandMode || !ex.is_bodyweight || showLoadFor.has(ex.id);
                   const timeMode = (ex.time ?? "").trim().length > 0;
                   const completionOnly = !!ex.completion_only;
                   const showVelocity = !!ex.track_velocity && !completionOnly;
@@ -724,7 +737,7 @@ export default function AthleteSessionView({
                     {!completionOnly && (
                       <div style={{ ...styles.setColHeaders, gridTemplateColumns: gridCols }}>
                         <div />
-                        {showWeight && <div style={styles.setColLabel}>Load</div>}
+                        {showWeight && <div style={styles.setColLabel}>{bandMode ? "Band" : "Load"}</div>}
                         <div style={styles.setColLabel}>{timeMode ? "Time" : "Reps"}</div>
                         {showVelocity && <div style={styles.setColLabel}>Speed</div>}
                         {showPause && <div style={styles.setColLabel}>Pause</div>}
@@ -759,15 +772,46 @@ export default function AthleteSessionView({
                     const prevSet = i > 0 ? (ex.log ?? [])[i - 1] : null;
                     const prevHasData = !!prevSet && setHasData(ex, prevSet);
                     const canCopyPrev = !hasPrimaryValue && !set.done && prevHasData;
+                    const quickLoads = !bandMode && showWeight && loadFocus === `${ex.id}:${i}` ? guessLoads(ex, i, lastWeights.get(ex.name.trim().toLowerCase())) : [];
                     return (
-                      <div key={i} style={{ ...styles.setChip, gridTemplateColumns: gridCols, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
+                      <Fragment key={i}>
+                      <div style={{ ...styles.setChip, gridTemplateColumns: gridCols, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
                         <div style={styles.setIdx}>{i + 1}</div>
-                        {showWeight && (
+                        {showWeight && bandMode && (
+                          <select
+                            value={bandOf(set.weight, bands) ? bandLabel(bandOf(set.weight, bands)!) : ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              const patch: Partial<SetLog> = { weight: v, done: !!v || set.done };
+                              const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
+                              if (!timeMode && v && !set.reps.trim() && ex.reps && !isAmrap) {
+                                const lower = repsForSet(ex.reps, i).match(/(\d+)/)?.[1] ?? "";
+                                if (lower) patch.reps = lower;
+                              }
+                              handleSetUpdate(ex.id, i, patch);
+                            }}
+                            aria-label={`Band for set ${i + 1}`}
+                            style={{
+                              ...styles.setInput,
+                              padding: "0 4px",
+                              color: bandOf(set.weight, bands) ? "var(--text)" : "var(--mute)",
+                              borderLeft: `4px solid ${(bandOf(set.weight, bands) ?? bandOf(ex.target_load, bands))?.colour ?? "var(--line)"}`,
+                            }}
+                          >
+                            <option value="">{bandOf(ex.target_load, bands)?.name ?? "Band"}</option>
+                            {bands.map((b) => (
+                              <option key={b.name} value={bandLabel(b)}>{b.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        {showWeight && !bandMode && (
                           <input
                             key={`${ex.id}-${i}-w-${set.weight}`}
                             defaultValue={set.weight}
-                            onFocus={(e) => e.target.select()}
+                            onFocus={(e) => { e.target.select(); setLoadFocus(`${ex.id}:${i}`); }}
                             onBlur={(e) => {
+                              const key = `${ex.id}:${i}`;
+                              setTimeout(() => setLoadFocus((k) => (k === key ? null : k)), 150);
                               const v = e.target.value;
                               if (v === set.weight) return;
                               const shouldBeDone = v.trim().length > 0;
@@ -879,6 +923,9 @@ export default function AthleteSessionView({
                             if (showWeight && !set.weight.trim() && target != null) {
                               patch.weight = String(target);
                             }
+                            // A banded set ticked without picking: the band the coach prescribed.
+                            const prescribedBand = bandMode ? bandOf(ex.target_load, bands) : null;
+                            if (prescribedBand && !set.weight.trim()) patch.weight = bandLabel(prescribedBand);
                             // Same idea for reps: the greyed box shows
                             // the prescribed rep count as a placeholder,
                             // never written into set.reps unless typed.
@@ -898,6 +945,34 @@ export default function AthleteSessionView({
                           ✓
                         </button>
                       </div>
+                      {quickLoads.length > 0 && (
+                        <div style={styles.quickLoads}>
+                          {quickLoads.map((kg) => (
+                            <button
+                              key={kg}
+                              type="button"
+                              style={styles.quickLoadBtn}
+                              // Keep the kg box focused (no blur-save of a half-typed value)
+                              // until the pick lands.
+                              onPointerDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                const patch: Partial<SetLog> = { weight: String(kg), done: true };
+                                const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
+                                if (!timeMode && !set.reps.trim() && ex.reps && !isAmrap) {
+                                  const lower = repsForSet(ex.reps, i).match(/(\d+)/)?.[1] ?? "";
+                                  if (lower) patch.reps = lower;
+                                }
+                                setLoadFocus(null);
+                                (document.activeElement as HTMLElement | null)?.blur?.();
+                                handleSetUpdate(ex.id, i, patch);
+                              }}
+                            >
+                              {kg}kg
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      </Fragment>
                     );
                   })}
                     </div>
@@ -909,7 +984,7 @@ export default function AthleteSessionView({
                   <button style={styles.addSetBtn} onClick={() => handleAddSet(ex.id)}>
                     + Add set
                   </button>
-                  {ex.is_bodyweight && !ex.completion_only && !showLoadFor.has(ex.id) && (
+                  {ex.is_bodyweight && !ex.completion_only && !showLoadFor.has(ex.id) && !isBandExercise(ex, bands) && (
                     <button
                       style={styles.addSetBtn}
                       onClick={() => setShowLoadFor((prev) => new Set(prev).add(ex.id))}
@@ -1177,8 +1252,10 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
   },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
-  exHeadRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  exName: { fontWeight: 700, fontSize: 15, color: "var(--text)" },
+  // Wraps: with a video plus four icon buttons there's ~220px of buttons,
+  // so on a phone they drop under a long name instead of covering it.
+  exHeadRow: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  exName: { fontWeight: 700, fontSize: 15, color: "var(--text)", overflowWrap: "anywhere" },
   swappedNote: { fontSize: 11, color: "var(--accent)", fontWeight: 600, marginTop: 4 },
   optedOutRow: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1217,6 +1294,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
   historyBtnActive: { borderColor: "var(--accent)", color: "var(--accent)" },
+  quickLoads: { display: "flex", gap: 6, justifyContent: "flex-end", padding: "2px 0 6px" },
+  quickLoadBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer", minWidth: 58 },
   prescLine: { fontSize: 13, color: "var(--mute)", marginTop: 4 },
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
   exNotesTextarea: {
