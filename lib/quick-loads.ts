@@ -3,7 +3,7 @@
 // squat) so most sets are logged with one tap instead of typing.
 //
 // The middle button is the best guess for this set: what they typed on
-// the set before, else the coach's %1RM target, else what they lifted on
+// the set before (or any set logged today), else the coach's %1RM target, else what they lifted on
 // this set last time, else the coach's kg load. Either side is one step
 // lighter / heavier - 1 kg for light loads, 2 kg for dumbbells and
 // kettlebells, 2.5 kg for barbell-type loads.
@@ -27,6 +27,7 @@ export function guessLoads(
   const base =
     num(log[setIndex]?.weight) ??
     num(log[setIndex - 1]?.weight) ??
+    log.map((l) => num(l.weight)).find((n) => n != null) ?? // any set already logged today
     ex.computed_targets?.[setIndex] ??
     (lastTime?.length ? lastTime[Math.min(setIndex, lastTime.length - 1)] : null) ??
     num(ex.target_load);
