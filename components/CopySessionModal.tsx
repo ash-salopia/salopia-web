@@ -50,7 +50,8 @@ export default function CopySessionModal({
   const [mode, setMode] = useState<"single" | "repeat">("single");
   const [targetDate, setTargetDate] = useState("");
   const [pattern, setPattern] = useState<RepeatPattern>("mwf");
-  const [customDays, setCustomDays] = useState<number[]>([1, 3, 5]);
+  // Starts empty: picking Custom days means choosing your own, not editing Mon/Wed/Fri.
+  const [customDays, setCustomDays] = useState<number[]>([]);
   const [durationType, setDurationType] = useState<"weeks" | "range">("weeks");
   const [weeks, setWeeks] = useState(4);
   const [rangeStart, setRangeStart] = useState(initialRangeStart ?? "");
@@ -174,6 +175,9 @@ export default function CopySessionModal({
                     </button>
                   ))}
                 </div>
+              )}
+              {pattern === "custom" && !customDays.length && (
+                <div style={{ fontSize: 12, color: "var(--mute)", marginTop: 6 }}>Pick the days to repeat on.</div>
               )}
             </div>
 
