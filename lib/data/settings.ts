@@ -144,7 +144,8 @@ export interface OrgSettings {
   // prescription", and the coach's own chart (12 values, 1-12 reps).
   rep_scheme?: import("@/lib/rep-charts").RepSchemeKey | null;
   rep_chart?: number[] | null;
-  bands?: import("@/lib/bands").Band[] | null; // resistance bands for assisted exercises (Settings); none = lib/bands DEFAULT_BANDS
+  bands?: import("@/lib/bands").Band[] | null;
+  load_increments?: Partial<import("@/lib/load-increments").LoadIncrements> | null; // gym weight steps for quick-pick loads (Settings -> Gym weights) // resistance bands for assisted exercises (Settings); none = lib/bands DEFAULT_BANDS
   one_rm_source: OneRMSource;
   weight_unit: WeightUnit;
   checkin_enabled: boolean;

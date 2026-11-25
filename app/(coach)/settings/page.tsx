@@ -7,6 +7,8 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
 import DeletePasswordSettings from "@/components/DeletePasswordSettings";
 import BandsEditor from "@/components/BandsEditor";
+import GymIncrementsPicker from "@/components/GymIncrementsPicker";
+import { resolveIncrements } from "@/lib/load-increments";
 import { bandsFrom } from "@/lib/bands";
 import { resetOrgBandsCache } from "@/lib/use-org-bands";
 
@@ -210,7 +212,19 @@ export default function SettingsPage() {
       </CollapsibleSection>
 
       {/* ── Units ── */}
-      <CollapsibleSection title="Resistance bands">
+      <CollapsibleSection title="Gym equipment">
+        <div style={{ ...s.card, marginBottom: 10 }}>
+          <div style={s.cardLabel}>Gym weights</div>
+          <div style={s.cardDesc}>
+            How the weights go up at your gym. When an athlete taps a kg box, quick-pick buttons offer one step lighter, the
+            same and one step heavier - these keep the steps to weights that exist. Athletes who train elsewhere can set
+            their own gym in their app (Settings).
+          </div>
+          <GymIncrementsPicker
+            value={resolveIncrements(null, settings.load_increments)}
+            onChange={(next) => setSettings((prev) => ({ ...prev, load_increments: next }))}
+          />
+        </div>
         <BandsEditor
           bands={bandsFrom(settings)}
           onChange={(next) => {

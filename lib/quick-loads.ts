@@ -5,23 +5,21 @@
 // The middle button is the best guess for this set: what they typed on
 // the set before (or any set logged today), else the coach's %1RM target, else what they lifted on
 // this set last time, else the coach's kg load. Either side is one step
-// lighter / heavier - 1 kg for light loads, 2 kg for dumbbells and
-// kettlebells, 2.5 kg for barbell-type loads.
+// lighter / heavier, by the gym's own steps (lib/load-increments.ts:
+// dumbbells, kettlebells, the smallest barbell plates, machines).
+
+import { DEFAULT_INCREMENTS, stepFor, type LoadIncrements } from "@/lib/load-increments";
 
 const num = (v: unknown): number | null => {
   const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-export function loadStep(exerciseName: string, kg: number): number {
-  if (kg < 12) return 1;
-  return /dumbbell|\bdb\b|kettlebell|\bkb\b/i.test(exerciseName) ? 2 : 2.5;
-}
-
 export function guessLoads(
   ex: { name: string; target_load?: string; computed_targets?: (number | null)[]; log?: { weight: string }[] },
   setIndex: number,
-  lastTime?: number[]
+  lastTime?: number[],
+  inc: LoadIncrements = DEFAULT_INCREMENTS
 ): number[] {
   const log = ex.log ?? [];
   const base =
@@ -32,8 +30,8 @@ export function guessLoads(
     (lastTime?.length ? lastTime[Math.min(setIndex, lastTime.length - 1)] : null) ??
     num(ex.target_load);
   if (!base) return [];
-  const step = loadStep(ex.name, base);
-  const r = (n: number) => Math.round(n * 2) / 2;
+  const step = stepFor(ex.name, base, inc);
+  const r = (n: number) => Math.round(n * 100) / 100;
   return [r(base - step), r(base), r(base + step)].filter((n, i, a) => n > 0 && a.indexOf(n) === i);
 }
 

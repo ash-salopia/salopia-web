@@ -58,6 +58,7 @@ export interface Athlete {
   direct_messages_enabled?: boolean; // 0121 — per-athlete coach-messages switch; account and group switches can still turn it off
   group_chat_enabled?: boolean; // 0121 — per-athlete group-chat switch
   squad_comparison_enabled: boolean; // 0075 — per-athlete override of the org-level "Compare to squad" report toggle (lib/data/settings.ts); org setting still wins if it's off
+  load_increments?: Partial<import("@/lib/load-increments").LoadIncrements> | null; // 0133 — athlete's own gym weight steps for quick-pick loads; null = coach default
   rtp_status: RtpStatus; // 0088 — availability / return-to-play status; 'available' is the default for everyone
   rtp_note: string | null; // 0088 — coach/physio-only context for the current status (e.g. "L hamstring strain grade 2, running progression")
   rtp_athlete_note: string | null; // 0091 — athlete-facing "what you can / can't do" message, shown in their app
