@@ -594,11 +594,11 @@ export default function AthleteSessionView({
           return (
           <div key={ex.id} style={styles.card}>
             <div style={styles.exHeadRow}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 150px", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minWidth: 0 }}>
                 {ex.order && <span style={styles.orderBadge}>{ex.order}</span>}
                 <div style={styles.exName}>{ex.name || "Exercise"}</div>
               </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {ex.name.trim() && (
                   <button
                     style={styles.historyBtn}
@@ -772,7 +772,10 @@ export default function AthleteSessionView({
                     const prevSet = i > 0 ? (ex.log ?? [])[i - 1] : null;
                     const prevHasData = !!prevSet && setHasData(ex, prevSet);
                     const canCopyPrev = !hasPrimaryValue && !set.done && prevHasData;
-                    const quickLoads = !bandMode && showWeight && loadFocus === `${ex.id}:${i}` ? guessLoads(ex, i, lastWeights.get(ex.name.trim().toLowerCase())) : [];
+                    // Stays under the last kg box tapped until a weight is picked or the set
+                    // is ticked - on a phone the keyboard closing blurs the box before a tap
+                    // lands, so tying the buttons to focus made them vanish mid-tap.
+                    const quickLoads = !bandMode && showWeight && !set.done && loadFocus === `${ex.id}:${i}` ? guessLoads(ex, i, lastWeights.get(ex.name.trim().toLowerCase())) : [];
                     return (
                       <Fragment key={i}>
                       <div style={{ ...styles.setChip, gridTemplateColumns: gridCols, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
@@ -810,8 +813,6 @@ export default function AthleteSessionView({
                             defaultValue={set.weight}
                             onFocus={(e) => { e.target.select(); setLoadFocus(`${ex.id}:${i}`); }}
                             onBlur={(e) => {
-                              const key = `${ex.id}:${i}`;
-                              setTimeout(() => setLoadFocus((k) => (k === key ? null : k)), 150);
                               const v = e.target.value;
                               if (v === set.weight) return;
                               const shouldBeDone = v.trim().length > 0;
@@ -952,9 +953,6 @@ export default function AthleteSessionView({
                               key={kg}
                               type="button"
                               style={styles.quickLoadBtn}
-                              // Keep the kg box focused (no blur-save of a half-typed value)
-                              // until the pick lands.
-                              onPointerDown={(e) => e.preventDefault()}
                               onClick={() => {
                                 const patch: Partial<SetLog> = { weight: String(kg), done: true };
                                 const isAmrap = ex.reps?.toUpperCase() === "AMRAP";
@@ -963,7 +961,6 @@ export default function AthleteSessionView({
                                   if (lower) patch.reps = lower;
                                 }
                                 setLoadFocus(null);
-                                (document.activeElement as HTMLElement | null)?.blur?.();
                                 handleSetUpdate(ex.id, i, patch);
                               }}
                             >
@@ -1252,9 +1249,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
   },
   card: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 },
-  // Wraps: with a video plus four icon buttons there's ~220px of buttons,
-  // so on a phone they drop under a long name instead of covering it.
-  exHeadRow: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  // Name on top, its buttons (history, swap, note, setup, video) on their own
+  // line underneath, left-aligned - a long name never has to share the row.
+  exHeadRow: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 },
   exName: { fontWeight: 700, fontSize: 15, color: "var(--text)", overflowWrap: "anywhere" },
   swappedNote: { fontSize: 11, color: "var(--accent)", fontWeight: 600, marginTop: 4 },
   optedOutRow: {
