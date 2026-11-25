@@ -1080,13 +1080,24 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "quick-pick-weights",
+    category: "programmes",
+    title: "Quick-pick weights and gym weight steps",
+    summary: "Tap a kg box and three buttons offer the likely weight - one tap logs the set.",
+    keywords: ["quick pick", "quick select", "weights", "dumbbell", "kettlebell", "plates", "increments", "gym", "2kg", "2.5kg", "1.25kg"],
+    body: [
+      { type: "p", text: "When an athlete taps a kg box (in their app, or you in Live group), **Quick pick** buttons appear under the set: one step lighter, the most likely weight, and one step heavier. Tapping one logs the set with its reps. The middle weight is the set before, else your %1RM target, else what they lifted on that set last time, else your prescribed kg." },
+      { type: "p", text: "The steps follow the gym's weights: **Settings \u2192 Gym equipment \u2192 Gym weights** sets dumbbells (e.g. 1kg up to 10kg, then 2kg), kettlebells, the smallest barbell plates (1.25kg plates = the bar goes up 2.5kg) and machines. An athlete who trains somewhere else can set their own gym in their app under **Settings \u2192 My gym's weights**." },
+    ],
+  },
+  {
     id: "resistance-bands",
     category: "programmes",
     title: "Resistance bands for assisted exercises",
     summary: "Prescribe a band instead of kg (e.g. Red band for assisted pull-ups) and athletes log which band they used.",
     keywords: ["band", "bands", "resistance band", "assisted", "pull up", "dip", "red band", "colour", "progression"],
     body: [
-      { type: "p", text: "Set up your bands once in **Settings \u2192 Resistance bands**: colour, and the help (or resistance) each gives, lightest to heaviest. Every brand grades its colours differently, so edit the defaults to match yours." },
+      { type: "p", text: "Set up your bands once in **Settings \u2192 Gym equipment**: colour, and the help (or resistance) each gives, lightest to heaviest. Every brand grades its colours differently, so edit the defaults to match yours." },
       { type: "p", text: "In an exercise, pick a band from the **Band** box next to Load (for a bodyweight exercise it's **Band (assisted)**). Exercises with \"band\" or \"assisted\" in the name are treated as banded automatically." },
       { type: "p", text: "Athletes then choose the band they used for each set instead of typing kg - in the app and in Live group - and \u2713 logs your prescribed band if they don't change it. \"Last time\" shows the band. Bands aren't counted as kg in reports; progress an assisted lift by prescribing a lighter band." },
     ],

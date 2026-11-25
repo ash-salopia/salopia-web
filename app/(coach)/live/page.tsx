@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { listLiveGroupAthletes } from "@/lib/data/athletes";
 import { listSessionsForAthletes } from "@/lib/data/sessions";
@@ -26,7 +26,9 @@ import {
   type PSSetLog, type PSMetricKey,
 } from "@/lib/ps-metrics";
 import { repsForSet, looksTimed } from "@/lib/exercise-dose";
-import { useOrgBands } from "@/lib/use-org-bands";
+import { useOrgBands, useOrgIncrements } from "@/lib/use-org-bands";
+import { guessLoads } from "@/lib/quick-loads";
+import { resolveIncrements } from "@/lib/load-increments";
 import { bandLabel, bandOf, isBandExercise } from "@/lib/bands";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
@@ -147,6 +149,10 @@ export default function LiveGroupPage() {
   const [limits, setLimits] = useState<LiveGroupLimits>(() => liveGroupLimits("trial"));
   const control = useLiveControl();
   const bands = useOrgBands(); // resistance bands, for assisted / banded exercises
+  const orgIncrements = useOrgIncrements(); // coach's gym weight steps, for quick-pick loads
+  // Which athlete's kg box was tapped last ("exerciseId:set") - its quick-pick
+  // buttons stay until a weight is picked or the set is done.
+  const [loadFocus, setLoadFocus] = useState<string | null>(null);
   const queue = useLiveQueueStatus();
   const allAthleteIds = useRef<string[]>([]);
 
@@ -1038,7 +1044,8 @@ export default function LiveGroupPage() {
                                 </button>
                               </div>
                             ) : (
-                              <div key={si} style={{ ...s.setRow, gridTemplateColumns: setGridCols }}>
+                              <Fragment key={si}>
+                              <div style={{ ...s.setRow, gridTemplateColumns: setGridCols }}>
                                 <span style={s.setNum}>{si + 1}</span>
                                 {showWeight && bandMode && (
                                   <select
@@ -1066,6 +1073,7 @@ export default function LiveGroupPage() {
                                     placeholder={oneRmTargets[ex.id]?.[si] != null ? String(oneRmTargets[ex.id][si]) : (ex.target_load || "kg")}
                                     inputMode="decimal"
                                     style={s.setInput}
+                                    onFocus={() => setLoadFocus(`${ex.id}:${si}`)}
                                     onBlur={(e) => {
                                       const v = e.target.value;
                                       if (v === set.weight) return;
@@ -1185,6 +1193,39 @@ export default function LiveGroupPage() {
                                   {set.done ? "✓" : "○"}
                                 </button>
                               </div>
+                              {(() => {
+                                if (!showWeight || bandMode || set.done || loadFocus !== `${ex.id}:${si}`) return null;
+                                const lastKg = (prevEx?.log ?? []).filter((l) => l.done).map((l) => parseFloat(l.weight)).filter((n) => n > 0);
+                                const picks = guessLoads(
+                                  { ...ex, computed_targets: oneRmTargets[ex.id] ?? undefined },
+                                  si,
+                                  lastKg,
+                                  resolveIncrements(activeAthlete.load_increments, orgIncrements)
+                                );
+                                if (!picks.length) return null;
+                                return (
+                                  <div style={s.quickLoads}>
+                                    <span style={s.quickLoadLabel}>Quick pick:</span>
+                                    {picks.map((kg) => (
+                                      <button
+                                        key={kg}
+                                        type="button"
+                                        style={s.quickLoadBtn}
+                                        onClick={() => {
+                                          const patch: Partial<SetLog> = { weight: String(kg), done: true };
+                                          const singleRep = singleRepValue(repsForSet(ex.reps, si));
+                                          if (!set.reps.trim() && singleRep) patch.reps = singleRep;
+                                          setLoadFocus(null);
+                                          handleLogChange(activeSess.id, ex.id, si, patch);
+                                        }}
+                                      >
+                                        {kg}kg
+                                      </button>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                              </Fragment>
                             ))}
                             {(() => {
                               const log = ex.log ?? [];
@@ -1698,4 +1739,7 @@ const s: Record<string, React.CSSProperties> = {
   editModeToggle: { display: "flex", gap: 4, background: "var(--ink)", borderRadius: 6, padding: 2 },
   editModeBtn:  { background: "transparent", border: "none", color: "var(--mute)", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
   editModeBtnActive: { background: "var(--accent)", color: "#0a1420" },
+  quickLoads: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, padding: "2px 0 6px 28px" },
+  quickLoadLabel: { fontSize: 12, fontWeight: 600, color: "var(--mute)", marginRight: 2 },
+  quickLoadBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer", minWidth: 58 },
 };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
+import MyGymWeights from "@/components/MyGymWeights";
 import type { ComputedZone } from "@/lib/training-zones";
 import { rtpMeta } from "@/lib/rtp";
 import AthletePageHeading from "@/components/AthletePageHeading";
@@ -101,6 +102,8 @@ export default function AthleteSettingsPage() {
         {error && <div style={s.errorBox}>{error}</div>}
 
         {token && <PushNotificationToggle mode="athlete" token={token} />}
+
+        {token && <MyGymWeights token={token} />}
 
         {availability && (() => {
           const m = rtpMeta(availability.status);

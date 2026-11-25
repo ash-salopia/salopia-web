@@ -21,6 +21,7 @@ import { saveWithRetry, usePendingSaveCount, useFailedSaveCount, clearFailedSave
 import { todayISO } from "@/lib/date-utils";
 import { DEFAULT_BANDS, bandLabel, bandOf, isBandExercise, type Band } from "@/lib/bands";
 import { guessLoads, lastWeightsByExercise } from "@/lib/quick-loads";
+import type { LoadIncrements } from "@/lib/load-increments";
 import type { Session, SessionExercise, SetLog } from "@/types";
 import { repsForSet, setGroups } from "@/lib/exercise-dose";
 
@@ -109,6 +110,7 @@ export default function AthleteSessionView({
   wellnessCheckIn = false,
   painCheckIn = false,
   bands = DEFAULT_BANDS,
+  increments,
 }: {
   session?: Session;
   allSessions?: Session[];
@@ -122,6 +124,7 @@ export default function AthleteSessionView({
   wellnessCheckIn?: boolean;
   painCheckIn?: boolean;
   bands?: Band[]; // the coach's resistance bands (lib/bands.ts), for assisted exercises
+  increments?: LoadIncrements; // this athlete's gym weight steps, for quick-pick loads
 }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(initialSession ?? null);
@@ -775,7 +778,7 @@ export default function AthleteSessionView({
                     // Stays under the last kg box tapped until a weight is picked or the set
                     // is ticked - on a phone the keyboard closing blurs the box before a tap
                     // lands, so tying the buttons to focus made them vanish mid-tap.
-                    const quickLoads = !bandMode && showWeight && !set.done && loadFocus === `${ex.id}:${i}` ? guessLoads(ex, i, lastWeights.get(ex.name.trim().toLowerCase())) : [];
+                    const quickLoads = !bandMode && showWeight && !set.done && loadFocus === `${ex.id}:${i}` ? guessLoads(ex, i, lastWeights.get(ex.name.trim().toLowerCase()), increments) : [];
                     return (
                       <Fragment key={i}>
                       <div style={{ ...styles.setChip, gridTemplateColumns: gridCols, ...(hasPrimaryValue || set.done ? styles.setChipDone : {}) }}>
@@ -948,6 +951,7 @@ export default function AthleteSessionView({
                       </div>
                       {quickLoads.length > 0 && (
                         <div style={styles.quickLoads}>
+                          <span style={styles.quickLoadLabel}>Quick pick:</span>
                           {quickLoads.map((kg) => (
                             <button
                               key={kg}
@@ -1291,7 +1295,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
   historyBtnActive: { borderColor: "var(--accent)", color: "var(--accent)" },
-  quickLoads: { display: "flex", gap: 6, justifyContent: "flex-end", padding: "2px 0 6px" },
+  quickLoads: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, justifyContent: "flex-start", padding: "2px 0 6px 30px" },
+  quickLoadLabel: { fontSize: 12, fontWeight: 600, color: "var(--mute)", marginRight: 2 },
   quickLoadBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer", minWidth: 58 },
   prescLine: { fontSize: 13, color: "var(--mute)", marginTop: 4 },
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
