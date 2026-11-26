@@ -98,6 +98,18 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "recommended-actions",
+    category: "getting-started",
+    title: "Recommended actions on the Dashboard",
+    summary: "One ranked to-do list: programmes running out, messages waiting, flags, tests and reports due.",
+    keywords: ["recommended actions", "to do", "dashboard", "what needs me", "priorities", "done for today"],
+    body: [
+      { type: "p", text: "**Recommended actions** at the top of the Dashboard pulls everything that needs you into one list, most urgent first: programmes about to run out, messages and session comments left waiting, poor check-ins, availability and training-load flags, tests and reports due, and athletes who haven't trained." },
+      { type: "p", text: "Each item has a button straight to the fix (e.g. message the athlete or open their page). Press **Done** to hide an item until tomorrow. When there's nothing to do it says \"Nothing needs you right now.\"" },
+      { type: "note", text: "Done items and the waiting-time settings are saved on this device only." },
+    ],
+  },
+  {
     id: "first-week",
     category: "getting-started",
     title: "Your first week — a setup checklist",
@@ -400,6 +412,18 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["photo", "avatar", "picture", "headshot"],
     body: [
       { type: "p", text: "On the athlete **Profile**, click the **✎** button over the avatar to upload a photo. The athlete can also change their own photo from their app's home screen (the **✎** over their avatar)." },
+    ],
+  },
+  {
+    id: "calendar-views",
+    category: "athletes",
+    title: "Week, By day and Month views",
+    summary: "See an athlete's week with every exercise, or one weekday across several weeks.",
+    keywords: ["week view", "by day", "month view", "calendar view", "every tuesday", "recurring session", "session editor pop-up"],
+    body: [
+      { type: "p", text: "On an athlete's page, switch the calendar between **Dashboard**, **Month**, **Week** and **By day**." },
+      { type: "p", text: "**Week** shows each session with its exercises and doses (e.g. \"4×5 @ 80kg\"). **By day** shows one weekday across the next few weeks - e.g. every Tuesday - so you can compare and tweak a recurring session week to week." },
+      { type: "tip", text: "Click a session in Week or By day to open it in a pop-up editor and step through the others without leaving the page." },
     ],
   },
   {
@@ -772,7 +796,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         items: [
           "On the calendar, click the **⧉** button on the session's chip.",
           "Choose **📅 Single date** (one copy) or **🔁 Repeat pattern**.",
-          "For a pattern, pick the days (**Mon / Wed / Fri**, **Weekdays**, **Custom days**, etc.) and a duration (**Next X weeks** or a **Date range**).",
+          "For a pattern, pick the days (**Mon / Wed / Fri**, **Weekdays**, **Custom days**, etc.) and a duration (**Next X weeks** or a **Date range**). **Custom days** starts with nothing ticked - tap the days you want.",
           "Check the preview list of dates, then **Copy … sessions**.",
         ],
       },
@@ -1077,6 +1101,54 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["programme", "program", "block", "mesocycle", "multi session"],
     body: [
       { type: "p", text: "A programme is a training block laid out week by week. Build one from **Programmes → + Build New Programme** (name it and pick how many weeks), or save one from an athlete's calendar (**Manage → Save as programme**) or a template (**Add to Programme Library**)." },
+      { type: "p", text: "In the builder, **Modify prescription** progresses sets, reps, load and %1RM across weeks, applies methods such as 5/3/1, block periodisation, DUP and double progression, and adds deloads. You can load a programme onto athletes or sell it in your **Online Store**." },
+    ],
+  },
+  {
+    id: "store-setup",
+    category: "programmes",
+    title: "Sell programmes in your Online Store",
+    summary: "Connect Stripe, fill in your store page, list programmes - buyers pay you directly.",
+    keywords: ["store", "online store", "shop", "sell", "selling", "stripe", "payments", "price", "listing", "store link", "seller details", "refund policy"],
+    body: [
+      { type: "p", text: "The **Online Store** lets you sell programmes you've built. Buyers pay you directly through Stripe (VIS BUILD takes no fee - Stripe's standard card fee applies), the programme lands in their training app, and they start it when they're ready." },
+      { type: "steps", items: [
+        "Open **Online Store** in the sidebar.",
+        "**1 · Get paid** - the account owner presses the button to connect your own Stripe account (about 5 minutes: bank details and ID). Stripe opens in a new tab; come back and press **Refresh**.",
+        "**2 · Your store page** - choose your store link (e.g. app.visbuild.co.uk/store/your-name) and fill in **Seller details**: trading name, contact email, business address and your refund policy. Buyers see these before they pay. Press **Save**.",
+        "**3 · Programmes for sale** - press **+ Add programme**, choose a programme you've built, give it a title, description and price, and fill in **Who it's for** (ages, level, equipment, goals, e.g. Back friendly). Press **Add to store**.",
+        "Share your store link. **Edit**, **Hide** or **Remove** a listing any time.",
+      ] },
+      { type: "note", text: "Every new buyer becomes an athlete in your account and uses a seat. If you're full, new customers can't buy until you upgrade or archive athletes - existing athletes can still buy." },
+    ],
+  },
+  {
+    id: "store-buyers",
+    category: "programmes",
+    title: "What buyers see in your store",
+    summary: "Filters, Find your ideal programme, checkout, then the programme waits in their app.",
+    keywords: ["store", "buyer", "customer", "find your ideal programme", "quiz", "filters", "checkout", "my programmes", "start programme", "purchase"],
+    body: [
+      { type: "p", text: "Your store page shows each programme with its length, sessions, price and who it's for. Buyers can **filter** by age, equipment and goals, or press **Find your ideal programme** and answer six quick questions (age, goal, equipment, injuries to work around, experience, days a week). The best fit is marked **Best match**, with the reasons it fits - and a warning where one doesn't (e.g. \"Not marked knee friendly\")." },
+      { type: "steps", items: [
+        "The buyer presses **Buy now**, agrees to your terms and pays on Stripe's secure checkout.",
+        "They land on a **You're in!** page and get an email with their personal app link (it's their login - they should bookmark it or add it to their home screen).",
+        "In their app, **My Programmes** shows the programme. They press **Start when ready**, pick a start date and press **Start programme** - every session goes onto their calendar.",
+        "You get a notification when they start, and they appear in your Athletes list like any other athlete.",
+      ] },
+      { type: "tip", text: "The better you fill in **Who it's for** on each listing, the better the finder matches buyers to the right programme." },
+    ],
+  },
+  {
+    id: "store-sales-refunds",
+    category: "programmes",
+    title: "Store sales, refunds and access",
+    summary: "See sales in Online Store; refunds are done in Stripe; choose which coaches can see the store.",
+    keywords: ["sales", "refund", "refunds", "stripe dashboard", "payout", "receipt", "store access", "team", "seat full"],
+    body: [
+      { type: "p", text: "Every purchase is listed under **Sales** on the **Online Store** page with the buyer, date and amount. Payouts, refunds and receipts are handled in your Stripe account - use **Open Stripe dashboard ↗** in the Get paid section." },
+      { type: "p", text: "If a purchase can't be completed because you had no free athlete seat, it's refunded automatically and shows as \"Refunded - no free athlete seat\"." },
+      { type: "note", text: "Sales and listings are visible to the account owner. To let another coach manage the store, the owner ticks **Online store access** for them in **Settings → Team**. Only the owner can connect payments." },
     ],
   },
   {
@@ -1088,6 +1160,11 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "p", text: "When an athlete taps a kg box (in their app, or you in Live group), **Quick pick** buttons appear under the set: one step lighter, the most likely weight, and one step heavier. Tapping one logs the set with its reps. The middle weight is the set before, else your %1RM target, else what they lifted on that set last time, else your prescribed kg." },
       { type: "p", text: "The steps follow the gym's weights: **Settings \u2192 Gym equipment \u2192 Gym weights** sets dumbbells (e.g. 1kg up to 10kg, then 2kg), kettlebells, the smallest barbell plates (1.25kg plates = the bar goes up 2.5kg) and machines. An athlete who trains somewhere else can set their own gym in their app under **Settings \u2192 My gym's weights**." },
+      { type: "steps", items: [
+        "For your gym: **Settings \u2192 Gym equipment \u2192 Gym weights**. Choose from the dropdowns - **Dumbbells** (1kg up to 10kg then 2kg, 1kg up to 10kg then 2.5kg, or every 1 / 2 / 2.5kg), **Kettlebells** (every 2 or 4kg), **Smallest barbell plates** (0.5 / 1 / 1.25 / 2.5kg) and **Machines & cables** (every 1 / 2.5 / 5kg). It saves automatically.",
+        "For an athlete at a different gym: in their app they open **Settings \u2192 My gym's weights**, tick **I train at a different gym (set my own weights)** and choose from the same dropdowns. Theirs is used instead of yours; untick to go back to yours.",
+      ] },
+      { type: "note", text: "Which step applies comes from the exercise name: dumbbell/goblet lifts use the dumbbell steps, kettlebell lifts the kettlebell steps, barbell lifts (squat, deadlift, bench, presses...) go up by two of the smallest plates, and machine/cable lifts the machine steps." },
     ],
   },
   {
@@ -1136,11 +1213,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
           "Open the athlete → **Manage** → **Assign programme**.",
           "Choose **🖱️ Pick**, **⌨️ Type** or **🎤 Voice**.",
           "**Pick**: choose the programme, a **Start date**, and **Session spacing** (original day pattern, or every 1–3 days / weekly).",
-          "**Type / Voice**: describe it — e.g. \"Start the 8-week strength programme this coming Monday, every other day\".",
+          "**Type / Voice**: describe it — e.g. \"Start the 8-week strength programme this coming Monday\". Add \"every other day\" (or similar) only if you want different spacing - otherwise it keeps the programme's own days.",
           "Click through to the **preview** — check the schedule — then **✓ Confirm & schedule … sessions**.",
         ],
       },
       { type: "p", text: "This both assigns the programme to the athlete and writes every session onto their calendar." },
+      { type: "note", text: "Programmes built week by week in the programme builder start on a Monday: the start date defaults to next Monday and every session lands on its own weekday (Mon session on Mondays, Thu on Thursdays). Pick a different day and they shift to match." },
     ],
   },
   {
@@ -1153,10 +1231,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
       {
         type: "steps",
         items: [
-          "On the **Programmes** page, open a programme and click **Load onto athlete**.",
-          "**Step 1** — pick the athlete and a **Start date**. Sessions keep the day pattern they were saved with (rest days included); the first one lands on the start date. Click **Preview →**.",
+          "Open a programme and click **Load Programme** (whole programme) or tick sessions and press **Load onto athlete**.",
+          "**Step 1** — pick the athlete and a **Start date**. For a week-by-week programme this defaults to next Monday (the Monday of week 1) and every session lands on its own weekday; you're warned if the date isn't a Monday. Older programmes keep the day pattern they were saved with, starting on the start date. Click **Preview →**.",
           "**Step 2** — optionally tick **Use fixed spacing instead of the original day pattern** and choose every 1–3 days / weekly. Remove any session from *this* load with its **×**.",
-          "Click **Generate programme**.",
+          "Click **Generate programme**. A 12-week block loads in a couple of seconds - and if it fails part way, nothing is left half-loaded.",
         ],
       },
     ],
@@ -1228,6 +1306,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**📝** — add a coaching-cue note on the exercise.",
         "**👍** / **👎** — mark whether the athlete could progress this next time. Tap again to clear.",
         "Expand a row for the full per-set editor. Strength: weight, reps/time, bar speed, copy-previous, ＋ Add set. Power/Speed: a box per tracked metric (Load / Reps / Box height per set; Time / Distance / Height / … per rep).",
+        "Tap a weight box for **Quick pick** buttons (one step lighter, likely weight, one step heavier, by that athlete's gym). Tap one to log the set - the reps box is then highlighted ready to change. Banded exercises show a **band** picker instead of kg.",
       ] },
       { type: "note", text: "The **👍 / 👎** call writes to the same field the athlete's own \"could you have progressed this?\" prompt uses — so you and they are updating one shared signal." },
       { type: "note", text: "Strength and Power/Speed sessions log inline here. Hybrid / Cardio show the structure and metric boxes; Recovery and Sport use **Open full session →**." },
@@ -1406,6 +1485,24 @@ export const HELP_ARTICLES: HelpArticle[] = [
           "Click **Save Session**.",
         ],
       },
+    ],
+  },
+  {
+    id: "testing-import",
+    category: "testing",
+    title: "Import test results from a file",
+    summary: "Testing → Import results: CSV, Excel or force plate PDF, matched to athletes and your metrics.",
+    keywords: ["import", "csv", "excel", "pdf", "force plate", "vald", "hawkin", "forcedecks", "upload results", "bulk results"],
+    body: [
+      { type: "p", text: "Save typing by importing results exported from force plates and other testing kit. No AI is used, so it costs nothing." },
+      { type: "steps", items: [
+        "Go to **Testing → Import results**.",
+        "**1 · Choose files** - pick one or more CSV / Excel files, or PDFs. A CSV export from the force plate software works best; PDFs work when they contain real text (not a scanned image).",
+        "**2 · Athletes and dates** - check which columns hold the athlete and the date (detected automatically), then match each name in the file to an athlete (or **Skip**). Optionally choose a **Test battery**.",
+        "**3 · Match results to your metrics** - pair each column with one of your test metrics, or choose **Don't import**. Matches are remembered for next time.",
+        "**4 · Check and import** - review and press import.",
+      ] },
+      { type: "note", text: "If an athlete already has a test session on that date, the results are added to it. Re-importing the same file replaces those results rather than duplicating them." },
     ],
   },
   {
@@ -1607,6 +1704,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         ],
       },
       { type: "tip", text: "Use **🔍 Load exercise list** to hand-pick which lifts appear in trend charts, or leave it to auto-pick." },
+      { type: "p", text: "Once it's generated, press the red **✕** on any exercise to leave it out, tick **Full detail** for the per-exercise tables, and use **✉️ Email report** to send it - see the articles on each." },
     ],
   },
   {
@@ -1690,6 +1788,33 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: "subhead", text: "Monotony & strain (Foster)" },
       { type: "p", text: "**Monotony** = the week's average daily load ÷ its day-to-day variation. A high value (flagged above **2.0**) means every day looked the same — no hard/easy structure, which is itself a risk factor. **Strain** = weekly load × monotony, so a big unvarying week scores highest." },
       { type: "note", text: "All of these are built on athlete-reported RPE and duration. They're decision support for a coach and physio, not a diagnosis." },
+    ],
+  },
+  {
+    id: "email-report",
+    category: "reporting",
+    title: "Email or share a report",
+    summary: "✉️ Email report sends a link to the full report (works for 90 days).",
+    keywords: ["email report", "share report", "send report", "parent", "client", "link", "report link"],
+    body: [
+      { type: "steps", items: [
+        "Generate the athlete's report, then press **✉️ Email report** at the top.",
+        "Add one or more email addresses (e.g. the athlete or a parent).",
+        "Choose a **Report style**: **Branded, best on screen** or **Plain, print-friendly**.",
+        "Send it - they get a short summary email with a **View full report** button. Or tick **Create the link without emailing it** to copy the link and send it yourself.",
+      ] },
+      { type: "note", text: "The report link works for 90 days and needs no login. Emails carry a link rather than the report itself because email apps strip the charts." },
+    ],
+  },
+  {
+    id: "report-remove-exercises",
+    category: "reporting",
+    title: "Take exercises out of a report",
+    summary: "The red ✕ on an exercise removes it from that report and from the Coach's summary.",
+    keywords: ["remove exercise", "hide exercise", "exclude exercise", "red x", "full detail", "exercise tables"],
+    body: [
+      { type: "p", text: "In a generated report, press the red **✕** next to an exercise to take it out - it disappears from the charts, tables and PBs, and the Coach's summary leaves it out too. This only affects that report." },
+      { type: "p", text: "The per-exercise tables are folded away under **Full detail** to keep the report short - tick it to include them." },
     ],
   },
   {
@@ -2103,6 +2228,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["settings", "preferences", "org", "auto save", "owner"],
     body: [
       { type: "p", text: "**Settings** preferences apply to your whole organisation and save automatically (a \"✓ Saved\" indicator appears)." },
+      { type: "p", text: "**Gym equipment** holds your gym's weight steps (dumbbells, kettlebells, smallest plates, machines - used by Quick pick) and your resistance bands (colours and kg ranges, for assisted exercises)." },
       { type: "note", text: "Only the organisation **owner** can change org-wide settings, Billing, Branding and the Team. Other coaches see these as read-only. Everyone can set their own profile and push preferences." },
     ],
   },
@@ -2394,6 +2520,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "Tap a session from the calendar or Upcoming list.",
         "Type the **Load** and **Reps** (or **Time**) for each set — values save when they tap out of the box, and typing a value marks the set done.",
         "**↑ Same** copies the previous set. For a %1RM exercise, a greyed suggested kg shows in the load box.",
+        "Tapping a load box shows **Quick pick** buttons (e.g. 5kg / 6kg / 7kg) - one tap logs the set and moves to the reps box, highlighted, so they can change it or carry on.",
+        "Per-set schemes (e.g. 5 @ 65% · 5 @ 75% · 5+ @ 85%) show each set's own reps and kg. For banded / assisted exercises they pick the **band** they used instead of typing kg.",
         "**⏱ Start rest** runs a rest timer with a buzz at the end.",
         "After an exercise, they answer \"Could you have progressed this next session?\" — **Yes** / **No**.",
         "At the end, they set a **🔥 Session RPE** (1–10) and can add notes for you.",
@@ -2480,7 +2608,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["push", "notifications", "reminders", "opt in", "ios home screen"],
     body: [
       { type: "p", text: "On their first visit the athlete sees a **🔔 Turn on notifications?** banner. In **⚙️ Settings** they can toggle push and choose which reminders they get: session today (with a time picker), evening not-started, evening not-rated, and \"my coach sends me a message\"." },
-      { type: "note", text: "You can't turn push on for an athlete — the browser requires them to tap Allow. On iPhone it only works if they've added the link to their Home Screen. Reminder times are UK time (not per-athlete timezone yet)." },
+      { type: "note", text: "You can't turn push on for an athlete — the browser requires them to tap Allow. On iPhone it only works if they've added the link to their Home Screen and open the app from that icon. Reminder times are UK time (not per-athlete timezone yet)." },
     ],
   },
   {
@@ -2789,6 +2917,17 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ["video not playing", "exercise video", "youtube", "demo won't load"],
     body: [
       { type: "p", text: "In the Library entry, the **Video URL** should be a normal watch link (e.g. a full YouTube or Vimeo URL). Private/unlisted videos with playback restrictions, or non-video pages, won't embed. Test the link in a new tab." },
+    ],
+  },
+  {
+    id: "faq-ai-limits",
+    category: "faq",
+    title: "Is there a limit on AI features?",
+    summary: "Each coach has a generous daily allowance per AI feature.",
+    keywords: ["ai limit", "daily limit", "too many", "allowance", "quota", "ai usage"],
+    body: [
+      { type: "p", text: "Yes - each coach has a daily allowance for each AI feature, plenty for normal coaching: build from notes (60 a day), voice (100), AI session changes (40), assign a programme by text or voice (40) and report summaries (60). It resets every day." },
+      { type: "note", text: "The public demo login is shared by everyone trying it, so its allowance is lower." },
     ],
   },
   {
