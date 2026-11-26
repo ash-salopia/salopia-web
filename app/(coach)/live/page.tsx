@@ -1096,6 +1096,7 @@ export default function LiveGroupPage() {
                                 {timeMode ? (
                                   <input
                                     key={`t-${ex.id}-${si}-${set.time}`}
+                                    data-after-load={`${ex.id}:${si}`}
                                     defaultValue={set.time ?? ""}
                                     type="number"
                                     placeholder={ex.time || "sec"}
@@ -1217,6 +1218,13 @@ export default function LiveGroupPage() {
                                           if (!set.reps.trim() && singleRep) patch.reps = singleRep;
                                           setLoadFocus(null);
                                           handleLogChange(activeSess.id, ex.id, si, patch);
+                                          // On to this set's reps (or time), highlighted, ready to change.
+                                          setTimeout(() => {
+                                            const next = document.getElementById(`reps-${ex.id}-${si}`) as HTMLInputElement | null
+                                              ?? document.querySelector<HTMLInputElement>(`[data-after-load="${ex.id}:${si}"]`);
+                                            next?.focus();
+                                            next?.select();
+                                          }, 80);
                                         }}
                                       >
                                         {kg}kg
@@ -1739,7 +1747,8 @@ const s: Record<string, React.CSSProperties> = {
   editModeToggle: { display: "flex", gap: 4, background: "var(--ink)", borderRadius: 6, padding: 2 },
   editModeBtn:  { background: "transparent", border: "none", color: "var(--mute)", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
   editModeBtnActive: { background: "var(--accent)", color: "#0a1420" },
-  quickLoads: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, padding: "2px 0 6px 28px" },
+  quickLoads: { display: "flex", alignItems: "center", flexWrap: "nowrap", gap: 5, padding: "2px 0 6px 0" },
   quickLoadLabel: { fontSize: 12, fontWeight: 600, color: "var(--mute)", marginRight: 2 },
-  quickLoadBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer", minWidth: 58 },
+  // Share the row's width equally so three buttons always fit on one line, even "102.5kg" on a small phone.
+  quickLoadBtn: { flex: "1 1 0", minWidth: 0, maxWidth: 96, background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 4px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip" },
 };

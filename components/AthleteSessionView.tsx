@@ -849,6 +849,7 @@ export default function AthleteSessionView({
                             placeholder={ex.time || "sec"}
                             inputMode="numeric"
                             style={styles.setInput}
+                            data-after-load={`${ex.id}:${i}`}
                           />
                         ) : (
                           <input
@@ -858,6 +859,7 @@ export default function AthleteSessionView({
                             placeholder={ex.reps?.toUpperCase() === "AMRAP" ? "reps" : (repsForSet(ex.reps, i) || "reps")}
                             inputMode="numeric"
                             style={styles.setInput}
+                            data-after-load={`${ex.id}:${i}`}
                           />
                         )}
                         {showVelocity && (
@@ -966,6 +968,13 @@ export default function AthleteSessionView({
                                 }
                                 setLoadFocus(null);
                                 handleSetUpdate(ex.id, i, patch);
+                                // On to this set's reps (or time), highlighted, so typing replaces
+                                // the 8 with a 10 - or just carry on, the set is already logged.
+                                setTimeout(() => {
+                                  const next = document.querySelector<HTMLInputElement>(`[data-after-load="${ex.id}:${i}"]`);
+                                  next?.focus();
+                                  next?.select();
+                                }, 60);
                               }}
                             >
                               {kg}kg
@@ -1295,9 +1304,11 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
   historyBtnActive: { borderColor: "var(--accent)", color: "var(--accent)" },
-  quickLoads: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, justifyContent: "flex-start", padding: "2px 0 6px 30px" },
-  quickLoadLabel: { fontSize: 12, fontWeight: 600, color: "var(--mute)", marginRight: 2 },
-  quickLoadBtn: { background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer", minWidth: 58 },
+  // One line on a phone: starts under the set number, compact buttons.
+  quickLoads: { display: "flex", alignItems: "center", flexWrap: "nowrap", gap: 5, justifyContent: "flex-start", padding: "2px 0 6px 0" },
+  quickLoadLabel: { fontSize: 11, fontWeight: 600, color: "var(--mute)", marginRight: 1, whiteSpace: "nowrap" },
+  // Share the row's width equally so three buttons always fit on one line, even "102.5kg" on a small phone.
+  quickLoadBtn: { flex: "1 1 0", minWidth: 0, maxWidth: 96, background: "var(--accent-dim)", border: "1px solid var(--accent)", color: "var(--text)", borderRadius: 8, padding: "7px 4px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip" },
   prescLine: { fontSize: 13, color: "var(--mute)", marginTop: 4 },
   notes: { fontSize: 12, color: "var(--mute)", marginTop: 6, fontStyle: "italic" },
   exNotesTextarea: {
