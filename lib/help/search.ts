@@ -42,6 +42,13 @@ const SYNONYM_GROUPS: string[][] = [
   ["exercise", "movement", "lift", "drill"],
   ["reorder", "order", "move", "drag", "rearrange"],
   ["error", "broken", "bug", "crash", "working", "wrong"],
+  ["store", "shop", "sell", "selling", "buyer", "customer", "purchase"],
+  ["band", "assisted", "resistance"],
+  ["deload", "taper", "recovery week", "lighter"],
+  ["progression", "modify", "periodisation", "periodization", "method"],
+  ["weight", "load", "kg"],
+  ["import", "upload", "csv", "excel"],
+  ["email", "send", "parent"],
 ];
 
 export function stem(word: string): string {

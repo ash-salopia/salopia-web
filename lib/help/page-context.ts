@@ -13,6 +13,7 @@ const PAGES: { prefix: RegExp; label: string; categories: HelpCategoryId[] }[] =
   { prefix: /^\/(challenges|documents)/, label: "Challenges & Documents", categories: ["documents-challenges"] },
   { prefix: /^\/testing/, label: "Testing", categories: ["testing"] },
   { prefix: /^\/(templates|programmes)/, label: "Programmes & templates", categories: ["programmes"] },
+  { prefix: /^\/shop/, label: "the Online Store", categories: ["programmes", "billing"] },
   { prefix: /^\/library/, label: "the Exercise library", categories: ["sessions"] },
   { prefix: /^\/reporting/, label: "Reporting", categories: ["reporting"] },
   { prefix: /^\/settings/, label: "Settings", categories: ["settings", "billing"] },
