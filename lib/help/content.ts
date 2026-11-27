@@ -2544,7 +2544,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "**↑ Same** copies the previous set. For a %1RM exercise, a greyed suggested kg shows in the load box.",
         "Tapping a load box shows **Quick pick** buttons (e.g. 5kg / 6kg / 7kg) - one tap logs the set and moves to the reps box, highlighted, so they can change it or carry on.",
         "Per-set schemes (e.g. 5 @ 65% · 5 @ 75% · 5+ @ 85%) show each set's own reps and kg. For banded / assisted exercises they pick the **band** they used instead of typing kg.",
-        "**⏱ Start rest** runs a rest timer with a buzz at the end.",
+        "**Start rest** (under an exercise with a rest set by the coach) runs a rest timer with a buzz at the end - in strength and power/speed sessions. Coaches can write rest as 90s, 3min or 1:30.",
         "After an exercise, they answer \"Could you have progressed this next session?\" — **Yes** / **No**.",
         "At the end, they set a **🔥 Session RPE** (1–10) and can add notes for you.",
       ] },

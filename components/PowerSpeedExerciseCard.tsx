@@ -346,7 +346,7 @@ export default function PowerSpeedExerciseCard({
         )}
         <Field label="Rest">
           <input value={exercise.rest} onChange={(e) => update({ rest: e.target.value })}
-            placeholder="3min" style={card.miniInput} />
+            placeholder="90s / 3min" style={card.miniInput} />
         </Field>
         {!completionOnly && (
           <Field label="Surface">

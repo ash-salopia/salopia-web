@@ -702,7 +702,7 @@ export default function ExerciseCard({
           <input
             value={exercise.rest}
             onChange={(e) => onEditPresc({ rest: e.target.value })}
-            placeholder="90s"
+            placeholder="90s / 3min"
             style={styles.miniInput}
           />
         </Field>
