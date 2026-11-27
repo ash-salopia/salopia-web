@@ -245,6 +245,8 @@ export default function AthleteDetailPage() {
   const [loadTemplateId, setLoadTemplateId] = useState("");
   const [loadStart, setLoadStart] = useState(todayISO());
   const [loadEnd, setLoadEnd] = useState(todayISO());
+  // End date follows the start date until the coach picks an end date themselves.
+  const [loadEndTouched, setLoadEndTouched] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [saveProgrammeOpen, setSaveProgrammeOpen] = useState(false);
   const [saveProgrammeName, setSaveProgrammeName] = useState("");
@@ -804,6 +806,7 @@ export default function AthleteDetailPage() {
                   setLoadTemplateId(templates[0]?.id ?? "");
                   setLoadStart(todayISO());
                   setLoadEnd(todayISO());
+                  setLoadEndTouched(false);
                   setLoadTemplateOpen(true);
                 },
               },
@@ -1188,7 +1191,11 @@ export default function AthleteDetailPage() {
                     <input
                       type="date"
                       value={loadStart}
-                      onChange={(e) => setLoadStart(e.target.value)}
+                      onChange={(e) => {
+                    const v = e.target.value;
+                    setLoadStart(v);
+                    if (v && (!loadEndTouched || loadEnd < v)) setLoadEnd(v);
+                  }}
                       style={styles.modalInput}
                     />
                   </div>
@@ -1197,7 +1204,7 @@ export default function AthleteDetailPage() {
                     <input
                       type="date"
                       value={loadEnd}
-                      onChange={(e) => setLoadEnd(e.target.value)}
+                      onChange={(e) => { setLoadEnd(e.target.value); setLoadEndTouched(true); }}
                       style={styles.modalInput}
                     />
                   </div>

@@ -36,6 +36,8 @@ export default function TemplateDetailPage() {
   const [loadAthleteSearch, setLoadAthleteSearch] = useState("");
   const [loadStart, setLoadStart] = useState(todayISO());
   const [loadEnd, setLoadEnd] = useState(todayISO());
+  // End date follows the start date until the coach picks an end date themselves.
+  const [loadEndTouched, setLoadEndTouched] = useState(false);
   const [loadingOnto, setLoadingOnto] = useState(false);
 
   const load = async () => {
@@ -176,6 +178,7 @@ export default function TemplateDetailPage() {
             setLoadAthleteSearch("");
             setLoadStart(todayISO());
             setLoadEnd(todayISO());
+            setLoadEndTouched(false);
             setLoadOpen(true);
           }}
         >
@@ -265,7 +268,11 @@ export default function TemplateDetailPage() {
                 <input
                   type="date"
                   value={loadStart}
-                  onChange={(e) => setLoadStart(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setLoadStart(v);
+                    if (v && (!loadEndTouched || loadEnd < v)) setLoadEnd(v);
+                  }}
                   style={styles.modalInput}
                 />
               </div>
@@ -274,7 +281,7 @@ export default function TemplateDetailPage() {
                 <input
                   type="date"
                   value={loadEnd}
-                  onChange={(e) => setLoadEnd(e.target.value)}
+                  onChange={(e) => { setLoadEnd(e.target.value); setLoadEndTouched(true); }}
                   style={styles.modalInput}
                 />
               </div>
