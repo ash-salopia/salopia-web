@@ -528,7 +528,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       { type: "p", text: "**Archive** (the **📦** button) hides the athlete from your roster, the Dashboard and every assignment picker. Nothing is deleted. Restore them any time from the **Archived** view. Any coach can archive." },
       { type: "p", text: "**Permanently delete** (the **×** in the Archived view, or **Delete athlete** on their profile) removes the athlete and every session, PB and test result they ever had. It cannot be undone." },
-      { type: "note", text: "Deleting is owner-only by default and always asks for your organisation's **delete password**. The owner sets it in **Settings → Athlete deletion**, and can switch on **Let coaches delete athletes** there too. Until a password is set, nobody can delete athletes. Undoing a roster import asks for the same password." },
+      { type: "note", text: "Deleting is owner-only by default and always asks for your organisation's **delete password**. The owner sets it in **Settings → Coach permissions**, and can switch on **Let coaches delete athletes** there too. Until a password is set, nobody can delete athletes. Undoing a roster import asks for the same password." },
       { type: "tip", text: "Not coaching someone right now? Archive them rather than deleting — you keep all their history and can bring them back later." },
     ],
   },
@@ -2351,9 +2351,31 @@ export const HELP_ARTICLES: HelpArticle[] = [
           "New coaches are **Pending** until their first login, then **Active**.",
           "Per coach you can set **All athletes** or **Assigned only**; for the latter, **Manage athletes (N)** picks which.",
           "Use **Revoke** (pending), **Archive** / **Reactivate** (active) to manage access.",
+          "Tick boxes per coach: **Online store access**, **Can message athletes** and (when Data export is set to Owner only) **Can download data**.",
         ],
       },
       { type: "note", text: "The coach seat limit is separate from athlete seats and isn't self-serve — contact support to add coach seats." },
+    ],
+  },
+  {
+    id: "coach-permissions",
+    category: "settings",
+    title: "Coach permissions: exports, contact details, messaging and deleting",
+    summary: "Settings → Coach permissions and Team: control what other coaches can download, see, send and delete.",
+    keywords: ["permissions", "restrict coach", "export", "download data", "csv", "contact details", "email hidden", "stop coach messaging", "can't message", "delete athletes", "gdpr", "data protection", "privacy"],
+    body: [
+      { type: "note", text: "Owner only. The owner is never restricted, except that Data export set to **Nobody** applies to the owner too." },
+      {
+        type: "steps",
+        items: [
+          "**Data export** (Settings → Coach permissions): **Owner only** (default), **All coaches** or **Nobody**. This covers bulk downloads - the Export / Export all buttons, Reporting → Download CSV, testing CSVs and report ZIPs. Viewing, printing and emailing a single report still work for everyone.",
+          "On **Owner only**, you can let individual coaches download: **Settings → Team → Can download data** on that coach.",
+          "**Coaches can see contact details**: switch off and only you can see or change an athlete's contact email. Other coaches see **🔒 Hidden** on the profile, but can still tick **Send to the saved contact email** when emailing a report - the address is never shown to them.",
+          "**Messaging** per coach: **Settings → Team → Can message athletes**. Off: that coach can't send 1-to-1 messages, group chat messages or announcements, but can still read them. To switch messaging off for athletes or groups instead, use Settings → Messaging.",
+          "**Let coaches delete athletes** and the **delete password** are in the same section.",
+        ],
+      },
+      { type: "note", text: "Buttons update for a coach when they next refresh or open the app. The rules are enforced by the server and database, not just by hiding buttons." },
     ],
   },
   {

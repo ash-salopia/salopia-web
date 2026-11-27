@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { findAthleteIdByEmail, getContactEmail } from "@/lib/athlete-contacts-server";
 import { createServiceRoleClient } from "@/lib/supabase-service";
 import { getStripe } from "@/lib/stripe";
 import { getAthleteByShareToken } from "@/lib/data/athlete-share-link";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const service = createServiceRoleClient();
 
   let store;
-  let athlete: { id: string; name: string; contact_email?: string | null; organisation_id: string } | null = null;
+  let athlete: { id: string; name: string; organisation_id: string } | null = null;
   let buyerName = "";
   let buyerEmail = "";
   if (body.token) {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     athlete = a as any;
     store = await getStoreForOrg((a as any).organisation_id);
     buyerName = (a as any).name ?? "";
-    buyerEmail = String((a as any).contact_email ?? "").toLowerCase();
+    buyerEmail = String((await getContactEmail(service, (a as any).id)) ?? "").toLowerCase();
   } else {
     store = typeof body.slug === "string" ? await getStoreBySlug(body.slug) : null;
     buyerName = String(body.name ?? "").trim().slice(0, 80);
@@ -54,14 +55,11 @@ export async function POST(req: NextRequest) {
 
   // Public buyer whose email already matches an athlete here: no new seat needed.
   if (!athlete && buyerEmail) {
-    const { data: existing } = await service
-      .from("athletes")
-      .select("id, name, contact_email, organisation_id")
-      .eq("organisation_id", store.organisationId)
-      .ilike("contact_email", buyerEmail)
-      .eq("archived", false)
-      .limit(1);
-    athlete = (existing?.[0] as any) ?? null;
+    const matchId = await findAthleteIdByEmail(service, store.organisationId, buyerEmail);
+    if (matchId) {
+      const { data: existing } = await service.from("athletes").select("id, name, organisation_id").eq("id", matchId).maybeSingle();
+      athlete = (existing as any) ?? null;
+    }
   }
   if (!athlete) {
     const seats = await seatStatus(service, store.organisationId);

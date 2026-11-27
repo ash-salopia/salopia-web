@@ -1,5 +1,7 @@
 "use client";
 
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
+import { MESSAGING_BLOCKED_MESSAGE } from "@/lib/coach-permissions";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -511,6 +513,7 @@ function AnnouncementsTab({ announcements, groups, onAnnouncementsChange }: {
   groups: Group[];
   onAnnouncementsChange: (a: Announcement[]) => void;
 }) {
+  const { canMessage } = useCoachPermissions();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -544,6 +547,12 @@ function AnnouncementsTab({ announcements, groups, onAnnouncementsChange }: {
       {error && <div style={s.errorBox}>{error}</div>}
 
       {/* Compose */}
+      {!canMessage ? (
+        <div style={s.createCard}>
+          <div style={s.sectionTitle}>New announcement</div>
+          <div style={{ fontSize: 13, color: "var(--mute)" }}>{MESSAGING_BLOCKED_MESSAGE}</div>
+        </div>
+      ) : (
       <div style={s.createCard}>
         <div style={s.sectionTitle}>New announcement</div>
         <div style={s.fieldLabel}>Title</div>
@@ -571,6 +580,7 @@ function AnnouncementsTab({ announcements, groups, onAnnouncementsChange }: {
           </button>
         </div>
       </div>
+      )}
 
       {/* Announcement list */}
       <div style={s.sectionTitle}>Recent announcements</div>

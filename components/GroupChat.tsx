@@ -14,6 +14,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
+import { MESSAGING_BLOCKED_MESSAGE } from "@/lib/coach-permissions";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
 
 interface Message {
@@ -57,6 +59,7 @@ function formatTime(iso: string): string {
 }
 
 export default function GroupChat({ groupId, groupName, coachId, coachName }: Props) {
+  const { canMessage } = useCoachPermissions();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -321,6 +324,11 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
       </div>
 
       {/* Input */}
+      {!canMessage ? (
+        <div style={{ padding: "12px 14px", borderTop: "1px solid var(--line)", fontSize: 13, color: "var(--mute)", background: "var(--ink)" }}>
+          {MESSAGING_BLOCKED_MESSAGE} You can still read the chat.
+        </div>
+      ) : (
       <div style={s.inputRow}>
         <input
           value={input}
@@ -344,6 +352,7 @@ export default function GroupChat({ groupId, groupName, coachId, coachName }: Pr
           ↑
         </button>
       </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { PRINT_FLOW_CSS, tagPrintSections } from "@/lib/print-flow";
 import { useState } from "react";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
+import { EXPORT_BLOCKED_MESSAGE } from "@/lib/coach-permissions";
 import { buildTestReportView, testResultsToCSV, downloadCSV, RATING_SCOPE_LABEL, type CompareBasis, type RatingScope } from "@/lib/data/testing";
 import TestReportBody from "@/components/reports/TestReportBody";
 import type { TestSession, TestMetric, TestBenchmark } from "@/types";
@@ -66,6 +68,7 @@ function printReport(title: string) {
 }
 
 export default function TestReportModal({ athlete, sessions, metrics, benchmarksByMetric, branding = DEFAULT_BRANDING, onClose, nav, initialCompareTo, initialRatingScope }: Props) {
+  const { canExport } = useCoachPermissions();
   const [mode, setMode] = useState<ReportMode>("full");
   const [compareTo, setCompareTo] = useState<CompareBasis>(initialCompareTo ?? { kind: "previous" });
   const [ratingScope, setRatingScope] = useState<RatingScope>(initialRatingScope ?? "both");
@@ -153,7 +156,7 @@ export default function TestReportModal({ athlete, sessions, metrics, benchmarks
               Downloads every logged trial across {sessions.length} test session{sessions.length !== 1 ? "s" : ""} as a CSV —
               date, metric, side, trial number, value, bodyweight, and notes. Just the numbers, ready for your own analysis.
             </div>
-            <button style={s.primaryBtn} onClick={handleExportCSV}>⬇ Download CSV</button>
+            {canExport ? <button style={s.primaryBtn} onClick={handleExportCSV}>⬇ Download CSV</button> : <div style={s.csvDesc}>{EXPORT_BLOCKED_MESSAGE}</div>}
           </div>
         ) : (
           <>

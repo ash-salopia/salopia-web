@@ -10,7 +10,8 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import CoachAthleteAssignModal from "@/components/CoachAthleteAssignModal";
-import { setCoachAthleteAccess, setCoachStoreAccess, listCoachAssignedAthleteIds } from "@/lib/data/coach-access";
+import { setCoachAthleteAccess, setCoachStoreAccess, setCoachPermission, listCoachAssignedAthleteIds } from "@/lib/data/coach-access";
+import type { ExportAccess } from "@/lib/coach-permissions";
 
 interface Coach {
   id: string;
@@ -21,15 +22,19 @@ interface Coach {
   archived: boolean;
   athlete_access: "all" | "assigned";
   can_manage_store?: boolean;
+  can_export?: boolean; // 0134
+  can_message?: boolean; // 0134, missing = true
 }
 
 interface Props {
   orgId: string;
   role: "owner" | "coach";
   coachSeatLimit: number | null;
+  /** Settings -> Coach permissions -> Data export. The per-coach export tick only applies on "owner". */
+  exportAccess?: ExportAccess;
 }
 
-export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
+export default function TeamSettings({ orgId, role, coachSeatLimit, exportAccess = "owner" }: Props) {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -115,6 +120,15 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
     }
   }
 
+  async function handlePermissionChange(coach: Coach, field: "can_export" | "can_message", on: boolean) {
+    try {
+      await setCoachPermission(coach.id, field, on);
+      setCoaches((prev) => prev.map((c) => (c.id === coach.id ? { ...c, [field]: on } : c)));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not update this coach");
+    }
+  }
+
   if (loading) return null;
 
   const activeCount = coaches.filter((c) => !c.archived).length;
@@ -188,6 +202,24 @@ export default function TeamSettings({ orgId, role, coachSeatLimit }: Props) {
                     />
                     Online store access
                   </label>
+                  <label style={s.permToggle} title="Send 1-to-1 messages, group chat messages and announcements. Off: they can still read them.">
+                    <input
+                      type="checkbox"
+                      checked={c.can_message !== false}
+                      onChange={(e) => handlePermissionChange(c, "can_message", e.target.checked)}
+                    />
+                    Can message athletes
+                  </label>
+                  {exportAccess === "owner" && (
+                    <label style={s.permToggle} title="Download data in bulk: raw CSV/JSON exports, testing CSVs and report ZIPs.">
+                      <input
+                        type="checkbox"
+                        checked={c.can_export === true}
+                        onChange={(e) => handlePermissionChange(c, "can_export", e.target.checked)}
+                      />
+                      Can download data
+                    </label>
+                  )}
                 </div>
               )}
             </div>
@@ -295,6 +327,7 @@ const s: Record<string, React.CSSProperties> = {
   rowWrap: { background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" },
   row: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
   storeToggle: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer", marginLeft: "auto" },
+  permToggle: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" },
   accessRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)" },
   accessSelect: { background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 600 },
   manageBtn: { background: "transparent", border: "1px solid var(--accent)", color: "var(--accent)", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" },

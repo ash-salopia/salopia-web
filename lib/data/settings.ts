@@ -184,6 +184,13 @@ export interface OrgSettings {
   // 0114 — permanent athlete delete is owner-only unless this is on.
   // Either way it needs the org's delete password (org_secrets).
   coaches_can_delete_athletes: boolean;
+  // 0134 — coach permissions (Settings -> Coach permissions). Who can
+  // download data (raw CSV/JSON, testing CSV, report ZIPs): nobody, the
+  // owner (+ coaches given coaches.can_export), or every coach.
+  export_access: ExportAccess;
+  // Off = only the owner sees or changes athletes' contact email
+  // (athlete_contacts + athlete_contact() in 0134).
+  coaches_see_contact_details: boolean;
   // 0121 — messaging switches. Account-wide; each also has a per-athlete
   // switch (athletes.*) and a per-group one (groups.*). Off = hidden for
   // athletes and no new messages either way (DB triggers enforce it).
@@ -193,6 +200,9 @@ export interface OrgSettings {
 
 // One picked strength lift + whether it gets a relative (÷BW) board, an
 // absolute (kg) board, or both.
+export type { ExportAccess } from "@/lib/coach-permissions";
+import type { ExportAccess } from "@/lib/coach-permissions";
+
 export interface LeaderboardStrengthExercise {
   name: string; // matched case-insensitively against PBs
   relative: boolean;
@@ -278,6 +288,8 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   leaderboards_enabled: false,
   leaderboards: DEFAULT_LEADERBOARDS,
   coaches_can_delete_athletes: false,
+  export_access: "owner",
+  coaches_see_contact_details: true,
   direct_messages_enabled: true,
   group_chat_enabled: true,
 };

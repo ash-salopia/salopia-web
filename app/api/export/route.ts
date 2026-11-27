@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { getMyCoachPermissions } from "@/lib/coach-permissions-server";
+import { EXPORT_BLOCKED_MESSAGE } from "@/lib/coach-permissions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -351,6 +353,11 @@ function buildJSON(data: any, opts: ExportOptions): string {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // 0134: the owner decides who can download data (Settings -> Coach permissions).
+  const me = await getMyCoachPermissions(await createClient());
+  if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!me.permissions.canExport) return NextResponse.json({ error: EXPORT_BLOCKED_MESSAGE }, { status: 403 });
+
   let opts: ExportOptions;
   try {
     opts = await req.json();
