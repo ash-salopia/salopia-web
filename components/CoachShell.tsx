@@ -10,6 +10,8 @@ import { DEFAULT_BRANDING } from "@/types/branding";
 import Avatar from "@/components/Avatar";
 import { useIsMobile } from "@/lib/use-is-mobile";
 import SupportAgentChat from "@/components/SupportAgentChat";
+import { CoachPermissionsProvider } from "@/lib/use-coach-permissions";
+import { FULL_PERMISSIONS, type CoachPermissions } from "@/lib/coach-permissions";
 
 const NAV_ITEMS = [
   { href: "/dashboard",   label: "Dashboard",   icon: "📋" },
@@ -41,6 +43,7 @@ export default function CoachShell({
   branding = DEFAULT_BRANDING,
   billingBanner = null,
   canManageStore = true,
+  permissions = FULL_PERMISSIONS,
   children,
 }: {
   coachName: string;
@@ -50,6 +53,8 @@ export default function CoachShell({
   billingBanner?: BillingBanner;
   /** Owner, or a coach given Online Store access (0126). */
   canManageStore?: boolean;
+  /** Export / messaging / contact-details rules (0134). */
+  permissions?: CoachPermissions;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -175,7 +180,9 @@ export default function CoachShell({
             );
           })}
         </aside>
-        <main style={{ ...styles.main, ...(isMobile ? styles.mainMobile : {}) }}>{children}</main>
+        <main style={{ ...styles.main, ...(isMobile ? styles.mainMobile : {}) }}>
+          <CoachPermissionsProvider value={permissions}>{children}</CoachPermissionsProvider>
+        </main>
       </div>
 
       {helpOpen && (

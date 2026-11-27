@@ -175,6 +175,8 @@ export default function ReportModal({
   branding = DEFAULT_BRANDING,
   athleteId,
   athleteEmail,
+  contactHidden = false,
+  hasSavedContact = false,
   onAthleteEmailSaved,
   initialEmailOpen = false,
   onShared,
@@ -189,7 +191,9 @@ export default function ReportModal({
   squadComparison?: SquadComparisonContext[] | null;
   branding?: ResolvedBranding;
   athleteId?: string; // enables "Email report"
-  athleteEmail?: string | null; // athletes.contact_email (0122), pre-fills the To field
+  athleteEmail?: string | null; // contact email (athlete_contacts, 0134), pre-fills the To field
+  contactHidden?: boolean; // 0134 - this coach can't see the contact email
+  hasSavedContact?: boolean; // one is saved (offer "send to the saved contact")
   onAthleteEmailSaved?: (email: string) => void;
   initialEmailOpen?: boolean; // open the Email dialog once the AI verdict is in (schedule reminders)
   onShared?: () => void;
@@ -1661,6 +1665,8 @@ ${fonts}
             athleteId={athleteId}
             athleteName={athleteName}
             savedEmail={athleteEmail ?? null}
+            contactHidden={contactHidden}
+            hasSavedContact={hasSavedContact}
             rangeLabel={rangeLabel}
             summary={visual?.headline ?? null}
             buildHtml={buildReportDocument}

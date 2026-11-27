@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { sendEmail } from "@/lib/email";
 import { sendPushToAthlete } from "@/lib/push/send";
+import { createServiceRoleClient } from "@/lib/supabase-service";
+import { getContactEmail } from "@/lib/athlete-contacts-server";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +127,9 @@ export async function POST(req: NextRequest) {
     : [];
   if (!athleteId || !html) return NextResponse.json({ error: "Missing report" }, { status: 400 });
   if (new TextEncoder().encode(html).length > MAX_HTML_BYTES) return NextResponse.json({ error: "Report is too large to share" }, { status: 413 });
+  // 0134: a coach who can't see contact details can still send to the
+  // athlete's saved email - looked up here, never returned to them.
+  const useSavedContact = body.useSavedContact === true;
   if (recipients.length > MAX_RECIPIENTS) return NextResponse.json({ error: `Up to ${MAX_RECIPIENTS} email addresses at a time` }, { status: 400 });
   const bad = recipients.find((e) => !EMAIL_RE.test(e));
   if (bad) return NextResponse.json({ error: `"${bad}" doesn't look like an email address` }, { status: 400 });
@@ -135,6 +140,13 @@ export async function POST(req: NextRequest) {
   // RLS: only returns the athlete if this coach can access them.
   const { data: athlete } = await supabase.from("athletes").select("id, name, organisation_id").eq("id", athleteId).maybeSingle();
   if (!athlete) return NextResponse.json({ error: "Athlete not found" }, { status: 404 });
+
+  if (useSavedContact) {
+    const saved = String((await getContactEmail(createServiceRoleClient(), athlete.id)) ?? "").trim().toLowerCase();
+    if (!saved || !EMAIL_RE.test(saved)) return NextResponse.json({ error: "No saved contact email for this athlete" }, { status: 400 });
+    if (!recipients.includes(saved)) recipients.unshift(saved);
+    if (recipients.length > MAX_RECIPIENTS) return NextResponse.json({ error: `Up to ${MAX_RECIPIENTS} email addresses at a time` }, { status: 400 });
+  }
 
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { data: recent } = await supabase
@@ -177,8 +189,10 @@ export async function POST(req: NextRequest) {
   const url = `${req.nextUrl.origin}/r/${row.id}`;
   const expires = new Date(row.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-  if (body.saveEmail && recipients[0]) {
-    const { error } = await supabase.from("athletes").update({ contact_email: recipients[0] }).eq("id", athlete.id);
+  if (body.saveEmail && recipients[0] && !useSavedContact) {
+    // set_athlete_contact() refuses if this coach can't change contact details (0134).
+    let { error } = await supabase.rpc("set_athlete_contact", { p_athlete_id: athlete.id, p_email: recipients[0] });
+    if (error?.code === "PGRST202") ({ error } = await supabase.from("athletes").update({ contact_email: recipients[0] }).eq("id", athlete.id));
     if (error) console.error("[reports/share] saving contact email failed", error);
   }
 
@@ -213,6 +227,9 @@ export async function POST(req: NextRequest) {
   });
   if (!sent.ok) return NextResponse.json({ url, emailed: false, reason: sent.reason });
 
-  await supabase.from("shared_reports").update({ emailed_to: recipients, emailed_at: new Date().toISOString() }).eq("id", row.id);
+  // Report history is visible to every coach, so a hidden address is recorded as a placeholder.
+  const savedAddr = useSavedContact ? recipients[0] : null;
+  const logged = recipients.map((e) => (e === savedAddr ? "(saved contact)" : e));
+  await supabase.from("shared_reports").update({ emailed_to: logged, emailed_at: new Date().toISOString() }).eq("id", row.id);
   return NextResponse.json({ url, emailed: true });
 }

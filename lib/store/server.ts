@@ -1,4 +1,5 @@
 import "server-only";
+import { findAthleteIdByEmail, saveContactEmail } from "@/lib/athlete-contacts-server";
 import type Stripe from "stripe";
 import type { MatchableProduct } from "@/lib/store/match";
 import { toExerciseRow } from "@/lib/prescription";
@@ -406,19 +407,19 @@ export async function fulfilCheckoutSession(checkout: Stripe.Checkout.Session, a
   let athleteId: string | null = purchase.athlete_id;
   const email = String(purchase.buyer_email || "").toLowerCase();
   if (!athleteId && email) {
-    const { data: existing } = await service.from("athletes").select("id").eq("organisation_id", org.id).ilike("contact_email", email).eq("archived", false).limit(1);
-    athleteId = existing?.[0]?.id ?? null;
+    athleteId = await findAthleteIdByEmail(service, org.id, email);
   }
   let createdAthlete = false;
   if (!athleteId) {
     const { data: created, error } = await service
       .from("athletes")
-      .insert({ organisation_id: org.id, name: purchase.buyer_name || email || "New athlete", group: "Online", contact_email: email || null })
+      .insert({ organisation_id: org.id, name: purchase.buyer_name || email || "New athlete", group: "Online" })
       .select("id")
       .single();
     if (error || !created) return fail(error?.message?.includes("SEAT_LIMIT") ? "SEAT_LIMIT_REACHED" : `Could not create athlete: ${error?.message ?? "unknown"}`);
     athleteId = created.id;
     createdAthlete = true;
+    if (email) await saveContactEmail(service, created.id, org.id, email);
     if (product.created_by) await service.from("coach_athletes").insert({ coach_id: product.created_by, athlete_id: athleteId });
   }
 

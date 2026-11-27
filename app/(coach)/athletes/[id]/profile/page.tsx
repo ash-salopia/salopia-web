@@ -16,6 +16,8 @@ import { getOrgSettings } from "@/lib/data/settings";
 import { DEFAULT_ZONE_MODEL, type ZoneModel } from "@/lib/training-zones";
 import { todayISO } from "@/lib/date-utils";
 import ExportModal from "@/components/ExportModal";
+import { getAthleteContact, setAthleteContact, type AthleteContact } from "@/lib/data/athlete-contact";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
 import AerobicProfileSection from "@/components/AerobicProfileSection";
 import Avatar from "@/components/Avatar";
 import type { Athlete, AthleteOneRM, AthleteVelocityProfile } from "@/types";
@@ -171,11 +173,16 @@ function formatDate(iso: string): string {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AthleteProfilePage() {
+  const { canExport } = useCoachPermissions();
   const params = useParams();
   const router = useRouter();
   const athleteId = params?.id as string;
 
   const [athlete, setAthlete] = useState<Athlete | null>(null);
+  const [contact, setContact] = useState<AthleteContact | null>(null);
+  useEffect(() => {
+    if (athleteId) getAthleteContact(athleteId).then(setContact).catch(() => setContact({ visible: false, email: null, hasEmail: false }));
+  }, [athleteId]);
   const [pbs, setPbs] = useState<PBRecord[]>([]);
   const [stats, setStats] = useState<SessionStat | null>(null);
   const [progressData, setProgressData] = useState<Record<string, ProgressPoint[]>>({});
@@ -446,9 +453,11 @@ export default function AthleteProfilePage() {
           ← Back to sessions
         </button>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={p.ghostBtn} onClick={() => setExportOpen(true)}>
-            📥 Export
-          </button>
+          {canExport && (
+            <button style={p.ghostBtn} onClick={() => setExportOpen(true)}>
+              📥 Export
+            </button>
+          )}
           {canDelete && (
             <button style={p.dangerBtn} onClick={() => athlete && setDeleteOpen(true)}>
               Delete athlete
@@ -930,25 +939,34 @@ export default function AthleteProfilePage() {
             </div>
             <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, flex: "1 1 100%", minWidth: 200 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: "var(--mute)", textTransform: "uppercase" as const }}>Email (for reports)</label>
-              <input
-                type="email"
-                defaultValue={athlete?.contact_email ?? ""}
-                key={athlete?.contact_email ?? "email"}
-                placeholder="Athlete's or parent's email"
-                style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 13 }}
-                onBlur={async (e) => {
-                  const val = e.target.value.trim().toLowerCase() || null;
-                  if (val === (athlete?.contact_email ?? null)) return;
-                  if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) {
-                    setError("That email address doesn't look right.");
-                    return;
-                  }
-                  const supabase = createClient();
-                  const { error: upErr } = await supabase.from("athletes").update({ contact_email: val }).eq("id", athleteId);
-                  if (upErr) setError("Could not save email: " + upErr.message);
-                  else setAthlete((prev) => prev ? { ...prev, contact_email: val } : prev);
-                }}
-              />
+              {contact && !contact.visible ? (
+                <div style={{ fontSize: 13, color: "var(--mute)", padding: "7px 0" }}>
+                  {contact.hasEmail ? "🔒 Saved - hidden." : "🔒 Hidden."} Only the account owner can see or change contact details.
+                </div>
+              ) : (
+                <input
+                  type="email"
+                  defaultValue={contact?.email ?? ""}
+                  key={contact ? contact.email ?? "none" : "loading"}
+                  disabled={!contact}
+                  placeholder="Athlete's or parent's email"
+                  style={{ background: "var(--ink)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 8, padding: "7px 10px", fontSize: 13 }}
+                  onBlur={async (e) => {
+                    const val = e.target.value.trim().toLowerCase() || null;
+                    if (val === (contact?.email ?? null)) return;
+                    if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) {
+                      setError("That email address doesn't look right.");
+                      return;
+                    }
+                    try {
+                      await setAthleteContact(athleteId, val);
+                      setContact({ visible: true, email: val, hasEmail: !!val });
+                    } catch (err) {
+                      setError("Could not save email: " + (err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err)));
+                    }
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>

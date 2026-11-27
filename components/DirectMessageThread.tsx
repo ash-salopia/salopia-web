@@ -17,6 +17,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import VoiceNoteRecorder from "@/components/VoiceNoteRecorder";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
+import { MESSAGING_BLOCKED_MESSAGE } from "@/lib/coach-permissions";
 import VoiceNotePlayer from "@/components/VoiceNotePlayer";
 import { ReactionButtons, ReactionBadge } from "@/components/MessageReactions";
 import { reactToAthleteMessage } from "@/lib/data/messages";
@@ -50,6 +52,7 @@ async function uploadCoachAudio(blob: Blob): Promise<{ path: string }> {
 }
 
 export default function DirectMessageThread({ athleteId, athleteName, coachId, coachName, initialText, onSent }: Props) {
+  const { canMessage } = useCoachPermissions();
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [input, setInput] = useState(initialText ?? "");
   const [sending, setSending] = useState(false);
@@ -332,7 +335,9 @@ export default function DirectMessageThread({ athleteId, athleteName, coachId, c
         <div ref={bottomRef} />
       </div>
 
-      {off ? (
+      {!canMessage ? (
+        <div style={s.offNote}>{MESSAGING_BLOCKED_MESSAGE} You can still read this thread.</div>
+      ) : off ? (
         <div style={s.offNote}>
           Messaging is turned off for {athleteName}, so they can&apos;t see this thread. Past messages are kept. Turn it
           back on from their profile, their group (Community → Groups), or Settings → Messaging.

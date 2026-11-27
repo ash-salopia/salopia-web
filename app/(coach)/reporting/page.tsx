@@ -15,6 +15,8 @@ import ReportTargetPicker from "@/components/reports/ReportTargetPicker";
 import DateRangePicker from "@/components/reports/DateRangePicker";
 import ReportOptionsForm from "@/components/reports/ReportOptionsForm";
 import ExportModal from "@/components/ExportModal";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
+import { EXPORT_BLOCKED_MESSAGE } from "@/lib/coach-permissions";
 import {
   computeSquadReport,
   availableExercises,
@@ -143,6 +145,7 @@ async function fetchAiSummary(
 }
 
 export default function ReportingPage() {
+  const { canExport } = useCoachPermissions();
   const [tab, setTab] = useState<Tab>("athletes");
 
   // Athlete Reports tab state
@@ -949,33 +952,41 @@ export default function ReportingPage() {
                 >
                   {previewLoading ? "Generating…" : "👁 Preview / print 1 report"}
                 </button>
-                <button
-                  style={{ ...s.actionBtn, opacity: targetIds.length && !pdfBusy ? 1 : 0.5 }}
-                  disabled={!targetIds.length || pdfBusy}
-                  onClick={handleDownloadAll}
-                >
-                  {pdfBusy
-                    ? pdfProgress
-                      ? `Building ${Math.min(pdfProgress.done + 1, pdfProgress.total)} of ${pdfProgress.total}…`
-                      : "Generating…"
-                    : `📦 Download reports (${targetIds.length || 0}) as ZIP`}
-                </button>
+                {canExport && (
+                  <button
+                    style={{ ...s.actionBtn, opacity: targetIds.length && !pdfBusy ? 1 : 0.5 }}
+                    disabled={!targetIds.length || pdfBusy}
+                    onClick={handleDownloadAll}
+                  >
+                    {pdfBusy
+                      ? pdfProgress
+                        ? `Building ${Math.min(pdfProgress.done + 1, pdfProgress.total)} of ${pdfProgress.total}…`
+                        : "Generating…"
+                      : `📦 Download reports (${targetIds.length || 0}) as ZIP`}
+                  </button>
+                )}
               </div>
               {pdfError && <div style={s.errorHint}>{pdfError}</div>}
             </div>
 
             <div style={s.card}>
               <div style={s.cardTitle}>Raw data export</div>
-              <div style={s.actionRow}>
-                <button
-                  style={{ ...s.actionBtn, opacity: targetIds.length ? 1 : 0.5 }}
-                  disabled={!targetIds.length}
-                  onClick={() => setExportOpen(true)}
-                >
-                  📥 Download CSV
-                </button>
-              </div>
-              {!targetIds.length && <div style={s.hint}>Pick at least one athlete first.</div>}
+              {canExport ? (
+                <>
+                  <div style={s.actionRow}>
+                    <button
+                      style={{ ...s.actionBtn, opacity: targetIds.length ? 1 : 0.5 }}
+                      disabled={!targetIds.length}
+                      onClick={() => setExportOpen(true)}
+                    >
+                      📥 Download CSV
+                    </button>
+                  </div>
+                  {!targetIds.length && <div style={s.hint}>Pick at least one athlete first.</div>}
+                </>
+              ) : (
+                <div style={s.hint}>{EXPORT_BLOCKED_MESSAGE}</div>
+              )}
             </div>
           </div>
         </div>

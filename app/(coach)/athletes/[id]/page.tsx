@@ -58,6 +58,7 @@ import { getMyBranding } from "@/lib/data/branding";
 import { DEFAULT_BRANDING, type ResolvedBranding } from "@/types/branding";
 import { listGoalMilestones, type GoalMilestone } from "@/lib/data/goals";
 import { DEFAULT_CHECKIN_RULES, type CheckInRules } from "@/lib/checkin";
+import { getAthleteContact, type AthleteContact } from "@/lib/data/athlete-contact";
 
 // "4×5 @ 80kg" - compact prescription for the Week / By day cards.
 // A bare number in the time field is seconds ("45" -> "45s"); anything
@@ -189,6 +190,11 @@ export default function AthleteDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const athleteId = params.id;
+  const [contact, setContact] = useState<AthleteContact | null>(null);
+  // Contact email for "Email report" (0134 - may be hidden from this coach).
+  useEffect(() => {
+    if (athleteId) getAthleteContact(athleteId).then(setContact).catch(() => {});
+  }, [athleteId]);
 
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -1301,8 +1307,10 @@ export default function AthleteDetailPage() {
           squadComparison={squadComparison}
           branding={branding}
           athleteId={athleteId}
-          athleteEmail={athlete.contact_email ?? null}
-          onAthleteEmailSaved={(email) => setAthlete((prev) => (prev ? { ...prev, contact_email: email } : prev))}
+          athleteEmail={contact?.email ?? null}
+          contactHidden={contact ? !contact.visible : false}
+          hasSavedContact={contact?.hasEmail ?? false}
+          onAthleteEmailSaved={(email) => setContact({ visible: true, email, hasEmail: true })}
           initialEmailOpen={emailOnOpen}
           onShared={() => { markScheduledReportSent(athleteId).catch(() => {}); }}
           onClose={() => { setReportData(null); setAiReportSummary(null); setSquadComparison(null); setEmailOnOpen(false); }}

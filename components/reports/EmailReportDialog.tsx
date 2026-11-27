@@ -20,6 +20,8 @@ export default function EmailReportDialog({
   athleteId,
   athleteName,
   savedEmail,
+  contactHidden = false,
+  hasSavedContact = false,
   rangeLabel,
   summary,
   buildHtml,
@@ -30,6 +32,8 @@ export default function EmailReportDialog({
   athleteId: string;
   athleteName: string;
   savedEmail: string | null;
+  contactHidden?: boolean; // 0134 - owner has hidden contact details from this coach
+  hasSavedContact?: boolean;
   rangeLabel: string;
   summary: Headline | null;
   buildHtml: (style: "white" | "colour") => string | null;
@@ -47,6 +51,8 @@ export default function EmailReportDialog({
   const [copied, setCopied] = useState(false);
   const [style, setStyle] = useState<"colour" | "white">("colour");
   const [showInApp, setShowInApp] = useState(true);
+  // Hidden contact: the server adds the saved address, this coach never sees it.
+  const [useSaved, setUseSaved] = useState(contactHidden && hasSavedContact);
 
   const recipients = to
     .split(/[,;\s]+/)
@@ -54,11 +60,12 @@ export default function EmailReportDialog({
     .filter(Boolean);
   const invalid = recipients.find((e) => !EMAIL_RE.test(e));
   const firstRecipient = recipients[0]?.toLowerCase() ?? "";
-  const differsFromSaved = !!firstRecipient && firstRecipient !== (savedEmail ?? "").toLowerCase();
+  const differsFromSaved = !contactHidden && !!firstRecipient && firstRecipient !== (savedEmail ?? "").toLowerCase();
+  const sendingToSaved = contactHidden && useSaved;
 
   const share = async (withEmail: boolean) => {
     setError("");
-    if (withEmail && !recipients.length) return setError("Add an email address.");
+    if (withEmail && !recipients.length && !sendingToSaved) return setError("Add an email address.");
     if (withEmail && invalid) return setError(`"${invalid}" doesn't look like an email address.`);
     const html = buildHtml(style);
     if (!html) return setError("Couldn't read the report - close it and generate it again.");
@@ -77,6 +84,7 @@ export default function EmailReportDialog({
           showInApp,
           message: withEmail ? message : "",
           emailTo: withEmail ? recipients : [],
+          useSavedContact: withEmail && sendingToSaved,
           saveEmail: withEmail && saveEmail && differsFromSaved,
           summary: summary
             ? {
@@ -93,7 +101,8 @@ export default function EmailReportDialog({
       if (!res.ok || !json.url) throw new Error(json.error || "Couldn't share the report.");
       if (withEmail && saveEmail && differsFromSaved) onSavedEmail?.(firstRecipient);
       onShared?.();
-      setResult(json.emailed ? { kind: "sent", url: json.url, to: recipients } : { kind: "link", url: json.url, reason: json.reason, to: withEmail ? recipients : [] });
+      const shown = withEmail && sendingToSaved ? [`${firstName}'s saved contact`, ...recipients] : recipients;
+      setResult(json.emailed ? { kind: "sent", url: json.url, to: shown } : { kind: "link", url: json.url, reason: json.reason, to: withEmail ? recipients : [] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't share the report.");
     } finally {
@@ -162,15 +171,24 @@ export default function EmailReportDialog({
         ) : (
           <>
             <div style={d.label}>To</div>
+            {contactHidden && hasSavedContact && (
+              <label style={{ ...d.check, marginTop: 0, marginBottom: 8 }}>
+                <input type="checkbox" checked={useSaved} onChange={(e) => setUseSaved(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+                Send to {firstName}&apos;s saved contact email (hidden)
+              </label>
+            )}
             <input
               type="email"
               multiple
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              placeholder="athlete@example.com, parent@example.com"
+              placeholder={sendingToSaved ? "Anyone else? (optional)" : "athlete@example.com, parent@example.com"}
               style={d.input}
-              autoFocus={!savedEmail}
+              autoFocus={!savedEmail && !sendingToSaved}
             />
+            {contactHidden && (
+              <div style={d.hint}>The account owner has hidden contact details, so {firstName}&apos;s saved email isn&apos;t shown or changed here.</div>
+            )}
             {differsFromSaved && (
               <label style={d.check}>
                 <input type="checkbox" checked={saveEmail} onChange={(e) => setSaveEmail(e.target.checked)} style={{ accentColor: "var(--accent)" }} />

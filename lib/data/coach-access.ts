@@ -59,3 +59,14 @@ export async function setCoachStoreAccess(coachId: string, canManageStore: boole
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not update store access");
 }
+
+// Per-coach export / messaging switches (0134). Owner only, service-role route.
+export async function setCoachPermission(coachId: string, field: "can_export" | "can_message", value: boolean): Promise<void> {
+  const res = await fetch("/api/coaches/permissions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ coachId, field, value }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not update this coach");
+}

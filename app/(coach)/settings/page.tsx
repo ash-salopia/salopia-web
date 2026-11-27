@@ -1202,10 +1202,51 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* ── Athlete deletion (0114) ── */}
-      <CollapsibleSection title="Athlete deletion">
+      {/* ── Coach permissions (0114 delete, 0134 export / contacts / messaging) ── */}
+      <CollapsibleSection title="Coach permissions" subtitle="What coaches other than you can do. The owner is never restricted.">
         <div style={s.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={s.cardLabel}>Data export</div>
+          <div style={s.cardDesc}>
+            Who can download data in bulk: raw CSV/JSON exports, testing CSVs and report ZIPs. Viewing, printing and
+            emailing single reports isn&apos;t affected.
+          </div>
+          <select
+            value={settings.export_access}
+            onChange={(e) => setSettings((prev) => ({ ...prev, export_access: e.target.value as OrgSettings["export_access"] }))}
+            style={{ ...s.ruleSelect, alignSelf: "flex-start", maxWidth: "100%" }}
+          >
+            <option value="owner">Owner only (plus coaches you allow in Team)</option>
+            <option value="all">All coaches</option>
+            <option value="off">Nobody (owner included)</option>
+          </select>
+        </div>
+
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <div style={s.cardLabel}>Coaches can see contact details</div>
+              <div style={s.cardDesc}>
+                On (default): coaches can see and edit an athlete&apos;s contact email. Off: only you can. Coaches can still
+                email a report to the saved address without seeing it.
+              </div>
+            </div>
+            <button
+              style={{
+                ...s.toggleSwitch,
+                background: settings.coaches_see_contact_details ? "var(--accent)" : "var(--panel2)",
+              }}
+              onClick={() => setSettings((prev) => ({ ...prev, coaches_see_contact_details: !prev.coaches_see_contact_details }))}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: settings.coaches_see_contact_details ? "translateX(20px)" : "translateX(0)",
+              }} />
+            </button>
+          </div>
+        </div>
+
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div>
               <div style={s.cardLabel}>Let coaches delete athletes</div>
               <div style={s.cardDesc}>
@@ -1229,6 +1270,10 @@ export default function SettingsPage() {
           </div>
           <DeletePasswordSettings isOwner={coachRole === "owner"} />
         </div>
+
+        <div style={s.cardDesc}>
+          Messaging and data downloads can also be set for each coach in <b>Team</b> below.
+        </div>
       </CollapsibleSection>
 
       </fieldset>
@@ -1238,6 +1283,7 @@ export default function SettingsPage() {
           orgId={orgId}
           role={coachRole}
           coachSeatLimit={coachSeatLimit}
+          exportAccess={settings.export_access}
         />
       )}
       {/* #billing: target of every "Upgrade" link (lib/billing/live-group-limits.ts UPGRADE_HREF) */}

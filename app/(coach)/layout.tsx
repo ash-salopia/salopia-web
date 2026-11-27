@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import CoachShell from "@/components/CoachShell";
 import { resolveBranding, DEFAULT_BRANDING } from "@/types/branding";
 import { graceDaysRemaining } from "@/lib/billing/access";
+import { coachPermissions } from "@/lib/coach-permissions";
 
 export default async function CoachLayout({
   children,
@@ -17,7 +18,7 @@ export default async function CoachLayout({
 
   const { data: coach, error: coachError } = await supabase
     .from("coaches")
-    .select("*, organisations(id, name, tier, branding, subscription_status, past_due_since)")
+    .select("*, organisations(id, name, tier, branding, settings, subscription_status, past_due_since)")
     .eq("id", user.id)
     .single();
 
@@ -63,6 +64,7 @@ export default async function CoachLayout({
       branding={branding}
       billingBanner={billingBanner}
       canManageStore={coach.role === "owner" || coach.can_manage_store === true}
+      permissions={coachPermissions(coach, org?.settings ?? null)}
     >
       {children}
     </CoachShell>

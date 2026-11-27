@@ -18,6 +18,7 @@ import {
   type GroupTestAthlete, type CompareBasis, type TestReportRatedRow, type RatingScope,
 } from "@/lib/data/testing";
 import TestReportModal from "@/components/TestReportModal";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
 import TestReportBody from "@/components/reports/TestReportBody";
 import { CAPABILITY_MIN_PLAN, type ReportCapability } from "@/lib/billing/entitlements";
 import type { GroupTestSession, TestBenchmark, TestMetric, TestSession } from "@/types";
@@ -71,6 +72,7 @@ async function loadHistories(athletes: GroupTestAthlete[]): Promise<Map<string, 
 }
 
 export default function GroupTestReports({ groupSession, sessions, athletes, detailLoader, branding = DEFAULT_BRANDING, capabilities, compact }: Props) {
+  const { canExport } = useCoachPermissions();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [open, setOpen] = useState<OpenMode>(null);
@@ -197,7 +199,7 @@ export default function GroupTestReports({ groupSession, sessions, athletes, det
     { key: "athlete", label: "Athlete reports", cap: "athlete_reports", onClick: () => pick("athlete", "athlete_reports") },
     { key: "squad", label: "Squad summary", cap: "squad_summary", onClick: () => pick("squad", "squad_summary") },
     { key: "batch", label: "Print all — combined", cap: "batch_reports", onClick: () => pick("batch", "batch_reports") },
-    { key: "zip", label: zipBusy ? "Building ZIP…" : "Download all as PDF ZIP", cap: "batch_reports", onClick: handleZip },
+    ...(canExport ? [{ key: "zip" as const, label: zipBusy ? "Building ZIP…" : "Download all as PDF ZIP", cap: "batch_reports" as ReportCapability, onClick: handleZip }] : []),
   ];
 
   const busy = zipBusy || loadingDetail || loadingRef;

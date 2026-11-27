@@ -16,6 +16,7 @@ import {
 } from "@/lib/data/athletes";
 import DeleteAthleteModal from "@/components/DeleteAthleteModal";
 import ExportModal from "@/components/ExportModal";
+import { useCoachPermissions } from "@/lib/use-coach-permissions";
 import Avatar from "@/components/Avatar";
 import { getOrgSettings } from "@/lib/data/settings";
 import { rtpMeta } from "@/lib/rtp";
@@ -24,6 +25,7 @@ import LiveGroupCapNotice from "@/components/LiveGroupCapNotice";
 
 export default function AthletesPage() {
   const router = useRouter();
+  const { canExport } = useCoachPermissions();
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [archivedAthletes, setArchivedAthletes] = useState<Athlete[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -212,9 +214,11 @@ export default function AthletesPage() {
               ☆ Clear live group ({athletes.filter((a) => a.in_live_group).length})
             </button>
           )}
-          <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
-            Export all
-          </button>
+          {canExport && (
+            <button style={styles.ghostBtn} onClick={() => setExportOpen(true)}>
+              Export all
+            </button>
+          )}
           <button style={styles.ghostBtn} onClick={() => router.push("/import")}>
             Import
           </button>
