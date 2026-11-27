@@ -7,19 +7,35 @@ import { useEffect, useState } from "react";
 // One timer at a time per session view: starting another exercise's
 // rest replaces it.
 
-// The coach's free-text rest prescription ("90s", "2min", "1:30", or
-// a bare "90") parsed into seconds for the rest timer. Returns null
+// The coach's free-text rest prescription parsed into seconds for the
+// rest timer: "90s", "90", "2min", "2 mins", "1:30", "2min30s", "2m 30s",
+// "1.5min", and ranges ("60-90s", "2-3min", "2 to 3 mins") - a range
+// uses the longer end, so the athlete gets the full rest. Returns null
 // for anything unparseable so the timer button just doesn't show
 // rather than starting at a nonsense duration.
 export function parseRestSeconds(rest: string | null | undefined): number | null {
-  const s = (rest ?? "").trim().toLowerCase();
+  const s = (rest ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   if (!s) return null;
-  const colonMatch = s.match(/^(\d+):(\d{1,2})$/);
-  if (colonMatch) return parseInt(colonMatch[1], 10) * 60 + parseInt(colonMatch[2], 10);
-  const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*(min|mins|minute|minutes|m)\b/);
-  if (minMatch) return Math.round(parseFloat(minMatch[1]) * 60);
-  const secMatch = s.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds)?\b/);
-  if (secMatch) return Math.round(parseFloat(secMatch[1]));
+  const range = s.match(/^(.+?)\s*(?:-|–|to)\s*(.+)$/);
+  if (range) {
+    const hi = parseOne(range[2]);
+    if (hi == null) return null;
+    // "2-3min": the unit sits on the second number only.
+    const unit = range[2].replace(/^[\d.:\s]+/, "");
+    const lo = parseOne(/^[\d.]+$/.test(range[1].trim()) && unit ? `${range[1].trim()}${unit}` : range[1]);
+    return lo == null ? hi : Math.max(lo, hi);
+  }
+  return parseOne(s);
+}
+
+function parseOne(raw: string): number | null {
+  const s = raw.trim();
+  const colon = s.match(/^(\d+):(\d{1,2})$/);
+  if (colon) return parseInt(colon[1], 10) * 60 + parseInt(colon[2], 10);
+  const minSec = s.match(/^(\d+(?:\.\d+)?)\s*(?:min|mins|minute|minutes|m)\s*(?:(\d+)\s*(?:s|sec|secs|second|seconds)?)?$/);
+  if (minSec) return Math.round(parseFloat(minSec[1]) * 60) + (minSec[2] ? parseInt(minSec[2], 10) : 0);
+  const sec = s.match(/^(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)?$/);
+  if (sec) return Math.round(parseFloat(sec[1]));
   return null;
 }
 
