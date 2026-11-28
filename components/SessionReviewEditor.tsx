@@ -35,6 +35,7 @@ export interface ReviewExercise {
   notes: string;
   time: string;
   each_side: boolean;
+  pause?: string; // "5" = 5s pause each rep, "yes" = paused with no length; saved as Pause (s)
   is_bodyweight?: boolean;
   use_percent_1rm?: boolean;
   rpe?: number | null;
@@ -130,6 +131,7 @@ export function enrichWithLibrary(
       notes: e.notes,
       time: dose.time,
       each_side: e.each_side,
+      pause: typeof e.pause === "string" ? e.pause : "",
       // No parsed signal for these two exists at this layer (unlike
       // each_side, which comes from the AI/voice parse itself) - pure
       // library-default addition, so a match applies it directly.
@@ -744,6 +746,9 @@ export default function SessionReviewEditor({
 
                     {ex.each_side && (
                       <span style={{ ...s.chipSep, fontSize: 10 }}>· each side</span>
+                    )}
+                    {ex.pause && (
+                      <span style={{ ...s.chipSep, fontSize: 10 }}>· {ex.pause === "yes" ? "paused" : `${ex.pause}s pause`}</span>
                     )}
                   </div>
                 )}

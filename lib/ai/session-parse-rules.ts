@@ -31,7 +31,8 @@ export const DOSE_RULES = `Sets, reps and time:
 - sets: integer when the coach states it ("3 sets", "3 by 8", "3x8", "three of eight"). If the coach does NOT state a set count, use null - never 0, never guess. The app fills in the exercise's library default, or 3.
 - reps: string - "8", "8-12", "AMRAP", "Max", "5 each side" -> "5" with each_side true. If not stated, use "" (the app fills in the library default or 8-12). "3 by 8 to 12" = sets 3, reps "8-12".
 - time: for timed work, e.g. "30s", "45s", "1min" ("3 by 30 seconds" = sets 3, time "30s", reps ""). Only one of reps/time is filled for an exercise.
-- Never output 0 sets or "0" reps.`;
+- Never output 0 sets or "0" reps.
+- pause: a pause/hold inside each rep, in seconds as a number string - "5s pause", "5 second pause", "pause 3s at the bottom", "paused squat 2 seconds", "with a 3 count pause" -> "5" / "3" / "2" / "3". If a pause is asked for with no length ("paused bench"), use "yes". "" when no pause is mentioned. Put it ONLY here - not in notes, tempo or the name (keep "Paused" in the name only if the coach's library name has it).`;
 
 /** A set count the coach actually gave, or null (not stated / 0 / junk). */
 export function positiveInt(v: unknown): number | null {
@@ -47,4 +48,14 @@ export function normaliseOrder(v: unknown): string {
   m = s.match(/^([A-Z])\s*(\d+)$/);
   if (m) return `${m[2]}${m[1]}`;
   return s;
+}
+
+/** "5", "5s", "5 sec" -> "5"; "yes"/true -> "yes" (pause, no length); else "". */
+export function normalisePause(v: unknown): string {
+  if (v === true) return "yes";
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s || s === "0" || s === "no" || s === "false") return "";
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  if (m && parseFloat(m[1]) > 0) return m[1];
+  return /yes|true|pause/.test(s) ? "yes" : "";
 }

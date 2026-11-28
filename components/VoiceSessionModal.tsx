@@ -240,6 +240,7 @@ export default function VoiceSessionModal({
         target_load: e.target_load, tempo: e.tempo || "2-0-2",
         notes: e.notes, time: e.time, each_side: e.each_side, video_url: e.video_url,
         is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,
+        track_pause: !!e.pause, target_pause: e.pause && e.pause !== "yes" ? e.pause : "",
       }));
 
     try {
@@ -258,6 +259,7 @@ export default function VoiceSessionModal({
           tempo: e.tempo, each_side: e.each_side, notes: e.notes,
           is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,
           video_url: e.video_url, session_notes: "", progress: "" as const,
+          ...(e.track_pause ? { track_pause: true, target_pause: e.target_pause } : {}),
           progress_reminder: false, sort_order: exerciseCount + i,
           log: Array.from({ length: e.sets }, () => ({ weight: "", done: false, reps: "" })),
         }));

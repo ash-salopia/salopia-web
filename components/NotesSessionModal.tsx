@@ -251,6 +251,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
           contacts: e.ps_contacts ?? undefined,
           tracked_metrics: e.ps_tracked_metrics,
           count_contacts: e.ps_count_contacts,
+          track_pause: !!e.pause, target_pause: e.pause && e.pause !== "yes" ? e.pause : "",
         }))
     );
 
@@ -316,6 +317,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
             contacts: e.ps_contacts ?? undefined,
             tracked_metrics: e.ps_tracked_metrics,
             count_contacts: e.ps_count_contacts,
+          track_pause: !!e.pause, target_pause: e.pause && e.pause !== "yes" ? e.pause : "",
           }));
         const sessionType = (s.type ?? "strength") as any;
         const session = await createSession(athleteId, sessionType, date, name, exInputs, {

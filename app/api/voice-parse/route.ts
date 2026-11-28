@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { AI_MODEL, callClaude } from "@/lib/ai/claude";
-import { libraryRules, ORDER_RULES, DOSE_RULES, positiveInt, normaliseOrder } from "@/lib/ai/session-parse-rules";
+import { libraryRules, ORDER_RULES, DOSE_RULES, positiveInt, normaliseOrder, normalisePause } from "@/lib/ai/session-parse-rules";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,7 @@ export interface ParsedExercise {
   notes: string;
   time: string;
   each_side: boolean;
+  pause?: string; // seconds, "yes" (paused, no length) or "" - ticks Pause (s) on save
 }
 
 interface ParseResponse {
@@ -49,6 +50,7 @@ Always respond with valid JSON only - no markdown, no backticks, no preamble. Us
       "rest": "90s",
       "target_load": "80kg",
       "tempo": "",
+      "pause": "",
       "notes": "",
       "time": "",
       "each_side": false
@@ -153,6 +155,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
     notes: e.notes ?? "",
     time: e.time ?? "",
     each_side: !!e.each_side,
+    pause: normalisePause((e as any).pause),
   }));
 
   const updatedHistory: ConvMessage[] = [

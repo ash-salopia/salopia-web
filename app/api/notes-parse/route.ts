@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 import { QUALITY_META, isPSMetricKey } from "@/lib/ps-metrics";
-import { libraryRules, ORDER_RULES, DOSE_RULES, positiveInt, normaliseOrder } from "@/lib/ai/session-parse-rules";
+import { libraryRules, ORDER_RULES, DOSE_RULES, positiveInt, normaliseOrder, normalisePause } from "@/lib/ai/session-parse-rules";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ export interface ParsedExerciseWithMatch {
   notes: string;
   time: string;
   each_side: boolean;
+  pause?: string; // seconds, "yes" (paused, no length) or "" - ticks Pause (s) on save
   // Power/Speed-only fields — undefined/empty for every other session
   // type. Without these a "power_speed" session built from a PDF landed
   // with every exercise on "General" quality and no metrics ticked, so
@@ -111,6 +112,7 @@ Response format:
           "rest": "90s",
           "target_load": "80kg",
           "tempo": "",
+          "pause": "",
           "notes": "",
           "time": "",
           "each_side": false,
@@ -296,6 +298,7 @@ export async function POST(
       notes: e.notes ?? "",
       time: e.time ?? "",
       each_side: !!e.each_side,
+      pause: normalisePause((e as any).pause),
       // Validated against the real quality/metric-key sets rather than
       // trusted as-is — this lands straight in intensity_label /
       // ps_tracked_metrics columns on save, so a hallucinated key here
