@@ -629,7 +629,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     category: "sessions",
     title: "Build a session by talking (Build · Voice)",
     summary: "Record yourself describing the session; it's transcribed, parsed and shown for review.",
-    keywords: ["voice", "dictate", "speak", "audio", "build by talking"],
+    keywords: ["voice", "dictate", "speak", "audio", "build by talking", "superset", "1a", "order", "db", "bb", "default sets"],
     body: [
       {
         type: "steps",
@@ -642,6 +642,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         ],
       },
       { type: "note", text: "Your browser will ask for microphone permission the first time. Every unmatched exercise must be resolved before you can save." },
+      { type: "tip", text: "**Order:** say or write the label - \"one A back squat, one B dumbbell bench\" or \"1a) RDL\" - or say \"superset\" / \"tri set\" and it numbers them for you (1A, 1B, 2…). **Names:** dumbbell/DB, barbell/BB, kettlebell/KB, single leg/SL and single arm/SA are treated as the same, so your Library names are found either way. **No sets or reps said?** It uses the exercise's Library defaults, otherwise 3 × 8-12 (3 × 30s for planks, holds and carries)." },
     ],
   },
   {
@@ -663,6 +664,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         ],
       },
       { type: "tip", text: "Clear layout helps — one exercise per line with sets, reps and load; label weeks and days if it's a block." },
+      { type: "tip", text: "**Order:** say or write the label - \"one A back squat, one B dumbbell bench\" or \"1a) RDL\" - or say \"superset\" / \"tri set\" and it numbers them for you (1A, 1B, 2…). **Names:** dumbbell/DB, barbell/BB, kettlebell/KB, single leg/SL and single arm/SA are treated as the same, so your Library names are found either way. **No sets or reps said?** It uses the exercise's Library defaults, otherwise 3 × 8-12 (3 × 30s for planks, holds and carries)." },
     ],
   },
   {

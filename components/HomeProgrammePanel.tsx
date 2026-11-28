@@ -13,6 +13,7 @@ import { equipmentOptions } from "@/lib/equipment";
 import { publishTemplate, unpublishTemplate, updateTemplateDef } from "@/lib/data/templates";
 import { listLibrary } from "@/lib/data/library";
 import type { Template, TemplateDef, ExerciseAlternative, LibraryEntry } from "@/types";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 const EXPIRY_OPTIONS: { label: string; days: number | null }[] = [
   { label: "Never", days: null },
@@ -230,7 +231,7 @@ export default function HomeProgrammePanel({ template, onRefresh }: { template: 
                           const altOpen = openAltKey === altKey;
                           const query = altOpen ? altDraft : alt.name;
                           const matches = altOpen && query.trim()
-                            ? library.filter((l) => l.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
+                            ? library.filter((l) => exerciseMatchesQuery(l.name, query)).slice(0, 8)
                             : [];
                           const applyLibraryEntry = (entry: LibraryEntry) => {
                             const next = [...(def.exercises ?? [])];

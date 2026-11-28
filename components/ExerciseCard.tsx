@@ -11,6 +11,7 @@ import { exerciseDose, repsForSet } from "@/lib/exercise-dose";
 import { resizeSets } from "@/lib/programme-builder";
 import { useOrgBands } from "@/lib/use-org-bands";
 import { bandLabel, bandOf, type Band } from "@/lib/bands";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 interface Props {
   exercise: SessionExercise;
@@ -150,7 +151,7 @@ export default function ExerciseCard({
   // prototype) - "back sq" matches "Barbell Back Squat".
   const nameQuery = exercise.name.trim().toLowerCase();
   const nameMatches = nameQuery
-    ? library.filter((l) => l.name.toLowerCase().includes(nameQuery)).slice(0, 8)
+    ? library.filter((l) => exerciseMatchesQuery(l.name, nameQuery)).slice(0, 8)
     : [];
   const hasExactMatch = nameQuery && library.some((l) => l.name.toLowerCase() === nameQuery);
 
@@ -460,7 +461,7 @@ export default function ExerciseCard({
               {library
                 .filter((l) => l.name.toLowerCase() !== exercise.name.trim().toLowerCase())
                 .filter((l) => !(exercise.alternative_names ?? []).includes(l.name))
-                .filter((l) => !altSearch.trim() || l.name.toLowerCase().includes(altSearch.trim().toLowerCase()))
+                .filter((l) => exerciseMatchesQuery(l.name, altSearch))
                 .slice(0, 20)
                 .map((entry) => (
                   <button

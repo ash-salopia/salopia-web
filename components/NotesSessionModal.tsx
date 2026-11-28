@@ -6,6 +6,7 @@ import { listLibrary } from "@/lib/data/library";
 import { todayISO, addDaysISO } from "@/lib/date-utils";
 import SessionReviewEditor, {
   enrichWithLibrary,
+  sortByOrderLabel,
   type ReviewSession,
 } from "@/components/SessionReviewEditor";
 import type { Session, LibraryEntry } from "@/types";
@@ -162,7 +163,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
       sessionNotes: s.sessionNotes ?? "",
       warmupNotes: s.warmupNotes ?? "",
       cooldownNotes: s.cooldownNotes ?? "",
-      exercises: enrichWithLibrary(s.exercises, library),
+      exercises: enrichWithLibrary(s.exercises, library, s.type),
     }));
 
   const callParse = async (text: string, convHistory: ConvMessage[], pdf?: string | null) => {
@@ -230,8 +231,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
 
     // Build sorted exercise inputs from all sessions
     const allExInputs = sessions.flatMap((s) =>
-      [...s.exercises]
-        .sort((a, b) => String(a.order ?? "").localeCompare(String(b.order ?? ""), undefined, { numeric: true }))
+      sortByOrderLabel(s.exercises)
         .map((e) => ({
           name: e.name,
           order: e.order ?? "",  // superset label stored in order field, not notes
@@ -304,8 +304,7 @@ export default function NotesSessionModal({ athleteId, sessionCount, onCreated, 
         // on the PDF's original date because this line preferred s.date.
         const date = sessionDate(startDate, s.weekNumber, s.dayOffset);
         const name = sessionNames[i]?.trim() || s.name || `Session ${sessionCount + i + 1}`;
-        const exInputs = [...s.exercises]
-          .sort((a, b) => String(a.order ?? "").localeCompare(String(b.order ?? ""), undefined, { numeric: true }))
+        const exInputs = sortByOrderLabel(s.exercises)
           .map((e) => ({
             name: e.name, order: e.order ?? "", sets: e.sets, reps: e.reps, rest: e.rest,
             target_load: e.target_load, tempo: e.tempo || "2-0-2",

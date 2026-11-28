@@ -20,13 +20,15 @@ import { listLibrary } from "@/lib/data/library";
 import { todayISO } from "@/lib/date-utils";
 import SessionReviewEditor, {
   enrichWithLibrary,
+  sortByOrderLabel,
   type ReviewSession,
 } from "@/components/SessionReviewEditor";
 import type { Session, SessionExercise, LibraryEntry } from "@/types";
 
 export interface ParsedExercise {
   name: string;
-  sets: number;
+  order?: string;
+  sets: number | null;
   reps: string;
   rest: string;
   target_load: string;
@@ -104,7 +106,7 @@ export default function VoiceSessionModal({
     type: type || detectedType || "strength",
     dayOffset: 0,
     weekNumber: 1,
-    exercises: enrichWithLibrary(exercises, library),
+    exercises: enrichWithLibrary(exercises, library, type || detectedType),
   }];
 
   const transcribeBlob = async (blob: Blob): Promise<string> => {
@@ -120,7 +122,7 @@ export default function VoiceSessionModal({
     const res = await fetch("/api/voice-parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript, history: convHistory }),
+      body: JSON.stringify({ transcript, history: convHistory, libraryNames: library.map((l) => l.name) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Parse failed");
@@ -232,8 +234,7 @@ export default function VoiceSessionModal({
     setPhase("saving");
     setError("");
     const exercises = sessions[0]?.exercises ?? [];
-    const exInputs = [...exercises]
-      .sort((a, b) => String(a.order ?? "").localeCompare(String(b.order ?? ""), undefined, { numeric: true }))
+    const exInputs = sortByOrderLabel(exercises)
       .map((e) => ({
         name: e.name, order: e.order ?? "", sets: e.sets, reps: e.reps, rest: e.rest,
         target_load: e.target_load, tempo: e.tempo || "2-0-2",
@@ -252,7 +253,7 @@ export default function VoiceSessionModal({
       } else if (mode === "add") {
         const supabase = createClient();
         const rows = exInputs.map((e, i) => ({
-          session_id: sessionId!, name: e.name, order: "", sets: e.sets,
+          session_id: sessionId!, name: e.name, order: e.order, sets: e.sets,
           reps: e.reps, time: e.time, rest: e.rest, target_load: e.target_load,
           tempo: e.tempo, each_side: e.each_side, notes: e.notes,
           is_bodyweight: e.is_bodyweight, use_percent_1rm: e.use_percent_1rm,

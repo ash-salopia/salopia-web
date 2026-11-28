@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { AI_MODEL, callClaude } from "@/lib/ai/claude";
+import { libraryRules, ORDER_RULES, DOSE_RULES, positiveInt, normaliseOrder } from "@/lib/ai/session-parse-rules";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -12,7 +13,8 @@ interface ConvMessage {
 export interface ParsedExercise {
   name: string;
   order: string;
-  sets: number;
+  matched: boolean;
+  sets: number | null; // null = not stated - the client fills the library default / 3
   reps: string;
   rest: string;
   target_load: string;
@@ -33,13 +35,15 @@ interface ParseResponse {
 // Claude always returns the FULL exercise list (never a delta) so the client
 // can just replace whatever it had - this keeps the correction loop simple.
 
-const SYSTEM = `You are a strength & conditioning programming assistant. Coaches speak their session plans to you and you parse them into structured exercise data.
+const buildSystem = (libraryNames: string[]) => `You are a strength & conditioning programming assistant. Coaches speak their session plans to you (transcribed by speech-to-text, so expect mishearings and run-on sentences) and you parse them into structured exercise data.
 
 Always respond with valid JSON only - no markdown, no backticks, no preamble. Use this exact format:
 {
   "exercises": [
     {
       "name": "Exercise Name",
+      "order": "1A",
+      "matched": true,
       "sets": 3,
       "reps": "8",
       "rest": "90s",
@@ -54,27 +58,30 @@ Always respond with valid JSON only - no markdown, no backticks, no preamble. Us
   "message": "One sentence confirming what you parsed or changed."
 }
 
-Field rules:
-- name: Capitalise properly. "back squat" → "Back Squat", "rdl" → "Romanian Deadlift"
-- sets: integer
-- reps: string - "8", "8-10", "AMRAP", "Max", etc. Empty string if none mentioned
+${libraryRules(libraryNames)}
+
+${ORDER_RULES}
+
+${DOSE_RULES}
+
+Other field rules:
+- name: Capitalise properly. "back squat" → "Back Squat". Use the library name when matched.
 - rest: normalise to "90s", "2min", "3min". Empty string if not mentioned
 - target_load: "80kg", "RPE 8", "bodyweight", "60% 1RM". Empty string if not mentioned
 - tempo: "3-1-2" format. Empty string if not mentioned
-- time: for timed sets, e.g. "30s", "1min". Empty string if not reps-based
 - each_side: true only if coach explicitly says "each side", "per side", "each leg/arm"
-- notes: any other instruction that doesn't fit the above
+- notes: only genuine coaching instructions that don't fit any field above (never the order label, sets, reps, load or rest)
 
 Correction rules:
 - When the user says "correction" or describes a change, update only the exercise(s) mentioned
-- Return the COMPLETE updated exercises array, not just the changed ones
-- Infer exercise number from "exercise 1", "first exercise", "the squat", etc.
+- Return the COMPLETE updated exercises array, not just the changed ones, keeping every other field (including order) as it was
+- Infer exercise number from "exercise 1", "first exercise", "one A", "the squat", etc.
 
 Session type detection:
 - Analyse the exercises described and return session_type as one of: "strength", "power_speed", "cardio", "hyrox"
 - "power_speed" if the session contains sprints, jumps, plyometrics, agility drills, throws, or speed work
 - "strength" if it contains weights, sets/reps, resistance exercises
-- "cardio" if it contains running, cycling, rowing without structure  
+- "cardio" if it contains running, cycling, rowing without structure
 - "hyrox" if it explicitly mentions Hyrox
 - Default to "strength" if unclear
 
@@ -94,11 +101,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
 
   let transcript: string;
   let history: ConvMessage[];
+  let libraryNames: string[];
 
   try {
     const body = await req.json();
     transcript = body.transcript ?? "";
     history = body.history ?? [];
+    libraryNames = Array.isArray(body.libraryNames) ? body.libraryNames.map(String).slice(0, 1500) : [];
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -114,7 +123,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
 
   // "Build a session by talking" — wrong exercises kill the magic, so
   // kept on the stronger model. The coach reviews the parse before save.
-  const r = await callClaude({ model: AI_MODEL.parse, system: SYSTEM, maxTokens: 1024, messages });
+  const r = await callClaude({ model: AI_MODEL.parse, system: buildSystem(libraryNames), maxTokens: 1024, messages });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
 
   const raw: string = r.text || "{}";
@@ -134,9 +143,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<ParseResponse
   // Normalise defaults so the client can rely on all fields being present
   const exercises: ParsedExercise[] = (parsed.exercises ?? []).map((e) => ({
     name: e.name ?? "",
-    order: String(e.order ?? ""),
-    sets: typeof e.sets === "number" ? e.sets : parseInt(String(e.sets), 10) || 3,
-    reps: e.reps ?? "",
+    order: normaliseOrder(e.order),
+    matched: !!e.matched,
+    sets: positiveInt(e.sets),
+    reps: e.reps && String(e.reps).trim() !== "0" ? String(e.reps) : "",
     rest: e.rest ?? "",
     target_load: e.target_load ?? "",
     tempo: e.tempo ?? "",

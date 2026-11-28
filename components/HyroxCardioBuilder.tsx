@@ -23,6 +23,7 @@ import { DEFAULT_TRACKED_METRICS, resolveTrackedMetrics, resolveKeyMetrics, metr
 import { saveLibraryEntry } from "@/lib/data/library";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
 import { zoneSummary, type ComputedZone } from "@/lib/training-zones";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 // Z1–Z5 + "Custom" picker. Stores the zone number on the config
 // (cfg.zone / block.zone). When a zone is set the athlete's HR + pace
@@ -221,7 +222,7 @@ function LibraryAutocomplete({ value, onChange, library, types, placeholder }: {
   const typesLower = types.map(t => t.toLowerCase());
   const filtered = library
     .filter(e => !typesLower.length || (e.types || []).some((t: string) => typesLower.includes(t.toLowerCase())))
-    .filter(e => !value.trim() || e.name.toLowerCase().includes(value.toLowerCase()))
+    .filter(e => exerciseMatchesQuery(e.name, value))
     .slice(0, 8);
   const trimmed = value.trim();
   const hasExactMatch = trimmed && filtered.some(e => e.name.toLowerCase() === trimmed.toLowerCase());
