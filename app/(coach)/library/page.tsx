@@ -7,6 +7,7 @@ import YouTubeImportDialog from "@/components/YouTubeImportDialog";
 import VideoModal from "@/components/VideoModal";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
 import type { LibraryEntry } from "@/types";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 // entry.types stores "Hyrox" (see LibraryEntryForm's SESSION_TYPES) so
 // every existing library entry's data keeps matching - this only
@@ -103,7 +104,7 @@ export default function LibraryPage() {
   const filtered = query.trim()
     ? library.filter((e) => {
         const q = query.trim().toLowerCase();
-        if (e.name.toLowerCase().includes(q)) return true;
+        if (exerciseMatchesQuery(e.name, q)) return true;
         return (e.types ?? []).some((t) => (TYPE_DISPLAY_LABEL[t] ?? t).toLowerCase().includes(q));
       })
     : library;

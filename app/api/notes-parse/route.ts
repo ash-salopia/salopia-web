@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAIRequest } from "@/lib/ai/usage-guard";
 import { AI_MODEL, callClaude } from "@/lib/ai/claude";
 import { QUALITY_META, isPSMetricKey } from "@/lib/ps-metrics";
+import { libraryRules, ORDER_RULES, DOSE_RULES, positiveInt, normaliseOrder, normalisePause } from "@/lib/ai/session-parse-rules";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ export interface ParsedExerciseWithMatch {
   name: string;
   order: string;  // "1", "1A", "1B", "2" etc.
   matched: boolean;
-  sets: number;
+  sets: number | null; // null = not stated - the client fills the library default / 3
   reps: string;
   rest: string;
   target_load: string;
@@ -23,6 +24,7 @@ export interface ParsedExerciseWithMatch {
   notes: string;
   time: string;
   each_side: boolean;
+  pause?: string; // seconds, "yes" (paused, no length) or "" - ticks Pause (s) on save
   // Power/Speed-only fields — undefined/empty for every other session
   // type. Without these a "power_speed" session built from a PDF landed
   // with every exercise on "General" quality and no metrics ticked, so
@@ -88,9 +90,6 @@ You are a strength & conditioning programming assistant. You parse coaching note
 
 Always respond with valid JSON only - no markdown, no backticks, no preamble.
 
-${libraryNames.length > 0 ? `The coach's exercise library contains these exercises (use EXACT names when matching):
-${libraryNames.join(", ")}` : "The coach has no library entries yet."}
-
 Response format:
 {
   "sessions": [
@@ -113,6 +112,7 @@ Response format:
           "rest": "90s",
           "target_load": "80kg",
           "tempo": "",
+          "pause": "",
           "notes": "",
           "time": "",
           "each_side": false,
@@ -129,13 +129,7 @@ Response format:
   "message": "1-2 sentence summary of what you found and parsed."
 }
 
-Library matching rules:
-- Only match an exercise to a library entry if it is genuinely the SAME exercise under a different name — an abbreviation, plural, or equipment-naming variant of the identical movement (e.g. "DB Lateral Raises" = "Dumbbell Lateral Raise", "RDL" = "Romanian Deadlift").
-- NEVER match just because two names share a family or keyword. Split Squat, Bulgarian Split Squat, Lunge, Step-Up, Front Squat, Back Squat, Goblet Squat, and Overhead Squat are all DIFFERENT exercises even though "squat" appears in several. The same applies to every other family: Deadlift variants (RDL, Sumo, Deficit, Single-Leg), Press variants (Bench, Incline, Overhead, Push Press), Row variants, Curl variants, etc. Match only true synonyms of the identical exercise — never the "closest relative."
-- If genuinely uncertain whether two names are the same exercise, do NOT match (matched=false) — the coach can create it as a new library entry in one tap, which is cheap and safe. A wrong match silently attaches logged data to the wrong exercise's history and PBs, which is much worse than an unmatched exercise.
-- Common abbreviations for genuinely identical exercises: BS=Back Squat, RDL=Romanian Deadlift, BP=Bench Press, DL=Deadlift, OHP=Overhead Press, SQ=Squat, DB=Dumbbell, BB=Barbell, BW=Bodyweight
-- If matched: use the EXACT library name, set matched=true
-- If no confident match: use the coach's own wording from the notes, set matched=false
+${libraryRules(libraryNames)}
 - List all unmatched names in unmatchedExercises
 
 Session type detection:
@@ -151,7 +145,7 @@ Session detection rules:
 - Single session: name it clearly (e.g. "Upper Body", "Strength A")
 - Multiple sessions per week: name each (e.g. "Upper A", "Lower A")
 - Multi-week: include week numbers
-- date: if a specific date is mentioned (e.g. "26/06/2026", "June 26", "next Monday"), extract it as YYYY-MM-DD. Today is 2026-06-24. Leave null if no specific date mentioned.
+- date: if a specific date is mentioned (e.g. "26/06/2026", "June 26", "next Monday"), extract it as YYYY-MM-DD. Today is ${new Date().toISOString().slice(0, 10)}. Leave null if no specific date mentioned.
 - dayOffset: days from start - Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
   - If training days are specified (Mon/Wed/Fri): use those offsets (0, 2, 4)
   - If only order given (Day 1/Day 2/Day 3): use 0, 1, 2
@@ -173,24 +167,16 @@ Warm-up and cool-down:
 - If a session has no warm-up or no cool-down described, use an empty string "" for that field — never omit it, and never guess one that wasn't in the source.
 - Only the genuinely tracked working sets (the main lifts, conditioning pieces, plyo/speed work etc. the coach actually prescribed sets/reps/load for) go into "exercises".
 
-Exercise field rules:
-- sets: integer, default 3 if unclear
-- reps: string - "8", "8-10", "AMRAP". Empty if none
+${DOSE_RULES}
+
+Other exercise field rules:
 - rest: "90s", "2min". Empty if none
 - target_load: "80kg", "RPE 8", "bodyweight". Empty if none
 - tempo: "3-1-2" format. Empty if none
-- time: "30s", "1min" for timed sets. Empty if reps-based
 - each_side: true only if explicitly mentioned
-- notes: any other instruction that doesn't fit above
+- notes: any other instruction that doesn't fit above (never the order label)
 
-Exercise ordering rules:
-- order: string label for the exercise position. A session is a sequence of numbered "blocks" (1, 2, 3…); a block that groups multiple exercises together (superset/tri-set/giant-set/circuit) letters them A, B, C… within that block instead of just using the plain number. A standalone exercise that isn't grouped with anything keeps a plain number ("1", "2", "3") - do NOT letter-suffix it.
-- Grouping trigger words - all of these mean "group these exercises into one lettered block": "superset"/"super set"/"super", "tri set"/"triset", "giant set", "circuit". Also treat "trust" as "tri set" - it's a common voice-transcription mishearing of "tri set", not the coach actually saying "trust".
-- If the notes name the exercises explicitly for a group (e.g. "super these exercises: back squat and bench press" or "tri set these exercises: dead bug, side plank and pallof press"), group exactly those named exercises together, in the order given - back squat/bench press becomes "1A"/"1B"; dead bug/side plank/pallof press becomes the NEXT block, e.g. "2A"/"2B"/"2C".
-- If the trigger word appears with no explicit exercise list, apply it to the next exercises in the list in order: 2 exercises for "superset"/"super set", 3 for "tri set"/"triset"/"trust", or however many the phrasing implies (e.g. "giant set of 4" = 4).
-- The block NUMBER increments by one for every block (grouped or standalone) as you move down the session - it does not reset or skip. E.g. a tri-set of 3 exercises followed by a superset of 2 followed by one standalone exercise becomes: 1A, 1B, 1C, 2A, 2B, 3.
-- Always assign order based on the notation/wording in the notes, using the rules above when notation is absent.
-- Exercises within the same session must be in order (1A before 1B, 2A before 2B etc.)
+${ORDER_RULES}
 
 Power/Speed exercise setup (only for exercises inside a "power_speed" session — leave ps_quality/ps_distance/ps_contacts/ps_tracked_metrics as "" / "" / null / [] for every strength/cardio/hyrox exercise):
 - ps_quality: classify each exercise into exactly one of "acceleration" (short sprints, starts, ~≤10-20m flat-out), "max_velocity" (flying sprints, top-speed segments, longer flat-out runs), "power" (ballistic/concentric-dominant explosive work with no fast reactive landing — a CMJ, broad/standing jump, med ball throw/slam/rotational throw, a loaded jump squat), "plyometric" (fast stretch-shortening-cycle/reactive work specifically — depth jumps, hurdle hops, repeated pogo bounds, anything defined by a quick, elastic ground contact rather than a single deliberate jump/throw), "cod" (change of direction, agility, shuttle, 5-0-5-style drills), "deceleration" (drills explicitly about braking/stopping/landing control rather than producing force), or "" if none of those genuinely fit. "power" vs "plyometric" is the easiest of these to mix up: a single Broad Jump or CMJ is "power" (one deliberate ballistic effort, no reactive bounce), while "Repeated Broad Jumps" or "Hurdle Hops" (continuous, reactive, minimal ground-contact time) is "plyometric" - when genuinely unsure between the two, prefer "power" (it doesn't affect the contacts-load total the way plyometric does). Do not force a fit — "" (General) is correct for something that doesn't match any of them.
@@ -302,16 +288,17 @@ export async function POST(
     cooldownNotes: typeof s.cooldownNotes === "string" ? s.cooldownNotes : "",
     exercises: (s.exercises ?? []).map((e) => ({
       name: e.name ?? "",
-      order: String(e.order ?? ""),
+      order: normaliseOrder(e.order),
       matched: !!e.matched,
-      sets: typeof e.sets === "number" ? e.sets : parseInt(String(e.sets), 10) || 3,
-      reps: e.reps ?? "",
+      sets: positiveInt(e.sets),
+      reps: e.reps && String(e.reps).trim() !== "0" ? String(e.reps) : "",
       rest: e.rest ?? "",
       target_load: e.target_load ?? "",
       tempo: e.tempo ?? "",
       notes: e.notes ?? "",
       time: e.time ?? "",
       each_side: !!e.each_side,
+      pause: normalisePause((e as any).pause),
       // Validated against the real quality/metric-key sets rather than
       // trusted as-is — this lands straight in intensity_label /
       // ps_tracked_metrics columns on save, so a hallucinated key here

@@ -28,6 +28,7 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
   reps = reps ?? "";
   time = time ?? "";
   const [explicitMode, setExplicitMode] = useState<"reps" | "time" | null>(null);
+  const [focused, setFocused] = useState(false);
   // What was in each mode before switching away, so toggling back puts it
   // back (12 reps -> time -> reps shows 12 again) rather than an empty box.
   const [stash, setStash] = useState<{ reps: string; time: string }>({ reps: "", time: "" });
@@ -38,8 +39,10 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
     if (mode === "time") {
       onChange({ time: v });
     } else {
-      // Auto-complete "A"/"a" to "AMRAP", matching ExerciseCard's reps input.
-      onChange({ reps: v === "A" || v === "a" ? "AMRAP" : v });
+      // Typing "A"/"a" into an EMPTY box auto-completes to "AMRAP". Only
+      // from empty - otherwise backspacing "AMRAP" down to "A" re-filled
+      // it and the box could never be cleared.
+      onChange({ reps: !reps.trim() && (v === "A" || v === "a") ? "AMRAP" : v });
     }
   };
 
@@ -59,12 +62,14 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
   };
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       {labelStyle && <div style={labelStyle}>{mode === "time" ? "Time" : "Reps"}</div>}
       <div style={{ display: "flex", gap: 3 }}>
         <input
           value={value}
           onChange={(e) => handleChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={mode === "time" ? "30s" : "-"}
           style={{ ...inputStyle, flex: 1, minWidth: 0 }}
         />
@@ -77,11 +82,20 @@ export default function RepsTimeField({ reps, time, onChange, inputStyle, labelS
           {mode === "time" ? "⏱" : "#"}
         </button>
       </div>
+      {focused && mode === "reps" && (
+        <div style={s.hint}>A = AMRAP</div>
+      )}
     </div>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
+  // Floats under the box so it doesn't push the row around.
+  hint: {
+    position: "absolute", top: "100%", left: 0, marginTop: 2, zIndex: 5, whiteSpace: "nowrap",
+    fontSize: 10, fontWeight: 700, color: "var(--mute)", background: "var(--panel)",
+    border: "1px solid var(--line)", borderRadius: 4, padding: "1px 5px", pointerEvents: "none",
+  },
   toggleBtn: {
     flexShrink: 0,
     width: 26,

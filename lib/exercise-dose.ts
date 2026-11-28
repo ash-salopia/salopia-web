@@ -62,3 +62,22 @@ export function exerciseDose(ex: DoseInput): string {
   else if ((ex.target_load ?? "").trim()) out += ` @ ${loadLabel(ex.target_load!)}`;
   return out;
 }
+
+// Sets/reps the coach didn't say (the parsers return sets null and reps/
+// time "" for those): the library entry's own defaults first, else 3 x
+// 8-12 (3 x 30s for holds/carries, 3 x 3 for power/speed) - never 0 x 0.
+export function defaultDose(
+  e: { name: string; sets: number | null; reps: string; time: string },
+  lib: { sets?: string | null; reps?: string | null; time?: string | null } | undefined,
+  sessionType?: string
+): { sets: number; reps: string; time: string } {
+  const libSets = parseInt(String(lib?.sets ?? ""), 10);
+  const sets = e.sets && e.sets > 0 ? e.sets : libSets > 0 ? libSets : 3;
+  const reps = (e.reps ?? "").trim();
+  const time = (e.time ?? "").trim();
+  if (reps || time) return { sets, reps, time };
+  if (lib?.time?.trim()) return { sets, reps: "", time: lib.time.trim() };
+  if (lib?.reps?.trim()) return { sets, reps: lib.reps.trim(), time: "" };
+  if (looksTimed(e.name)) return { sets, reps: "", time: "30s" };
+  return { sets, reps: sessionType === "power_speed" ? "3" : "8-12", time: "" };
+}

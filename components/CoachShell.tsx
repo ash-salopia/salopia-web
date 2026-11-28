@@ -105,8 +105,8 @@ export default function CoachShell({
   // Inject branding CSS variables
   return (
     <div style={styles.app}>
-      <header style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <header style={{ ...styles.header, ...(isMobile ? styles.headerMobile : {}) }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 4, minWidth: 0 }}>
           {isMobile && (
             <button
               style={styles.hamburgerBtn}
@@ -117,11 +117,11 @@ export default function CoachShell({
             </button>
           )}
           {/* Logo / brand name */}
-          <div style={styles.brand}>
+          <div style={{ ...styles.brand, ...(isMobile ? { minWidth: 0, flexShrink: 1 } : {}) }}>
             {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt={branding.displayName} style={styles.logo} />
+              <img src={branding.logoUrl} alt={branding.displayName} style={isMobile ? styles.logoMobile : styles.logo} />
             ) : (
-              <span style={{ color: "var(--accent)" }}>{branding.displayName}</span>
+              <span style={{ color: "var(--accent)", ...(isMobile ? styles.brandTextMobile : {}) }}>{branding.displayName}</span>
             )}
             {branding.showOrgName && orgName && !isMobile && (
               <span style={styles.orgSeparator}>· {orgName}</span>
@@ -129,15 +129,15 @@ export default function CoachShell({
           </div>
         </div>
 
-        <div style={styles.headerRight}>
+        <div style={{ ...styles.headerRight, ...(isMobile ? { gap: 10 } : {}) }}>
           {!onHelpPage && (
-            <button style={styles.helpBtn} onClick={() => setHelpOpen(true)}>
+            <button style={{ ...styles.helpBtn, ...(isMobile ? styles.smallBtn : {}) }} onClick={() => setHelpOpen(true)}>
               {isMobile ? "Help?" : "Need Help?"}
             </button>
           )}
-          <Avatar name={coachName || "Coach"} avatarUrl={coachAvatarUrl} size={28} />
+          {!isMobile && <Avatar name={coachName || "Coach"} avatarUrl={coachAvatarUrl} size={28} />}
           {!isMobile && <span style={styles.coachInfo}>{coachName || "Coach"}</span>}
-          <button style={styles.signOutBtn} onClick={handleSignOut}>Sign out</button>
+          <button style={{ ...styles.signOutBtn, ...(isMobile ? styles.smallBtn : {}) }} onClick={handleSignOut}>Sign out</button>
         </div>
       </header>
 
@@ -225,6 +225,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   logo: { height: 42, width: "auto", objectFit: "contain" },
+  // Phones: smaller logo and more room between it, Help and Sign out.
+  headerMobile: { padding: "0 12px", gap: 14 },
+  logoMobile: { height: 28, width: "auto", maxWidth: "min(110px, 100%)", objectFit: "contain", display: "block" },
+  brandTextMobile: { fontSize: 16, letterSpacing: 1, whiteSpace: "nowrap" },
+  smallBtn: { padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap" },
   orgSeparator: { fontSize: 14, fontWeight: 400, color: "var(--mute)", letterSpacing: 0 },
   headerRight: { display: "flex", alignItems: "center", gap: 12 },
   coachInfo: { fontSize: 13, color: "var(--mute)" },

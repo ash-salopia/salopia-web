@@ -30,6 +30,7 @@ import { useOrgBands, useOrgIncrements } from "@/lib/use-org-bands";
 import { guessLoads } from "@/lib/quick-loads";
 import { resolveIncrements } from "@/lib/load-increments";
 import { bandLabel, bandOf, isBandExercise } from "@/lib/bands";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 const TYPE_META: Record<SessionType, { label: string; color: string; dim: string }> = {
   strength:    { label: "Strength",    color: "#3B8BEB", dim: "#162743" },
@@ -729,7 +730,7 @@ export default function LiveGroupPage() {
   // it by typing instead of only ever typing a fresh free-text name.
   const editNameQuery = editDraft.name.trim().toLowerCase();
   const editNameMatches = editNameQuery
-    ? library.filter((l) => l.name.toLowerCase().includes(editNameQuery)).slice(0, 8)
+    ? library.filter((l) => exerciseMatchesQuery(l.name, editNameQuery)).slice(0, 8)
     : [];
 
   return (

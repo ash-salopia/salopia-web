@@ -15,6 +15,7 @@ import type { LibraryEntry } from "@/types";
 import { saveLibraryEntry } from "@/lib/data/library";
 import LibraryEntryForm from "@/components/LibraryEntryForm";
 import VideoModal from "@/components/VideoModal";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 import {
   PS_METRIC_META, PS_METRIC_ORDER, QUALITY_META,
   buildPSLog, emptyPSSetLog, normalizePSLog,
@@ -83,7 +84,7 @@ export default function PowerSpeedExerciseCard({
   const trimmedName = nameQuery.trim();
   const libraryMatches = trimmedName.length > 0
     ? library
-        .filter((e) => e.name.toLowerCase().includes(nameQuery.toLowerCase()))
+        .filter((e) => exerciseMatchesQuery(e.name, nameQuery))
         .sort((a, b) => {
           const aPS = (a.types ?? []).includes("Power/Speed");
           const bPS = (b.types ?? []).includes("Power/Speed");
@@ -346,7 +347,7 @@ export default function PowerSpeedExerciseCard({
         )}
         <Field label="Rest">
           <input value={exercise.rest} onChange={(e) => update({ rest: e.target.value })}
-            placeholder="3min" style={card.miniInput} />
+            placeholder="90s / 3min" style={card.miniInput} />
         </Field>
         {!completionOnly && (
           <Field label="Surface">

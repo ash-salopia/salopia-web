@@ -14,9 +14,10 @@
 
 import { useState, useRef } from "react";
 import { saveLibraryEntry } from "@/lib/data/library";
-import { normalizeExerciseName } from "@/lib/exercise-name-match";
+import { normalizeExerciseName, exerciseMatchesQuery } from "@/lib/exercise-name-match";
 import SessionNotesBlock from "@/components/SessionNotesBlock";
 import type { LibraryEntry } from "@/types";
+import { defaultDose } from "@/lib/exercise-dose";
 
 // ── Exported types - used by both modals ──────────────────────────────────────
 
@@ -34,6 +35,7 @@ export interface ReviewExercise {
   notes: string;
   time: string;
   each_side: boolean;
+  pause?: string; // "5" = 5s pause each rep, "yes" = paused with no length; saved as Pause (s)
   is_bodyweight?: boolean;
   use_percent_1rm?: boolean;
   rpe?: number | null;
@@ -79,10 +81,17 @@ export const SESSION_TYPE_META: Record<string, { label: string; color: string }>
 
 // ── Exported helpers - call these when converting Claude output ───────────────
 
+// Save order: by the 1/1A/1B labels when every exercise has one,
+// otherwise exactly as parsed (sorting would push unlabelled ones first).
+export function sortByOrderLabel<T extends { order?: string | null }>(exercises: T[]): T[] {
+  if (!exercises.every((e) => String(e.order ?? "").trim())) return [...exercises];
+  return [...exercises].sort((a, b) => String(a.order).localeCompare(String(b.order), undefined, { numeric: true }));
+}
+
 export function enrichWithLibrary(
   exercises: Array<{
     name: string;
-    sets: number;
+    sets: number | null;
     reps: string;
     rest: string;
     target_load: string;
@@ -92,7 +101,8 @@ export function enrichWithLibrary(
     each_side: boolean;
     [key: string]: any;
   }>,
-  library: LibraryEntry[]
+  library: LibraryEntry[],
+  sessionType?: string
 ): ReviewExercise[] {
   return exercises.map((e) => {
     let lib = library.find(
@@ -106,20 +116,22 @@ export function enrichWithLibrary(
       const normalizedTarget = normalizeExerciseName(e.name);
       lib = library.find((l) => normalizeExerciseName(l.name) === normalizedTarget);
     }
+    const dose = defaultDose(e, lib, sessionType);
     return {
       name: lib?.name ?? e.name,
       order: String((e as any).order ?? ""),   // preserve superset label
       libraryId: lib?.id ?? null,
       matched: !!lib,
       video_url: lib?.video_url ?? "",
-      sets: e.sets,
-      reps: e.reps,
-      rest: e.rest,
+      sets: dose.sets,
+      reps: dose.reps,
+      rest: e.rest || lib?.rest || "",
       target_load: e.target_load,
       tempo: e.tempo || lib?.tempo || "",
       notes: e.notes,
-      time: e.time,
+      time: dose.time,
       each_side: e.each_side,
+      pause: typeof e.pause === "string" ? e.pause : "",
       // No parsed signal for these two exists at this layer (unlike
       // each_side, which comes from the AI/voice parse itself) - pure
       // library-default addition, so a match applies it directly.
@@ -308,9 +320,7 @@ export default function SessionReviewEditor({
     }
   };
 
-  const filteredLibrary = library.filter((e) =>
-    e.name.toLowerCase().includes(pickerSearch.toLowerCase())
-  );
+  const filteredLibrary = library.filter((e) => exerciseMatchesQuery(e.name, pickerSearch));
 
   // ── Inline cell editing ─────────────────────────────────────────────────────
 
@@ -584,7 +594,8 @@ export default function SessionReviewEditor({
                             startEditing(si, ei, ex.time ? "time" : "reps")
                           }
                           onChange={(v) =>
-                            setEditingCell((c) => c ? { ...c, value: v } : c)
+                            // "A" typed into an empty reps chip = AMRAP (same as the exercise card).
+                            setEditingCell((c) => c ? { ...c, value: !ex.time && !c.value.trim() && /^a$/i.test(v) ? "AMRAP" : v } : c)
                           }
                           onCommit={(v) =>
                             commitEdit(si, ei, ex.time ? "time" : "reps", v)
@@ -735,6 +746,9 @@ export default function SessionReviewEditor({
 
                     {ex.each_side && (
                       <span style={{ ...s.chipSep, fontSize: 10 }}>· each side</span>
+                    )}
+                    {ex.pause && (
+                      <span style={{ ...s.chipSep, fontSize: 10 }}>· {ex.pause === "yes" ? "paused" : `${ex.pause}s pause`}</span>
                     )}
                   </div>
                 )}

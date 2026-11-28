@@ -21,6 +21,7 @@ import { useCoachPermissions } from "@/lib/use-coach-permissions";
 import AerobicProfileSection from "@/components/AerobicProfileSection";
 import Avatar from "@/components/Avatar";
 import type { Athlete, AthleteOneRM, AthleteVelocityProfile } from "@/types";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1013,7 +1014,7 @@ export default function AthleteProfilePage() {
               {oneRmNameDropdownOpen && newOneRM.exercise_name.trim() && (
                 <div style={p.pbNameDropdown}>
                   {library
-                    .filter(entry => entry.name.toLowerCase().includes(newOneRM.exercise_name.toLowerCase()))
+                    .filter(entry => exerciseMatchesQuery(entry.name, newOneRM.exercise_name))
                     .slice(0, 8)
                     .map((entry, i) => (
                       <button
@@ -1143,7 +1144,7 @@ export default function AthleteProfilePage() {
               {profileNameDropdownOpen && newProfile.exercise_name.trim() && (
                 <div style={p.pbNameDropdown}>
                   {library
-                    .filter((entry) => entry.name.toLowerCase().includes(newProfile.exercise_name.toLowerCase()))
+                    .filter((entry) => exerciseMatchesQuery(entry.name, newProfile.exercise_name))
                     .slice(0, 8)
                     .map((entry, i) => (
                       <button
@@ -1291,7 +1292,7 @@ export default function AthleteProfilePage() {
               {pbNameDropdownOpen && newPB.exercise_name.trim() && (
                 <div style={p.pbNameDropdown}>
                   {library
-                    .filter(entry => entry.name.toLowerCase().includes(newPB.exercise_name.toLowerCase()))
+                    .filter(entry => exerciseMatchesQuery(entry.name, newPB.exercise_name))
                     .slice(0, 8)
                     .map((entry, i) => (
                       <button

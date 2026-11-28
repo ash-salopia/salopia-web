@@ -7,6 +7,7 @@
 // per-rep (Time/Distance/Height/…) — and saves the PSSetLog[] via the
 // same /api/athlete-link/log route the strength logger uses.
 
+import { RestTimerControl, useRestTimer, type RestTimerState } from "@/components/RestTimer";
 import { useState, useEffect, Fragment } from "react";
 import Icon from "@/components/ui/Icon";
 import { saveWithRetry } from "@/lib/save-queue";
@@ -52,6 +53,7 @@ export default function PowerSpeedAthleteView({
   const [session, setSession] = useState(initialSession);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const rt = useRestTimer();
   const { locked, checkInButton, checkInModal, lockOverlay } = useSessionCheckIn({
     session, token, lockUntilCheckin, checkedInToday, wellnessCheckIn, painCheckIn,
   });
@@ -142,6 +144,7 @@ export default function PowerSpeedAthleteView({
               }}
               onSaveNotes={(notes) => saveExerciseNotes(ex.id, notes)}
               onSwapOrSkipDone={onUpdated}
+              rt={rt}
             />
           ))}
           {exercises.length === 0 && <div style={s.empty}>No exercises in this session.</div>}
@@ -168,7 +171,7 @@ export default function PowerSpeedAthleteView({
   );
 }
 
-function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSaveNotes, onSwapOrSkipDone }: {
+function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSaveNotes, onSwapOrSkipDone, rt }: {
   ex: any;
   token: string;
   sessionId: string;
@@ -177,6 +180,7 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
   onNotesChange: (notes: string) => void;
   onSaveNotes: (notes: string) => void;
   onSwapOrSkipDone: () => void;
+  rt: RestTimerState;
 }) {
   const tracked = resolveTrackedMetrics(ex.ps_tracked_metrics, ex.tempo, ex.intensity_label);
   const reps = parseInt(String(ex.reps ?? "")) || 4;
@@ -385,6 +389,7 @@ function ExerciseLog({ ex, token, sessionId, saving, onSave, onNotesChange, onSa
               </div>
             );
           })}
+          <RestTimerControl exerciseId={ex.id} rest={ex.rest} rt={rt} />
         </>
       )}
 

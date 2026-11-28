@@ -338,7 +338,12 @@ export default function AthleteLinkShell({
             </button>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={st.brand}>{branding?.displayName ?? "VIS BUILD"}</div>
+            {/* Organisations with custom branding show their logo (same as the coach app); others the name. */}
+            {branding?.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.displayName} style={st.brandLogo} />
+            ) : (
+              <div style={st.brand}>{branding?.displayName ?? "VIS BUILD"}</div>
+            )}
             <div style={st.athleteName}>{athlete.name}</div>
           </div>
           <div style={{ position: "relative" }}>
@@ -671,6 +676,7 @@ const st: Record<string, React.CSSProperties> = {
     background: "var(--accent)", color: "#0a1420", border: "2px solid var(--panel)",
     fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
   },
+  brandLogo: { height: 26, width: "auto", maxWidth: 150, objectFit: "contain", display: "block", marginBottom: 2 },
   brand: { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: 2, color: "var(--accent)" },
   menuBtn: { display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 9, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 },
   menuBackdrop: { position: "fixed", inset: 0, zIndex: 40 },

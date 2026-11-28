@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { exerciseMatchesQuery } from "@/lib/exercise-name-match";
 
 interface LibraryExercise {
   id: string;
@@ -95,7 +96,7 @@ export default function AthleteSwapExerciseModal({
 
   const results = library
     .filter((l) => l.name.toLowerCase() !== currentName.trim().toLowerCase())
-    .filter((l) => !search.trim() || l.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter((l) => exerciseMatchesQuery(l.name, search))
     .slice(0, 30);
 
   return (

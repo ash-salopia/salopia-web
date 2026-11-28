@@ -223,6 +223,9 @@ export interface NewExerciseInput {
   // Omit/leave undefined for the normal one-contact-per-rep case.
   contacts?: number;
   tracked_metrics?: string[];  // -> ps_tracked_metrics column
+  // Pause (s) box on each set (0090): from "5s pause" in voice / notes builds.
+  track_pause?: boolean;
+  target_pause?: string;
   completion_only?: boolean;
   // Whether this exercise's reps should count toward the session's
   // "Plyo contacts" total (plyometric quality only) - undefined defaults
@@ -263,6 +266,7 @@ export function exerciseDefaults(over: NewExerciseInput) {
     ps_tracked_metrics: over.tracked_metrics ?? null,
     completion_only: over.completion_only ?? false,
     count_contacts: over.count_contacts ?? true,
+    ...(over.track_pause ? { track_pause: true, target_pause: over.target_pause ?? "" } : {}),
   };
 }
 
